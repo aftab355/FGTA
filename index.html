@@ -5638,6 +5638,24 @@ const PT_ICE={iceServers:[
 function ptRandCode(){ return Math.random().toString(36).slice(2,7).toUpperCase(); }
 function ptRandId(){ return Math.random().toString(36).slice(2,10); }
 
+/* The CSS default is a 4:3 landscape box, but the actual stream can be
+   portrait (phone held upright) or any other ratio the camera reports —
+   without this, a portrait stream gets squashed into a landscape box.
+   Match the box to whatever the video element is really receiving. */
+function ptBindAspect(v){
+  if(!v) return;
+  const fit=()=>{
+    // fullscreen mode fills width/height:100% with object-fit:contain instead —
+    // a forced aspect-ratio there would fight that layout, so skip it.
+    if(document.fullscreenElement){ v.style.aspectRatio=''; return; }
+    if(v.videoWidth && v.videoHeight) v.style.aspectRatio=v.videoWidth+'/'+v.videoHeight;
+  };
+  v.addEventListener('loadedmetadata',fit);
+  v.addEventListener('resize',fit);
+  document.addEventListener('fullscreenchange',fit);
+  fit();
+}
+
 /* ---- ICE failure diagnostics: on a failed connection, inspect what candidate
    types were actually gathered so we can tell "TURN relay never allocated"
    (shared free credentials rate-limited/blocked) apart from "relay allocated
@@ -5713,7 +5731,8 @@ function renderPTStream(){
         </div>
         <div class="pt-stream-foot"><button class="mini no" onclick="ptStopLive()">stop streaming</button></div>
       </div>`;
-    const v=$("ptLocalVideo"); if(v && v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream;
+    const v=$("ptLocalVideo");
+    if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     return;
   }
   const muted = PTStream.muted!==false;
@@ -5735,9 +5754,12 @@ function renderPTStream(){
       </div>
     </div>`;
   const v=$("ptRemoteVideo");
-  if(v && PTStream.remoteStream){
-    if(v.srcObject!==PTStream.remoteStream) v.srcObject=PTStream.remoteStream;
-    v.play().catch(()=>{});
+  if(v){
+    ptBindAspect(v);
+    if(PTStream.remoteStream){
+      if(v.srcObject!==PTStream.remoteStream) v.srcObject=PTStream.remoteStream;
+      v.play().catch(()=>{});
+    }
   }
 }
 function ptUnmute(){
@@ -5781,6 +5803,13 @@ function ptStartProcessing(S){
     if(!PTStream || PTStream!==S) return;
     if(S.camOn && S.rawVideo.readyState>=2){
       const vw=S.rawVideo.videoWidth||640, vh=S.rawVideo.videoHeight||480;
+      /* The camera sensor's raw frame keeps whatever orientation the phone was
+         actually held in — a canvas hardcoded to a 4:3 landscape frame just
+         squishes a portrait feed into it instead of showing it upright. Match
+         the canvas to the camera's real orientation instead. */
+      const portrait=vh>vw;
+      const targetW=portrait?480:640, targetH=portrait?640:480;
+      if(S.canvas.width!==targetW || S.canvas.height!==targetH){ S.canvas.width=targetW; S.canvas.height=targetH; }
       const z=S.zoom||1;
       const sw=vw/z, sh=vh/z, sx=(vw-sw)/2, sy=(vh-sh)/2;
       S.ctx.filter=ptFilterCSS(S.filter);
@@ -5822,8 +5851,14 @@ function ptStartProcessing(S){
   const audioTrack=S.rawStream.getAudioTracks()[0];
   S.localStream=new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack?[audioTrack]:[])]);
   try{
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
-    S.recorder=new MediaRecorder(S.localStream,{mimeType:mime});
+    /* Safari (incl. iOS) has never supported MediaRecorder with webm — only
+       mp4 — so a webm-only mime list silently threw there and instant replay
+       just never worked, with the error swallowed by the catch below. Try
+       webm first (smaller/faster elsewhere) but fall back to mp4. */
+    const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
+    const mime=candidates.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+    S.recorder=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined);
+    S.replayMime=mime || 'video/webm';
     S.replayChunks=[];
     S.recorder.ondataavailable=e=>{
       if(e.data && e.data.size){
@@ -5833,7 +5868,10 @@ function ptStartProcessing(S){
       }
     };
     S.recorder.start(1000);
-  }catch(e){}
+  }catch(e){
+    console.log('[ptStream] instant replay unavailable:', e && e.message);
+    S.replayUnavailable=true;
+  }
 }
 function ptStopProcessing(S){
   if(!S) return;
@@ -5870,13 +5908,24 @@ async function ptEnumerateCameras(){
 }
 async function ptSwapVideoTrack(constraints){
   if(!PTStream || PTStream.role!=='host') return null;
+  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
+  /* Most phones only let one getUserMedia call hold the camera hardware at a
+     time — requesting the new camera before releasing the old one is exactly
+     what throws NotReadableError ("Could not start video source"/"in use").
+     Release first, then request. */
+  const prevDeviceId=PTStream.videoDeviceId;
+  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
   let newStream;
-  try{ newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false}); }
-  catch(e){ toast("Couldn't switch camera: "+e.name,true); return null; }
+  try{
+    newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false});
+  }catch(e){
+    toast("Couldn't switch camera ("+e.name+") — reconnecting previous camera",true);
+    try{
+      newStream=await navigator.mediaDevices.getUserMedia({video:prevDeviceId?{deviceId:{ideal:prevDeviceId}}:true,audio:false});
+    }catch(e2){ toast("Camera unavailable: "+e2.name,true); return null; }
+  }
   const newTrack=newStream.getVideoTracks()[0];
   if(!newTrack) return null;
-  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
-  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
   PTStream.rawStream.addTrack(newTrack);
   const s=newTrack.getSettings();
   PTStream.videoDeviceId=s.deviceId||PTStream.videoDeviceId;
@@ -5901,14 +5950,16 @@ window.ptSwitchCameraDevice=ptSwitchCameraDevice;
    pulsing REPLAY chrome banner + corner bug, played back in slow motion
    from the last ~15s the host's camera actually recorded. ---- */
 function ptInstantReplay(){
-  if(!PTStream || PTStream.role!=='host' || !PTStream.replayChunks || !PTStream.replayChunks.length){
+  if(!PTStream || PTStream.role!=='host') return;
+  if(PTStream.replayUnavailable) return toast("Instant replay isn't supported on this browser",true);
+  if(!PTStream.replayChunks || !PTStream.replayChunks.length){
     return toast("Nothing buffered yet — give it a few seconds",true);
   }
   const flash=document.createElement('div');
   flash.style.cssText='position:fixed;inset:0;z-index:100000;background:#fff;opacity:1;pointer-events:none;transition:opacity .35s ease';
   document.body.appendChild(flash);
   requestAnimationFrame(()=>{ flash.style.opacity='0'; setTimeout(()=>flash.remove(),400); });
-  const blob=new Blob(PTStream.replayChunks.map(c=>c.blob),{type:'video/webm'});
+  const blob=new Blob(PTStream.replayChunks.map(c=>c.blob),{type:PTStream.replayMime||'video/webm'});
   const url=URL.createObjectURL(blob);
   const ov=document.createElement('div');
   ov.className='pt-replay-overlay';
