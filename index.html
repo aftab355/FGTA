@@ -5689,6 +5689,7 @@ function renderPTStream(){
           <div class="pt-stream-vwrap">
             <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
             <video id="ptLocalVideo" class="pt-stream-video" autoplay playsinline muted></video>
+            <div id="ptHostDebug" class="pt-stream-note" style="font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:4px;word-break:break-all"></div>
           </div>
           ${chatHtml(PTStream)}
         </div>
@@ -5802,6 +5803,17 @@ function ptStartProcessing(S){
       const ptScore = PT.tiebreak ? (PT.tbA+'-'+PT.tbB+' TB') : (PT.ptsA+'-'+PT.ptsB);
       S.ctx.fillStyle='#4be3ff'; S.ctx.font="bold 11px monospace";
       S.ctx.fillText('PT '+ptScore, 8, S.canvas.height-8);
+    }
+    const now=Date.now();
+    if(!S._dbgT || now-S._dbgT>500){
+      S._dbgT=now;
+      const dbg=document.getElementById('ptHostDebug');
+      if(dbg){
+        const vt=S.rawStream.getVideoTracks()[0];
+        const ct=S.localStream?S.localStream.getVideoTracks()[0]:null;
+        dbg.textContent=`cam:${S.camOn} rawReady:${S.rawVideo.readyState} rawWH:${S.rawVideo.videoWidth}x${S.rawVideo.videoHeight} `+
+          `rawTrack:${vt?vt.readyState+(vt.enabled?'/on':'/off'):'none'} outTrack:${ct?ct.readyState+(ct.enabled?'/on':'/off'):'none'}`;
+      }
     }
     S._raf=requestAnimationFrame(loop);
   }
