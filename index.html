@@ -2036,9 +2036,24 @@
     animation:ptBannerPop 1.6s ease forwards;white-space:nowrap;z-index:5;text-transform:uppercase}
   @keyframes ptBannerPop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.7)}15%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.15)}25%{transform:translateX(-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-16px) scale(.9)}}
   @media(max-width:520px){
-    .pt-board{grid-template-columns:1fr}
-    .pt-point{font-size:36px}
-    .pt-sets{font-size:28px}
+    /* Was grid-template-columns:1fr here, which stacked side A, the VS/timer
+       column, and side B into three full-height blocks in a row — on a phone
+       that's taller than one screen, forcing a scroll just to see both
+       players' score at once. Keep the same side-by-side layout as desktop
+       (one row, not three) and compact the sizing so it actually fits. */
+    .pt-board{gap:8px;margin-top:10px}
+    .pt-side{padding:10px 6px;gap:3px}
+    .pt-name{font-size:12px}
+    .pt-sets{font-size:22px}
+    .pt-games{font-size:9px}
+    .pt-point{font-size:26px;margin:3px 0;min-height:30px}
+    .pt-btn{min-height:44px;font-size:11px;padding:6px 4px}
+    .pt-mid{min-width:40px;gap:4px}
+    .pt-vs{font-size:9px}
+    .pt-timer{font-size:9px}
+    .pt-tb-tag{font-size:8px;padding:2px 5px}
+    .pt-set-chip{font-size:9px;padding:2px 4px}
+    .pt-set-chip.pt-set-live{font-size:11px;padding:3px 6px}
   }
 
   /* ===== 8-8: THE MAGIC NUMBER ===== */
@@ -6064,8 +6079,24 @@ function ptDrawScoreboard(S){
   ctx.filter='none';
 
   const u=Math.min(W,H);
-  const barH=Math.max(34, Math.round(Math.min(u*0.115, H*0.16)));
-  const m=Math.round(barH*0.24);          // margin from the frame edges
+  /* Both dimensions here (barH, m) intentionally derive from u = the
+     canvas's SHORTER side, never from W directly. Two real bugs came from
+     using W before:
+       1. In landscape, W is huge relative to u — a margin/size formula tied
+          to barH (itself u-based) stayed small while `avail` (width left
+          for content) scaled with the full frame width, so the bug kept
+          stretching wider the wider the stream got. avail is now capped to
+          a multiple of u so it reads as a compact corner bug regardless of
+          how wide the landscape frame is.
+       2. In portrait fullscreen, the video is shown with object-fit:cover
+          (see the CSS), which crops horizontally when the viewport's aspect
+          ratio doesn't match the canvas's — center-cropped, so pixels near
+          BOTH the left and right edges of the canvas can go off-screen. The
+          old margin (~20px on a 720-wide canvas) was nowhere near enough to
+          survive that; a real device crop was clipping the leftmost player
+          block clean off. u*0.11 (~80px here) gives real headroom. */
+  const barH=Math.max(30, Math.round(u*0.095));
+  const m=Math.round(u*0.11);             // margin from the frame edges — see above
   const pad=Math.round(barH*0.26);        // horizontal padding inside a cell
   const rad=Math.round(barH*0.17);
   const MONO="'JetBrains Mono',monospace";
@@ -6090,7 +6121,7 @@ function ptDrawScoreboard(S){
   const ptsW=Math.round(Math.max(ptsDigW, ctx.measureText(ptsLab).width)+pad*1.7);
   const gamesW=Math.round(Math.max(gamesDigW, ctx.measureText('GAMES').width)+pad*1.7);
 
-  const avail=W-m*2;
+  const avail=Math.min(W-m*2, Math.round(u*2.1));
   let showGames=true;
   let fixed=setCellW*2+pad*4+gamesW+ptsW;
   let nameBudget=avail-fixed;
