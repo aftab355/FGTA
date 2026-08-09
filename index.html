@@ -5638,6 +5638,25 @@ const PT_ICE={iceServers:[
 function ptRandCode(){ return Math.random().toString(36).slice(2,7).toUpperCase(); }
 function ptRandId(){ return Math.random().toString(36).slice(2,10); }
 
+/* ---- ICE failure diagnostics: on a failed connection, inspect what candidate
+   types were actually gathered so we can tell "TURN relay never allocated"
+   (shared free credentials rate-limited/blocked) apart from "relay allocated
+   fine but the path still didn't work" (a different, rarer problem). ---- */
+async function ptIceDiag(pc){
+  const out={host:false,srflx:false,relay:false};
+  try{
+    const stats=await pc.getStats();
+    stats.forEach(r=>{
+      if(r.type==='local-candidate'||r.type==='remote-candidate'){
+        if(r.candidateType==='relay') out.relay=true;
+        else if(r.candidateType==='srflx'||r.candidateType==='prflx') out.srflx=true;
+        else if(r.candidateType==='host') out.host=true;
+      }
+    });
+  }catch(e){}
+  return out;
+}
+
 function renderPTStream(){
   const box=$("ptStreamBox"); if(!box) return;
   const others = ptActiveStreams();
@@ -5986,7 +6005,8 @@ async function ptGoLive(){
     PTStream.peers[vid]=pc;
     PTStream.localStream.getTracks().forEach(t=>pc.addTrack(t,PTStream.localStream));
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-host",payload:{viewerId:vid,candidate:e.candidate}}); };
-    pc.onconnectionstatechange=()=>{
+    pc.onconnectionstatechange=async ()=>{
+      if(pc.connectionState==='failed') console.log('[ptStream host] peer failed:', await ptIceDiag(pc));
       if(PTStream && ['disconnected','failed','closed'].includes(pc.connectionState)){
         delete PTStream.peers[vid]; PTStream.viewerCount=Object.keys(PTStream.peers).length; renderPTStream();
       }
@@ -6048,9 +6068,14 @@ async function ptWatch(codeArg){
     PTStream.pc=pc;
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,candidate:e.candidate}}); };
     pc.ontrack=e=>{ if(PTStream){ PTStream.remoteStream=e.streams[0]; PTStream.status="live"; renderPTStream(); } };
-    pc.onconnectionstatechange=()=>{
+    pc.onconnectionstatechange=async ()=>{
       if(!PTStream) return;
-      if(pc.connectionState==='failed'){ PTStream.status="connection failed — network blocked it"; PTStream.failed=true; renderPTStream(); }
+      if(pc.connectionState==='failed'){
+        const diag=await ptIceDiag(pc);
+        console.log('[ptStream viewer] connection failed:', diag);
+        PTStream.status="connection failed"+(diag.relay?" (relay reachable, still blocked)":diag.srflx?" (no relay found — TURN unreachable)":" (no usable network path found)");
+        PTStream.failed=true; renderPTStream();
+      }
       else if(['disconnected','closed'].includes(pc.connectionState)){ PTStream.status="disconnected"; renderPTStream(); }
     };
     await pc.setRemoteDescription(payload.sdp);
