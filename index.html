@@ -6099,6 +6099,13 @@ function ptStartProcessing(S){
     S.replayChunks=[];
     S.recorder.ondataavailable=e=>{
       if(e.data && e.data.size){
+        /* The very first chunk carries the container's header (track/codec
+           info) — without it, nothing built from later chunks alone is
+           decodable at all. Keep it forever, separate from the rolling
+           window, instead of letting it age out like every other chunk
+           (which is exactly why replay silently went black ~16s into any
+           stream: every clip after that point was headerless). */
+        if(!S.replayHeaderChunk){ S.replayHeaderChunk=e.data; return; }
         S.replayChunks.push({blob:e.data,t:Date.now()});
         const cutoff=Date.now()-16000;
         while(S.replayChunks.length && S.replayChunks[0].t<cutoff) S.replayChunks.shift();
@@ -6218,17 +6225,23 @@ function ptInstantReplay(){
   if(!PTStream.replayChunks || !PTStream.replayChunks.length){
     return toast("Nothing buffered yet — give it a few seconds",true);
   }
-  const blob=new Blob(PTStream.replayChunks.map(c=>c.blob),{type:PTStream.replayMime||'video/webm'});
+  const parts=[PTStream.replayHeaderChunk, ...PTStream.replayChunks.map(c=>c.blob)].filter(Boolean);
+  const blob=new Blob(parts,{type:PTStream.replayMime||'video/webm'});
   const url=URL.createObjectURL(blob);
   const rv=document.createElement('video');
   rv.muted=true; rv.playsInline=true; rv.playbackRate=0.55;
   rv.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
   document.body.appendChild(rv);
   rv.addEventListener('loadedmetadata', ()=>{
-    // start a few seconds before the end of the buffer — "what just happened",
-    // not the oldest ~15s-ago moment the rolling buffer still happens to hold.
-    const look=Math.min(5, rv.duration||5);
-    try{ rv.currentTime=Math.max(0,(rv.duration||5)-look); }catch(e){}
+    /* MediaRecorder-assembled blobs frequently report duration:Infinity/NaN
+       (the container was never finalized, since it was a live recording) —
+       seeking against that either throws or leaves the video permanently
+       stuck before any frame decodes. Only seek when the duration is a real,
+       finite number; otherwise just play from the start, which always works. */
+    if(isFinite(rv.duration) && rv.duration>0){
+      const look=Math.min(5, rv.duration);
+      try{ rv.currentTime=Math.max(0, rv.duration-look); }catch(e){}
+    }
     rv.play().catch(()=>{});
   });
   rv.src=url;
