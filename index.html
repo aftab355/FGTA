@@ -5870,13 +5870,24 @@ async function ptEnumerateCameras(){
 }
 async function ptSwapVideoTrack(constraints){
   if(!PTStream || PTStream.role!=='host') return null;
+  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
+  /* Most phones only let one getUserMedia call hold the camera hardware at a
+     time — requesting the new camera before releasing the old one is exactly
+     what throws NotReadableError ("Could not start video source"/"in use").
+     Release first, then request. */
+  const prevDeviceId=PTStream.videoDeviceId;
+  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
   let newStream;
-  try{ newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false}); }
-  catch(e){ toast("Couldn't switch camera: "+e.name,true); return null; }
+  try{
+    newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false});
+  }catch(e){
+    toast("Couldn't switch camera ("+e.name+") — reconnecting previous camera",true);
+    try{
+      newStream=await navigator.mediaDevices.getUserMedia({video:prevDeviceId?{deviceId:{ideal:prevDeviceId}}:true,audio:false});
+    }catch(e2){ toast("Camera unavailable: "+e2.name,true); return null; }
+  }
   const newTrack=newStream.getVideoTracks()[0];
   if(!newTrack) return null;
-  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
-  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
   PTStream.rawStream.addTrack(newTrack);
   const s=newTrack.getSettings();
   PTStream.videoDeviceId=s.deviceId||PTStream.videoDeviceId;
