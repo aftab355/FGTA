@@ -6302,6 +6302,25 @@ function ptStartProcessing(S){
   const canvasStream=S.canvas.captureStream(30);
   const audioTrack=S.rawStream.getAudioTracks()[0];
   S.localStream=new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack?[audioTrack]:[])]);
+  ptStartReplayRecorder(S);
+  /* Keeping chunk #0 forever (see ptStartReplayRecorder) stops replay clips
+     from being flat-out undecodable, but it doesn't stop them from being
+     broken in a different way: that header chunk is from whenever the
+     stream started, while the rolling window holds only the last ~16s — so
+     a clip built from [old header, ...recent chunks] has a huge timestamp
+     gap baked into it. Depending on exactly where playback lands relative
+     to that gap, you get either a frozen single frame or stuttery,
+     glitchy playback — not a smaller bug, a different one.
+     The actual fix is to never let a header get that stale: periodically
+     stop and immediately restart the recorder, so at any moment the
+     buffer is one uninterrupted recording with its OWN fresh, nearby
+     header — never a splice. */
+  S._replayCycle=setInterval(()=>{
+    if(S.recorder && S.recorder.state==='recording') S.recorder.stop();
+  }, 20000);
+}
+function ptStartReplayRecorder(S){
+  if(!S || !S.localStream) return;
   try{
     /* Safari (incl. iOS) has never supported MediaRecorder with webm — only
        mp4 — so a webm-only mime list silently threw there and instant replay
@@ -6309,25 +6328,29 @@ function ptStartProcessing(S){
        webm first (smaller/faster elsewhere) but fall back to mp4. */
     const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
     const mime=candidates.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
-    S.recorder=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined);
+    const rec=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined);
     S.replayMime=mime || 'video/webm';
     S.replayChunks=[];
-    S.recorder.ondataavailable=e=>{
+    S.replayHeaderChunk=null;
+    rec.ondataavailable=e=>{
       if(e.data && e.data.size){
-        /* The very first chunk carries the container's header (track/codec
-           info) — without it, nothing built from later chunks alone is
-           decodable at all. Keep it forever, separate from the rolling
-           window, instead of letting it age out like every other chunk
-           (which is exactly why replay silently went black ~16s into any
-           stream: every clip after that point was headerless). */
+        /* The very first chunk of *this* recording session carries the
+           container's header (track/codec info) — without it, nothing
+           built from later chunks alone is decodable. Keep it for the
+           life of this session, separate from the rolling window. */
         if(!S.replayHeaderChunk){ S.replayHeaderChunk=e.data; return; }
         S.replayChunks.push({blob:e.data,t:Date.now()});
         const cutoff=Date.now()-16000;
         while(S.replayChunks.length && S.replayChunks[0].t<cutoff) S.replayChunks.shift();
       }
     };
-    S.recorder.onerror=e=>console.log('[ptStream] recorder error:', e && e.error && e.error.message);
-    S.recorder.start(1000);
+    rec.onerror=e=>console.log('[ptStream] recorder error:', e && e.error && e.error.message);
+    rec.onstop=()=>{
+      // chain into a fresh session, unless the stream itself is ending
+      if(!S._stoppingForGood && PTStream===S) ptStartReplayRecorder(S);
+    };
+    rec.start(1000);
+    S.recorder=rec;
   }catch(e){
     console.log('[ptStream] instant replay unavailable:', e && e.message);
     S.replayUnavailable=true;
@@ -6336,6 +6359,8 @@ function ptStartProcessing(S){
 function ptStopProcessing(S){
   if(!S) return;
   if(S._raf) cancelAnimationFrame(S._raf);
+  S._stoppingForGood=true;
+  if(S._replayCycle) clearInterval(S._replayCycle);
   if(S.recorder && S.recorder.state!=='inactive'){ try{ S.recorder.stop(); }catch(e){} }
   if(S.replay){
     try{ S.replay.video.pause(); if(S.replay.video.parentNode) S.replay.video.parentNode.removeChild(S.replay.video); URL.revokeObjectURL(S.replay.url); }catch(e){}
