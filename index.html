@@ -5611,7 +5611,12 @@ window.initGalaxy=initGalaxy;
    Independent of PT so it isn't wiped by undo/redo/reload.
    ============================================================ */
 let PTStream=null;
-const PT_ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"}]};
+const PT_ICE={iceServers:[
+  {urls:"stun:stun.l.google.com:19302"},
+  {urls:"turn:openrelay.metered.ca:80", username:"openrelayproject", credential:"openrelayproject"},
+  {urls:"turn:openrelay.metered.ca:443", username:"openrelayproject", credential:"openrelayproject"},
+  {urls:"turn:openrelay.metered.ca:443?transport=tcp", username:"openrelayproject", credential:"openrelayproject"}
+]};
 function ptRandCode(){ return Math.random().toString(36).slice(2,7).toUpperCase(); }
 function ptRandId(){ return Math.random().toString(36).slice(2,10); }
 
@@ -5653,6 +5658,10 @@ function renderPTStream(){
         <div class="pt-stream-controls">
           <button class="mini" onclick="ptToggleMic()">${PTStream.micOn===false?'🔇':'🎤'} mic</button>
           <button class="mini" onclick="ptToggleCam()">${PTStream.camOn===false?'🚫':'📷'} camera</button>
+          ${PTStream.cameras && PTStream.cameras.length>1?`<button class="mini" onclick="ptFlipCamera()">🔄 flip</button>`:''}
+          ${PTStream.cameras && PTStream.cameras.length>2?`<select onchange="ptSwitchCameraDevice(this.value)">
+            ${PTStream.cameras.map(c=>`<option value="${esc(c.deviceId)}" ${c.deviceId===PTStream.videoDeviceId?'selected':''}>${esc(c.label||'Camera')}</option>`).join('')}
+          </select>`:''}
           <label class="pt-zoom-label">zoom <input type="range" min="1" max="3" step="0.1" value="${PTStream.zoom||1}" oninput="ptSetZoom(this.value)" style="width:80px"></label>
           <select onchange="ptSetFilter(this.value)">
             <option value="none" ${(!PTStream.filter||PTStream.filter==='none')?'selected':''}>No filter</option>
@@ -5683,6 +5692,7 @@ function renderPTStream(){
       </div>
       ${othersHtml}
       <button class="mini no" style="margin-top:10px" onclick="ptStopWatching()">stop watching</button>
+      ${PTStream.failed?`<button class="mini" style="margin-top:10px" onclick="ptRetryWatch()">↻ retry</button>`:''}
     </div>`;
   const v=$("ptRemoteVideo");
   if(v && PTStream.remoteStream){
@@ -5791,6 +5801,44 @@ function ptToggleCam(){
 }
 window.ptToggleCam=ptToggleCam;
 
+/* ---- camera switching: since viewers only ever receive the canvas-drawn
+   stream (see ptStartProcessing), swapping the input camera never needs to
+   touch the peer connections — just hot-swap the video track feeding the
+   canvas and the next drawImage() picks it up. ---- */
+async function ptEnumerateCameras(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+  try{ return (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'); }
+  catch(e){ return []; }
+}
+async function ptSwapVideoTrack(constraints){
+  if(!PTStream || PTStream.role!=='host') return null;
+  let newStream;
+  try{ newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false}); }
+  catch(e){ toast("Couldn't switch camera: "+e.name,true); return null; }
+  const newTrack=newStream.getVideoTracks()[0];
+  if(!newTrack) return null;
+  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
+  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
+  PTStream.rawStream.addTrack(newTrack);
+  const s=newTrack.getSettings();
+  PTStream.videoDeviceId=s.deviceId||PTStream.videoDeviceId;
+  if(s.facingMode) PTStream.facingMode=s.facingMode;
+  return newTrack;
+}
+async function ptFlipCamera(){
+  if(!PTStream || PTStream.role!=='host') return;
+  const next = PTStream.facingMode==='environment' ? 'user' : 'environment';
+  await ptSwapVideoTrack({facingMode:{ideal:next}});
+  renderPTStream();
+}
+window.ptFlipCamera=ptFlipCamera;
+async function ptSwitchCameraDevice(deviceId){
+  if(!deviceId) return;
+  await ptSwapVideoTrack({deviceId:{exact:deviceId}});
+  renderPTStream();
+}
+window.ptSwitchCameraDevice=ptSwitchCameraDevice;
+
 /* ---- instant replay: NBA-broadcast style — flash-wipe transition, a
    pulsing REPLAY chrome banner + corner bug, played back in slow motion
    from the last ~15s the host's camera actually recorded. ---- */
@@ -5886,7 +5934,7 @@ async function ptGoLive(){
     return toast("Camera not available in this browser",true);
   }
   let stream;
-  try{ stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true}); }
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:true}); }
   catch(e){
     const msg = e.name==="NotAllowedError" ? "Camera/mic permission denied — allow access and try again"
       : e.name==="NotFoundError" ? "No camera found on this device"
@@ -5894,8 +5942,11 @@ async function ptGoLive(){
     return toast(msg,true);
   }
   const code=ptRandCode();
-  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[]};
+  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[]};
+  const initTrack=stream.getVideoTracks()[0];
+  if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
+  ptEnumerateCameras().then(list=>{ if(PTStream && PTStream.role==='host'){ PTStream.cameras=list; renderPTStream(); } });
   const ch=sb.channel("ptstream_"+code);
   PTStream.channel=ch;
   ch.on("broadcast",{event:"join"}, async ({payload})=>{
@@ -5969,7 +6020,9 @@ async function ptWatch(codeArg){
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,candidate:e.candidate}}); };
     pc.ontrack=e=>{ if(PTStream){ PTStream.remoteStream=e.streams[0]; PTStream.status="live"; renderPTStream(); } };
     pc.onconnectionstatechange=()=>{
-      if(PTStream && ['disconnected','failed','closed'].includes(pc.connectionState)){ PTStream.status="disconnected"; renderPTStream(); }
+      if(!PTStream) return;
+      if(pc.connectionState==='failed'){ PTStream.status="connection failed — network blocked it"; PTStream.failed=true; renderPTStream(); }
+      else if(['disconnected','closed'].includes(pc.connectionState)){ PTStream.status="disconnected"; renderPTStream(); }
     };
     await pc.setRemoteDescription(payload.sdp);
     const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -6000,6 +6053,14 @@ function ptStopWatching(){
   renderPTStream();
 }
 window.ptStopWatching=ptStopWatching;
+
+function ptRetryWatch(){
+  if(!PTStream) return;
+  const code=PTStream.code;
+  ptStopWatching();
+  setTimeout(()=>ptWatch(code),200);
+}
+window.ptRetryWatch=ptRetryWatch;
 
 window.addEventListener("beforeunload", ()=>{
   try{ if(PTStream){ if(PTStream.role==='host') ptStopLive(); else ptStopWatching(); } }catch(e){}
