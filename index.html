@@ -1863,7 +1863,10 @@
      picture itself rather than on whatever else lives in the wrapper */
   .pt-video-shell{position:relative;min-width:0;border-radius:var(--r-md);overflow:hidden;
     border:1px solid var(--line);background:#000;box-shadow:0 20px 46px -26px rgba(0,0,0,.85)}
-  .pt-stream-video{width:100%;aspect-ratio:4/3;object-fit:contain;background:#000;display:block;
+  /* 16/9 is only the placeholder until ptBindAspect() reads the real intrinsic
+     size off the video element — it matches the canvas's landscape capture
+     ratio so the box doesn't visibly jump on the first frame */
+  .pt-stream-video{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;display:block;
     max-height:min(72vh,620px)}
   .pt-vid-badge{position:absolute;top:8px;left:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;
     padding:4px 9px;border-radius:var(--r-pill);background:rgba(8,6,16,.62);border:1px solid rgba(255,255,255,.18);
@@ -1920,14 +1923,44 @@
   .pt-stream-others{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px;min-width:0}
   .pt-other-btn{display:block;width:100%;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* ---- fullscreen (any device) ---- */
+  /* ---- fullscreen (any device) ----
+     Fullscreen is "let the picture own the screen" mode, so it deliberately
+     departs from the windowed layout twice:
+       1. object-fit:cover, not contain. A portrait stream on a wide screen was
+          sitting inside huge dead black pillarbox bars; cover crops to fill
+          instead, the way every streaming app's theatre mode does. The crop is
+          anchored to the bottom of the frame (object-position) so the
+          scoreboard baked into the bottom of every canvas frame always
+          survives, whatever cover decides to trim.
+          The windowed view keeps object-fit:contain on purpose.
+       2. chat is an off-screen overlay drawer behind a 💬 edge tab instead of
+          a rail that permanently eats the picture's width. Being absolutely
+          positioned, opening it slides over the video rather than resizing it.
+     --pt-drawer-w is re-tuned per device class in the media queries below. */
   .pt-stream-main:fullscreen{background:#000;padding:14px;gap:12px;flex-wrap:nowrap;align-items:stretch;
-    width:100vw;height:100vh;max-width:none}
+    width:100vw;height:100vh;max-width:none;position:relative;--pt-drawer-w:min(78vw,320px)}
   .pt-stream-main:fullscreen .pt-stream-vwrap{flex:1 1 auto;min-width:0;min-height:0;max-width:none}
   .pt-stream-main:fullscreen .pt-video-shell{flex:1 1 auto;min-height:0;border:none;border-radius:0;box-shadow:none}
-  .pt-stream-main:fullscreen .pt-stream-video{aspect-ratio:auto!important;width:100%;height:100%;max-height:none;object-fit:contain}
-  .pt-stream-main:fullscreen .pt-chat{width:320px;max-width:320px;flex:none;height:auto;max-height:none}
+  .pt-stream-main:fullscreen .pt-stream-video{aspect-ratio:auto!important;width:100%;height:100%;max-height:none;
+    object-fit:cover;object-position:center bottom}
   .pt-stream-main:fullscreen .pt-dbg{flex:none;max-height:26vh;overflow:auto}
+  .pt-stream-main:fullscreen .pt-chat{position:absolute;top:0;right:0;bottom:0;z-index:6;
+    width:var(--pt-drawer-w);max-width:var(--pt-drawer-w);height:auto;max-height:none;flex:none;
+    box-shadow:0 24px 70px -18px rgba(0,0,0,.95);
+    /* +20px clears the fullscreen container's padding so no sliver peeks in */
+    transform:translateX(calc(100% + 20px));transition:transform .22s cubic-bezier(.16,1,.3,1)}
+  .pt-stream-main:fullscreen .pt-chat.pt-chat-open{transform:translateX(0)}
+  /* the tab only exists in fullscreen — windowed views show chat outright */
+  .pt-chat-tab{display:none}
+  .pt-stream-main:fullscreen .pt-chat-tab{display:flex;position:absolute;z-index:7;right:0;top:50%;
+    align-items:center;justify-content:center;width:34px;height:76px;padding:0;cursor:pointer;
+    font-size:17px;line-height:1;color:#fff;background:rgba(8,6,16,.62);
+    border:1px solid rgba(255,255,255,.22);border-right:none;border-radius:12px 0 0 12px;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    transform:translateY(-50%);transition:transform .22s cubic-bezier(.16,1,.3,1),background .15s}
+  .pt-stream-main:fullscreen .pt-chat.pt-chat-open+.pt-chat-tab{
+    transform:translateY(-50%) translateX(calc(-1 * var(--pt-drawer-w)));
+    background:color-mix(in srgb,var(--accent) 80%, #000)}
 
   /* ---- tablets / small laptops: below ~820px the video+chat row can no
      longer hold both at a usable size, so stack them rather than letting the
@@ -1974,19 +2007,22 @@
   }
 
   /* ---- phone in fullscreen landscape: cinema mode ----
-     Short-and-wide viewport, so drop the chrome, let the picture own the
-     screen and dock chat as a narrow rail. */
+     Short-and-wide viewport, so drop the chrome and let the picture own the
+     whole screen. Chat used to be a permanent min(38vw,250px) rail here, which
+     is a third of a phone's landscape width gone before the match even starts;
+     it's now the collapsed drawer defined in the base :fullscreen block, so
+     the video is full-width by default and chat is opt-in via the 💬 tab. */
   @media(max-height:520px) and (orientation:landscape){
-    .pt-stream-main:fullscreen{flex-direction:row;padding:8px;gap:8px}
+    .pt-stream-main:fullscreen{flex-direction:row;padding:8px;gap:8px;--pt-drawer-w:min(58vw,260px)}
     .pt-stream-main:fullscreen .pt-stream-video{max-height:none}
-    .pt-stream-main:fullscreen .pt-chat{width:min(38vw,250px);max-width:250px}
     .pt-stream-main:fullscreen .pt-chat-log{font-size:11px;padding:8px}
     .pt-stream-main:fullscreen .pt-dbg{max-height:34vh}
+    .pt-stream-main:fullscreen .pt-chat-tab{width:30px;height:64px;font-size:15px}
   }
-  /* ---- phone in fullscreen portrait: video on top, chat docked below ---- */
+  /* ---- phone in fullscreen portrait ---- same drawer treatment, just wider:
+     a docked 32vh chat panel was costing a third of the screen here too. ---- */
   @media(max-width:640px) and (orientation:portrait){
-    .pt-stream-main:fullscreen{flex-direction:column;padding:8px;gap:8px}
-    .pt-stream-main:fullscreen .pt-chat{width:100%;max-width:none;height:32vh;flex:none}
+    .pt-stream-main:fullscreen{flex-direction:column;padding:8px;gap:8px;--pt-drawer-w:min(84vw,330px)}
   }
   .pt-final{text-align:center;font-size:17px;font-weight:700;color:var(--gold);margin-top:16px;background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:var(--r-md);padding:16px}
   .pt-foot{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
@@ -5800,10 +5836,13 @@ function renderPTStream(){
     <div class="pt-stream-note">📡 other angles live now</div>
     ${others.map(o=>`<button class="mini pt-other-btn" onclick="ptSwitchTo('${esc(o.code)}')">▶ ${esc(o.label||'Live match')} — ${esc(o.code)}</button>`).join('')}
   </div>` : '';
-  const chatHtml = (S)=>`<div class="pt-chat">
+  /* The 💬 tab must stay the chat panel's immediate next sibling — the CSS
+     slides it aside with `.pt-chat.pt-chat-open + .pt-chat-tab`. It's hidden
+     outside fullscreen, where chat is docked and always visible. */
+  const chatHtml = (S)=>`<div class="pt-chat${S.chatOpen?' pt-chat-open':''}" id="ptChat">
       <div class="pt-chat-log" id="ptChatLog">${(S.chat||[]).slice(-40).map(c=>`<div class="pt-chat-msg"><b>${esc(c.author)}:</b>${esc(c.text)}</div>`).join('') || '<div class="pw-legend">say something — chat is live for everyone watching</div>'}</div>
       <div class="pt-chat-row"><input id="ptChatInput" placeholder="say something…" autocomplete="off" onkeydown="ptChatKey(event)"><button class="mini" onclick="ptSendChat()">send</button></div>
-    </div>`;
+    </div><button class="pt-chat-tab" id="ptChatTab" onclick="ptToggleChatDrawer(event)" title="Chat" aria-label="Toggle chat">💬</button>`;
   if(!PTStream){
     box.innerHTML=`
       <div class="pt-stream-panel">
@@ -5913,6 +5952,38 @@ function ptUnmute(){
 window.ptUnmute=ptUnmute;
 window.renderPTStream=renderPTStream;
 
+/* ---- capture / composite resolution ----------------------------------------
+   The camera is *asked* for full 1920x1080 (ideal, so it degrades gracefully on
+   anything that can't do it), but the shared canvas everyone actually receives
+   composites at 1280x720 (720x1280 in portrait). That split is deliberate:
+
+   - Requesting a 1080p source is close to free — the sensor/ISP does it in
+     hardware — and it pays off twice: downscaling 1080p into a 720p canvas is
+     effectively supersampled (crisper than a native 720p capture), and the
+     zoom control crops the *source* frame, so the extra pixels are what keeps
+     3x zoom from turning to mush.
+   - Compositing at 1080p is NOT free. This canvas is redrawn every animation
+     frame with drawImage (plus an optional ctx.filter, which is the expensive
+     one), captureStream()'d into WebRTC for up to 3 peers, AND fed to a live
+     MediaRecorder for the replay buffer — three consumers of every frame, on a
+     phone, while the tracker UI is also running. 1080p is 2.07M px/frame,
+     6.75x the old 640x480; 720p is 921k px/frame, 3x the old size. 720p is the
+     point where mid-range phones still hold a steady 30fps and a sane uplink
+     bitrate for 3 simultaneous peers, and it is already a large, obvious
+     sharpness win over 480p on a phone or a laptop screen.
+
+   If a device class turns out to have the headroom, bumping this to full
+   1920x1080 is a one-line change to the two constants below. ---- */
+const PT_CAP_LONG=1280, PT_CAP_SHORT=720;      // canvas composite size
+const PT_SRC_LONG=1920, PT_SRC_SHORT=1080;     // what we ask the camera for
+/* getUserMedia video constraints, shared by the initial request and every
+   camera swap so flipping cameras never silently drops back to VGA. */
+function ptVideoConstraints(extra){
+  return Object.assign({
+    width:{ideal:PT_SRC_LONG}, height:{ideal:PT_SRC_SHORT}
+  }, extra||{});
+}
+
 /* ---- camera FX pipeline: draws the raw camera onto a canvas (crop = zoom,
    ctx.filter = effect), so zoom/filters are baked into what viewers see too,
    not just a local CSS preview. Also feeds a rolling MediaRecorder buffer
@@ -5931,44 +6002,175 @@ function ptFilterCSS(name){
 /* ---- broadcast-style scoreboard, baked directly into the outgoing video
    frame. Since every viewer (and the host's own preview) renders this same
    canvas, nobody needs a separate overlay or a "how's the score" chat
-   message — it's just part of the picture, fullscreen or not. ---- */
+   message — it's just part of the picture, fullscreen or not.
+
+   Styled as a real TV score bug: two colour-coded player blocks carrying the
+   set score in oversized digits, a labelled GAMES readout, and the live
+   point (or tiebreak) as its own bright badge. Everything is derived from a
+   single `u` scale unit so the identical code reads correctly on a 720x1280
+   portrait canvas and a 1280x720 landscape one. ---- */
+
+/* Canvas 2D can't resolve var(--x), so resolve the app's real accent tokens
+   off :root once and cache them — ptDrawScoreboard runs every frame. */
+let _ptSbColors=null;
+function ptSbColors(){
+  if(_ptSbColors) return _ptSbColors;
+  let cs=null;
+  try{ cs=getComputedStyle(document.documentElement); }catch(e){}
+  const g=(n,f)=>{ const v=cs?(cs.getPropertyValue(n)||'').trim():''; return v||f; };
+  _ptSbColors={
+    a:g('--accent','#ff2d78'),   // player A block — hot pink
+    b:g('--court','#1ec9dd'),    // player B block — cyan
+    ball:g('--ball','#d4ff2b'),  // live-point badge
+    gold:g('--gold','#ffcc00'),  // tiebreak + winner
+    dim:g('--dim','#6e6795')
+  };
+  return _ptSbColors;
+}
+/* rounded rect with optional per-corner radii [tl,tr,br,bl]; falls back to a
+   hand-rolled path on engines without ctx.roundRect (older Safari) */
+function ptRoundRect(ctx,x,y,w,h,r){
+  const a=Array.isArray(r)?r:[r,r,r,r];
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x,y,w,h,a); return; }
+  const tl=a[0],tr=a[1],br=a[2],bl=a[3];
+  ctx.beginPath();
+  ctx.moveTo(x+tl,y);
+  ctx.lineTo(x+w-tr,y); ctx.quadraticCurveTo(x+w,y,x+w,y+tr);
+  ctx.lineTo(x+w,y+h-br); ctx.quadraticCurveTo(x+w,y+h,x+w-br,y+h);
+  ctx.lineTo(x+bl,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-bl);
+  ctx.lineTo(x,y+tl); ctx.quadraticCurveTo(x,y,x+tl,y);
+  ctx.closePath();
+}
+function ptFitText(ctx,text,maxW){
+  if(!text) return '';
+  if(ctx.measureText(text).width<=maxW) return text;
+  let t=text;
+  while(t.length>1 && ctx.measureText(t+'…').width>maxW) t=t.slice(0,-1);
+  return t+'…';
+}
+/* broadcasts use surnames — it also happens to be the natural way to keep a
+   long "Firstname Lastname" from eating the whole bug */
+function ptShortName(n){
+  const p=String(n==null?'':n).trim().split(/\s+/).filter(Boolean);
+  return (p.length>1?p[p.length-1]:p[0])||'—';
+}
 function ptDrawScoreboard(S){
   if(typeof PT==='undefined' || !PT) return;
   const ctx=S.ctx, canvas=S.canvas;
-  const barH=Math.max(50,Math.min(64,Math.round(canvas.height*0.15)));
-  const y0=canvas.height-barH, pad=10;
+  const W=canvas.width, H=canvas.height;
+  if(!W || !H) return;
+  const C=ptSbColors();
+  ctx.save();
   ctx.filter='none';
-  const grad=ctx.createLinearGradient(0,y0,0,canvas.height);
-  grad.addColorStop(0,'rgba(10,8,20,0)');
-  grad.addColorStop(0.3,'rgba(10,8,20,0.88)');
-  grad.addColorStop(1,'rgba(10,8,20,0.92)');
-  ctx.fillStyle=grad;
-  ctx.fillRect(0,y0,canvas.width,barH);
-  ctx.strokeStyle='#ff2d78'; ctx.lineWidth=2.5;
-  ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(canvas.width,y0); ctx.stroke();
 
-  ctx.textBaseline='alphabetic'; ctx.textAlign='left';
-  ctx.fillStyle='#fff'; ctx.font="bold 14px 'JetBrains Mono',monospace";
-  ctx.fillText(`${PT.a}  ${PT.setsA}–${PT.setsB}  ${PT.b}`, pad, y0+barH*0.42);
-  ctx.fillStyle='#9a93ad'; ctx.font="11px 'JetBrains Mono',monospace";
-  ctx.fillText(`games ${PT.gamesA}-${PT.gamesB}`, pad, y0+barH-10);
+  const u=Math.min(W,H);
+  const barH=Math.max(34, Math.round(Math.min(u*0.115, H*0.16)));
+  const m=Math.round(barH*0.24);          // margin from the frame edges
+  const pad=Math.round(barH*0.26);        // horizontal padding inside a cell
+  const rad=Math.round(barH*0.17);
+  const MONO="'JetBrains Mono',monospace";
+  const fName=`700 ${Math.max(9,Math.round(barH*0.30))}px ${MONO}`;
+  const fBig =`800 ${Math.max(13,Math.round(barH*0.46))}px ${MONO}`;
+  const fMid =`800 ${Math.max(11,Math.round(barH*0.34))}px ${MONO}`;
+  const fLab =`700 ${Math.max(7,Math.round(barH*0.185))}px ${MONO}`;
 
-  const ptScore = PT.tiebreak ? `${PT.tbA}-${PT.tbB} TB` : `${PT.ptsA}-${PT.ptsB}`;
-  const pillText='PT '+ptScore;
-  ctx.font="bold 13px 'JetBrains Mono',monospace";
-  const tw=ctx.measureText(pillText).width, pillW=tw+18, pillH=24;
-  const pillX=canvas.width-pillW-pad, pillY=y0+(barH-pillH)/2;
-  ctx.fillStyle='#4be3ff';
-  ctx.beginPath();
-  if(ctx.roundRect) ctx.roundRect(pillX,pillY,pillW,pillH,12); else ctx.rect(pillX,pillY,pillW,pillH);
-  ctx.fill();
-  ctx.fillStyle='#0a0814'; ctx.textAlign='center';
-  ctx.fillText(pillText, pillX+pillW/2, pillY+pillH/2+4);
+  const setsA=String(PT.setsA||0), setsB=String(PT.setsB||0);
+  const tb=!!PT.tiebreak;
+  const ptsTxt = tb ? `${PT.tbA||0}-${PT.tbB||0}` : `${PT.ptsA||0}-${PT.ptsB||0}`;
+  const ptsLab = tb ? 'TIEBREAK' : 'POINT';
+  const gamesTxt = `${PT.gamesA||0}-${PT.gamesB||0}`;
 
-  if(PT.winner){
-    ctx.textAlign='center'; ctx.fillStyle='#ffd23f'; ctx.font="bold 12px 'JetBrains Mono',monospace";
-    ctx.fillText('🏆 '+(PT.winner==='a'?PT.a:PT.b)+' wins', canvas.width/2, y0-8);
+  /* --- measure, then hand whatever width is left over to the two names --- */
+  ctx.font=fBig;
+  const setCellW=Math.round(Math.max(ctx.measureText(setsA).width, ctx.measureText(setsB).width)+pad*1.7);
+  const ptsDigW=ctx.measureText(ptsTxt).width;
+  ctx.font=fMid;
+  const gamesDigW=ctx.measureText(gamesTxt).width;
+  ctx.font=fLab;
+  const ptsW=Math.round(Math.max(ptsDigW, ctx.measureText(ptsLab).width)+pad*1.7);
+  const gamesW=Math.round(Math.max(gamesDigW, ctx.measureText('GAMES').width)+pad*1.7);
+
+  const avail=W-m*2;
+  let showGames=true;
+  let fixed=setCellW*2+pad*4+gamesW+ptsW;
+  let nameBudget=avail-fixed;
+  /* on a very narrow canvas the games cell is the first thing to go — the set
+     score and the live point are the two readings that actually matter */
+  if(nameBudget < barH*1.1){ showGames=false; fixed-=gamesW; nameBudget=avail-fixed; }
+  const nameMax=Math.max(Math.round(barH*0.5), Math.floor(nameBudget/2));
+  ctx.font=fName;
+  const nA=ptFitText(ctx, ptShortName(PT.a).toUpperCase(), nameMax);
+  const nB=ptFitText(ctx, ptShortName(PT.b).toUpperCase(), nameMax);
+  const nAW=Math.round(ctx.measureText(nA).width), nBW=Math.round(ctx.measureText(nB).width);
+
+  const teamAW=nAW+pad*2+setCellW, teamBW=nBW+pad*2+setCellW;
+  const totalW=teamAW+teamBW+(showGames?gamesW:0)+ptsW;
+  const x0=m, y0=H-barH-m;
+  const labY=y0+barH*0.30, valY=y0+barH*0.685;
+
+  /* backing plate — flat fills only, no per-frame gradient objects */
+  ctx.fillStyle='rgba(8,6,18,0.88)';
+  ptRoundRect(ctx,x0,y0,totalW,barH,rad); ctx.fill();
+
+  ctx.textBaseline='middle';
+  let x=x0;
+  const drawTeam=(name,nw,setTxt,col,first)=>{
+    const bw=nw+pad*2+setCellW;
+    ptRoundRect(ctx,x,y0,bw,barH,[first?rad:0,0,0,first?rad:0]);
+    ctx.fillStyle=col; ctx.fill();
+    /* inset well behind the set digits so they read as a distinct score box
+       rather than more text sitting on the colour block */
+    ctx.fillStyle='rgba(6,4,14,0.46)';
+    ctx.fillRect(x+nw+pad*2, y0, setCellW, barH);
+    ctx.font=fName; ctx.textAlign='left'; ctx.fillStyle='#0b0714';
+    ctx.fillText(name, x+pad, y0+barH*0.5);
+    ctx.font=fBig; ctx.textAlign='center'; ctx.fillStyle='#fff';
+    ctx.fillText(setTxt, x+nw+pad*2+setCellW/2, y0+barH*0.53);
+    x+=bw;
+  };
+  drawTeam(nA,nAW,setsA,C.a,true);
+  drawTeam(nB,nBW,setsB,C.b,false);
+
+  if(showGames){
+    ctx.fillStyle='rgba(255,255,255,0.055)';
+    ctx.fillRect(x,y0,gamesW,barH);
+    ctx.textAlign='center';
+    ctx.font=fLab; ctx.fillStyle=C.dim;
+    ctx.fillText('GAMES', x+gamesW/2, labY);
+    ctx.font=fMid; ctx.fillStyle='#fff';
+    ctx.fillText(gamesTxt, x+gamesW/2, valY);
+    x+=gamesW;
   }
+
+  /* live point / tiebreak: the one thing that changes every rally, so it gets
+     the brightest block and the biggest digits */
+  const badgeW=Math.max(ptsW, x0+totalW-x);
+  ptRoundRect(ctx,x,y0,badgeW,barH,[0,rad,rad,0]);
+  ctx.fillStyle = tb ? C.gold : C.ball; ctx.fill();
+  ctx.textAlign='center';
+  ctx.font=fLab; ctx.fillStyle='rgba(10,8,20,0.72)';
+  ctx.fillText(ptsLab, x+badgeW/2, labY);
+  ctx.font=fBig; ctx.fillStyle='#0b0714';
+  ctx.fillText(ptsTxt, x+badgeW/2, valY);
+
+  /* hairline so the bug still separates from a bright/washed-out picture */
+  ctx.lineWidth=Math.max(1,Math.round(barH*0.025));
+  ctx.strokeStyle='rgba(255,255,255,0.16)';
+  ptRoundRect(ctx,x0,y0,totalW,barH,rad); ctx.stroke();
+
+  if(PT.winner || PT.draw){
+    const txt = PT.draw ? 'MATCH DRAWN'
+      : '🏆 '+ptShortName(PT.winner==='a'?PT.a:PT.b).toUpperCase()+' WINS';
+    const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
+    ctx.font=fMid;
+    const bw=Math.min(avail, Math.round(ctx.measureText(txt).width+bp*2));
+    const by=y0-bh-Math.round(barH*0.20);
+    ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
+    ctx.fillStyle=C.gold; ctx.fill();
+    ctx.fillStyle='#1a1400'; ctx.textAlign='center';
+    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+  }
+  ctx.restore();
 }
 
 /* ---- instant replay, broadcast to everyone at once: rather than showing a
@@ -5981,10 +6183,13 @@ function ptDrawWipe(ctx,canvas,x,drawRight,drawLeft){
   ctx.save(); ctx.beginPath(); ctx.rect(x,0,canvas.width-x,canvas.height); ctx.clip(); drawRight(); ctx.restore();
   ctx.save(); ctx.beginPath(); ctx.rect(0,0,x,canvas.height); ctx.clip(); drawLeft(); ctx.restore();
   ctx.save();
+  /* scale with the canvas so the wipe reads the same at 720p as it did at 480p */
+  const wu=Math.min(canvas.width,canvas.height)/480;
+  const bw=Math.max(4,Math.round(6*wu)), bs=Math.max(20,Math.round(30*wu));
   ctx.fillStyle='#c6ff3d';
-  ctx.fillRect(Math.max(0,x-3),0,6,canvas.height);
-  ctx.font='bold 30px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('🎾', Math.min(canvas.width-16,Math.max(16,x)), canvas.height/2);
+  ctx.fillRect(Math.max(0,x-bw/2),0,bw,canvas.height);
+  ctx.font='bold '+bs+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🎾', Math.min(canvas.width-bs/2,Math.max(bs/2,x)), canvas.height/2);
   ctx.restore();
 }
 function ptDrawReplayFrame(S){
@@ -6013,10 +6218,15 @@ function ptDrawReplayFrame(S){
   } else if(r.phase==='playing'){
     drawClip();
     ctx.save();
+    /* chyron scales with the canvas too — hardcoded 13px vanished at 720p */
+    const cu=Math.min(canvas.width,canvas.height)/480;
+    const cf=Math.max(11,Math.round(13*cu)), ch=Math.round(cf*2.15), cx=Math.round(10*cu), cp=Math.round(cf*0.62);
+    ctx.font="bold "+cf+"px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
+    const cw=Math.round(ctx.measureText('🔁 REPLAY').width+cp*2);
     ctx.fillStyle='rgba(255,45,45,.92)';
-    ctx.fillRect(10,10,124,28);
-    ctx.fillStyle='#fff'; ctx.font="bold 13px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.fillText('🔁 REPLAY',18,24);
+    ctx.fillRect(cx,cx,cw,ch);
+    ctx.fillStyle='#fff';
+    ctx.fillText('🔁 REPLAY',cx+cp,cx+ch/2);
     ctx.restore();
     if(r.video.ended || (now-r.phaseStart)>r.maxMs){ r.phase='wipeOut'; r.phaseStart=now; }
   } else {
@@ -6038,7 +6248,7 @@ function ptStartProcessing(S){
   S.rawVideo.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
   document.body.appendChild(S.rawVideo);
   S.rawVideo.play().catch(()=>{});
-  S.canvas=document.createElement('canvas'); S.canvas.width=640; S.canvas.height=480;
+  S.canvas=document.createElement('canvas'); S.canvas.width=PT_CAP_LONG; S.canvas.height=PT_CAP_SHORT;
   S.ctx=S.canvas.getContext('2d');
   S.zoom=1; S.filter='none'; S.camOn=true; S.micOn=true;
   function loop(){
@@ -6046,16 +6256,19 @@ function ptStartProcessing(S){
     if(S.replay){
       ptDrawReplayFrame(S);
     } else if(S.camOn && S.rawVideo.readyState>=2){
-      const vw=S.rawVideo.videoWidth||640, vh=S.rawVideo.videoHeight||480;
+      const vw=S.rawVideo.videoWidth||PT_CAP_LONG, vh=S.rawVideo.videoHeight||PT_CAP_SHORT;
       /* The camera sensor's raw frame keeps whatever orientation the phone was
-         actually held in — a canvas hardcoded to a 4:3 landscape frame just
+         actually held in — a canvas hardcoded to a landscape frame just
          squishes a portrait feed into it instead of showing it upright. Match
          the canvas to the camera's real orientation instead. Locked once
          (not re-applied every frame): resizing a canvas mid-stream clears it
-         and breaks the MediaRecorder session feeding instant replay. */
+         and breaks the MediaRecorder session feeding instant replay.
+         See PT_CAP_LONG/PT_CAP_SHORT above for why this composites at 720p
+         even though the camera is asked for 1080p. */
       if(!S._sizeLocked){
         const portrait=vh>vw;
-        S.canvas.width=portrait?480:640; S.canvas.height=portrait?640:480;
+        S.canvas.width=portrait?PT_CAP_SHORT:PT_CAP_LONG;
+        S.canvas.height=portrait?PT_CAP_LONG:PT_CAP_SHORT;
         S._sizeLocked=true;
       }
       const z=S.zoom||1;
@@ -6065,7 +6278,9 @@ function ptStartProcessing(S){
     } else {
       S.ctx.filter='none';
       S.ctx.fillStyle='#000'; S.ctx.fillRect(0,0,S.canvas.width,S.canvas.height);
-      S.ctx.fillStyle='#666'; S.ctx.font='20px monospace'; S.ctx.textAlign='center';
+      S.ctx.fillStyle='#666';
+      S.ctx.font=Math.max(16,Math.round(Math.min(S.canvas.width,S.canvas.height)*0.042))+'px monospace';
+      S.ctx.textAlign='center'; S.ctx.textBaseline='middle';
       S.ctx.fillText('camera off', S.canvas.width/2, S.canvas.height/2);
     }
     ptDrawScoreboard(S);
@@ -6150,6 +6365,47 @@ function ptToggleDebug(){
   if(btn) btn.classList.toggle('on', !!PTStream.showDebug);
 }
 window.ptToggleDebug=ptToggleDebug;
+
+/* ---- fullscreen chat drawer ----
+   Same pattern as ptToggleDebug above: flip a flag on PTStream and poke the
+   class straight onto the DOM rather than calling renderPTStream(), which
+   would rebuild the chat input mid-typing. The flag living on PTStream is
+   what makes the drawer survive the full re-render that fires on every
+   incoming chat message. */
+function ptSyncChatDrawer(){
+  const open=!!(PTStream && PTStream.chatOpen);
+  const el=document.getElementById('ptChat');
+  /* the tab's own slid-aside/highlighted state rides the CSS sibling selector
+     off this same class, so there is nothing else to toggle */
+  if(el) el.classList.toggle('pt-chat-open', open);
+  if(open){ const log=document.getElementById('ptChatLog'); if(log) log.scrollTop=log.scrollHeight; }
+}
+function ptToggleChatDrawer(e){
+  /* stop the click from reaching the tap-away closer below */
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!PTStream) return;
+  PTStream.chatOpen=!PTStream.chatOpen;
+  ptSyncChatDrawer();
+}
+window.ptToggleChatDrawer=ptToggleChatDrawer;
+window.ptSyncChatDrawer=ptSyncChatDrawer;
+/* tap anywhere off the drawer (i.e. on the picture) to dismiss it */
+document.addEventListener('click', e=>{
+  if(!PTStream || !PTStream.chatOpen || !document.fullscreenElement) return;
+  const t=e.target;
+  if(t && t.closest && t.closest('.pt-chat,.pt-chat-tab')) return;
+  PTStream.chatOpen=false;
+  ptSyncChatDrawer();
+});
+/* leaving fullscreen returns chat to the normal docked layout, where the flag
+   is meaningless — clear it so re-entering fullscreen starts collapsed again */
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement && PTStream && PTStream.chatOpen){
+    PTStream.chatOpen=false;
+    ptSyncChatDrawer();
+  }
+});
+
 function ptSetFilter(v){ if(PTStream) PTStream.filter=v; }
 window.ptSetFilter=ptSetFilter;
 function ptToggleMic(){
@@ -6185,12 +6441,15 @@ async function ptSwapVideoTrack(constraints){
   const prevDeviceId=PTStream.videoDeviceId;
   if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
   let newStream;
+  /* carry the same HD resolution request across the swap — without it a
+     camera flip silently renegotiates back down to the driver's default
+     (often 640x480) and the stream visibly softens mid-match */
   try{
-    newStream=await navigator.mediaDevices.getUserMedia({video:constraints,audio:false});
+    newStream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints(constraints),audio:false});
   }catch(e){
     toast("Couldn't switch camera ("+e.name+") — reconnecting previous camera",true);
     try{
-      newStream=await navigator.mediaDevices.getUserMedia({video:prevDeviceId?{deviceId:{ideal:prevDeviceId}}:true,audio:false});
+      newStream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints(prevDeviceId?{deviceId:{ideal:prevDeviceId}}:null),audio:false});
     }catch(e2){ toast("Camera unavailable: "+e2.name,true); return null; }
   }
   const newTrack=newStream.getVideoTracks()[0];
@@ -6316,7 +6575,7 @@ async function ptGoLive(){
     return toast("Camera not available in this browser",true);
   }
   let stream;
-  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:true}); }
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints({facingMode:{ideal:'environment'}}),audio:true}); }
   catch(e){
     const msg = e.name==="NotAllowedError" ? "Camera/mic permission denied — allow access and try again"
       : e.name==="NotFoundError" ? "No camera found on this device"
