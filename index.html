@@ -4397,6 +4397,25 @@ const COURT = {
   realHours: "Open 6 a.m. – 11:35 p.m. (lights out) — later than Google's posted hours"
 };
 
+/* ---- Google Drive uploads for local match recordings (optional) ----
+   Even after capping the recording bitrate (see PT_REC_BITRATE), a full
+   90-minute match is still north of 2GB — too big to want piling up on a
+   phone. If you'd rather finished recordings upload straight to Google
+   Drive instead of downloading to the device:
+     1. console.cloud.google.com → a project → APIs & Services → enable
+        the "Google Drive API".
+     2. OAuth consent screen → External → add yourself as a test user (this
+        only ever requests the narrow drive.file scope — "files this app
+        itself created" — so it doesn't need Google's full verification).
+     3. Credentials → Create Credentials → OAuth client ID → Web
+        application → Authorized JavaScript origins: this site's exact
+        deployed URL (add http://localhost:PORT too if testing locally).
+     4. Paste the Client ID below.
+   Left as the placeholder, the ☁️ Drive button just explains what's
+   missing rather than failing silently — recordings keep saving locally
+   exactly as before either way. */
+const GOOGLE_DRIVE_CLIENT_ID = "YOUR_GOOGLE_DRIVE_CLIENT_ID.apps.googleusercontent.com";
+
 /* Elo settings */
 const K = 32;
 let DIVISOR = 400;     // classic Elo. Live-adjustable via the admin preview toggle.
@@ -6306,6 +6325,15 @@ function renderPTStream(){
      copy of what they're watching (S.remoteStream instead of S.localStream —
      see ptStartRecord). */
   const moreHtml = (S,isHost)=>{
+    /* only surfaced once GOOGLE_DRIVE_CLIENT_ID is actually filled in — an
+       always-visible button that just explains a missing setup step isn't
+       useful to anyone but the site owner, and this appears automatically
+       the moment that constant is set, no other code change needed */
+    const driveBtn = gdriveConfigured() ? (
+      gdriveIsConnected()
+        ? `<button class="mini pt-ctl-btn auto-on" onclick="gdriveDisconnect()" title="Recordings upload to Google Drive instead of this device — tap to disconnect"><span class="pt-ctl-ico">☁️</span><span class="pt-ctl-lbl">Drive on</span></button>`
+        : `<button class="mini pt-ctl-btn" onclick="gdriveConnect()" title="Connect Google Drive so a finished recording uploads there instead of downloading to this device"><span class="pt-ctl-ico">☁️</span><span class="pt-ctl-lbl">connect Drive</span></button>`
+    ) : '';
     const body = isHost ? `
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn${S.micOn===false?' off':''}" onclick="ptToggleMic()"><span class="pt-ctl-ico">${S.micOn===false?'🔇':'🎤'}</span><span class="pt-ctl-lbl">mic</span></button>
@@ -6314,7 +6342,8 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
-        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        ${driveBtn}
       </div>
       <div class="pt-ctl-sep"></div>
       <div class="pt-ctl-group">
@@ -6336,7 +6365,8 @@ function renderPTStream(){
       </div>` : `
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn" onclick="ptRequestReplay()" title="Ask the host to replay the last point for everyone watching"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
-        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save what you're watching as a video file on this device"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save what you're watching as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        ${driveBtn}
       </div>
       <div class="pw-legend" style="margin-top:8px">mic, camera, zoom and filters belong to the host's own device — not shown here</div>`;
     return `<div class="pt-more${S.moreOpen?' pt-more-open':''}" id="ptMore">
@@ -6461,6 +6491,15 @@ window.renderPTStream=renderPTStream;
    1920x1080 is a one-line change to the two constants below. ---- */
 const PT_CAP_LONG=1280, PT_CAP_SHORT=720;      // canvas composite size
 const PT_SRC_LONG=1920, PT_SRC_SHORT=1080;     // what we ask the camera for
+/* Neither MediaRecorder call below used to pass a bitrate at all, so every
+   browser fell back to its own default for a canvas.captureStream() source
+   — which, unlike a camera stream, isn't rate-limited by sensor/encoder
+   heuristics and can end up enormous (~30+ Mbps observed on Chrome/Android,
+   i.e. a 90-minute match recording north of 18GB). 3 Mbps video is already
+   comfortable for a 720p broadcast-style feed (roughly a decent 720p
+   YouTube stream); 128 kbps audio is plenty for a courtside mic. That's
+   about 23MB/min — a 90-minute match lands around 2GB instead of 18+. */
+const PT_REC_BITRATE={videoBitsPerSecond:3_000_000, audioBitsPerSecond:128_000};
 /* getUserMedia video constraints, shared by the initial request and every
    camera swap so flipping cameras never silently drops back to VGA. */
 function ptVideoConstraints(extra){
@@ -7134,7 +7173,7 @@ function ptStartReplayRecorder(S){
        webm first (smaller/faster elsewhere) but fall back to mp4. */
     const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
     const mime=candidates.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
-    const rec=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined);
+    const rec=new MediaRecorder(S.localStream, {...(mime?{mimeType:mime}:{}), ...PT_REC_BITRATE});
     S.replayMime=mime || 'video/webm';
     S.replayChunks=[];
     S.replayHeaderChunk=null;
@@ -7461,7 +7500,7 @@ function ptStartRecord(){
   const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
   const mime=candidates.find(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
   let rec;
-  try{ rec=new MediaRecorder(src, mime?{mimeType:mime}:undefined); }
+  try{ rec=new MediaRecorder(src, {...(mime?{mimeType:mime}:{}), ...PT_REC_BITRATE}); }
   catch(e){ return toast("Couldn't start recording: "+(e.message||e.name),true); }
   S.recChunks=[];
   S.recMime=mime||'video/webm';
@@ -7473,7 +7512,7 @@ function ptStartRecord(){
   S.recRecorder=rec;
   S.recOn=true;
   renderPTStream();
-  toast("⏺ Recording to this device — stops and saves when you tap stop, or when the stream ends");
+  toast(gdriveIsConnected() ? "⏺ Recording — will upload to Google Drive when you stop" : "⏺ Recording to this device — stops and saves when you tap stop, or when the stream ends");
 }
 function ptStopRecord(){
   const S=PTStream;
@@ -7487,7 +7526,9 @@ function ptFinishRecord(S){
   const blob=new Blob(S.recChunks,{type:S.recMime||'video/webm'});
   const ext=(S.recMime||'').includes('mp4')?'mp4':'webm';
   const stamp=new Date(S.recStartT||Date.now()).toISOString().replace(/[:.]/g,'-').slice(0,19);
-  ptSaveRecording(blob, `fgta-match-${S.code||'live'}-${stamp}.${ext}`);
+  const filename=`fgta-match-${S.code||'live'}-${stamp}.${ext}`;
+  if(gdriveIsConnected()) gdriveUploadRecording(blob, filename);
+  else ptSaveRecording(blob, filename);
   S.recChunks=null;
   S.recRecorder=null;
 }
@@ -7508,6 +7549,172 @@ function ptSaveRecording(blob, filename){
     toast("📥 Recording saved — "+filename);
   }catch(e){
     toast("Couldn't save the recording: "+(e.message||e.name),true);
+  }
+}
+
+/* ============================================================
+   GOOGLE DRIVE UPLOAD — an alternative to ptSaveRecording for people who'd
+   rather a multi-GB match recording land in their own Drive than pile up
+   on their phone. See GOOGLE_DRIVE_CLIENT_ID above for the one-time setup
+   this needs on Google's side; everything below just no-ops with an
+   explanatory toast until that's filled in.
+
+   Deliberately client-only, no server involved:
+   - Auth is Google Identity Services' token client (implicit OAuth token,
+     scope drive.file — "only files this app created", the one scope that
+     doesn't require Google's app-verification review). Tokens last ~1hr;
+     gdriveEnsureToken() silently re-requests one (prompt:'') using the
+     browser's existing Google session rather than popping the consent
+     screen again, and every upload call routes through it so a token that
+     expires mid-upload just gets refreshed and the failed chunk retried.
+   - The recording itself is uploaded AFTER it's fully assembled (not
+     streamed live chunk-by-chunk while recording) — Drive's resumable
+     upload protocol needs the final byte count up front to close out the
+     session cleanly, and re-verifying an unknown-total live stream against
+     mobile network drops over 90 minutes is a lot of fragility for not
+     much win once the bitrate cap already gets a full match down to ~2GB.
+   - Uploaded in 8MB chunks (a multiple of Drive's required 256KiB
+     alignment) with retry+backoff per chunk, and a status check to find
+     the real resume offset after a failed chunk rather than guessing —
+     the documented-safe way to survive a connection drop mid-upload. ---- */
+const GDRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
+const GDRIVE_CHUNK=8*1024*1024; // must be a multiple of 256KiB; last chunk can be any size
+function gdriveConfigured(){ return !GOOGLE_DRIVE_CLIENT_ID.startsWith("YOUR_"); }
+function gdriveIsConnected(){ try{ return gdriveConfigured() && localStorage.getItem("fgta_gdrive_connected")==="1"; }catch(e){ return false; } }
+let _gdriveTokenClient=null, _gdriveToken=null, _gdriveTokenExp=0, _gdriveScriptPromise=null;
+function gdriveLoadScript(){
+  if(_gdriveScriptPromise) return _gdriveScriptPromise;
+  _gdriveScriptPromise=new Promise((resolve,reject)=>{
+    if(window.google && window.google.accounts && window.google.accounts.oauth2) return resolve();
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(s);
+  });
+  return _gdriveScriptPromise;
+}
+/* Resolves a still-valid access token, silently refreshing if expired.
+   `interactive` only matters the very first time (or if the user's Google
+   session itself has gone stale) — everything else on this page calls this
+   with interactive:false and just surfaces a "reconnect" prompt on failure
+   rather than popping Google's consent UI mid-upload unannounced. */
+function gdriveEnsureToken(interactive){
+  return new Promise(async (resolve,reject)=>{
+    if(!gdriveConfigured()) return reject(new Error('not_configured'));
+    if(_gdriveToken && Date.now()<_gdriveTokenExp-30000) return resolve(_gdriveToken);
+    try{ await gdriveLoadScript(); }catch(e){ return reject(e); }
+    if(!_gdriveTokenClient){
+      _gdriveTokenClient=google.accounts.oauth2.initTokenClient({
+        client_id:GOOGLE_DRIVE_CLIENT_ID, scope:GDRIVE_SCOPE,
+        callback:()=>{} // overridden per-call below
+      });
+    }
+    _gdriveTokenClient.callback=(resp)=>{
+      if(resp && resp.access_token){
+        _gdriveToken=resp.access_token;
+        _gdriveTokenExp=Date.now()+(Number(resp.expires_in||3300)*1000);
+        try{ localStorage.setItem("fgta_gdrive_connected","1"); }catch(e){}
+        resolve(_gdriveToken);
+      } else reject(new Error(resp && resp.error || 'auth_failed'));
+    };
+    try{ _gdriveTokenClient.requestAccessToken({prompt: interactive?'consent':''}); }
+    catch(e){ reject(e); }
+  });
+}
+function gdriveConnect(){
+  if(!gdriveConfigured()){
+    toast("Google Drive isn't set up on this deploy yet — see GOOGLE_DRIVE_CLIENT_ID near the top of the file",true);
+    return;
+  }
+  gdriveEnsureToken(true).then(()=>{ toast("☁️ Google Drive connected — recordings will upload here"); renderPTStream(); })
+    .catch(e=>toast("Couldn't connect Google Drive: "+(e.message||e),true));
+}
+window.gdriveConnect=gdriveConnect;
+function gdriveDisconnect(){
+  _gdriveToken=null; _gdriveTokenExp=0;
+  try{ localStorage.removeItem("fgta_gdrive_connected"); }catch(e){}
+  toast("Google Drive disconnected — recordings will save locally again");
+  renderPTStream();
+}
+window.gdriveDisconnect=gdriveDisconnect;
+
+async function gdriveApiFetch(url, opt, retryOn401){
+  const token=await gdriveEnsureToken(false);
+  const headers=Object.assign({}, opt.headers||{}, {Authorization:'Bearer '+token});
+  const res=await fetch(url, Object.assign({}, opt, {headers}));
+  if(res.status===401 && retryOn401!==false){
+    _gdriveToken=null; // force a fresh token, then retry exactly once
+    return gdriveApiFetch(url, opt, false);
+  }
+  return res;
+}
+async function gdriveCreateSession(filename, mimeType, size){
+  const res=await gdriveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+    method:'POST',
+    headers:{'Content-Type':'application/json; charset=UTF-8', 'X-Upload-Content-Type':mimeType, 'X-Upload-Content-Length':String(size)},
+    body:JSON.stringify({name:filename}),
+  });
+  if(!res.ok) throw new Error('Could not start the upload session ('+res.status+')');
+  const loc=res.headers.get('Location');
+  if(!loc) throw new Error('Drive did not return an upload session');
+  return loc;
+}
+/* asks Drive how many bytes it actually has, per the documented resumable-
+   upload recovery flow — used after a chunk PUT fails so the next attempt
+   resumes from the real offset instead of guessing (and possibly
+   re-sending, or worse skipping, bytes) */
+async function gdriveQueryOffset(sessionUri, total){
+  const res=await gdriveApiFetch(sessionUri, {method:'PUT', headers:{'Content-Range':`bytes */${total}`}});
+  if(res.status===308){
+    const range=res.headers.get('Range'); // "bytes=0-12345"
+    return range ? Number(range.split('-')[1])+1 : 0;
+  }
+  if(res.ok) return total; // Drive already considers it complete
+  throw new Error('Could not check upload progress ('+res.status+')');
+}
+async function gdriveUploadBlob(blob, filename, mimeType, onProgress){
+  const sessionUri=await gdriveCreateSession(filename, mimeType, blob.size);
+  let offset=0;
+  while(offset<blob.size){
+    const end=Math.min(offset+GDRIVE_CHUNK, blob.size);
+    const chunk=blob.slice(offset, end);
+    let attempt=0, lastErr=null;
+    while(attempt<5){
+      attempt++;
+      try{
+        const res=await gdriveApiFetch(sessionUri, {
+          method:'PUT',
+          headers:{'Content-Range':`bytes ${offset}-${end-1}/${blob.size}`},
+          body:chunk,
+        });
+        if(res.status===308){ offset=end; onProgress && onProgress(offset, blob.size); lastErr=null; break; }
+        if(res.ok){ onProgress && onProgress(blob.size, blob.size); return await res.json(); }
+        throw new Error('Chunk upload failed ('+res.status+')');
+      }catch(e){
+        lastErr=e;
+        try{ offset=await gdriveQueryOffset(sessionUri, blob.size); }catch(e2){}
+        await new Promise(r=>setTimeout(r, Math.min(8000, 500*Math.pow(2,attempt))));
+      }
+    }
+    if(lastErr) throw lastErr;
+  }
+}
+/* wired into ptFinishRecord: try Drive first when connected, and only fall
+   back to the local download if the upload genuinely fails — a finished
+   recording should never just disappear because a network blip happened
+   to land on the last chunk of a 2GB upload */
+async function gdriveUploadRecording(blob, filename){
+  toast("☁️ Uploading recording to Google Drive…");
+  try{
+    await gdriveUploadBlob(blob, filename, blob.type||'video/webm', (done,total)=>{
+      const pct=Math.round(done/total*100);
+      if(pct%20===0) toast(`☁️ Uploading… ${pct}%`);
+    });
+    toast("☁️ Recording uploaded to Google Drive — "+filename);
+  }catch(e){
+    toast("Drive upload failed, saving locally instead: "+(e.message||e),true);
+    ptSaveRecording(blob, filename);
   }
 }
 
