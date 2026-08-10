@@ -2051,23 +2051,25 @@
   /* ---- fullscreen (any device) ----
      Fullscreen is "let the picture own the screen" mode, so it deliberately
      departs from the windowed layout twice:
-       1. object-fit:cover, not contain. A portrait stream on a wide screen was
-          sitting inside huge dead black pillarbox bars; cover crops to fill
-          instead, the way every streaming app's theatre mode does. The crop is
-          anchored to the bottom of the frame (object-position) so the
-          scoreboard baked into the bottom of every canvas frame always
-          survives, whatever cover decides to trim.
-          The windowed view keeps object-fit:contain on purpose.
-       2. chat is an off-screen overlay drawer behind a 💬 edge tab instead of
+       1. chat is an off-screen overlay drawer behind a 💬 edge tab instead of
           a rail that permanently eats the picture's width. Being absolutely
           positioned, opening it slides over the video rather than resizing it.
-     --pt-drawer-w is re-tuned per device class in the media queries below. */
+       2. --pt-drawer-w is re-tuned per device class in the media queries below.
+     object-fit stays :contain (same as windowed) even here — this used to be
+     :cover anchored to the bottom of the frame, on the theory that a small
+     pillarbox on the sides was worse than a small crop off the top. In
+     practice, on the wide-aspect screens most phones ship with today, that
+     "small crop" was cutting off real content: the top of the court on a
+     lobbed shot, and the top of the SET COMPLETE / instant-replay cards
+     baked into the same canvas. A phone screen wider than the fixed 16:9
+     canvas now gets modest black bars on the sides instead — nothing about
+     the actual broadcast is ever trimmed. */
   .pt-stream-main:fullscreen{background:#000;padding:14px;gap:12px;flex-wrap:nowrap;align-items:stretch;
     width:100vw;height:100vh;max-width:none;position:relative;--pt-drawer-w:min(78vw,320px)}
   .pt-stream-main:fullscreen .pt-stream-vwrap{flex:1 1 auto;min-width:0;min-height:0;max-width:none}
   .pt-stream-main:fullscreen .pt-video-shell{flex:1 1 auto;min-height:0;border:none;border-radius:0;box-shadow:none}
   .pt-stream-main:fullscreen .pt-stream-video{aspect-ratio:auto!important;width:100%;height:100%;max-height:none;
-    object-fit:cover;object-position:center bottom}
+    object-fit:contain}
   .pt-stream-main:fullscreen .pt-dbg{flex:none;max-height:26vh;overflow:auto}
   .pt-stream-main:fullscreen .pt-chat{position:absolute;top:0;right:0;bottom:0;z-index:6;
     width:var(--pt-drawer-w);max-width:var(--pt-drawer-w);height:auto;max-height:none;flex:none;
@@ -5467,6 +5469,16 @@ function fgtaParticles(ov, glyphs, opt){
   fx.innerHTML=html;
   ov.appendChild(fx);
 }
+/* Appending a brand-new top-level node straight to document.body while
+   another element (#ptStreamMain) is in Fullscreen-API fullscreen makes
+   many mobile browsers silently exit fullscreen — the new node reads as
+   content escaping the fullscreen subtree. That's what was kicking a
+   host/viewer out of fullscreen the instant a set (or 8-8) celebration
+   fired mid-match. Mounting into the actual fullscreen element when one's
+   active sidesteps that entirely; falls back to body otherwise. */
+function fgtaCelMount(){
+  return document.fullscreenElement || document.body;
+}
 /* fade out then detach, so the celebration doesn't just vanish on a frame */
 function fgtaDismiss(ov, delay){
   const go=()=>{
@@ -5488,7 +5500,7 @@ function ptFireSet(name, setScore, setsA, setsB){
   ov.innerHTML=`<div class="fgta-bg"></div>
     <div class="fgta-card ptset-card"><div class="ptset-label">🔥 Set to</div><div class="ptset-name">${esc(name)}</div><div class="ptset-score">${esc(setScore)} · now ${setsA}-${setsB} in sets</div></div>`;
   fgtaParticles(ov, ['🔥','🔥','✨'], {count:28,min:18,range:28,dur:1.6,durRange:1.2,delay:0.6});
-  document.body.appendChild(ov);
+  fgtaCelMount().appendChild(ov);
   sfx('setWin');
   try{ buzz(150); }catch(e){}
   fgtaDismiss(ov, 2600);
@@ -5503,7 +5515,7 @@ function ptFire88(){
   ov.innerHTML='<div class="fgta-bg"></div>'+
     '<div class="fgta-card pt88-card"><div class="pt88-num">8–8</div><div class="pt88-tag">🚨 THE MAGIC NUMBER 🚨</div></div>';
   fgtaParticles(ov, ['🎾','✨','🔥','⚡','🌈','💥','🏆','😱','🎉'], {count:40,min:18,range:32,dur:1.4,durRange:1.6,delay:0.7});
-  document.body.appendChild(ov);
+  fgtaCelMount().appendChild(ov);
   sfx('magic');
   try{ if(typeof confetti==="function") confetti(); }catch(e){}
   try{ buzz(250); }catch(e){}
@@ -6787,13 +6799,13 @@ function ptDrawScoreboard(S){
           stretching wider the wider the stream got. avail is now capped to
           a multiple of u so it reads as a compact corner bug regardless of
           how wide the landscape frame is.
-       2. In portrait fullscreen, the video is shown with object-fit:cover
-          (see the CSS), which crops horizontally when the viewport's aspect
-          ratio doesn't match the canvas's — center-cropped, so pixels near
-          BOTH the left and right edges of the canvas can go off-screen. The
-          old margin (~20px on a 720-wide canvas) was nowhere near enough to
-          survive that; a real device crop was clipping the leftmost player
-          block clean off. u*0.11 (~80px here) gives real headroom. */
+       2. Fullscreen used to show the video with object-fit:cover, which
+          could center-crop either axis depending on the viewport's aspect
+          ratio — pixels near the canvas edges could go off-screen, and the
+          old ~20px margin wasn't enough to survive that. Fullscreen is now
+          object-fit:contain (see the CSS) so nothing is ever cropped, but
+          the generous u*0.11 (~80px here) margin is kept anyway as safe-area
+          headroom against notches/rounded corners/camera cutouts. */
   const barH=Math.max(30, Math.round(u*0.095));
   const m=Math.round(u*0.11);             // margin from the frame edges — see above
   const pad=Math.round(barH*0.26);        // horizontal padding inside a cell
