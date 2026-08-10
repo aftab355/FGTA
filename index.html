@@ -2109,7 +2109,13 @@
     .pt-stream-main:fullscreen .pt-chat-tab{width:30px;height:64px;font-size:15px}
     .pt-stream-main:fullscreen .pt-ref-tab{width:30px;height:64px;font-size:15px}
     .pt-stream-main:fullscreen .pt-ref-h{padding:6px 10px}
-    .pt-stream-main:fullscreen .pt-ref-side{padding:7px 6px;min-height:0}
+    /* NOT min-height:0 — flex items default to min-height:auto, which stops
+       flex-shrink from crushing a side below its own content's size (the
+       content just doesn't shrink, so it overflows and overlaps whatever
+       comes next instead — that was the actual bug: two player blocks
+       rendering on top of each other in landscape). .pt-ref-body already
+       scrolls, so a compact — not corrupted — layout is enough here. */
+    .pt-stream-main:fullscreen .pt-ref-side{padding:7px 6px}
     .pt-stream-main:fullscreen .pt-ref-pt{font-size:22px}
   }
   /* ---- phone in fullscreen portrait ---- same drawer treatment, just wider:
@@ -6038,9 +6044,16 @@ function renderPTStream(){
   /* The 💬 tab must stay the chat panel's immediate next sibling — the CSS
      slides it aside with `.pt-chat.pt-chat-open + .pt-chat-tab`. It's hidden
      outside fullscreen, where chat is docked and always visible. */
+  /* Anyone watching can chat — no account needed, just a display name typed
+     once and remembered on this device (localStorage), same lightweight
+     pattern as ptRandId() viewer IDs elsewhere in the stream code. A real
+     signed-in player identity (myName()) still wins if present, so someone
+     already logged in never gets re-prompted. */
+  const chatRowHtml = ptChatDisplayName() ? `<div class="pt-chat-row"><input id="ptChatInput" placeholder="say something…" autocomplete="off" onkeydown="ptChatKey(event)"><button class="mini" onclick="ptSendChat()">send</button></div>`
+    : `<div class="pt-chat-row"><input id="ptChatNameInput" placeholder="pick a display name to chat…" autocomplete="off" maxlength="24" onkeydown="ptChatNameKey(event)"><button class="mini" onclick="ptSetChatDisplayName()">set name</button></div>`;
   const chatHtml = (S)=>`<div class="pt-chat${S.chatOpen?' pt-chat-open':''}" id="ptChat">
       <div class="pt-chat-log" id="ptChatLog">${(S.chat||[]).slice(-40).map(c=>`<div class="pt-chat-msg"><b>${esc(c.author)}:</b>${esc(c.text)}</div>`).join('') || '<div class="pw-legend">say something — chat is live for everyone watching</div>'}</div>
-      <div class="pt-chat-row"><input id="ptChatInput" placeholder="say something…" autocomplete="off" onkeydown="ptChatKey(event)"><button class="mini" onclick="ptSendChat()">send</button></div>
+      ${chatRowHtml}
     </div><button class="pt-chat-tab" id="ptChatTab" onclick="ptToggleChatDrawer(event)" title="Chat" aria-label="Toggle chat">💬</button>`;
   /* host-only ref deck. Body is filled by ptSyncRefPanel() rather than being
      templated here, because it has to refresh on every scored point without a
@@ -7186,12 +7199,27 @@ function ptToggleFullscreen(){
 }
 window.ptToggleFullscreen=ptToggleFullscreen;
 
-/* ---- live chat, riding the same signaling channel ---- */
+/* ---- live chat, riding the same signaling channel ----
+   No account required — just a display name, typed once and remembered on
+   this device, the way any ordinary live-stream chat works. A real signed-in
+   player identity still takes priority when present. */
+function ptChatDisplayName(){
+  try{ return (localStorage.getItem('fgta_chat_name')||'').trim(); }catch(e){ return ''; }
+}
+function ptSetChatDisplayName(){
+  const inp=$("ptChatNameInput"); const name=(inp?inp.value:"").trim().slice(0,24);
+  if(!name) return toast("Enter a name to chat",true);
+  try{ localStorage.setItem('fgta_chat_name', name); }catch(e){}
+  renderPTStream();
+}
+window.ptSetChatDisplayName=ptSetChatDisplayName;
+function ptChatNameKey(e){ if(e.key==='Enter') ptSetChatDisplayName(); }
+window.ptChatNameKey=ptChatNameKey;
 function ptSendChat(){
   if(!PTStream || !PTStream.channel) return;
   const inp=$("ptChatInput"); const text=(inp?inp.value:"").trim();
   if(!text) return;
-  const payload={author:myName()||'guest', text, t:Date.now()};
+  const payload={author:myName()||ptChatDisplayName()||'guest', text, t:Date.now()};
   PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload);
   try{ PTStream.channel.send({type:"broadcast",event:"chat",payload}); }catch(e){}
   if(inp) inp.value='';
@@ -7259,6 +7287,16 @@ async function ptGoLive(){
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
   ptRequestWakeLock();
+  /* Streams are meant to be watched landscape (that's the composited canvas's
+     native shape when the phone starts that way) — best-effort nudge the OS
+     into landscape via the Screen Orientation API. Most browsers only honor
+     lock() in fullscreen, so this quietly no-ops outside it; the toast is the
+     fallback for everyone else, and neither blocks going live if a host is
+     deliberately filming portrait. */
+  try{ if(screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); }catch(e){}
+  if(window.matchMedia && window.matchMedia('(orientation: portrait)').matches){
+    toast("📱 Turn your phone sideways for the best stream");
+  }
   ptEnumerateCameras().then(list=>{ if(PTStream && PTStream.role==='host'){ PTStream.cameras=list; renderPTStream(); } });
   const ch=sb.channel("ptstream_"+code);
   PTStream.channel=ch;
@@ -7318,6 +7356,7 @@ function ptStopLive(){
   if(PTStream.channel) try{PTStream.channel.unsubscribe();}catch(e){}
   ptDirWithdraw();
   ptReleaseWakeLock();
+  try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
   PTStream=null;
   renderPTStream();
   toast("Stream ended");
