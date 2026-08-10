@@ -1925,6 +1925,12 @@
     text-transform:uppercase;color:var(--muted)}
   .pt-ref-hint{font-size:9px;letter-spacing:.4px;color:var(--dim);text-transform:none;min-width:0}
   .pt-ref-body{padding:10px;min-width:0}
+  /* undo/redo sit above the score grid, not inside it — they act on the last
+     point scored (by anyone reffing), not on either side specifically, so
+     giving them their own row keeps them from reading as a third "team" */
+  .pt-ref-actions{display:flex;gap:6px;margin-bottom:8px}
+  .pt-ref-actions .mini{flex:1 1 0;padding:7px 6px;font-size:10.5px;letter-spacing:.6px}
+  .pt-ref-actions .mini:disabled{opacity:.4;cursor:default}
   .pt-ref-grid{display:flex;gap:8px;align-items:stretch;min-width:0}
   .pt-ref-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;
     padding:10px 8px;cursor:pointer;color:var(--ink);text-align:center;appearance:none;-webkit-appearance:none;
@@ -6763,15 +6769,43 @@ function ptDrawScoreboard(S){
   }
 
   /* live point / tiebreak: the one thing that changes every rally, so it gets
-     the brightest block and the biggest digits */
+     the brightest block and the biggest digits — plus a broadcast-style flash
+     the instant it changes. Without that flash a rally point landing in an
+     otherwise-static bug doesn't read as "live" the way a TV score bug does;
+     a fading glow ring plus a brief scale-pop on the digits is the same
+     language sports broadcasts use for "the number just moved". Tracked on S
+     (not a module-level var) so multiple concurrent streams — a viewer
+     switching between "other angles live now" — never bleed animation state
+     into each other. */
   const badgeW=Math.max(ptsW, x0+totalW-x);
+  if(S._sbLastPtsTxt!==undefined && S._sbLastPtsTxt!==ptsTxt) S._sbFlashAt=performance.now();
+  S._sbLastPtsTxt=ptsTxt;
+  const FLASH_MS=420;
+  const flashAge = S._sbFlashAt!=null ? performance.now()-S._sbFlashAt : Infinity;
+  const flashT = flashAge<FLASH_MS ? flashAge/FLASH_MS : null;
+  if(flashT!=null){
+    const grow=Math.round(barH*0.22*(1-flashT));
+    ctx.save();
+    ctx.globalAlpha=0.55*(1-flashT);
+    ptRoundRect(ctx,x-grow,y0-grow,badgeW+grow*2,barH+grow*2,rad+grow);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.restore();
+  }
   ptRoundRect(ctx,x,y0,badgeW,barH,[0,rad,rad,0]);
   ctx.fillStyle = tb ? C.gold : C.ball; ctx.fill();
   ctx.textAlign='center';
   ctx.font=fLab; ctx.fillStyle='rgba(10,8,20,0.72)';
   ctx.fillText(ptsLab, x+badgeW/2, labY);
   ctx.font=fBig; ctx.fillStyle='#0b0714';
-  ctx.fillText(ptsTxt, x+badgeW/2, valY);
+  if(flashT!=null){
+    ctx.save();
+    ctx.translate(x+badgeW/2, valY);
+    ctx.scale(1+0.16*(1-flashT), 1+0.16*(1-flashT));
+    ctx.fillText(ptsTxt, 0, 0);
+    ctx.restore();
+  } else {
+    ctx.fillText(ptsTxt, x+badgeW/2, valY);
+  }
 
   /* hairline so the bug still separates from a bright/washed-out picture */
   ctx.lineWidth=Math.max(1,Math.round(barH*0.025));
@@ -7352,7 +7386,19 @@ function ptRefBodyHTML(state,isHost){
       ${decided?'':'<span class="pt-ref-cta">+ point</span>'}
     </button>`;
   };
-  return `<div class="pt-ref-grid">
+  /* Same tap-scores-for-everyone trust model as the point buttons above, just
+     aimed at the last point instead of the next one — a mis-tap or a bad call
+     needs fixing from right here in fullscreen, not by backing out to the
+     windowed Point Tracker. Host undoes/redoes its own local history directly
+     (ptUndo/ptRedo already fully own that state and broadcast the result via
+     renderTracker → ptSyncBroadcastIfLive); a viewer has no visibility into
+     that history, so its buttons are always tappable and just forward the
+     request — same shape as ptRefViewerPoint. */
+  const actions = `<div class="pt-ref-actions">
+      <button class="mini" onclick="${isHost?'ptUndo()':'ptRefViewerUndo()'}" ${isHost&&!ptHistory.length?'disabled':''} aria-label="Undo last point">↶ undo</button>
+      <button class="mini" onclick="${isHost?'ptRedo()':'ptRefViewerRedo()'}" ${isHost&&!ptFuture.length?'disabled':''} aria-label="Redo point">↷ redo</button>
+    </div>`;
+  return `${actions}<div class="pt-ref-grid">
       ${side('a')}
       <div class="pt-ref-mid">
         <span class="pt-ref-clock" id="ptRefClock">0:00</span>
@@ -7407,6 +7453,23 @@ function ptRefViewerPoint(side){
   try{ buzz(10); }catch(e){}   // immediate feel; the real number arrives on the next pt_sync
 }
 window.ptRefViewerPoint=ptRefViewerPoint;
+/* same request-not-action shape as ptRefViewerPoint, for the ↶/↷ pair above
+   the score grid. No local guard on ptHistory/ptFuture — a viewer's PTStream
+   has no idea how deep the host's history is — so these just forward the ask
+   and let the host's own ptUndo/ptRedo no-op harmlessly if there's nothing to
+   undo/redo. */
+function ptRefViewerUndo(){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_undo",payload:{}}); }catch(e){}
+  try{ buzz(10); }catch(e){}
+}
+window.ptRefViewerUndo=ptRefViewerUndo;
+function ptRefViewerRedo(){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_redo",payload:{}}); }catch(e){}
+  try{ buzz(10); }catch(e){}
+}
+window.ptRefViewerRedo=ptRefViewerRedo;
 /* same shape as ptRefViewerPoint — a request, not an action. The host's own
    ptInstantReplay() already guards against overlapping replays/cooldowns
    not applying here (it's manual, not the auto-highlight cooldown path), so
@@ -8060,6 +8123,10 @@ async function ptGoLive(){
   ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
     if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side);
   });
+  /* a viewer's ↶/↷ ref-panel tap — ptUndo/ptRedo are already safe no-ops with
+     nothing to undo/redo, same as a stray host tap on a disabled button */
+  ch.on("broadcast",{event:"ref_undo"}, ()=>{ ptUndo(); });
+  ch.on("broadcast",{event:"ref_redo"}, ()=>{ ptRedo(); });
   /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
