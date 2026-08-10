@@ -2051,6 +2051,31 @@
     transform:translateY(-50%) translateX(var(--pt-drawer-w));
     background:color-mix(in srgb,var(--accent) 80%, #000)}
 
+  /* "more" drawer: mic/cam/flip/replay/auto/AI/record/zoom/filter (host) or
+     replay/record (ref-mode viewer) — outside fullscreen this is nothing
+     more than a plain wrapper div, so .pt-stream-controls/.pt-stream-foot
+     render exactly as the windowed layout always has, via their own
+     unscoped rules below. Only :fullscreen turns it into a third drawer,
+     bottom-anchored rather than a side like chat/ref — a horizontal control
+     strip reads naturally sliding up from the bottom, and the bottom edge
+     is otherwise unused by the other two drawers. */
+  .pt-stream-main:fullscreen .pt-more{position:absolute;left:0;right:0;bottom:0;z-index:6;
+    max-height:64vh;overflow-y:auto;flex:none;
+    background:rgba(8,6,16,.92);border-top:1px solid rgba(255,255,255,.22);
+    border-radius:16px 16px 0 0;padding:16px 14px;
+    box-shadow:0 -24px 70px -18px rgba(0,0,0,.95);
+    transform:translateY(calc(100% + 20px));transition:transform .22s cubic-bezier(.16,1,.3,1)}
+  .pt-stream-main:fullscreen .pt-more.pt-more-open{transform:translateY(0)}
+  .pt-stream-main:fullscreen .pt-more .pt-stream-controls{margin-top:0}
+  .pt-more-tab{display:none}
+  .pt-stream-main:fullscreen .pt-more-tab{display:flex;position:absolute;z-index:8;left:50%;bottom:0;
+    align-items:center;justify-content:center;width:76px;height:32px;padding:0;cursor:pointer;
+    font-size:16px;line-height:1;color:#fff;background:rgba(8,6,16,.62);
+    border:1px solid rgba(255,255,255,.22);border-bottom:none;border-radius:12px 12px 0 0;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    transform:translateX(-50%);transition:background .15s}
+  .pt-more.pt-more-open+.pt-more-tab{background:color-mix(in srgb,var(--accent) 80%, #000)}
+
   /* ---- tablets / small laptops: below ~820px the video+chat row can no
      longer hold both at a usable size, so stack them rather than letting the
      chat orphan itself onto a half-empty second line ---- */
@@ -2122,6 +2147,8 @@
        scrolls, so a compact — not corrupted — layout is enough here. */
     .pt-stream-main:fullscreen .pt-ref-side{padding:7px 6px}
     .pt-stream-main:fullscreen .pt-ref-pt{font-size:22px}
+    .pt-stream-main:fullscreen .pt-more{max-height:80vh;padding:10px}
+    .pt-stream-main:fullscreen .pt-more-tab{width:56px;height:28px;font-size:14px}
   }
   /* ---- phone in fullscreen portrait ---- same drawer treatment, just wider:
      a docked 32vh chat panel was costing a third of the screen here too. ---- */
@@ -6260,6 +6287,63 @@ function renderPTStream(){
       <div class="pt-ref-h">⚖️ ref <span class="pt-ref-hint">taps score the real match — same numbers as the broadcast bug</span></div>
       <div class="pt-ref-body" id="ptRefBody"></div>
     </div><button class="pt-ref-tab" id="ptRefTab" onclick="ptToggleRefPanel(event)" title="Ref controls" aria-label="Toggle ref controls">⚖️</button>`;
+  /* mic/cam/flip/replay/auto/AI/record/zoom/filter — previously sat OUTSIDE
+     #ptStreamMain entirely, which meant they simply vanished the moment
+     fullscreen engaged (the Fullscreen API only renders the target element
+     and its subtree, and .pt-stream-controls was a sibling of it, not a
+     descendant) — exactly the "filming sideways in fullscreen and can't
+     reach replay/record" bug. Moving them inside #ptStreamMain and wrapping
+     them in .pt-more fixes that: outside fullscreen .pt-more is a bare div
+     (the controls render inline exactly as before, see the unscoped
+     .pt-stream-controls rule), and only :fullscreen turns it into a third,
+     bottom-anchored drawer behind a ⚙️ tab — same mechanic as chat/ref,
+     just anchored to the unused bottom edge instead of a side.
+     A viewer can't drive the host's own camera/mic/zoom/filter — those
+     operate on the host's local getUserMedia track, which doesn't exist on
+     a viewer's PTStream at all — so their set is just the two actions that
+     genuinely don't require the host's hardware: requesting a replay (a
+     broadcast request, same shape as ref_point) and recording their own
+     copy of what they're watching (S.remoteStream instead of S.localStream —
+     see ptStartRecord). */
+  const moreHtml = (S,isHost)=>{
+    const body = isHost ? `
+      <div class="pt-ctl-group pt-ctl-keys">
+        <button class="mini pt-ctl-btn${S.micOn===false?' off':''}" onclick="ptToggleMic()"><span class="pt-ctl-ico">${S.micOn===false?'🔇':'🎤'}</span><span class="pt-ctl-lbl">mic</span></button>
+        <button class="mini pt-ctl-btn${S.camOn===false?' off':''}" onclick="ptToggleCam()"><span class="pt-ctl-ico">${S.camOn===false?'🚫':'📷'}</span><span class="pt-ctl-lbl">cam</span></button>
+        ${S.cameras && S.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
+        <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
+        <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
+        <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
+        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+      </div>
+      <div class="pt-ctl-sep"></div>
+      <div class="pt-ctl-group">
+        <label class="pt-zoom-label">zoom <input class="pt-zoom-range" type="range" min="1" max="3" step="0.1" value="${S.zoom||1}" oninput="ptSetZoom(this.value)"><span class="pt-zoom-val" id="ptZoomVal">${(Number(S.zoom)||1).toFixed(1)}×</span></label>
+      </div>
+      <div class="pt-ctl-sep"></div>
+      <div class="pt-ctl-group pt-ctl-wide">
+        <select onchange="ptSetFilter(this.value)" aria-label="Video filter">
+          <option value="none" ${(!S.filter||S.filter==='none')?'selected':''}>No filter</option>
+          <option value="grayscale" ${S.filter==='grayscale'?'selected':''}>Grayscale</option>
+          <option value="sepia" ${S.filter==='sepia'?'selected':''}>Sepia</option>
+          <option value="invert" ${S.filter==='invert'?'selected':''}>Invert</option>
+          <option value="neon" ${S.filter==='neon'?'selected':''}>Neon</option>
+          <option value="vhs" ${S.filter==='vhs'?'selected':''}>VHS</option>
+        </select>
+        ${S.cameras && S.cameras.length>2?`<select onchange="ptSwitchCameraDevice(this.value)" aria-label="Camera">
+          ${S.cameras.map(c=>`<option value="${esc(c.deviceId)}" ${c.deviceId===S.videoDeviceId?'selected':''}>${esc(c.label||'Camera')}</option>`).join('')}
+        </select>`:''}
+      </div>` : `
+      <div class="pt-ctl-group pt-ctl-keys">
+        <button class="mini pt-ctl-btn" onclick="ptRequestReplay()" title="Ask the host to replay the last point for everyone watching"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
+        <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save what you're watching as a video file on this device"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+      </div>
+      <div class="pw-legend" style="margin-top:8px">mic, camera, zoom and filters belong to the host's own device — not shown here</div>`;
+    return `<div class="pt-more${S.moreOpen?' pt-more-open':''}" id="ptMore">
+        <div class="pt-stream-controls">${body}</div>
+        ${isHost?`<div class="pt-stream-foot"><button class="mini no" onclick="ptStopLive()">stop streaming</button></div>`:''}
+      </div><button class="pt-more-tab" id="ptMoreTab" onclick="ptToggleMoreDrawer(event)" title="More controls" aria-label="Toggle more controls">⚙️</button>`;
+  };
   if(!PTStream){
     box.innerHTML=`
       <div class="pt-stream-panel">
@@ -6295,41 +6379,13 @@ function renderPTStream(){
           </div>
           ${chatHtml(PTStream)}
           ${refHtml(PTStream)}
+          ${moreHtml(PTStream,true)}
         </div>
-        <div class="pt-stream-controls">
-          <div class="pt-ctl-group pt-ctl-keys">
-            <button class="mini pt-ctl-btn${PTStream.micOn===false?' off':''}" onclick="ptToggleMic()"><span class="pt-ctl-ico">${PTStream.micOn===false?'🔇':'🎤'}</span><span class="pt-ctl-lbl">mic</span></button>
-            <button class="mini pt-ctl-btn${PTStream.camOn===false?' off':''}" onclick="ptToggleCam()"><span class="pt-ctl-ico">${PTStream.camOn===false?'🚫':'📷'}</span><span class="pt-ctl-lbl">cam</span></button>
-            ${PTStream.cameras && PTStream.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
-            <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
-            <button class="mini pt-ctl-btn${PTStream.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${PTStream.autoHighlight?'auto on':'auto'}</span></button>
-            <button class="mini pt-ctl-btn${PTStream.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${PTStream.aiHighlight?'AI on':'AI'}</span></button>
-            <button class="mini pt-ctl-btn${PTStream.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${PTStream.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${PTStream.recOn?'stop rec':'record'}</span></button>
-          </div>
-          <div class="pt-ctl-sep"></div>
-          <div class="pt-ctl-group">
-            <label class="pt-zoom-label">zoom <input class="pt-zoom-range" type="range" min="1" max="3" step="0.1" value="${PTStream.zoom||1}" oninput="ptSetZoom(this.value)"><span class="pt-zoom-val" id="ptZoomVal">${(Number(PTStream.zoom)||1).toFixed(1)}×</span></label>
-          </div>
-          <div class="pt-ctl-sep"></div>
-          <div class="pt-ctl-group pt-ctl-wide">
-            <select onchange="ptSetFilter(this.value)" aria-label="Video filter">
-              <option value="none" ${(!PTStream.filter||PTStream.filter==='none')?'selected':''}>No filter</option>
-              <option value="grayscale" ${PTStream.filter==='grayscale'?'selected':''}>Grayscale</option>
-              <option value="sepia" ${PTStream.filter==='sepia'?'selected':''}>Sepia</option>
-              <option value="invert" ${PTStream.filter==='invert'?'selected':''}>Invert</option>
-              <option value="neon" ${PTStream.filter==='neon'?'selected':''}>Neon</option>
-              <option value="vhs" ${PTStream.filter==='vhs'?'selected':''}>VHS</option>
-            </select>
-            ${PTStream.cameras && PTStream.cameras.length>2?`<select onchange="ptSwitchCameraDevice(this.value)" aria-label="Camera">
-              ${PTStream.cameras.map(c=>`<option value="${esc(c.deviceId)}" ${c.deviceId===PTStream.videoDeviceId?'selected':''}>${esc(c.label||'Camera')}</option>`).join('')}
-            </select>`:''}
-          </div>
-        </div>
-        <div class="pt-stream-foot"><button class="mini no" onclick="ptStopLive()">stop streaming</button></div>
       </div>`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     ptSyncRefDrawer();
+    ptSyncMoreDrawer();
     return;
   }
   const muted = PTStream.muted!==false;
@@ -6352,6 +6408,7 @@ function renderPTStream(){
         </div>
         ${chatHtml(PTStream)}
         ${refHtml(PTStream)}
+        ${moreHtml(PTStream,false)}
       </div>
       ${othersHtml}
       <div class="pt-stream-foot">
@@ -6368,6 +6425,7 @@ function renderPTStream(){
     }
   }
   ptSyncRefDrawer();
+  ptSyncMoreDrawer();
 }
 function ptUnmute(){
   if(!PTStream) return;
@@ -7185,6 +7243,40 @@ function ptToggleChatDrawer(e){
 window.ptToggleChatDrawer=ptToggleChatDrawer;
 window.ptSyncChatDrawer=ptSyncChatDrawer;
 
+/* ---- "more controls" drawer (mic/cam/flip/replay/auto/AI/record/zoom/
+   filter for the host, replay-request/record for a viewer) ----
+   Same toggle pattern as chat/ref above. Bottom-anchored rather than a
+   side, so it doesn't need the chat/ref mutual-exclusion dance — it never
+   overlaps either of them on screen. */
+function ptSyncMoreDrawer(){
+  const open=!!(PTStream && PTStream.moreOpen);
+  const el=document.getElementById('ptMore');
+  if(el) el.classList.toggle('pt-more-open', open);
+  const tab=document.getElementById('ptMoreTab');
+  if(tab) tab.textContent = open ? '✕' : '⚙️';
+}
+function ptToggleMoreDrawer(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!PTStream) return;
+  PTStream.moreOpen=!PTStream.moreOpen;
+  ptSyncMoreDrawer();
+}
+window.ptToggleMoreDrawer=ptToggleMoreDrawer;
+window.ptSyncMoreDrawer=ptSyncMoreDrawer;
+document.addEventListener('click', e=>{
+  if(!PTStream || !PTStream.moreOpen || !document.fullscreenElement) return;
+  const t=e.target;
+  if(t && t.closest && t.closest('.pt-more,.pt-more-tab')) return;
+  PTStream.moreOpen=false;
+  ptSyncMoreDrawer();
+});
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement && PTStream && PTStream.moreOpen){
+    PTStream.moreOpen=false;
+    ptSyncMoreDrawer();
+  }
+});
+
 /* ---- ref mini-panel ----
    Exactly the toggle pattern above: the flag lives on PTStream (so it
    survives the full re-render that fires on every chat message / viewer
@@ -7280,6 +7372,16 @@ function ptRefViewerPoint(side){
   try{ buzz(10); }catch(e){}   // immediate feel; the real number arrives on the next pt_sync
 }
 window.ptRefViewerPoint=ptRefViewerPoint;
+/* same shape as ptRefViewerPoint — a request, not an action. The host's own
+   ptInstantReplay() already guards against overlapping replays/cooldowns
+   not applying here (it's manual, not the auto-highlight cooldown path), so
+   this doesn't need its own throttling on top. */
+function ptRequestReplay(){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"request_replay",payload:{}}); }catch(e){}
+  toast("🔁 Asked the host to replay that");
+}
+window.ptRequestReplay=ptRequestReplay;
 
 /* ---- host → everyone: mirror the match state alongside the score already
    baked into the broadcast pixels. The pixels cover watching; this covers
@@ -7329,24 +7431,29 @@ function ptToggleCam(){
 }
 window.ptToggleCam=ptToggleCam;
 
-/* ---- local recording: opt-in, host-only, saves the exact composed feed
-   (canvas + mic) that viewers see straight to this device — never uploaded
-   anywhere. Deliberately a second, independent MediaRecorder from the one
-   in ptStartReplayRecorder: that one evicts anything older than ~16s and
+/* ---- local recording: opt-in, saves straight to this device, never
+   uploaded anywhere. The host records the exact composed feed (canvas +
+   mic) viewers see (S.localStream); a viewer records their own copy of
+   what they're receiving (S.remoteStream) — same recorder, same save flow,
+   just a different source track since only the host has a localStream at
+   all. Deliberately a second, independent MediaRecorder from the one in
+   ptStartReplayRecorder: that one evicts anything older than ~16s and
    periodically restarts itself, which is exactly wrong for a recording
-   meant to hold the whole match. This one just keeps every chunk until the
-   host stops it. `S` is captured at start time (not read from the PTStream
-   global later) so a recording started on one stream session always finishes
-   and saves itself even if the global has already moved on to null or a new
-   session by the time the browser fires 'stop'. ---- */
+   meant to hold the whole match. This one just keeps every chunk until
+   stopped. `S` is captured at start time (not read from the PTStream
+   global later) so a recording started on one stream session always
+   finishes and saves itself even if the global has already moved on to
+   null or a new session by the time the browser fires 'stop'. ---- */
 function ptToggleRecord(){
-  if(!PTStream || PTStream.role!=='host') return;
+  if(!PTStream) return;
   if(PTStream.recOn) ptStopRecord(); else ptStartRecord();
 }
 window.ptToggleRecord=ptToggleRecord;
 function ptStartRecord(){
   const S=PTStream;
-  if(!S || !S.localStream) return;
+  if(!S) return;
+  const src = S.role==='host' ? S.localStream : S.remoteStream;
+  if(!src){ if(S.role==='viewer') toast("Nothing to record yet — wait for the video to connect",true); return; }
   if(!window.MediaRecorder) return toast("Recording isn't supported in this browser",true);
   /* Same codec fallback as the replay recorder — iOS/Safari has never
      shipped webm support, only mp4, so a webm-only candidate list would
@@ -7354,7 +7461,7 @@ function ptStartRecord(){
   const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
   const mime=candidates.find(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
   let rec;
-  try{ rec=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined); }
+  try{ rec=new MediaRecorder(src, mime?{mimeType:mime}:undefined); }
   catch(e){ return toast("Couldn't start recording: "+(e.message||e.name),true); }
   S.recChunks=[];
   S.recMime=mime||'video/webm';
@@ -7747,6 +7854,10 @@ async function ptGoLive(){
   ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
     if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side);
   });
+  /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
+     toast if a replay is already running or nothing's buffered yet, same as
+     if the host had tapped it locally */
+  ch.on("broadcast",{event:"request_replay"}, ()=>{ ptInstantReplay(); });
   ch.subscribe();
   ptDirAnnounce(code);
   renderPTStream();
