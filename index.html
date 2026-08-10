@@ -6003,6 +6003,23 @@ function ptVideoConstraints(extra){
    ctx.filter = effect), so zoom/filters are baked into what viewers see too,
    not just a local CSS preview. Also feeds a rolling MediaRecorder buffer
    for instant replay. ---- */
+/* Shared by the live-draw path (loop()) and the replay wipe's own live-frame
+   draw (ptDrawReplayFrame's drawLive) — both composite the raw camera onto
+   the locked-size canvas and both need the same aspect-mismatch protection:
+   some browsers rotate the raw track's own videoWidth/videoHeight when the
+   phone physically rotates mid-stream, and without this, drawImage stretches
+   the now-mismatched source into the canvas's fixed shape. Center-crop to
+   the canvas's aspect (on top of the zoom crop) instead — a no-op whenever
+   the source already matches. Having two copies of this math is exactly how
+   the second one silently missed the first fix; keep it to one. */
+function ptCropToCanvas(vw,vh,canvasW,canvasH,zoom){
+  const z=zoom||1;
+  let sw=vw/z, sh=vh/z;
+  const canvasAspect=canvasW/canvasH, srcAspect=sw/sh;
+  if(srcAspect>canvasAspect) sw=sh*canvasAspect;
+  else if(srcAspect<canvasAspect) sh=sw/canvasAspect;
+  return {sw, sh, sx:(vw-sw)/2, sy:(vh-sh)/2};
+}
 function ptFilterCSS(name){
   switch(name){
     case 'grayscale': return 'grayscale(1) contrast(1.1)';
@@ -6228,7 +6245,7 @@ function ptDrawReplayFrame(S){
   const drawLive=()=>{
     if(S.camOn && S.rawVideo.readyState>=2){
       const vw=S.rawVideo.videoWidth||canvas.width, vh=S.rawVideo.videoHeight||canvas.height;
-      const z=S.zoom||1, sw=vw/z, sh=vh/z, sx=(vw-sw)/2, sy=(vh-sh)/2;
+      const {sw,sh,sx,sy}=ptCropToCanvas(vw,vh,canvas.width,canvas.height,S.zoom);
       ctx.filter=ptFilterCSS(S.filter);
       ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,canvas.width,canvas.height);
     } else { ctx.filter='none'; ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
@@ -6302,23 +6319,17 @@ function ptStartProcessing(S){
         S.canvas.height=portrait?PT_CAP_LONG:PT_CAP_SHORT;
         S._sizeLocked=true;
       }
-      const z=S.zoom||1;
-      let sw=vw/z, sh=vh/z;
       /* If the phone physically rotates mid-stream, some browsers rotate the
          raw camera track's own videoWidth/videoHeight to match the new
          orientation — but the locked canvas above never changes shape once
-         set. Drawing a now-mismatched-aspect source straight into the old-
-         shaped destination stretches/squishes the picture (reported as: go
-         live in landscape, rotate to portrait mid-stream, picture turns
-         cropped/zoomed-looking — and the reverse). Center-crop the source to
-         the canvas's locked aspect first, on top of the zoom crop, so a
-         mid-stream rotation just reframes the shot instead of distorting
-         it — a no-op whenever the source already matches, i.e. every normal
-         case where the phone doesn't rotate. */
-      const canvasAspect=S.canvas.width/S.canvas.height, srcAspect=sw/sh;
-      if(srcAspect>canvasAspect) sw=sh*canvasAspect;
-      else if(srcAspect<canvasAspect) sh=sw/canvasAspect;
-      const sx=(vw-sw)/2, sy=(vh-sh)/2;
+         set. ptCropToCanvas center-crops the source to the canvas's locked
+         aspect (on top of the zoom crop) so a mid-stream rotation just
+         reframes the shot instead of stretching it (reported as: go live in
+         landscape, rotate to portrait mid-stream, picture turns cropped/
+         zoomed-looking — and the reverse). No-op whenever the source
+         already matches, i.e. every normal case where the phone doesn't
+         rotate. */
+      const {sw,sh,sx,sy}=ptCropToCanvas(vw,vh,S.canvas.width,S.canvas.height,S.zoom);
       S.ctx.filter=ptFilterCSS(S.filter);
       S.ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,S.canvas.width,S.canvas.height);
     } else {
