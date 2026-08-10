@@ -2125,7 +2125,63 @@
   }
   .pt-final{text-align:center;font-size:17px;font-weight:700;color:var(--gold);margin-top:16px;background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:var(--r-md);padding:16px}
   .pt-foot{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
-  .pt-log{margin-top:14px;max-height:150px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:4px;padding-top:10px;border-top:1px solid var(--line-soft)}
+
+  /* ---- SECTION RHYTHM UNDER THE SCORE BOARD ----
+     #ptLive stacks four fundamentally different KINDS of thing: the live
+     score, the match controls, the fix-a-past-game correction tool, and the
+     point-by-point log. They used to run together as one undifferentiated
+     column with ~12px between them, which on a phone reads as a wall of
+     controls and mono text glued to the bottom of the scorecards.
+     Each now gets its own band inside .pt-deck, and the two *utility* bands
+     sit in recessed wells (var(--bg), the same treatment as .pt-dbg) so the
+     score cards stay the only raised surface in the view. */
+  .pt-deck{display:flex;flex-direction:column;gap:16px;margin-top:20px;min-width:0}
+  .pt-deck>*{margin-top:0}
+  .pt-well{background:var(--bg);border:1px solid var(--line-soft);border-radius:var(--r-md);
+    padding:12px 14px;min-width:0}
+  /* .pt-fix-row carries its own hairline/spacing for when it stands alone —
+     inside a well the well already provides both */
+  .pt-well .pt-fix-row{margin-top:0;padding-top:0;border-top:none}
+  .pt-well-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1.4px;
+    text-transform:uppercase;color:var(--dim)}
+  .pt-well-h::after{content:'';height:1px;flex:1;background:var(--line-soft)}
+  .pt-well-sub{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.55;
+    color:var(--dim);margin-bottom:10px}
+
+  /* match controls — "undo/redo" is one thought and "end this match" is
+     another, so they're two groups separated by a wide column gap rather than
+     four equal pills in a row (which is how "discard match" ended up sitting
+     one thumb-width away from "redo") */
+  .pt-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 22px}
+  .pt-act-grp{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+
+  /* ---- POINT LOG ----
+     Collapsed to its single newest line by default (see ptLogExpanded in the
+     tracker JS) — the header row IS the toggle, so the whole strip is one big
+     tap target on a phone. Expanded it becomes the full scrollable history. */
+  .pt-logwell{padding-top:10px;padding-bottom:10px}
+  .pt-log-toggle{display:flex;align-items:center;gap:10px;width:100%;min-width:0;
+    background:transparent;border:none;padding:0;cursor:pointer;text-align:left;
+    color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.4}
+  .pt-log-toggle:hover .pt-log-caret{color:var(--accent);border-color:var(--accent)}
+  .pt-log-tag{flex:none;font-size:9.5px;font-weight:700;letter-spacing:1.3px;
+    text-transform:uppercase;color:var(--dim)}
+  .pt-log-latest{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+  .pt-log-count{flex:none;font-size:10px;color:var(--muted);background:var(--panel-2);
+    border:1px solid var(--line-soft);border-radius:var(--r-pill);padding:1px 8px}
+  .pt-log-caret{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;
+    border:1px solid var(--line);border-radius:50%;color:var(--dim);font-size:9px;line-height:1;
+    transform:rotate(-90deg);transition:transform .18s ease,color .18s ease,border-color .18s ease}
+  .pt-logwell.on .pt-log-caret{transform:rotate(0);color:var(--accent);border-color:var(--accent)}
+  .pt-log-empty{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--dim)}
+  .pt-log{margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft);
+    max-height:190px;overflow-y:auto;overscroll-behavior:contain;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);
+    display:flex;flex-direction:column;gap:5px}
+  .pt-log-row{line-height:1.5;overflow-wrap:anywhere}
+  .pt-log-row:first-child{color:var(--muted)}
+  .pt-log-more{opacity:.7;font-style:italic}
   .pt-board{position:relative}
   .pt-side.pt-game-win{animation:ptGameGlow 1s ease}
   @keyframes ptGameGlow{0%{box-shadow:0 0 0 0 var(--ac)}30%{box-shadow:0 0 50px 8px var(--ac)}100%{box-shadow:0 0 0 0 transparent}}
@@ -2153,6 +2209,19 @@
     .pt-tb-tag{font-size:8px;padding:2px 5px}
     .pt-set-chip{font-size:9px;padding:2px 4px}
     .pt-set-chip.pt-set-live{font-size:11px;padding:3px 6px}
+    /* the bands below the board keep their separation, just at phone scale —
+       the point of the wells is the grouping, not the padding */
+    .pt-deck{gap:12px;margin-top:14px}
+    .pt-well{padding:10px 12px;border-radius:var(--r-sm)}
+    .pt-well-sub{font-size:10px}
+    .pt-actions{gap:8px 14px}
+    .pt-final{font-size:15px;padding:13px;margin-top:0}
+    .pt-logwell{padding-top:9px;padding-bottom:9px}
+    /* drop the "Latest" caption — on a 320px screen the entry itself is the
+       only thing worth the horizontal room */
+    .pt-log-tag{display:none}
+    .pt-log-toggle{gap:8px;font-size:10.5px}
+    .pt-log{max-height:150px;font-size:10px}
   }
 
   /* ===== CELEBRATIONS — set won · the 8-8 easter egg =====
@@ -4220,7 +4289,7 @@
     <div class="help-body">
       <div class="help-row"><span class="help-ic">🏆</span><div><b>It's an Elo ladder.</b> Every 1v1 you play moves your rating — beat someone above you and you climb. Ratings are earned from results, never set by hand.</div></div>
       <div class="help-row"><span class="help-ic">📣</span><div><b>Report a game</b> on the Ladder tab. An admin approves it, then the ratings update for everyone.</div></div>
-      <div class="help-row"><span class="help-ic">💬</span><div><b>The Feed is social.</b> Post, reply, react, run polls, throw callouts, and tag people with @name. Sign in with your email once — your name is locked so nobody can post as you.</div></div>
+      <div class="help-row"><span class="help-ic">💬</span><div><b>The Feed is social.</b> Post, reply, react, run polls, throw callouts, and tag people with @name. Pick a display name once — no account needed — and it's remembered on this device.</div></div>
       <div class="help-row"><span class="help-ic">⚔️</span><div><b>Rivalry & Messages</b> let you dig into any head-to-head and trash-talk privately.</div></div>
       <div class="help-row"><span class="help-ic">🔮</span><div><b>Predict, Lab & Deep</b> are for the nerds — forecasts, simulations and model validation.</div></div>
     </div>
@@ -4251,6 +4320,18 @@
     <button class="btn" style="margin-top:14px" onclick="signInPlayer()">Sign in</button>
     <button class="btn ghost" style="margin-top:10px" onclick="signUpPlayer()">New here? Create account</button>
     <div class="pred-hint" id="loginNote" style="margin-top:10px;display:none"></div>
+  </div>
+</div>
+
+<!-- DISPLAY NAME MODAL — no account, just a name for this device, the same
+     lightweight identity used everywhere in the app that isn't admin -->
+<div class="modal" id="nameModal" onclick="if(event.target===this)closeNameModal()">
+  <div class="modal-card">
+    <button class="modal-x" onclick="closeNameModal()">✕</button>
+    <div class="tool-h">🎾 Pick a display name</div>
+    <div class="pred-hint">No account needed — just a name for this device. It's remembered here and used on everything you post, comment, poll, react to or message.</div>
+    <div style="margin-top:14px"><label>Display name</label><input id="nameModalInput" type="text" maxlength="24" placeholder="your name" onkeydown="if(event.key==='Enter')submitDisplayName()"></div>
+    <button class="btn" style="margin-top:14px" onclick="submitDisplayName()">Continue</button>
   </div>
 </div>
 
@@ -4430,7 +4511,17 @@ function avatar(name,size){
    refreshMyProfile()/claim_profile() below. myName() is still the single
    source of truth read by every post/comment/challenge/poll/DM/reaction
    call site in the app, so repointing it here is enough to lock all of them. */
-function myName(){ return myProfileName || ""; }
+/* No-account identity: a display name typed once and remembered on this
+   device (localStorage), used everywhere a real signed-in profile isn't
+   present. A real roster-locked profile (myProfileName) always wins when
+   it exists — this is only the fallback for everyone else. */
+function myDisplayName(){
+  try{ return (localStorage.getItem('fgta_display_name')||'').trim(); }catch(e){ return ''; }
+}
+function setMyDisplayName(name){
+  try{ localStorage.setItem('fgta_display_name', String(name||'').trim().slice(0,24)); }catch(e){}
+}
+function myName(){ return myProfileName || myDisplayName() || ""; }
 /* no-op: nothing may set your identity from free-typed text anymore — a
    profile name can only ever come from the roster via claim_profile() */
 function setMyName(n){ }
@@ -5055,6 +5146,17 @@ window.endLiveMatch=endLiveMatch;
    until ptSubmit() inserts the finished match for approval.
    ============================================================ */
 let PT=null, ptHistory=[], ptFuture=[];
+/* The point log used to render six lines permanently, which was the single
+   biggest lump of vertical space under the scorecards on a phone. It now
+   shows only PT.log[0] (the newest — the array is unshifted) with a caret
+   that reveals the full scrollable history. Deliberately a module-level flag
+   rather than a field on PT: it is view state, not match state, so it never
+   gets persisted into the localStorage draft and always starts collapsed on
+   a fresh load / new match / tab visit. Every mutation path already funnels
+   through renderTracker() (ptPoint → ptAfterMutate → renderTracker), so the
+   toggle just flips the flag and re-renders the same way a point does — no
+   separate DOM-syncing path that could drift out of step with a re-render. */
+let ptLogExpanded=false;
 try{
   const ptRaw=localStorage.getItem("fgta_tracker_draft");
   if(ptRaw){ const d=JSON.parse(ptRaw); PT=d.PT||null; ptHistory=d.history||[]; ptFuture=d.future||[]; }
@@ -5075,6 +5177,7 @@ function ptStart(){
   const a=($("ptA").value||"").trim(), b=($("ptB").value||"").trim();
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
+  ptLogExpanded=false;
   ptPersist();
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
   renderTracker();
@@ -5117,6 +5220,18 @@ function ptCloseGame(winSide, wasTiebreak){
   if(setDone) ptCloseSet(winSide);
 }
 function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} }
+
+/* expand/collapse the point-by-point log. Nothing here needs a targeted DOM
+   poke (the ⚖️/💬/🐛 toggles avoid a rebuild because it would nuke a live
+   video element or an input mid-typing) — the log is inert markup that
+   renderTracker() already rewrites on every single point, so a plain
+   re-render is both correct and the least surprising thing to read. */
+function ptToggleLog(){
+  ptLogExpanded=!ptLogExpanded;
+  renderTracker();
+  const w=$("ptLogWell"); if(w && ptLogExpanded) w.scrollIntoView({block:"nearest",behavior:"smooth"});
+}
+window.ptToggleLog=ptToggleLog;
 
 /* rebuilds every aggregate (games/sets/winner) from the permanent per-game log —
    used after a ref overturns one historical game so downstream results stay consistent */
@@ -5393,6 +5508,12 @@ function renderTracker(){
   const mpA = !decided && ptIsMatchPoint('a'), mpB = !decided && ptIsMatchPoint('b');
   if((mpA||mpB) && !PT._mpAnnounced){ PT._mpAnnounced=true; sfx('heartbeat'); }
   if(!mpA && !mpB) PT._mpAnnounced=false;
+  /* point log: one line collapsed, the whole history (capped so a long match
+     can't drop 400 nodes on every point) when expanded */
+  const LOG_MAX=40;
+  const logCount=PT.log.length;
+  const logRows=PT.log.slice(0,LOG_MAX).map(l=>`<div class="pt-log-row">${l}</div>`).join("")
+    + (logCount>LOG_MAX?`<div class="pt-log-row pt-log-more">+${logCount-LOG_MAX} earlier points</div>`:"");
   $("ptLive").innerHTML=`
     ${mpA?`<div class="pt-mp-banner">⚡ Match point — ${esc(PT.a)}</div>`:''}
     ${mpB?`<div class="pt-mp-banner">⚡ Match point — ${esc(PT.b)}</div>`:''}
@@ -5419,30 +5540,50 @@ function renderTracker(){
         ${decided?'':`<button class="pt-btn" style="--ac:${cB}" onclick="ptPoint('b')">+ point</button>`}
       </div>
     </div>
-    ${decided ? `<div class="pt-final">${PT.draw?`🤝 Recorded as a draw`:`🏆 ${esc(PT.winner==='a'?PT.a:PT.b)} wins ${PT.setsA}–${PT.setsB}`}</div>
-      <div class="pt-fix-row" style="border-top:none;padding-top:0">
-        <label class="pt-zoom-label">umpire fairness <select id="ptUmpireRating" style="width:auto;padding:6px 8px">
-          <option value="">skip</option><option value="5">5 — spotless</option><option value="4">4 — good</option><option value="3">3 — fine</option><option value="2">2 — shaky</option><option value="1">1 — biased</option>
-        </select></label>
+    <div class="pt-deck">
+      ${decided ? `<div class="pt-final">${PT.draw?`🤝 Recorded as a draw`:`🏆 ${esc(PT.winner==='a'?PT.a:PT.b)} wins ${PT.setsA}–${PT.setsB}`}</div>
+        <div class="pt-well">
+          <div class="pt-well-h">Wrap up</div>
+          <label class="pt-zoom-label">umpire fairness <select id="ptUmpireRating" style="width:auto;padding:6px 8px">
+            <option value="">skip</option><option value="5">5 — spotless</option><option value="4">4 — good</option><option value="3">3 — fine</option><option value="2">2 — shaky</option><option value="1">1 — biased</option>
+          </select></label>
+          <div class="pt-foot">
+            <button class="mini" onclick="ptUndo()" ${ptHistory.length?'':'disabled'}>↶ undo</button>
+            <button class="btn" id="ptSubmitBtn" style="width:auto;margin:0" onclick="ptSubmit()">Submit game</button>
+            <button class="mini no" onclick="ptAbandon()">discard</button>
+          </div>
+        </div>`
+      : `<div class="pt-actions">
+          <div class="pt-act-grp">
+            <button class="mini" onclick="ptUndo()" ${ptHistory.length?'':'disabled'}>↶ undo</button>
+            <button class="mini" onclick="ptRedo()" ${ptFuture.length?'':'disabled'}>↷ redo</button>
+          </div>
+          <div class="pt-act-grp">
+            <button class="mini" onclick="ptDraw()">call it a draw</button>
+            <button class="mini no" onclick="ptAbandon()">discard match</button>
+          </div>
+        </div>`}
+      ${fixMeta.length ? `<div class="pt-well">
+        <div class="pt-well-h">Fix a past game</div>
+        <div class="pt-well-sub">Gave a game to the wrong player? Overturn it here — only clean games (loser on 2 points or fewer) can be flipped.</div>
+        <div class="pt-fix-row">
+          <select id="ptFixSelect">
+            ${fixMeta.map((g,i)=>`<option value="${i}" ${g.flippable?'':'disabled'}>Set ${g.setNum} · Game ${g.gameInSet}${g.tiebreak?' (TB)':''} — ${esc(g.winner==='a'?PT.a:PT.b)} won ${g.a}-${g.b}${g.flippable?'':' (too close to flip)'}</option>`).join("")}
+          </select>
+          <button class="mini no" onclick="ptFlipSelectedGame()">Fix this game</button>
+        </div>
+      </div>` : ''}
+      <div class="pt-well pt-logwell${ptLogExpanded?' on':''}" id="ptLogWell">
+        ${logCount ? `<button type="button" class="pt-log-toggle" onclick="ptToggleLog()" aria-expanded="${ptLogExpanded?'true':'false'}" aria-controls="ptLogList" title="${ptLogExpanded?'Hide the full point log':'Show the full point log'}">
+            <span class="pt-log-tag">${ptLogExpanded?'Point log':'Latest'}</span>
+            <span class="pt-log-latest">${ptLogExpanded?`${logCount} ${logCount===1?'entry':'entries'}`:PT.log[0]}</span>
+            ${ptLogExpanded?'':`<span class="pt-log-count">${logCount}</span>`}
+            <span class="pt-log-caret" aria-hidden="true">▼</span>
+          </button>
+          ${ptLogExpanded?`<div class="pt-log" id="ptLogList">${logRows}</div>`:''}`
+        : `<div class="pt-log-empty">No points yet — the log fills in as you score.</div>`}
       </div>
-      <div class="pt-foot">
-        <button class="mini" onclick="ptUndo()" ${ptHistory.length?'':'disabled'}>↶ undo</button>
-        <button class="btn" id="ptSubmitBtn" style="width:auto;margin:0" onclick="ptSubmit()">Submit game</button>
-        <button class="mini no" onclick="ptAbandon()">discard</button>
-      </div>`
-    : `<div class="pt-foot">
-        <button class="mini" onclick="ptUndo()" ${ptHistory.length?'':'disabled'}>↶ undo</button>
-        <button class="mini" onclick="ptRedo()" ${ptFuture.length?'':'disabled'}>↷ redo</button>
-        <button class="mini" onclick="ptDraw()">call it a draw</button>
-        <button class="mini no" onclick="ptAbandon()">discard match</button>
-      </div>`}
-    ${fixMeta.length ? `<div class="pt-fix-row">
-      <select id="ptFixSelect">
-        ${fixMeta.map((g,i)=>`<option value="${i}" ${g.flippable?'':'disabled'}>Set ${g.setNum} · Game ${g.gameInSet}${g.tiebreak?' (TB)':''} — ${esc(g.winner==='a'?PT.a:PT.b)} won ${g.a}-${g.b}${g.flippable?'':' (too close to flip)'}</option>`).join("")}
-      </select>
-      <button class="mini no" onclick="ptFlipSelectedGame()">Fix this game</button>
-    </div>` : ''}
-    <div class="pt-log">${PT.log.slice(0,6).map(l=>`<div class="pt-log-row">${l}</div>`).join("")}</div>
+    </div>
   `;
   ptTickTimer();
 }
@@ -7201,15 +7342,16 @@ window.ptToggleFullscreen=ptToggleFullscreen;
 
 /* ---- live chat, riding the same signaling channel ----
    No account required — just a display name, typed once and remembered on
-   this device, the way any ordinary live-stream chat works. A real signed-in
-   player identity still takes priority when present. */
-function ptChatDisplayName(){
-  try{ return (localStorage.getItem('fgta_chat_name')||'').trim(); }catch(e){ return ''; }
-}
+   this device, the way any ordinary live-stream chat works. Shares the same
+   myDisplayName()/setMyDisplayName() identity used for posts/comments/polls/
+   etc. elsewhere in the app (one name per device, not a separate one per
+   feature) — a real signed-in player identity still takes priority when
+   present, same as everywhere else. */
+function ptChatDisplayName(){ return myDisplayName(); }
 function ptSetChatDisplayName(){
   const inp=$("ptChatNameInput"); const name=(inp?inp.value:"").trim().slice(0,24);
   if(!name) return toast("Enter a name to chat",true);
-  try{ localStorage.setItem('fgta_chat_name', name); }catch(e){}
+  setMyDisplayName(name);
   renderPTStream();
 }
 window.ptSetChatDisplayName=ptSetChatDisplayName;
@@ -8239,7 +8381,9 @@ function renderForView(id){
   if(id==="feed") renderFeed();
   else if(id==="matches") renderAllMatches();
   else if(id==="rivalry") renderRivalry();
-  else if(id==="tracker"){ renderTracker(); renderPTStream(); }
+  /* the point log always opens collapsed when you come back to ref mode —
+     the live score is what you switched tabs for, not the history */
+  else if(id==="tracker"){ ptLogExpanded=false; renderTracker(); renderPTStream(); }
   else if(id==="predict-forecast"||id==="predict") initPredict();
   else if(id==="events") renderTournaments();
   else if(id==="doubles") renderDoubles();
@@ -14771,38 +14915,59 @@ async function signOutProfile(){
 }
 window.signOutProfile = signOutProfile;
 
-/* gate any action that needs a locked identity: runs onReady() if already
-   signed in with a claimed profile, otherwise explains why and opens the
-   sign-in modal. Returns whether the action may proceed. */
+/* gate any action that needs SOME identity — a real signed-in profile or
+   just a chosen display name, either is fine. Runs onReady() immediately if
+   either already exists; otherwise prompts for a display name (no account
+   needed) and runs onReady() once one's set. Returns whether the action may
+   proceed *right now* (false while the name modal is up — the caller's
+   onReady still fires asynchronously once a name is submitted). */
+let _pendingIdentityCallback=null;
 function requireLogin(onReady){
-  if(myProfileName){ onReady(); return true; }
-  if(currentUser) toast("Signed in as "+(myProfileEmail||"")+", but you're not on the player roster yet — ask the league admin to add you.",true);
-  else toast("Sign in to post, comment, challenge, poll, react or message",true);
-  openLoginModal();
+  if(myName()){ onReady(); return true; }
+  openNameModal(onReady);
   return false;
 }
 window.requireLogin = requireLogin;
+function openNameModal(onReady){
+  _pendingIdentityCallback = onReady || null;
+  const inp=$("nameModalInput"); if(inp) inp.value=myDisplayName();
+  $("nameModal").classList.add("open");
+  setTimeout(()=>$("nameModalInput")&&$("nameModalInput").focus(),50);
+}
+window.openNameModal = openNameModal;
+function closeNameModal(){ $("nameModal").classList.remove("open"); _pendingIdentityCallback=null; }
+window.closeNameModal = closeNameModal;
+function submitDisplayName(){
+  const inp=$("nameModalInput"); const name=(inp?inp.value:"").trim();
+  if(!name) return toast("Enter a name",true);
+  if(isNameMuted(name)) return toast("That name has been muted by an admin",true);
+  setMyDisplayName(name);
+  $("nameModal").classList.remove("open");
+  toast("Chatting/posting as "+name+" ✓");
+  afterIdentityChange();
+  const cb=_pendingIdentityCallback; _pendingIdentityCallback=null;
+  if(cb) cb();
+}
+window.submitDisplayName = submitDisplayName;
 
 /* ---- composer identity (feed) ---- */
 function renderComposerIdentity(){
   const nameEl=$("cmpName"); if(!nameEl) return;
   const avEl=$("cmpAvatar");
   const actEl=$("cmpIdentityAction");
-  const canPost = !!myProfileName;
-  if(myProfileName){
-    nameEl.value = "Posting as " + myProfileName;
-    if(avEl) avEl.innerHTML = avatar(myProfileName,38);
-    if(actEl) actEl.innerHTML = '<button class="mini no" onclick="signOutProfile()">sign out</button>';
-  } else if(currentUser){
-    nameEl.value = "";
-    nameEl.placeholder = "not on the roster yet";
-    if(avEl) avEl.innerHTML = '<span class="avi avi-blank" style="width:38px;height:38px">?</span>';
-    if(actEl) actEl.innerHTML = '<span class="c-badge">'+esc(myProfileEmail||"")+' — ask the admin</span> <button class="mini no" onclick="signOutProfile()">sign out</button>';
+  const name=myName();
+  const canPost = !!name;
+  if(name){
+    nameEl.value = "Posting as " + name;
+    if(avEl) avEl.innerHTML = avatar(name,38);
+    if(actEl) actEl.innerHTML = myProfileName
+      ? '<button class="mini no" onclick="signOutProfile()">sign out</button>'
+      : '<button class="mini no" onclick="openNameModal()">change name</button>';
   } else {
     nameEl.value = "";
     nameEl.placeholder = "your name";
     if(avEl) avEl.innerHTML = '<span class="avi avi-blank" style="width:38px;height:38px">?</span>';
-    if(actEl) actEl.innerHTML = '<button class="mini yes" onclick="openLoginModal()">Sign in to post</button>';
+    if(actEl) actEl.innerHTML = '<button class="mini yes" onclick="openNameModal()">Pick a name to post</button>';
   }
   ["cmpBody","cmpImage","plQ","plO1","plO2","plO3","chTo","chMsg","cmpPostBtn","cmpPollBtn","cmpCallBtn"]
     .forEach(id=>{ const el=$(id); if(el) el.disabled=!canPost; });
@@ -14815,26 +14980,23 @@ window.renderComposerIdentity = renderComposerIdentity;
 function renderCommentIdentity(){
   const nameEl=$("cAuthor"); if(!nameEl) return;
   const bodyEl=$("cBody"), imgEl=$("cImage"), sendBtn=$("cSendBtn"), noteEl=$("cAuthNote");
-  if(myProfileName){
-    nameEl.value = myProfileName;
+  const name=myName();
+  if(name){
+    nameEl.value = name;
     nameEl.placeholder = "";
     if(bodyEl) bodyEl.disabled=false;
     if(imgEl) imgEl.disabled=false;
     if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent="Post"; sendBtn.onclick=postComment; }
-    if(noteEl) noteEl.style.display="none";
-  } else if(currentUser){
-    nameEl.value = "";
-    nameEl.placeholder = "not on roster";
-    if(bodyEl) bodyEl.disabled=true;
-    if(imgEl) imgEl.disabled=true;
-    if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent="Post"; sendBtn.onclick=postComment; }
-    if(noteEl){ noteEl.style.display="block"; noteEl.textContent="Signed in as "+(myProfileEmail||"")+", but you're not on the player roster yet — ask the league admin to add you."; }
+    if(noteEl){
+      if(myProfileName) noteEl.style.display="none";
+      else { noteEl.style.display="block"; noteEl.innerHTML='Commenting as '+esc(name)+' — <a href="javascript:void(0)" onclick="openNameModal()">change</a>'; }
+    }
   } else {
     nameEl.value = "";
     nameEl.placeholder = "your name";
     if(bodyEl) bodyEl.disabled=true;
     if(imgEl) imgEl.disabled=true;
-    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent="Sign in"; sendBtn.onclick=openLoginModal; }
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent="Pick a name"; sendBtn.onclick=()=>openNameModal(); }
     if(noteEl) noteEl.style.display="none";
   }
 }
