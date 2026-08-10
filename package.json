@@ -1,0 +1,8 @@
+{
+  "name": "fgta",
+  "private": true,
+  "description": "Netlify Functions for FGTA (currently just the live-stream AI highlight judge). The site itself is a static index.html with no build step — this file exists only so Netlify installs the function's one dependency.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0"
+  }
+}

@@ -5295,13 +5295,23 @@ function ptFmtElapsed(ms){
   return h>0 ? `${h}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}` : `${m}:${String(s%60).padStart(2,'0')}`;
 }
 function ptTickTimer(){
-  if(!PT||!PT.startedAt) return;
-  const t=ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt);
-  const el=$("ptTimer"); if(el) el.textContent=t;
   /* the stream panel's ref deck shows the same clock — no second interval,
      it just rides this one (the canvas scoreboard's copy is redrawn every
-     animation frame by ptDrawScoreboard, so it needs no tick at all) */
-  const rc=document.getElementById("ptRefClock"); if(rc) rc.textContent=t;
+     animation frame by ptDrawScoreboard, so it needs no tick at all).
+     A viewer has no local PT for the match being streamed (their own PT, if
+     any, is an unrelated personal tracker draft) — their ref clock ticks off
+     the mirrored PTStream.remotePT instead, kept current by pt_sync. */
+  if(PT && PT.startedAt){
+    const t=ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt);
+    const el=$("ptTimer"); if(el) el.textContent=t;
+    if(!PTStream || PTStream.role!=='viewer'){
+      const rc=document.getElementById("ptRefClock"); if(rc) rc.textContent=t;
+    }
+  }
+  if(PTStream && PTStream.role==='viewer' && PTStream.remotePT && PTStream.remotePT.startedAt){
+    const rp=PTStream.remotePT;
+    const rc=document.getElementById("ptRefClock"); if(rc) rc.textContent=ptFmtElapsed((rp.endedAt||Date.now())-rp.startedAt);
+  }
 }
 setInterval(ptTickTimer,1000);
 
@@ -5505,8 +5515,11 @@ function renderTracker(){
   /* the live-stream panel's ref deck mirrors this same state, so refresh it
      from here: every mutation path already funnels through renderTracker
      (ptPoint → ptAfterMutate → renderTracker, plus undo/redo/start/abandon),
-     and it bails cheaply when the deck isn't on the page */
+     and it bails cheaply when the deck isn't on the page. Same choke point
+     pushes the score to every viewer's mirrored copy — see ptSyncPayload/
+     ptSyncBroadcastIfLive below. */
   ptSyncRefPanel();
+  ptSyncBroadcastIfLive();
   if(!$("ptLive")) return;
   if(!PT){ $("ptSetup").style.display=""; $("ptLive").style.display="none"; return; }
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
@@ -6290,6 +6303,7 @@ function renderPTStream(){
             ${PTStream.cameras && PTStream.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
             <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
             <button class="mini pt-ctl-btn${PTStream.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${PTStream.autoHighlight?'auto on':'auto'}</span></button>
+            <button class="mini pt-ctl-btn${PTStream.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${PTStream.aiHighlight?'AI on':'AI'}</span></button>
             <button class="mini pt-ctl-btn${PTStream.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${PTStream.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${PTStream.recOn?'stop rec':'record'}</span></button>
           </div>
           <div class="pt-ctl-sep"></div>
@@ -6325,6 +6339,7 @@ function renderPTStream(){
         <span class="pt-live-badge pt-watch-badge">▶ watching</span>
         <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
         <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
+        <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>
       </div>
       <div class="pt-stream-main" id="ptStreamMain">
         <div class="pt-stream-vwrap">
@@ -6336,6 +6351,7 @@ function renderPTStream(){
           </div>
         </div>
         ${chatHtml(PTStream)}
+        ${refHtml(PTStream)}
       </div>
       ${othersHtml}
       <div class="pt-stream-foot">
@@ -6351,6 +6367,7 @@ function renderPTStream(){
       v.play().catch(()=>{});
     }
   }
+  ptSyncRefDrawer();
 }
 function ptUnmute(){
   if(!PTStream) return;
@@ -7175,20 +7192,33 @@ window.ptSyncChatDrawer=ptSyncChatDrawer;
    The body is rebuilt by ptSyncRefPanel(), which renderTracker() calls — so
    every path that mutates PT (ptPoint → ptAfterMutate → renderTracker, plus
    undo/redo/start/abandon) refreshes these numbers without anybody having to
-   remember a second hook. */
-function ptRefBodyHTML(){
-  if(typeof PT==='undefined' || !PT){
-    return `<div class="pt-ref-empty">No match is being tracked yet — start one in the Point Tracker above and the score shows up here <i>and</i> in the broadcast.</div>`;
+   remember a second hook.
+
+   Whoever starts the stream shouldn't be the only one who can ref it — a
+   viewer can open the same panel and tap points too. The host's PT is the
+   only copy of the real match state (a viewer's own local PT, if they even
+   have one, is an unrelated personal tracker draft — see ptSyncPayload), so
+   a viewer's tap never mutates anything locally: it's sent as a "ref_point"
+   request over the existing stream signaling channel, the host applies it
+   through the same ptPoint() a local tap would use, and the resulting score
+   flows back out to everyone (host's own preview included) as "pt_sync".
+   isHost just switches which state object feeds the panel and where a tap
+   is routed — the markup itself is identical either way, so a viewer
+   reffing sees exactly what the host sees. */
+function ptRefBodyHTML(state,isHost){
+  if(!state){
+    return `<div class="pt-ref-empty">No match is being tracked yet — ${isHost?'start one in the Point Tracker above and the score shows up here <i>and</i> in the broadcast.':'once the host starts tracking, the score shows up here.'}</div>`;
   }
-  const decided=!!(PT.winner||PT.draw);
-  const lbl = PT.tiebreak ? [String(PT.tbA),String(PT.tbB)] : ptPointLabel(PT.ptsA,PT.ptsB);
-  const chips = PT.sets.map(s=>`<span class="pt-set-chip">${s.a}-${s.b}</span>`).join('')
-    + (decided?'':`<span class="pt-set-chip pt-set-live">${PT.gamesA}-${PT.gamesB}${PT.tiebreak?' TB':''}</span>`);
+  const decided=!!(state.winner||state.draw);
+  const lbl = state.tiebreak ? [String(state.tbA),String(state.tbB)] : ptPointLabel(state.ptsA,state.ptsB);
+  const chips = (state.sets||[]).map(s=>`<span class="pt-set-chip">${s.a}-${s.b}</span>`).join('')
+    + (decided?'':`<span class="pt-set-chip pt-set-live">${state.gamesA}-${state.gamesB}${state.tiebreak?' TB':''}</span>`);
   const side=(k)=>{
     const isA=k==='a';
-    const name=isA?PT.a:PT.b, sets=isA?PT.setsA:PT.setsB, games=isA?PT.gamesA:PT.gamesB;
+    const name=isA?state.a:state.b, sets=isA?state.setsA:state.setsB, games=isA?state.gamesA:state.gamesB;
+    const action = isHost ? `ptPoint('${k}')` : `ptRefViewerPoint('${k}')`;
     return `<button class="pt-ref-side" style="--ac:${isA?'var(--accent)':'var(--court)'}"
-        ${decided?'disabled':`onclick="ptPoint('${k}')"`} aria-label="Point to ${esc(name)}">
+        ${decided?'disabled':`onclick="${action}"`} aria-label="Point to ${esc(name)}">
       <span class="pt-ref-name">${esc(name)}</span>
       <span class="pt-ref-line"><b>${sets}</b> sets · <b>${games}</b> games</span>
       <span class="pt-ref-pt">${lbl[isA?0:1]}</span>
@@ -7199,17 +7229,21 @@ function ptRefBodyHTML(){
       ${side('a')}
       <div class="pt-ref-mid">
         <span class="pt-ref-clock" id="ptRefClock">0:00</span>
-        ${PT.tiebreak?'<span class="pt-ref-tb">TIEBREAK</span>':''}
+        ${state.tiebreak?'<span class="pt-ref-tb">TIEBREAK</span>':''}
         <span class="pt-ref-chips">${chips}</span>
       </div>
       ${side('b')}
     </div>
-    ${decided?`<div class="pt-ref-final">${PT.draw?'🤝 drawn':`🏆 ${esc(PT.winner==='a'?PT.a:PT.b)} wins ${PT.setsA}–${PT.setsB}`}</div>`:''}`;
+    ${decided?`<div class="pt-ref-final">${state.draw?'🤝 drawn':`🏆 ${esc(state.winner==='a'?state.a:state.b)} wins ${state.setsA}–${state.setsB}`}</div>`:''}
+    ${!isHost && !decided?'<div class="pt-ref-hint">taps here score the real match for everyone — same as the host</div>':''}`;
 }
 function ptSyncRefPanel(){
   const body=document.getElementById('ptRefBody');
-  if(!body) return;                      // not hosting, or panel not built yet
-  body.innerHTML=ptRefBodyHTML();
+  if(!body) return;                      // panel not open, or not streaming
+  const isViewer = !!(PTStream && PTStream.role==='viewer');
+  body.innerHTML = isViewer
+    ? ptRefBodyHTML(PTStream.remotePT||null, false)
+    : ptRefBodyHTML((typeof PT!=='undefined'?PT:null), true);
   ptTickTimer();                         // fills #ptRefClock straight away
 }
 function ptSyncRefDrawer(){
@@ -7224,7 +7258,7 @@ function ptSyncRefDrawer(){
 }
 function ptToggleRefPanel(e){
   if(e && e.stopPropagation) e.stopPropagation();
-  if(!PTStream || PTStream.role!=='host') return;
+  if(!PTStream) return;
   PTStream.refOpen=!PTStream.refOpen;
   if(PTStream.refOpen && PTStream.chatOpen && document.fullscreenElement){
     PTStream.chatOpen=false; ptSyncChatDrawer();
@@ -7233,6 +7267,35 @@ function ptToggleRefPanel(e){
 }
 window.ptToggleRefPanel=ptToggleRefPanel;
 window.ptSyncRefPanel=ptSyncRefPanel;
+
+/* ---- viewer ref mode: request side, host stays authoritative ----
+   A viewer's own PT (if any) is a wholly separate, unrelated local tracker
+   draft — see the big comment above ptRefBodyHTML — so a viewer tap can
+   never touch it. It only ever asks the host to score, over the same
+   per-stream signaling channel chat/replay already use. */
+function ptRefViewerPoint(side){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  if(!PTStream.remotePT || PTStream.remotePT.winner || PTStream.remotePT.draw) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_point",payload:{side}}); }catch(e){}
+  try{ buzz(10); }catch(e){}   // immediate feel; the real number arrives on the next pt_sync
+}
+window.ptRefViewerPoint=ptRefViewerPoint;
+
+/* ---- host → everyone: mirror the match state alongside the score already
+   baked into the broadcast pixels. The pixels cover watching; this covers
+   reffing and the ref panel's own clock/chips, neither of which a viewer
+   can read back out of a video frame. Deliberately excludes log/gameLog —
+   viewers' ref panel doesn't need point-by-point history, and the pixels
+   are already the record of what happened. */
+function ptSyncPayload(){
+  if(typeof PT==='undefined' || !PT) return null;
+  const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt}=PT;
+  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt};
+}
+function ptSyncBroadcastIfLive(){
+  if(!PTStream || PTStream.role!=='host' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"pt_sync",payload:ptSyncPayload()}); }catch(e){}
+}
 /* tap anywhere off the drawer (i.e. on the picture) to dismiss it */
 document.addEventListener('click', e=>{
   if(!PTStream || !PTStream.chatOpen || !document.fullscreenElement) return;
@@ -7439,20 +7502,83 @@ function ptInstantReplay(label){
 }
 window.ptInstantReplay=ptInstantReplay;
 
+/* ---- Tier 3: grab a few small stills off the live canvas for the AI judge.
+   Never continuous — only ever called from inside ptMaybeAutoReplay, itself
+   only reached after a Tier 1/2 trigger already fired. Downscaled to a
+   480px long edge before toDataURL so neither the request nor the model's
+   token cost balloons — see netlify/functions/highlight.mts. */
+function ptCaptureFrames(S,n,gapMs){
+  return new Promise(resolve=>{
+    if(!S || !S.canvas){ resolve([]); return; }
+    const out=[];
+    const shot=()=>{
+      try{
+        const c=S.canvas, longEdge=Math.max(c.width,c.height);
+        const scale=Math.min(1,480/longEdge);
+        const w=Math.max(1,Math.round(c.width*scale)), h=Math.max(1,Math.round(c.height*scale));
+        const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
+        tmp.getContext('2d').drawImage(c,0,0,w,h);
+        out.push(tmp.toDataURL('image/jpeg',0.5));
+      }catch(e){}
+    };
+    shot();
+    let left=n-1;
+    const tick=()=>{
+      if(left<=0 || !PTStream || PTStream!==S){ resolve(out); return; }
+      left--; shot();
+      setTimeout(tick,gapMs);
+    };
+    setTimeout(tick,gapMs);
+  });
+}
+/* POSTs to the Netlify Function in netlify/functions/highlight.mts. Returns
+   null (not a verdict) on anything short of a clean answer — network error,
+   non-200, or AI Gateway not yet activated on this deploy — so the caller
+   can fail open instead of mistaking "couldn't ask" for "the answer is no". */
+async function ptAskAIHighlight(S,tag){
+  const frames=await ptCaptureFrames(S,3,160);
+  if(!frames.length) return null;
+  const res=await fetch('/api/highlight',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({frames,context:tag})});
+  if(!res.ok) return null;
+  const data=await res.json();
+  return data && !data.error ? data : null;
+}
+
 /* ---- auto-highlight trigger: shared gate for both Tier 1 (score drama,
    ptComputeDrama above) and Tier 2 (crowd audio spike, ptStartAudioWatch
    below) so neither can fire back-to-back or interrupt an in-flight replay.
    A replay takes over the whole broadcast for up to 9s — firing too often
    turns a close set into a highlight reel of itself, so this is cooldown-
-   gated rather than firing on every qualifying point. */
-function ptMaybeAutoReplay(tag){
+   gated rather than firing on every qualifying point.
+   When the host also has 🤖 AI on, a qualifying trigger doesn't replay
+   immediately — it asks the Tier 3 vision judge first (capped at 3s) and
+   only replays if that comes back either genuinely positive or unreachable/
+   unclear (fail open: a broken or not-yet-activated AI Gateway must never
+   silently defeat the heuristic replay feature that already works without
+   it). A confident, reachable "no" is the only thing that skips the replay. */
+async function ptMaybeAutoReplay(tag){
   if(!PTStream || PTStream.role!=='host' || !PTStream.autoHighlight) return;
   if(PTStream.replay || PTStream.camSwitch || PTStream.replayUnavailable) return;
   if(!PTStream.replayChunks || !PTStream.replayChunks.length) return;
+  const S=PTStream;
   const now=Date.now();
-  if(PTStream._lastAutoReplayAt && now-PTStream._lastAutoReplayAt<45000) return;
-  PTStream._lastAutoReplayAt=now;
-  ptInstantReplay(tag);
+  if(S._lastAutoReplayAt && now-S._lastAutoReplayAt<45000) return;
+  let label=tag;
+  if(S.aiHighlight){
+    let verdict=null;
+    try{
+      verdict=await Promise.race([ptAskAIHighlight(S,tag), new Promise(res=>setTimeout(()=>res(null),3000))]);
+    }catch(e){ verdict=null; }
+    if(verdict){
+      if(verdict.isHighlight===false) return;          // a real, confident no
+      if(verdict.label) label=String(verdict.label).slice(0,40);
+    }
+    // verdict===null (timeout / network error / AI Gateway not active yet) → fall through and replay on the heuristic tag alone
+    if(!PTStream || PTStream!==S || S.replay || S.camSwitch) return;   // state moved on while we were waiting
+    if(S._lastAutoReplayAt && Date.now()-S._lastAutoReplayAt<45000) return;
+  }
+  S._lastAutoReplayAt=Date.now();
+  ptInstantReplay(label);
 }
 function ptToggleAutoHighlight(){
   if(!PTStream || PTStream.role!=='host') return;
@@ -7461,6 +7587,13 @@ function ptToggleAutoHighlight(){
   renderPTStream();
 }
 window.ptToggleAutoHighlight=ptToggleAutoHighlight;
+function ptToggleAIHighlight(){
+  if(!PTStream || PTStream.role!=='host') return;
+  PTStream.aiHighlight=!PTStream.aiHighlight;
+  toast(PTStream.aiHighlight ? "🤖 AI will judge each auto-highlight before replaying (needs 🎯 auto on too)" : "AI judging off — auto-highlights use the score/crowd heuristic alone");
+  renderPTStream();
+}
+window.ptToggleAIHighlight=ptToggleAIHighlight;
 
 /* ---- fullscreen ---- */
 function ptToggleFullscreen(){
@@ -7590,6 +7723,7 @@ async function ptGoLive(){
     const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
     ch.send({type:"broadcast",event:"offer",payload:{viewerId:vid,sdp:offer}});
     PTStream.viewerCount=Object.keys(PTStream.peers).length; renderPTStream();
+    ptSyncBroadcastIfLive();   // a viewer joining mid-match needs the current score, not just the next point
   });
   ch.on("broadcast",{event:"answer"}, async ({payload})=>{
     const pc=PTStream && PTStream.peers[payload.viewerId]; if(!pc||pc.currentRemoteDescription) return;
@@ -7606,6 +7740,12 @@ async function ptGoLive(){
   });
   ch.on("broadcast",{event:"chat"}, ({payload})=>{
     if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
+  });
+  /* a viewer who's opted into ref mode (ptRefViewerPoint) — same ptPoint()
+     a local host tap uses, so it goes through every existing guard (winner/
+     draw bail, undo history, drama/auto-highlight triggers) identically */
+  ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
+    if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side);
   });
   ch.subscribe();
   ptDirAnnounce(code);
@@ -7675,6 +7815,15 @@ async function ptWatch(codeArg){
   });
   ch.on("broadcast",{event:"chat"}, ({payload})=>{
     if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
+  });
+  /* mirrored match state from the host — see ptSyncPayload/ptSyncBroadcastIfLive.
+     Only pokes the ref panel's own DOM (ptSyncRefPanel), same as the host's
+     side never re-renders the whole stream panel over a score change either —
+     a full renderPTStream() here would rebuild the chat input mid-typing. */
+  ch.on("broadcast",{event:"pt_sync"}, ({payload})=>{
+    if(!PTStream) return;
+    PTStream.remotePT=payload;
+    if(PTStream.refOpen) ptSyncRefPanel();
   });
   ch.subscribe(status=>{ if(status==="SUBSCRIBED") ch.send({type:"broadcast",event:"join",payload:{viewerId}}); });
   renderPTStream();
