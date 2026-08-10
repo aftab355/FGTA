@@ -8121,8 +8121,17 @@ function ptSwitchTo(code){
 }
 window.ptSwitchTo=ptSwitchTo;
 
+/* PTStream itself only gets set once getUserMedia resolves below, so a fast
+   double-tap on "Go live" (or the permission prompt sitting open for a beat)
+   used to let two concurrent getUserMedia() calls fire for the same camera —
+   the second commonly failing with NotReadableError, which reads as "the
+   camera is broken" when it's really just "already claimed by the request
+   still in flight". This flag closes that window; every exit path below
+   resets it, success or failure. */
+let ptGoLiveStarting=false;
 async function ptGoLive(){
   if(PTStream) return toast("Already streaming or watching \u2014 stop first",true);
+  if(ptGoLiveStarting) return;
   if(!sb || !sb.channel) return toast("Not connected",true);
   if(!window.isSecureContext){
     return toast("Camera needs a secure https:// link \u2014 opening this as a local file blocks the permission prompt",true);
@@ -8130,14 +8139,18 @@ async function ptGoLive(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     return toast("Camera not available in this browser",true);
   }
+  ptGoLiveStarting=true;
   let stream;
   try{ stream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints({facingMode:{ideal:'environment'}}),audio:true}); }
   catch(e){
+    ptGoLiveStarting=false;
     const msg = e.name==="NotAllowedError" ? "Camera/mic permission denied — allow access and try again"
       : e.name==="NotFoundError" ? "No camera found on this device"
+      : e.name==="NotReadableError" ? "Camera or mic is already in use by another app or tab — close it and try again"
       : "Couldn't start camera: "+e.name;
     return toast(msg,true);
   }
+  ptGoLiveStarting=false;
   const code=ptRandCode();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
