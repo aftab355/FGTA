@@ -1911,6 +1911,11 @@
   .pt-ctl-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
   .pt-ctl-ico{font-size:14px;line-height:1}
   .pt-ctl-btn.off{border-color:rgba(255,45,45,.45);color:#ff7d7d;background:rgba(255,45,45,.08)}
+  /* recording is opt-in and destructive to miss, so it gets a louder, pulsing
+     treatment than mute/off (which are just muted-red) — same red family,
+     but animated, so a host can tell at a glance it's actively capturing */
+  .pt-ctl-btn.rec-on{border-color:#ff2d2d;color:#ff2d2d;background:rgba(255,45,45,.14)}
+  .pt-ctl-btn.rec-on .pt-ctl-ico{animation:livepulse 1.1s ease-in-out infinite}
   .pt-zoom-label{display:flex;align-items:center;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace;
     color:var(--dim);min-width:0;margin-bottom:0;font-weight:600;letter-spacing:1px}
   /* the global input rule paints every input as a filled box — a range slider
@@ -5897,6 +5902,7 @@ function renderPTStream(){
             <button class="mini pt-ctl-btn${PTStream.camOn===false?' off':''}" onclick="ptToggleCam()"><span class="pt-ctl-ico">${PTStream.camOn===false?'🚫':'📷'}</span><span class="pt-ctl-lbl">cam</span></button>
             ${PTStream.cameras && PTStream.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
             <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
+            <button class="mini pt-ctl-btn${PTStream.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${PTStream.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${PTStream.recOn?'stop rec':'record'}</span></button>
           </div>
           <div class="pt-ctl-sep"></div>
           <div class="pt-ctl-group">
@@ -6504,6 +6510,81 @@ function ptToggleCam(){
 }
 window.ptToggleCam=ptToggleCam;
 
+/* ---- local recording: opt-in, host-only, saves the exact composed feed
+   (canvas + mic) that viewers see straight to this device — never uploaded
+   anywhere. Deliberately a second, independent MediaRecorder from the one
+   in ptStartReplayRecorder: that one evicts anything older than ~16s and
+   periodically restarts itself, which is exactly wrong for a recording
+   meant to hold the whole match. This one just keeps every chunk until the
+   host stops it. `S` is captured at start time (not read from the PTStream
+   global later) so a recording started on one stream session always finishes
+   and saves itself even if the global has already moved on to null or a new
+   session by the time the browser fires 'stop'. ---- */
+function ptToggleRecord(){
+  if(!PTStream || PTStream.role!=='host') return;
+  if(PTStream.recOn) ptStopRecord(); else ptStartRecord();
+}
+window.ptToggleRecord=ptToggleRecord;
+function ptStartRecord(){
+  const S=PTStream;
+  if(!S || !S.localStream) return;
+  if(!window.MediaRecorder) return toast("Recording isn't supported in this browser",true);
+  /* Same codec fallback as the replay recorder — iOS/Safari has never
+     shipped webm support, only mp4, so a webm-only candidate list would
+     silently fail there. */
+  const candidates=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
+  const mime=candidates.find(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+  let rec;
+  try{ rec=new MediaRecorder(S.localStream, mime?{mimeType:mime}:undefined); }
+  catch(e){ return toast("Couldn't start recording: "+(e.message||e.name),true); }
+  S.recChunks=[];
+  S.recMime=mime||'video/webm';
+  S.recStartT=Date.now();
+  rec.ondataavailable=e=>{ if(e.data && e.data.size) S.recChunks.push(e.data); };
+  rec.onerror=e=>console.log('[ptStream] local record error:', e && e.error && e.error.message);
+  rec.onstop=()=>ptFinishRecord(S);
+  rec.start(1000);
+  S.recRecorder=rec;
+  S.recOn=true;
+  renderPTStream();
+  toast("⏺ Recording to this device — stops and saves when you tap stop, or when the stream ends");
+}
+function ptStopRecord(){
+  const S=PTStream;
+  if(!S || !S.recRecorder) return;
+  S.recOn=false;
+  try{ if(S.recRecorder.state!=='inactive') S.recRecorder.stop(); }catch(e){}
+  renderPTStream();
+}
+function ptFinishRecord(S){
+  if(!S || !S.recChunks || !S.recChunks.length){ if(S) S.recRecorder=null; return; }
+  const blob=new Blob(S.recChunks,{type:S.recMime||'video/webm'});
+  const ext=(S.recMime||'').includes('mp4')?'mp4':'webm';
+  const stamp=new Date(S.recStartT||Date.now()).toISOString().replace(/[:.]/g,'-').slice(0,19);
+  ptSaveRecording(blob, `fgta-match-${S.code||'live'}-${stamp}.${ext}`);
+  S.recChunks=null;
+  S.recRecorder=null;
+}
+/* Plain anchor-download, same technique already used by exportData() for
+   backups: works on desktop everywhere and on Android Chrome as a real
+   file download. iOS Safari doesn't reliably honor the download attribute
+   for blob URLs of this size — there it instead opens the clip in a new
+   tab, where the native share-sheet's "Save Video" (or a long-press) saves
+   it to Photos/Files. Either way the file lands on the device, never a
+   server, which is what makes this a "local recording" feature. */
+function ptSaveRecording(blob, filename){
+  try{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    toast("📥 Recording saved — "+filename);
+  }catch(e){
+    toast("Couldn't save the recording: "+(e.message||e.name),true);
+  }
+}
+
 /* ---- camera switching: since viewers only ever receive the canvas-drawn
    stream (see ptStartProcessing), swapping the input camera never needs to
    touch the peer connections — just hot-swap the video track feeding the
@@ -6718,6 +6799,11 @@ window.ptGoLive=ptGoLive;
 function ptStopLive(){
   if(!PTStream || PTStream.role!=='host') return;
   Object.values(PTStream.peers).forEach(pc=>{ try{pc.close();}catch(e){} });
+  /* finalize+save a still-running local recording before the tracks it
+     depends on get stopped below — ptStopRecord/ptFinishRecord operate on
+     a captured reference to this session, so this stays correct even
+     though PTStream itself is nulled out a few lines down */
+  if(PTStream.recOn) ptStopRecord();
   ptStopProcessing(PTStream);
   if(PTStream.rawStream) PTStream.rawStream.getTracks().forEach(t=>t.stop());
   if(PTStream.localStream) PTStream.localStream.getTracks().forEach(t=>t.stop());
