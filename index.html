@@ -1903,6 +1903,60 @@
   .pt-chat-row{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);background:var(--panel)}
   .pt-chat-row input{flex:1;min-width:0;padding:8px 10px;font-size:12px}
 
+  /* ---- ref mini-panel ----
+     The host is almost always the umpire too, and the only way to score used
+     to be scrolling back up to #ptLive — i.e. taking your eyes and your hands
+     off the framing controls mid-rally. This mirrors exactly what's baked
+     into the broadcast score bug (both names, sets, games, live point) with
+     two thumb-sized tap targets, right inside the stream panel.
+     Same toggle pattern as 🐛 debug and 💬 chat: a flag on PTStream poked
+     straight onto the DOM, never a renderPTStream() rebuild.
+     Windowed it docks as its own full-width row below the video+chat row
+     (order:3 + a 100% basis makes it wrap onto its own line). In fullscreen
+     it becomes a LEFT-edge drawer — deliberately the opposite edge from the
+     chat drawer, so the two can never overlap; opening either also closes
+     the other while fullscreen, so they can't fight for the same picture. */
+  .pt-ref{order:3;flex:0 0 100%;width:100%;min-width:0;display:none;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+  .pt-ref.pt-ref-open{display:flex;flex-direction:column}
+  .pt-ref-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:8px 12px;min-width:0;
+    border-bottom:1px solid var(--line-soft);background:var(--panel);
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1.4px;
+    text-transform:uppercase;color:var(--muted)}
+  .pt-ref-hint{font-size:9px;letter-spacing:.4px;color:var(--dim);text-transform:none;min-width:0}
+  .pt-ref-body{padding:10px;min-width:0}
+  .pt-ref-grid{display:flex;gap:8px;align-items:stretch;min-width:0}
+  .pt-ref-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:10px 8px;cursor:pointer;color:var(--ink);text-align:center;appearance:none;-webkit-appearance:none;
+    font:inherit;background:color-mix(in srgb,var(--ac) 12%, var(--panel));
+    border:1px solid color-mix(in srgb,var(--ac) 45%, transparent);
+    border-radius:var(--r-sm);transition:transform .12s,background .15s}
+  .pt-ref-side:hover{background:color-mix(in srgb,var(--ac) 20%, var(--panel))}
+  .pt-ref-side:active{transform:scale(.97)}
+  .pt-ref-side:disabled{opacity:.45;cursor:default}
+  .pt-ref-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1px;
+    text-transform:uppercase;color:var(--ac);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pt-ref-line{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.4px;white-space:nowrap}
+  .pt-ref-line b{color:var(--muted);font-weight:700}
+  .pt-ref-pt{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;line-height:1.05;color:#fff}
+  .pt-ref-cta{margin-top:4px;width:100%;padding:9px 6px;border-radius:var(--r-pill);
+    background:var(--ac);color:#0b0714;font-family:'JetBrains Mono',monospace;font-size:11px;
+    font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .pt-ref-mid{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:5px;padding:0 2px;min-width:0}
+  .pt-ref-clock{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--ball);white-space:nowrap}
+  .pt-ref-chips{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
+  .pt-ref-tb{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;letter-spacing:1px;
+    color:#1a1400;background:var(--gold);padding:2px 6px;border-radius:999px;white-space:nowrap}
+  .pt-ref-empty{font-size:12px;color:var(--dim);line-height:1.5;text-align:center;padding:6px 4px}
+  .pt-ref-final{text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    color:var(--gold);margin-top:9px}
+  /* the ⚖️ key sits with 🐛 at the right end of the header; only one of them
+     may claim the auto margin or the pair drifts apart */
+  .pt-ref-btn{margin-left:auto}
+  .pt-ref-btn+.pt-dbg-btn{margin-left:0}
+  .pt-ref-tab{display:none}
+
   .pt-stream-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:10px;
     max-width:900px;min-width:0;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md)}
   .pt-stream-controls select{width:auto;padding:7px 9px;font-size:11px}
@@ -1967,6 +2021,31 @@
     transform:translateY(-50%) translateX(calc(-1 * var(--pt-drawer-w)));
     background:color-mix(in srgb,var(--accent) 80%, #000)}
 
+  /* ref panel in fullscreen: the mirror image of the chat drawer — left edge
+     instead of right — so the umpire can score without the panel ever landing
+     on top of chat, and without covering the score bug baked into the bottom
+     of the picture. The two side blocks stack vertically here, because a
+     side-by-side row inside a ~300px drawer is two useless slivers. */
+  .pt-stream-main:fullscreen .pt-ref{position:absolute;top:0;left:0;bottom:0;z-index:6;
+    display:flex;flex-direction:column;order:0;flex:none;
+    width:var(--pt-drawer-w);max-width:var(--pt-drawer-w);
+    box-shadow:0 24px 70px -18px rgba(0,0,0,.95);
+    transform:translateX(calc(-100% - 20px));transition:transform .22s cubic-bezier(.16,1,.3,1)}
+  .pt-stream-main:fullscreen .pt-ref.pt-ref-open{transform:translateX(0)}
+  .pt-stream-main:fullscreen .pt-ref-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;flex-direction:column;justify-content:center}
+  .pt-stream-main:fullscreen .pt-ref-grid{flex-direction:column;width:100%}
+  .pt-stream-main:fullscreen .pt-ref-mid{flex-direction:row;flex-wrap:wrap;gap:8px}
+  .pt-stream-main:fullscreen .pt-ref-tab{display:flex;position:absolute;z-index:7;left:0;top:50%;
+    align-items:center;justify-content:center;width:34px;height:76px;padding:0;cursor:pointer;
+    font-size:17px;line-height:1;color:#fff;background:rgba(8,6,16,.62);
+    border:1px solid rgba(255,255,255,.22);border-left:none;border-radius:0 12px 12px 0;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    transform:translateY(-50%);transition:transform .22s cubic-bezier(.16,1,.3,1),background .15s}
+  .pt-stream-main:fullscreen .pt-ref.pt-ref-open+.pt-ref-tab{
+    transform:translateY(-50%) translateX(var(--pt-drawer-w));
+    background:color-mix(in srgb,var(--accent) 80%, #000)}
+
   /* ---- tablets / small laptops: below ~820px the video+chat row can no
      longer hold both at a usable size, so stack them rather than letting the
      chat orphan itself onto a half-empty second line ---- */
@@ -1992,6 +2071,11 @@
     /* 16px keeps iOS from zooming the whole page in on focus */
     .pt-chat-row input{font-size:16px;padding:11px 12px}
     .pt-chat-row .mini{min-height:44px;padding:10px 14px}
+    /* ref keys get real thumb targets on a phone */
+    .pt-ref-side{padding:12px 6px;min-height:118px}
+    .pt-ref-pt{font-size:27px}
+    .pt-ref-cta{padding:12px 6px;font-size:12px}
+    .pt-ref-line{font-size:9px}
 
     /* controls become a proper touch deck: a row of equal icon keys, then
        full-width zoom and filter rows — no more ragged wrap of tiny pills */
@@ -2023,6 +2107,10 @@
     .pt-stream-main:fullscreen .pt-chat-log{font-size:11px;padding:8px}
     .pt-stream-main:fullscreen .pt-dbg{max-height:34vh}
     .pt-stream-main:fullscreen .pt-chat-tab{width:30px;height:64px;font-size:15px}
+    .pt-stream-main:fullscreen .pt-ref-tab{width:30px;height:64px;font-size:15px}
+    .pt-stream-main:fullscreen .pt-ref-h{padding:6px 10px}
+    .pt-stream-main:fullscreen .pt-ref-side{padding:7px 6px;min-height:0}
+    .pt-stream-main:fullscreen .pt-ref-pt{font-size:22px}
   }
   /* ---- phone in fullscreen portrait ---- same drawer treatment, just wider:
      a docked 32vh chat panel was costing a third of the screen here too. ---- */
@@ -2061,37 +2149,85 @@
     .pt-set-chip.pt-set-live{font-size:11px;padding:3px 6px}
   }
 
-  /* ===== 8-8: THE MAGIC NUMBER ===== */
-  @keyframes pt88shake{0%,100%{transform:translate(0,0)}10%{transform:translate(-7px,4px) rotate(-1deg)}20%{transform:translate(7px,-4px) rotate(1deg)}30%{transform:translate(-9px,-3px) rotate(-1.5deg)}40%{transform:translate(9px,4px) rotate(1.5deg)}50%{transform:translate(-6px,-6px)}60%{transform:translate(6px,6px)}70%{transform:translate(-4px,2px)}80%{transform:translate(4px,-2px)}90%{transform:translate(-2px,0)}}
-  .pt88-shake{animation:pt88shake .5s ease-in-out 4}
-  @keyframes pt88bg{0%{filter:hue-rotate(0deg) saturate(1.4)}100%{filter:hue-rotate(360deg) saturate(1.4)}}
-  @keyframes pt88in{0%{transform:scale(0) rotate(-30deg);opacity:0}55%{transform:scale(1.3) rotate(8deg);opacity:1}75%{transform:scale(.9) rotate(-4deg)}100%{transform:scale(1) rotate(0)}}
-  @keyframes pt88pulse{0%,100%{text-shadow:0 0 30px #ff2d78,0 0 60px #1ec9dd,0 0 90px #d4ff2b;transform:scale(1)}50%{text-shadow:0 0 60px #d4ff2b,0 0 110px #ff2d78,0 0 150px #1ec9dd;transform:scale(1.05)}}
-  @keyframes pt88fall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:.15}}
-  .pt88-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;
-    background:conic-gradient(from 0deg,#ff2d78,#1ec9dd,#d4ff2b,#ffcc00,#ff2d78);
-    animation:pt88bg 1s linear infinite;cursor:pointer}
-  .pt88-card{animation:pt88in .55s cubic-bezier(.2,1.5,.4,1) forwards;text-align:center}
-  .pt88-num{font-family:'JetBrains Mono',monospace;font-size:min(30vw,260px);font-weight:900;color:#fff;
-    animation:pt88pulse .5s ease-in-out infinite;line-height:1}
-  .pt88-tag{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;letter-spacing:4px;color:#0d0a16;
-    background:#fff;padding:9px 26px;border-radius:999px;margin-top:16px;display:inline-block;text-transform:uppercase}
-  .pt88-particle{position:fixed;top:-40px;z-index:99998;animation-name:pt88fall;animation-timing-function:linear;animation-fill-mode:forwards;pointer-events:none}
+  /* ===== CELEBRATIONS — set won · the 8-8 easter egg =====
+     Both are full-bleed `position:fixed` layers appended straight to <body>.
 
-  /* ===== SET WON: flame celebration ===== */
-  @keyframes ptsetIn{0%{transform:scale(.3) translateY(40px);opacity:0}60%{transform:scale(1.15) translateY(-6px);opacity:1}100%{transform:scale(1) translateY(0)}}
-  @keyframes ptsetFlicker{0%,100%{text-shadow:0 0 30px #ff6a00,0 0 60px #ff2d2d,0 0 100px #ffcc00}50%{text-shadow:0 0 50px #ffcc00,0 0 90px #ff6a00,0 0 140px #ff2d2d}}
-  @keyframes ptsetRise{0%{transform:translateY(20px) scale(.8);opacity:0}10%{opacity:1}100%{transform:translateY(-115vh) scale(1.1);opacity:0}}
-  @keyframes ptsetBgPulse{0%,100%{opacity:.88}50%{opacity:1}}
-  .ptset-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;
-    background:radial-gradient(ellipse 90% 70% at 50% 120%, #ff2d2d 0%, #ff6a00 35%, #1a0a05 70%);
-    animation:ptsetBgPulse 1s ease-in-out infinite;cursor:pointer}
-  .ptset-card{animation:ptsetIn .6s cubic-bezier(.2,1.5,.4,1) forwards;text-align:center}
-  .ptset-label{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:800;letter-spacing:6px;color:#ffe9b0;text-transform:uppercase;margin-bottom:6px}
-  .ptset-name{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:min(14vw,96px);font-weight:900;color:#fff;
-    animation:ptsetFlicker .4s ease-in-out infinite;line-height:1}
-  .ptset-score{font-family:'JetBrains Mono',monospace;font-size:20px;color:#ffe9b0;margin-top:14px;letter-spacing:2px}
-  .ptset-flame{position:fixed;bottom:-40px;z-index:99998;animation-name:ptsetRise;animation-timing-function:ease-in;animation-fill-mode:forwards;pointer-events:none}
+     THE MOBILE BUG THIS BLOCK FIXES: the screen-shake used to be added to
+     <body> itself (`.pt88-shake`), and an animated `transform` on an
+     ancestor re-points the containing block of every `position:fixed`
+     DESCENDANT at that ancestor instead of the viewport. On a phone — a long
+     page, usually scrolled down — `inset:0` therefore resolved to the whole
+     *document* box: the overlay was laid out thousands of px tall starting
+     at the very top of the page, so the gradient was stretched to nothing,
+     its flex-centred card landed somewhere off in the middle of the
+     document, and the real page stayed visible around it. That is exactly
+     what the device screenshot showed. The shake now rides `.wrap` (the
+     content column — note the top/bottom bars already live outside `.wrap`
+     for precisely this reason), which is a SIBLING of the overlay and never
+     an ancestor, so `position:fixed` keeps meaning "the viewport".
+
+     Two more mobile hardenings while we're here:
+       · sizing is inset:0 PLUS explicit 100%/100dvh, so a collapsing mobile
+         URL bar can't leave an uncovered strip at the bottom;
+       · the particles are absolutely positioned INSIDE the overlay instead
+         of ~50 extra fixed <span>s parented to <body>. One layer, no
+         document-level layout thrash on a cheap phone, they can't outlive
+         the overlay, and they were broken by the same transform bug. */
+  @keyframes fgtaShake{0%,100%{transform:translate(0,0)}10%{transform:translate(-7px,4px) rotate(-1deg)}20%{transform:translate(7px,-4px) rotate(1deg)}30%{transform:translate(-9px,-3px) rotate(-1.5deg)}40%{transform:translate(9px,4px) rotate(1.5deg)}50%{transform:translate(-6px,-6px)}60%{transform:translate(6px,6px)}70%{transform:translate(-4px,2px)}80%{transform:translate(4px,-2px)}90%{transform:translate(-2px,0)}}
+  .fgta-shake{animation:fgtaShake .5s ease-in-out 4;will-change:transform}
+  /* shared shell: the only fixed element either celebration creates */
+  .fgta-cel{position:fixed;inset:0;width:100%;height:100%;height:100dvh;z-index:99999;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    overflow:hidden;cursor:pointer;padding:20px;text-align:center;isolation:isolate;
+    -webkit-tap-highlight-color:transparent;animation:fgtaCelIn .18s ease-out}
+  @keyframes fgtaCelIn{from{opacity:0}to{opacity:1}}
+  .fgta-cel.fgta-cel-out{animation:fgtaCelOut .3s ease-in forwards}
+  @keyframes fgtaCelOut{to{opacity:0}}
+  /* particle field — absolute, clipped by the overlay, transform-only anims */
+  .fgta-fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
+  .fgta-p{position:absolute;line-height:1;animation-fill-mode:both;animation-timing-function:linear;will-change:transform,opacity}
+  .fgta-cel>.fgta-card{position:relative;z-index:2;max-width:100%}
+
+  /* ---- set won: flame ---- */
+  @keyframes ptsetIn{0%{transform:scale(.3) translateY(40px);opacity:0}60%{transform:scale(1.12) translateY(-6px);opacity:1}100%{transform:scale(1) translateY(0)}}
+  @keyframes ptsetFlicker{0%,100%{text-shadow:0 0 24px #ff6a00,0 0 52px #ff2d2d}50%{text-shadow:0 0 40px #ffcc00,0 0 80px #ff6a00}}
+  @keyframes ptsetRise{0%{transform:translate3d(0,0,0) scale(.7);opacity:0}12%{opacity:1}100%{transform:translate3d(0,-118vh,0) scale(1.15);opacity:0}}
+  @keyframes ptsetGlow{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.08);opacity:1}}
+  .ptset-overlay{background:#170703}
+  .ptset-overlay .fgta-bg{position:absolute;inset:-6%;z-index:0;
+    background:radial-gradient(ellipse 95% 72% at 50% 115%, #ffcc00 0%, #ff2d2d 26%, #ff6a00 46%, #6d1a02 68%, #150703 100%);
+    animation:ptsetGlow 1.15s ease-in-out infinite}
+  .ptset-label{font-family:'JetBrains Mono',monospace;font-size:clamp(13px,4vw,24px);font-weight:800;
+    letter-spacing:clamp(3px,1.4vw,6px);color:#ffe9b0;text-transform:uppercase;margin-bottom:6px}
+  .ptset-name{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:clamp(34px,13vw,96px);font-weight:900;color:#fff;
+    animation:ptsetFlicker .45s ease-in-out infinite;line-height:1.02;overflow-wrap:anywhere}
+  .ptset-score{font-family:'JetBrains Mono',monospace;font-size:clamp(12px,3.6vw,20px);color:#ffe9b0;margin-top:14px;letter-spacing:1.5px}
+  .ptset-card{animation:ptsetIn .6s cubic-bezier(.2,1.5,.4,1) both}
+  .ptset-overlay .fgta-p{bottom:-8%;animation-name:ptsetRise;animation-timing-function:ease-in}
+
+  /* ---- 8-8: THE MAGIC NUMBER ---- */
+  @keyframes pt88spin{to{transform:rotate(360deg)}}
+  @keyframes pt88in{0%{transform:scale(0) rotate(-30deg);opacity:0}55%{transform:scale(1.25) rotate(8deg);opacity:1}75%{transform:scale(.92) rotate(-4deg)}100%{transform:scale(1) rotate(0)}}
+  @keyframes pt88pulse{0%,100%{text-shadow:0 0 24px #ff2d78,0 0 52px #1ec9dd;transform:scale(1)}50%{text-shadow:0 0 46px #d4ff2b,0 0 90px #ff2d78;transform:scale(1.04)}}
+  @keyframes pt88fall{0%{transform:translate3d(0,0,0) rotate(0);opacity:1}100%{transform:translate3d(0,118vh,0) rotate(720deg);opacity:.15}}
+  .pt88-overlay{background:#0b0716}
+  /* a rotating conic layer instead of an infinite hue-rotate filter on the
+     whole overlay: transform-only, so it stays on the compositor */
+  .pt88-overlay .fgta-bg{position:absolute;top:50%;left:50%;width:180vmax;height:180vmax;margin:-90vmax 0 0 -90vmax;z-index:0;
+    background:conic-gradient(from 0deg,#ff2d78,#1ec9dd,#d4ff2b,#ffcc00,#ff2d78);
+    animation:pt88spin 2.6s linear infinite}
+  .pt88-card{animation:pt88in .55s cubic-bezier(.2,1.5,.4,1) both}
+  .pt88-num{font-family:'JetBrains Mono',monospace;font-size:clamp(76px,27vw,240px);font-weight:900;color:#fff;
+    animation:pt88pulse .5s ease-in-out infinite;line-height:1}
+  .pt88-tag{font-family:'JetBrains Mono',monospace;font-size:clamp(11px,3.4vw,22px);font-weight:800;
+    letter-spacing:clamp(2px,1vw,4px);color:#0d0a16;background:#fff;padding:9px clamp(14px,4vw,26px);
+    border-radius:999px;margin-top:16px;display:inline-block;text-transform:uppercase}
+  .pt88-overlay .fgta-p{top:-10%;animation-name:pt88fall}
+
+  @media(prefers-reduced-motion:reduce){
+    .fgta-shake{animation:none}
+    .fgta-cel .fgta-bg,.fgta-cel .fgta-p,.ptset-name,.pt88-num{animation:none!important}
+  }
 
   /* ===== SCORELINE DISTRIBUTION ===== */
   .sl-head{font-size:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
@@ -5033,61 +5169,99 @@ function ptFmtElapsed(ms){
   return h>0 ? `${h}:${String(m%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}` : `${m}:${String(s%60).padStart(2,'0')}`;
 }
 function ptTickTimer(){
-  const el=$("ptTimer"); if(!el||!PT||!PT.startedAt) return;
-  el.textContent = ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt);
+  if(!PT||!PT.startedAt) return;
+  const t=ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt);
+  const el=$("ptTimer"); if(el) el.textContent=t;
+  /* the stream panel's ref deck shows the same clock — no second interval,
+     it just rides this one (the canvas scoreboard's copy is redrawn every
+     animation frame by ptDrawScoreboard, so it needs no tick at all) */
+  const rc=document.getElementById("ptRefClock"); if(rc) rc.textContent=t;
 }
 setInterval(ptTickTimer,1000);
 
+/* ---- celebration plumbing (set won + the 8-8 easter egg) ----
+   See the "CELEBRATIONS" CSS block for the full story. The two rules that
+   matter here and were both broken before:
+
+   1. NEVER transform <body>. These overlays are position:fixed children of
+      <body>, and a transformed ancestor makes THAT ancestor the containing
+      block for fixed descendants — which is why the overlay was rendering
+      as a document-tall smear instead of covering the phone's screen. The
+      shake goes on `.wrap` (a sibling of the overlay), never on <body>.
+   2. Particles live INSIDE the overlay, absolutely positioned, so they're
+      clipped by it, die with it, and don't add dozens of separate fixed
+      layers to the document on a low-end phone. */
+function fgtaShakeScreen(ms){
+  const el=document.querySelector('.wrap');
+  if(!el) return;                    // nothing to shake ≠ break the celebration
+  el.classList.add('fgta-shake');
+  setTimeout(()=>el.classList.remove('fgta-shake'), ms);
+}
+/* particle budget scales down on small/low-end screens — the old fixed 36/50
+   was a real source of jank on phones, which is where these fire most */
+function fgtaParticleCount(base){
+  try{
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    const narrow = Math.min(window.innerWidth||900, window.innerHeight||900) < 560;
+    const weak = (navigator.hardwareConcurrency||8) <= 4;
+    return Math.max(6, Math.round(base * (narrow?0.5:1) * (weak?0.6:1)));
+  }catch(e){ return base; }
+}
+function fgtaParticles(ov, glyphs, opt){
+  const fx=document.createElement('div');
+  fx.className='fgta-fx';
+  const n=fgtaParticleCount(opt.count);
+  let html='';
+  for(let i=0;i<n;i++){
+    const g=glyphs[Math.floor(Math.random()*glyphs.length)];
+    const left=(i/n)*100 + (Math.random()*100/n);   // spread, not clumped
+    html+=`<span class="fgta-p" style="left:${left.toFixed(1)}%;font-size:${Math.round(opt.min+Math.random()*opt.range)}px;`+
+      `animation-duration:${(opt.dur+Math.random()*opt.durRange).toFixed(2)}s;animation-delay:${(Math.random()*opt.delay).toFixed(2)}s">${g}</span>`;
+  }
+  fx.innerHTML=html;
+  ov.appendChild(fx);
+}
+/* fade out then detach, so the celebration doesn't just vanish on a frame */
+function fgtaDismiss(ov, delay){
+  const go=()=>{
+    if(!ov.parentNode || ov._closing) return;
+    ov._closing=true;
+    ov.classList.add('fgta-cel-out');
+    setTimeout(()=>{ if(ov.parentNode) ov.remove(); },320);
+  };
+  ov.onclick=go;
+  setTimeout(go, delay);
+}
+
 /* bigger, flame-themed celebration whenever a set is won */
 function ptFireSet(name, setScore, setsA, setsB){
-  document.body.classList.add('pt88-shake');
-  setTimeout(()=>document.body.classList.remove('pt88-shake'),1000);
+  fgtaShakeScreen(1000);
   const ov=document.createElement('div');
-  ov.className='ptset-overlay';
-  ov.innerHTML=`<div class="ptset-card"><div class="ptset-label">🔥 Set to</div><div class="ptset-name">${esc(name)}</div><div class="ptset-score">${esc(setScore)} · now ${setsA}-${setsB} in sets</div></div>`;
-  ov.onclick=()=>ov.remove();
+  ov.className='fgta-cel ptset-overlay';
+  ov.setAttribute('role','status');
+  ov.innerHTML=`<div class="fgta-bg"></div>
+    <div class="fgta-card ptset-card"><div class="ptset-label">🔥 Set to</div><div class="ptset-name">${esc(name)}</div><div class="ptset-score">${esc(setScore)} · now ${setsA}-${setsB} in sets</div></div>`;
+  fgtaParticles(ov, ['🔥','🔥','✨'], {count:28,min:18,range:28,dur:1.6,durRange:1.2,delay:0.6});
   document.body.appendChild(ov);
   sfx('setWin');
-  for(let i=0;i<36;i++){
-    const p=document.createElement('span');
-    p.className='ptset-flame';
-    p.textContent='🔥';
-    p.style.left=Math.random()*100+'vw';
-    p.style.animationDuration=(1.6+Math.random()*1.2)+'s';
-    p.style.animationDelay=(Math.random()*0.6)+'s';
-    p.style.fontSize=(20+Math.random()*30)+'px';
-    document.body.appendChild(p);
-    setTimeout(()=>p.remove(),3200);
-  }
   try{ buzz(150); }catch(e){}
-  setTimeout(()=>{ if(ov.parentNode) ov.remove(); },2600);
+  fgtaDismiss(ov, 2600);
 }
 
 /* the 8-8 inside joke: however deep a deuce battle goes, if it ever ties at 8-8, go completely overboard */
 function ptFire88(){
-  document.body.classList.add('pt88-shake');
-  setTimeout(()=>document.body.classList.remove('pt88-shake'),2000);
+  fgtaShakeScreen(2000);
   const ov=document.createElement('div');
-  ov.className='pt88-overlay';
-  ov.innerHTML='<div class="pt88-card"><div class="pt88-num">8–8</div><div class="pt88-tag">🚨 THE MAGIC NUMBER 🚨</div></div>';
-  ov.onclick=()=>ov.remove();
+  ov.className='fgta-cel pt88-overlay';
+  ov.setAttribute('role','status');
+  ov.innerHTML='<div class="fgta-bg"></div>'+
+    '<div class="fgta-card pt88-card"><div class="pt88-num">8–8</div><div class="pt88-tag">🚨 THE MAGIC NUMBER 🚨</div></div>';
+  fgtaParticles(ov, ['🎾','✨','🔥','⚡','🌈','💥','🏆','😱','🎉'], {count:40,min:18,range:32,dur:1.4,durRange:1.6,delay:0.7});
   document.body.appendChild(ov);
   sfx('magic');
-  const EMO=['🎾','✨','🔥','⚡','🌈','💥','🏆','😱','🎉'];
-  for(let i=0;i<50;i++){
-    const p=document.createElement('span');
-    p.className='pt88-particle';
-    p.textContent=EMO[Math.floor(Math.random()*EMO.length)];
-    p.style.left=Math.random()*100+'vw';
-    p.style.animationDuration=(1.4+Math.random()*1.6)+'s';
-    p.style.animationDelay=(Math.random()*0.7)+'s';
-    p.style.fontSize=(20+Math.random()*34)+'px';
-    document.body.appendChild(p);
-    setTimeout(()=>p.remove(),3800);
-  }
   try{ if(typeof confetti==="function") confetti(); }catch(e){}
   try{ buzz(250); }catch(e){}
-  setTimeout(()=>{ if(ov.parentNode) ov.remove(); },3400);
+  fgtaDismiss(ov, 3400);
 }
 function ptCheck88(pa,pb){ if(pa===8 && pb===8) ptFire88(); }
 
@@ -5195,6 +5369,11 @@ async function ptSubmit(){
 window.ptSubmit=ptSubmit;
 
 function renderTracker(){
+  /* the live-stream panel's ref deck mirrors this same state, so refresh it
+     from here: every mutation path already funnels through renderTracker
+     (ptPoint → ptAfterMutate → renderTracker, plus undo/redo/start/abandon),
+     and it bails cheaply when the deck isn't on the page */
+  ptSyncRefPanel();
   if(!$("ptLive")) return;
   if(!PT){ $("ptSetup").style.display=""; $("ptLive").style.display="none"; return; }
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
@@ -5863,6 +6042,15 @@ function renderPTStream(){
       <div class="pt-chat-log" id="ptChatLog">${(S.chat||[]).slice(-40).map(c=>`<div class="pt-chat-msg"><b>${esc(c.author)}:</b>${esc(c.text)}</div>`).join('') || '<div class="pw-legend">say something — chat is live for everyone watching</div>'}</div>
       <div class="pt-chat-row"><input id="ptChatInput" placeholder="say something…" autocomplete="off" onkeydown="ptChatKey(event)"><button class="mini" onclick="ptSendChat()">send</button></div>
     </div><button class="pt-chat-tab" id="ptChatTab" onclick="ptToggleChatDrawer(event)" title="Chat" aria-label="Toggle chat">💬</button>`;
+  /* host-only ref deck. Body is filled by ptSyncRefPanel() rather than being
+     templated here, because it has to refresh on every scored point without a
+     renderPTStream() (see ptSyncRefPanel). The ⚖️ tab must stay the panel's
+     immediate next sibling — the fullscreen CSS slides it with
+     `.pt-ref.pt-ref-open + .pt-ref-tab`, same trick as the chat tab. */
+  const refHtml = (S)=>`<div class="pt-ref${S.refOpen?' pt-ref-open':''}" id="ptRef">
+      <div class="pt-ref-h">⚖️ ref <span class="pt-ref-hint">taps score the real match — same numbers as the broadcast bug</span></div>
+      <div class="pt-ref-body" id="ptRefBody"></div>
+    </div><button class="pt-ref-tab" id="ptRefTab" onclick="ptToggleRefPanel(event)" title="Ref controls" aria-label="Toggle ref controls">⚖️</button>`;
   if(!PTStream){
     box.innerHTML=`
       <div class="pt-stream-panel">
@@ -5883,6 +6071,7 @@ function renderPTStream(){
           <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
           <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
           <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
+          <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
           <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>
         </div>
         <div class="pt-stream-main" id="ptStreamMain">
@@ -5895,6 +6084,7 @@ function renderPTStream(){
             <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>
           </div>
           ${chatHtml(PTStream)}
+          ${refHtml(PTStream)}
         </div>
         <div class="pt-stream-controls">
           <div class="pt-ctl-group pt-ctl-keys">
@@ -5927,6 +6117,7 @@ function renderPTStream(){
       </div>`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
+    ptSyncRefDrawer();
     return;
   }
   const muted = PTStream.muted!==false;
@@ -6092,12 +6283,73 @@ function ptShortName(n){
   const p=String(n==null?'':n).trim().split(/\s+/).filter(Boolean);
   return (p.length>1?p[p.length-1]:p[0])||'—';
 }
+/* ---- live match clock, baked into the same frame as the score bug ----
+   A viewer had no way to tell how long a match had been running; the score
+   bug is the one thing literally every viewer already sees, so the clock
+   belongs in it rather than in some host-only chrome.
+
+   Degrades in two steps, because a stream can legitimately be live before
+   anyone taps "Start tracking":
+     1. a tracked match       → match elapsed (freezes at PT.endedAt)
+     2. live, but no match    → time on air, from PTStream.liveSince
+     3. neither               → nothing at all, no empty pill */
+function ptClockReadout(S){
+  if(typeof PT!=='undefined' && PT && PT.startedAt){
+    return {txt:ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt), live:!PT.endedAt};
+  }
+  if(S && S.liveSince) return {txt:ptFmtElapsed(Date.now()-S.liveSince), live:true, lab:'ON AIR'};
+  return null;
+}
+/* Same visual language as the bug itself (same plate colour, same hairline,
+   same mono face, all sized off barH) so it reads as one component and not a
+   second competing widget. Returns its drawn width so the caller can keep
+   whatever else shares that row from colliding with it. */
+function ptDrawClockPill(ctx,C,barH,x,y,alignX,info){
+  const ch=Math.max(14,Math.round(barH*0.52));
+  const pad=Math.round(ch*0.42), gap=Math.round(ch*0.26), dot=Math.max(3,Math.round(ch*0.20));
+  const fTime=`700 ${Math.max(8,Math.round(ch*0.55))}px 'JetBrains Mono',monospace`;
+  const fLab =`700 ${Math.max(6,Math.round(ch*0.38))}px 'JetBrains Mono',monospace`;
+  ctx.save();
+  ctx.font=fTime; const tw=ctx.measureText(info.txt).width;
+  let lw=0; if(info.lab){ ctx.font=fLab; lw=ctx.measureText(info.lab).width+gap; }
+  const w=Math.round(pad*2+dot+gap+lw+tw);
+  const x0 = alignX==='right' ? x-w : x;
+  const y0 = y-ch;
+  ptRoundRect(ctx,x0,y0,w,ch,Math.round(ch*0.5));
+  ctx.fillStyle='rgba(8,6,18,0.88)'; ctx.fill();
+  ctx.lineWidth=Math.max(1,Math.round(ch*0.045));
+  ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.stroke();
+  ctx.textBaseline='middle'; ctx.textAlign='left';
+  let cx=x0+pad;
+  ctx.beginPath(); ctx.arc(cx+dot/2, y0+ch*0.5, dot/2, 0, Math.PI*2);
+  ctx.fillStyle = info.lab ? '#ff3b3b' : (info.live ? C.ball : C.dim);
+  ctx.fill();
+  cx+=dot+gap;
+  if(info.lab){ ctx.font=fLab; ctx.fillStyle=C.dim; ctx.fillText(info.lab,cx,y0+ch*0.54); cx+=lw; }
+  ctx.font=fTime; ctx.fillStyle='#fff';
+  ctx.fillText(info.txt,cx,y0+ch*0.54);
+  ctx.restore();
+  return w;
+}
+
 function ptDrawScoreboard(S){
-  if(typeof PT==='undefined' || !PT) return;
   const ctx=S.ctx, canvas=S.canvas;
   const W=canvas.width, H=canvas.height;
   if(!W || !H) return;
   const C=ptSbColors();
+  const clock=ptClockReadout(S);
+  const u0=Math.min(W,H);
+  if(typeof PT==='undefined' || !PT){
+    /* live, but nothing being scored yet — no bug to draw, so the clock takes
+       the bug's corner on its own rather than disappearing entirely */
+    if(clock){
+      const bh=Math.max(30,Math.round(u0*0.095)), mm=Math.round(u0*0.11);
+      ctx.save(); ctx.filter='none';
+      ptDrawClockPill(ctx,C,bh,mm,H-mm,'left',clock);
+      ctx.restore();
+    }
+    return;
+  }
   ctx.save();
   ctx.filter='none';
 
@@ -6212,12 +6464,19 @@ function ptDrawScoreboard(S){
   ctx.strokeStyle='rgba(255,255,255,0.16)';
   ptRoundRect(ctx,x0,y0,totalW,barH,rad); ctx.stroke();
 
+  /* the clock rides the strip directly above the bug, pinned to its RIGHT
+     edge — the winner/draw badge below is pinned LEFT on that same strip, so
+     the two share the row without either being repositioned */
+  let clockW=0;
+  if(clock) clockW=ptDrawClockPill(ctx,C,barH,x0+totalW,y0-Math.round(barH*0.20),'right',clock);
+
   if(PT.winner || PT.draw){
     const txt = PT.draw ? 'MATCH DRAWN'
       : '🏆 '+ptShortName(PT.winner==='a'?PT.a:PT.b).toUpperCase()+' WINS';
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
-    const bw=Math.min(avail, Math.round(ctx.measureText(txt).width+bp*2));
+    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
+    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
     const by=y0-bh-Math.round(barH*0.20);
     ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
     ctx.fillStyle=C.gold; ctx.fill();
@@ -6233,21 +6492,143 @@ function ptDrawScoreboard(S){
    the literal source of what every viewer (and the host's own preview)
    receives. A tennis-ball wipe transition in and out, plus a REPLAY chyron,
    make it unmistakable it's not live action. ---- */
-function ptDrawWipe(ctx,canvas,x,drawRight,drawLeft){
-  ctx.save(); ctx.beginPath(); ctx.rect(x,0,canvas.width-x,canvas.height); ctx.clip(); drawRight(); ctx.restore();
-  ctx.save(); ctx.beginPath(); ctx.rect(0,0,x,canvas.height); ctx.clip(); drawLeft(); ctx.restore();
+/* ---- THE FGTA BUMPER ------------------------------------------------------
+   The transition is drawn onto the shared canvas, so it goes out to every
+   viewer — it's the one moment the product gets to sign its own broadcast,
+   and it used to be a 6px lime bar with a 🎾 emoji riding it. It's now the
+   app's actual wordmark: the lime tennis ball (radial highlight plus a single
+   white seam arc raked 34°, i.e. exactly what .tb-ball does in CSS) set
+   against "FGTA", with the context word on an --accent pill underneath — the
+   same accent-on-wordmark treatment the top bar's tagline and the load
+   screen's "FGTA LADDER" already use. Nothing hardcodes a colour: every
+   accent comes from ptSbColors(), the same tokens the score bug reads.
+
+   Mechanically it's still a two-region wipe — content A clipped right of the
+   divider, content B clipped left of it — but the divider is a full-frame,
+   forward-raked branded card rather than a bar. ptDrawBumperFrame drives it
+   as in → hold → out, and because the card covers the whole frame during the
+   hold, that beat is free cover for whatever swap is happening underneath:
+   the replay clip finishing its first decode, or a camera track being
+   released and re-acquired. Instant replay and camera switching both go
+   through it, so they read as the same product rather than two effects. ---- */
+function ptEaseInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+/* canvas2d letter-spacing is still not portable (ctx.letterSpacing is
+   Chromium-and-recent-Safari only), and the wordmark is letter-spaced — so
+   space it by hand rather than have it collapse on half the devices */
+function ptTextWidthLS(ctx,t,ls){ let w=0; for(const ch of t) w+=ctx.measureText(ch).width+ls; return Math.max(0,w-ls); }
+function ptFillTextLS(ctx,t,x,y,ls){ for(const ch of t){ ctx.fillText(ch,x,y); x+=ctx.measureText(ch).width+ls; } }
+function ptDrawBrandBall(ctx,x,y,r,C){
   ctx.save();
-  /* scale with the canvas so the wipe reads the same at 720p as it did at 480p */
-  const wu=Math.min(canvas.width,canvas.height)/480;
-  const bw=Math.max(4,Math.round(6*wu)), bs=Math.max(20,Math.round(30*wu));
-  ctx.fillStyle='#c6ff3d';
-  ctx.fillRect(Math.max(0,x-bw/2),0,bw,canvas.height);
-  ctx.font='bold '+bs+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('🎾', Math.min(canvas.width-bs/2,Math.max(bs/2,x)), canvas.height/2);
+  const g=ctx.createRadialGradient(x-r*0.34,y-r*0.38,r*0.08,x,y,r);
+  g.addColorStop(0,'#f5ff8f'); g.addColorStop(0.45,C.ball); g.addColorStop(1,'#9db81a');
+  ctx.shadowColor=C.ball; ctx.shadowBlur=r*1.1;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.restore();
+  ctx.save();                                   // seam, clipped to the ball
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.clip();
+  const lw=Math.max(1,r*0.11), rot=34*Math.PI/180;
+  ctx.lineWidth=lw; ctx.strokeStyle='rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(x,y,r-lw/2, Math.PI+rot, Math.PI*2+rot); ctx.stroke();
   ctx.restore();
 }
+function ptDrawBrandLockup(ctx,cx,cy,u,label,C){
+  const r=Math.round(u*0.058), size=Math.round(u*0.135);
+  const ls=Math.max(1,Math.round(size*0.06)), gap=Math.round(u*0.048);
+  ctx.textBaseline='middle'; ctx.textAlign='left';
+  ctx.font=`700 ${size}px -apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif`;
+  const wordW=ptTextWidthLS(ctx,'FGTA',ls);
+  const yWord=cy-Math.round(u*0.04);
+  let x=cx-(r*2+gap+wordW)/2;
+  ptDrawBrandBall(ctx,x+r,yWord,r,C);
+  x+=r*2+gap;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.65)'; ctx.shadowBlur=u*0.035; ctx.shadowOffsetY=u*0.005;
+  ctx.fillStyle='#f2eefc';
+  ptFillTextLS(ctx,'FGTA',x,yWord,ls);
+  ctx.restore();
+  if(!label) return;
+  const fs=Math.max(9,Math.round(u*0.04)), pls=Math.max(1,Math.round(fs*0.18));
+  ctx.font=`800 ${fs}px 'JetBrains Mono',monospace`;
+  const tw=ptTextWidthLS(ctx,label,pls);
+  const ph=Math.round(fs*2.1), pw=Math.round(tw+fs*1.9);
+  const py=yWord+r+Math.round(u*0.042);
+  ptRoundRect(ctx,cx-pw/2,py,pw,ph,Math.round(ph*0.5));
+  ctx.fillStyle=C.a; ctx.fill();
+  ctx.fillStyle='#12040c';
+  ptFillTextLS(ctx,label,cx-tw/2,py+ph*0.54,pls);
+}
+/* p is 0→1: the card travels from fully off the left edge to fully off the
+   right edge, and is exactly full-frame at p=0.5 */
+function ptDrawWipe(ctx,canvas,p,drawRight,drawLeft,label){
+  const W=canvas.width, H=canvas.height, C=ptSbColors();
+  const u=Math.min(W,H);
+  const skew=Math.round(H*0.11);                 // forward rake of the edges
+  const bw=W+skew*2;                             // full-bleed at the midpoint
+  const c=-bw/2-skew + p*(W+bw+skew*2);
+  const xl=c-bw/2, xe=c+bw/2, FAR=W+bw+skew*2+8;
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(xe+skew,0); ctx.lineTo(FAR,0); ctx.lineTo(FAR,H); ctx.lineTo(xe,H); ctx.closePath();
+  ctx.clip(); drawRight(); ctx.restore();
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(-FAR,0); ctx.lineTo(xl+skew,0); ctx.lineTo(xl,H); ctx.lineTo(-FAR,H); ctx.closePath();
+  ctx.clip(); drawLeft(); ctx.restore();
+
+  ctx.save();
+  ctx.filter='none';
+  ctx.beginPath(); ctx.moveTo(xl+skew,0); ctx.lineTo(xe+skew,0); ctx.lineTo(xe,H); ctx.lineTo(xl,H); ctx.closePath();
+  ctx.save(); ctx.clip();
+  const g=ctx.createLinearGradient(xl,H,xe+skew,0);
+  g.addColorStop(0,'#08060f'); g.addColorStop(0.5,'#1d1440'); g.addColorStop(1,'#08060f');
+  ctx.fillStyle=g; ctx.fillRect(xl-skew-2,0,bw+skew*2+4,H);
+  /* raked accent slashes trailing the leading edge, in the app's own order:
+     pink primary → cyan court → lime ball */
+  const slash=(off,col,a,wdt)=>{
+    ctx.globalAlpha=a; ctx.strokeStyle=col; ctx.lineWidth=wdt;
+    ctx.beginPath(); ctx.moveTo(xe+skew-off,0); ctx.lineTo(xe-off,H); ctx.stroke();
+    ctx.globalAlpha=1;
+  };
+  slash(u*0.10, C.a,    0.50, Math.max(2,u*0.016));
+  slash(u*0.17, C.b,    0.34, Math.max(2,u*0.011));
+  slash(u*0.235,C.ball, 0.20, Math.max(1,u*0.007));
+  ptDrawBrandLockup(ctx,c,H/2,u,label,C);
+  ctx.restore();
+  ctx.lineWidth=Math.max(2,Math.round(u*0.014));
+  ctx.strokeStyle=C.ball;                        // leading edge
+  ctx.beginPath(); ctx.moveTo(xe+skew,0); ctx.lineTo(xe,H); ctx.stroke();
+  ctx.lineWidth=Math.max(1,Math.round(u*0.008));
+  ctx.strokeStyle=C.a;                           // trailing edge
+  ctx.beginPath(); ctx.moveTo(xl+skew,0); ctx.lineTo(xl,H); ctx.stroke();
+  ctx.restore();
+}
+function ptBumper(label,opt){
+  return Object.assign({label, phase:'in', phaseStart:performance.now(),
+    inMs:360, holdMs:260, outMs:400, maxHoldMs:1800}, opt||{});
+}
+/* One frame of a bumper. `ready` gates the end of the hold — pass false while
+   whatever is being swapped under the card still isn't showable, and the hold
+   stretches (up to maxHoldMs) instead of revealing a black frame.
+   Returns true on the frame the transition finishes. */
+function ptDrawBumperFrame(ctx,canvas,B,drawFrom,drawTo,ready){
+  const now=performance.now();
+  if(B.phase==='in'){
+    const t=Math.min(1,(now-B.phaseStart)/B.inMs);
+    ptDrawWipe(ctx,canvas,ptEaseInOut(t)*0.5,drawFrom,drawFrom,B.label);
+    if(t>=1){ B.phase='hold'; B.phaseStart=now; }
+    return false;
+  }
+  if(B.phase==='hold'){
+    ptDrawWipe(ctx,canvas,0.5,drawFrom,drawFrom,B.label);
+    const held=now-B.phaseStart;
+    if(held>=B.holdMs && (ready!==false || held>=B.maxHoldMs)){ B.phase='out'; B.phaseStart=now; }
+    return false;
+  }
+  const t=Math.min(1,(now-B.phaseStart)/B.outMs);
+  ptDrawWipe(ctx,canvas,0.5+ptEaseInOut(t)*0.5,drawFrom,drawTo,B.label);
+  return t>=1;
+}
+
 function ptDrawReplayFrame(S){
-  const r=S.replay, ctx=S.ctx, canvas=S.canvas, now=performance.now(), WIPE_MS=380;
+  const r=S.replay, ctx=S.ctx, canvas=S.canvas, now=performance.now();
   const drawLive=()=>{
     if(S.camOn && S.rawVideo.readyState>=2){
       const vw=S.rawVideo.videoWidth||canvas.width, vh=S.rawVideo.videoHeight||canvas.height;
@@ -6265,10 +6646,12 @@ function ptDrawReplayFrame(S){
       ctx.drawImage(r.video, (canvas.width-dw)/2, (canvas.height-dh)/2, dw, dh);
     } else { ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
   };
-  if(r.phase==='wipeIn'){
-    const p=Math.min(1,(now-r.phaseStart)/WIPE_MS);
-    ptDrawWipe(ctx,canvas,canvas.width*p,drawLive,drawClip);
-    if(p>=1){ r.phase='playing'; r.phaseStart=now; }
+  if(r.phase==='in'){
+    /* the hold doubles as the clip's decode window — it won't reveal until
+       the blob actually has a frame, which used to be a black flash */
+    if(ptDrawBumperFrame(ctx,canvas,r.bump,drawLive,drawClip, r.video.readyState>=2)){
+      r.phase='playing'; r.phaseStart=now;
+    }
   } else if(r.phase==='playing'){
     drawClip();
     ctx.save();
@@ -6282,15 +6665,53 @@ function ptDrawReplayFrame(S){
     ctx.fillStyle='#fff';
     ctx.fillText('🔁 REPLAY',cx+cp,cx+ch/2);
     ctx.restore();
-    if(r.video.ended || (now-r.phaseStart)>r.maxMs){ r.phase='wipeOut'; r.phaseStart=now; }
+    if(r.video.ended || (now-r.phaseStart)>r.maxMs){
+      r.phase='out'; r.bump=ptBumper('BACK TO LIVE',{holdMs:170,inMs:320,outMs:380});
+    }
   } else {
-    const p=Math.min(1,(now-r.phaseStart)/WIPE_MS);
-    ptDrawWipe(ctx,canvas,canvas.width*p,drawClip,drawLive);
-    if(p>=1){
+    if(ptDrawBumperFrame(ctx,canvas,r.bump,drawClip,drawLive,true)){
       try{ r.video.pause(); if(r.video.parentNode) r.video.parentNode.removeChild(r.video); URL.revokeObjectURL(r.url); }catch(e){}
       S.replay=null;
     }
   }
+}
+
+/* ---- camera-switch bumper: a flip used to be a hard cut (or a visible
+   stutter while the new sensor woke up). Same FGTA card as instant replay,
+   drawn on the same shared canvas, so every viewer gets the transition for
+   free — but its own tiny state machine, since a camera change isn't a
+   replay: it freezes the OLD camera's last composited frame, holds the card
+   over the swap, and reveals the new lens on the way out. ---- */
+function ptBeginCamBumper(S,label){
+  if(!S || !S.canvas || !S.ctx || S.replay || S.camSwitch) return;
+  const f=S._camFreeze || (S._camFreeze=document.createElement('canvas'));
+  f.width=S.canvas.width; f.height=S.canvas.height;
+  try{ f.getContext('2d').drawImage(S.canvas,0,0); }catch(e){ return; }
+  S.camSwitch={freeze:f, ready:false,
+    bump:ptBumper(label||'NEW ANGLE',{inMs:300,holdMs:240,outMs:360,maxHoldMs:2400})};
+}
+function ptCamBumperReady(S){
+  const cs=S && S.camSwitch; if(!cs) return;
+  /* a track handed over by getUserMedia still needs a beat before it paints,
+     so don't unlock the hold on the very same tick the promise resolved */
+  setTimeout(()=>{ if(cs) cs.ready=true; },140);
+}
+function ptDrawCamSwitchFrame(S){
+  const cs=S.camSwitch, ctx=S.ctx, canvas=S.canvas;
+  const drawFrozen=()=>{
+    ctx.filter='none';
+    try{ ctx.drawImage(cs.freeze,0,0,canvas.width,canvas.height); }
+    catch(e){ ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+  };
+  const drawLive=()=>{
+    if(S.camOn && S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth){
+      const {sw,sh,sx,sy}=ptCropToCanvas(S.rawVideo.videoWidth,S.rawVideo.videoHeight,canvas.width,canvas.height,S.zoom);
+      ctx.filter=ptFilterCSS(S.filter);
+      ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,canvas.width,canvas.height);
+    } else drawFrozen();
+  };
+  const live = !S.camOn || !!(S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth);
+  if(ptDrawBumperFrame(ctx,canvas,cs.bump,drawFrozen,drawLive, cs.ready && live)) S.camSwitch=null;
 }
 function ptStartProcessing(S){
   S.rawVideo=document.createElement('video');
@@ -6309,6 +6730,8 @@ function ptStartProcessing(S){
     if(!PTStream || PTStream!==S) return;
     if(S.replay){
       ptDrawReplayFrame(S);
+    } else if(S.camSwitch){
+      ptDrawCamSwitchFrame(S);
     } else if(S.camOn && S.rawVideo.readyState>=2){
       const vw=S.rawVideo.videoWidth||PT_CAP_LONG, vh=S.rawVideo.videoHeight||PT_CAP_SHORT;
       /* The camera sensor's raw frame keeps whatever orientation the phone was
@@ -6429,6 +6852,7 @@ function ptStopProcessing(S){
     try{ S.replay.video.pause(); if(S.replay.video.parentNode) S.replay.video.parentNode.removeChild(S.replay.video); URL.revokeObjectURL(S.replay.url); }catch(e){}
     S.replay=null;
   }
+  S.camSwitch=null; S._camFreeze=null;
   if(S.rawVideo){ S.rawVideo.srcObject=null; if(S.rawVideo.parentNode) S.rawVideo.parentNode.removeChild(S.rawVideo); }
 }
 function ptSetZoom(v){
@@ -6473,10 +6897,81 @@ function ptToggleChatDrawer(e){
   if(e && e.stopPropagation) e.stopPropagation();
   if(!PTStream) return;
   PTStream.chatOpen=!PTStream.chatOpen;
+  /* in fullscreen the two drawers own opposite edges of the same picture —
+     keep only one of them out at a time so neither is talking over the other */
+  if(PTStream.chatOpen && PTStream.refOpen && document.fullscreenElement){
+    PTStream.refOpen=false; ptSyncRefDrawer();
+  }
   ptSyncChatDrawer();
 }
 window.ptToggleChatDrawer=ptToggleChatDrawer;
 window.ptSyncChatDrawer=ptSyncChatDrawer;
+
+/* ---- ref mini-panel ----
+   Exactly the toggle pattern above: the flag lives on PTStream (so it
+   survives the full re-render that fires on every chat message / viewer
+   join) and the state is poked straight onto the DOM.
+   The body is rebuilt by ptSyncRefPanel(), which renderTracker() calls — so
+   every path that mutates PT (ptPoint → ptAfterMutate → renderTracker, plus
+   undo/redo/start/abandon) refreshes these numbers without anybody having to
+   remember a second hook. */
+function ptRefBodyHTML(){
+  if(typeof PT==='undefined' || !PT){
+    return `<div class="pt-ref-empty">No match is being tracked yet — start one in the Point Tracker above and the score shows up here <i>and</i> in the broadcast.</div>`;
+  }
+  const decided=!!(PT.winner||PT.draw);
+  const lbl = PT.tiebreak ? [String(PT.tbA),String(PT.tbB)] : ptPointLabel(PT.ptsA,PT.ptsB);
+  const chips = PT.sets.map(s=>`<span class="pt-set-chip">${s.a}-${s.b}</span>`).join('')
+    + (decided?'':`<span class="pt-set-chip pt-set-live">${PT.gamesA}-${PT.gamesB}${PT.tiebreak?' TB':''}</span>`);
+  const side=(k)=>{
+    const isA=k==='a';
+    const name=isA?PT.a:PT.b, sets=isA?PT.setsA:PT.setsB, games=isA?PT.gamesA:PT.gamesB;
+    return `<button class="pt-ref-side" style="--ac:${isA?'var(--accent)':'var(--court)'}"
+        ${decided?'disabled':`onclick="ptPoint('${k}')"`} aria-label="Point to ${esc(name)}">
+      <span class="pt-ref-name">${esc(name)}</span>
+      <span class="pt-ref-line"><b>${sets}</b> sets · <b>${games}</b> games</span>
+      <span class="pt-ref-pt">${lbl[isA?0:1]}</span>
+      ${decided?'':'<span class="pt-ref-cta">+ point</span>'}
+    </button>`;
+  };
+  return `<div class="pt-ref-grid">
+      ${side('a')}
+      <div class="pt-ref-mid">
+        <span class="pt-ref-clock" id="ptRefClock">0:00</span>
+        ${PT.tiebreak?'<span class="pt-ref-tb">TIEBREAK</span>':''}
+        <span class="pt-ref-chips">${chips}</span>
+      </div>
+      ${side('b')}
+    </div>
+    ${decided?`<div class="pt-ref-final">${PT.draw?'🤝 drawn':`🏆 ${esc(PT.winner==='a'?PT.a:PT.b)} wins ${PT.setsA}–${PT.setsB}`}</div>`:''}`;
+}
+function ptSyncRefPanel(){
+  const body=document.getElementById('ptRefBody');
+  if(!body) return;                      // not hosting, or panel not built yet
+  body.innerHTML=ptRefBodyHTML();
+  ptTickTimer();                         // fills #ptRefClock straight away
+}
+function ptSyncRefDrawer(){
+  const open=!!(PTStream && PTStream.refOpen);
+  const el=document.getElementById('ptRef');
+  /* the ⚖️ tab's own slid-aside state rides the CSS sibling selector off this
+     same class, exactly like the chat tab — nothing else to toggle there */
+  if(el) el.classList.toggle('pt-ref-open', open);
+  const btn=document.getElementById('ptRefBtn');
+  if(btn) btn.classList.toggle('on', open);
+  ptSyncRefPanel();
+}
+function ptToggleRefPanel(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!PTStream || PTStream.role!=='host') return;
+  PTStream.refOpen=!PTStream.refOpen;
+  if(PTStream.refOpen && PTStream.chatOpen && document.fullscreenElement){
+    PTStream.chatOpen=false; ptSyncChatDrawer();
+  }
+  ptSyncRefDrawer();
+}
+window.ptToggleRefPanel=ptToggleRefPanel;
+window.ptSyncRefPanel=ptSyncRefPanel;
 /* tap anywhere off the drawer (i.e. on the picture) to dismiss it */
 document.addEventListener('click', e=>{
   if(!PTStream || !PTStream.chatOpen || !document.fullscreenElement) return;
@@ -6625,14 +7120,23 @@ async function ptSwapVideoTrack(constraints){
 }
 async function ptFlipCamera(){
   if(!PTStream || PTStream.role!=='host') return;
+  if(PTStream.camSwitch) return;                 // one transition at a time
   const next = PTStream.facingMode==='environment' ? 'user' : 'environment';
+  /* start the bumper BEFORE the swap: it freezes the outgoing camera's last
+     frame, so the dead air while the new sensor spins up happens behind the
+     card instead of on everyone's screen */
+  ptBeginCamBumper(PTStream, next==='user' ? 'FRONT CAMERA' : 'REAR CAMERA');
   await ptSwapVideoTrack({facingMode:{ideal:next}});
+  ptCamBumperReady(PTStream);
   renderPTStream();
 }
 window.ptFlipCamera=ptFlipCamera;
 async function ptSwitchCameraDevice(deviceId){
   if(!deviceId) return;
+  if(PTStream && PTStream.camSwitch) return;
+  ptBeginCamBumper(PTStream, 'NEW ANGLE');
   await ptSwapVideoTrack({deviceId:{exact:deviceId}});
+  ptCamBumperReady(PTStream);
   renderPTStream();
 }
 window.ptSwitchCameraDevice=ptSwitchCameraDevice;
@@ -6643,6 +7147,7 @@ window.ptSwitchCameraDevice=ptSwitchCameraDevice;
 function ptInstantReplay(){
   if(!PTStream || PTStream.role!=='host') return;
   if(PTStream.replay) return toast("Replay already playing",true);
+  if(PTStream.camSwitch) return toast("Switching camera — try again in a second",true);
   if(PTStream.replayUnavailable) return toast("Instant replay isn't supported on this browser",true);
   if(!PTStream.replayChunks || !PTStream.replayChunks.length){
     return toast("Nothing buffered yet — give it a few seconds",true);
@@ -6667,7 +7172,8 @@ function ptInstantReplay(){
     rv.play().catch(()=>{});
   });
   rv.src=url;
-  PTStream.replay={video:rv, url, phase:'wipeIn', phaseStart:performance.now(), maxMs:9000};
+  PTStream.replay={video:rv, url, phase:'in', phaseStart:performance.now(), maxMs:9000,
+    bump:ptBumper('INSTANT REPLAY')};
   toast("🔁 Replaying to everyone watching");
 }
 window.ptInstantReplay=ptInstantReplay;
@@ -6746,7 +7252,9 @@ async function ptGoLive(){
     return toast(msg,true);
   }
   const code=ptRandCode();
-  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[]};
+  /* liveSince is the fallback the baked-in scoreboard clock uses when the
+     stream is on air but no match has been started yet (see ptClockReadout) */
+  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now()};
   const initTrack=stream.getVideoTracks()[0];
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
