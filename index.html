@@ -1951,10 +1951,12 @@
   .pt-ref-empty{font-size:12px;color:var(--dim);line-height:1.5;text-align:center;padding:6px 4px}
   .pt-ref-final{text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
     color:var(--gold);margin-top:9px}
-  /* the ⚖️ key sits with 🐛 at the right end of the header; only one of them
-     may claim the auto margin or the pair drifts apart */
+  /* the ⚖️ key sits with 👁/🐛 at the right end of the header; only the first
+     of the group may claim the auto margin or the group drifts apart —
+     ~ (not +) so this still holds regardless of how many keys sit between
+     pt-ref-btn and a given pt-dbg-btn */
   .pt-ref-btn{margin-left:auto}
-  .pt-ref-btn+.pt-dbg-btn{margin-left:0}
+  .pt-ref-btn~.pt-dbg-btn{margin-left:0}
   .pt-ref-tab{display:none}
 
   .pt-stream-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:10px;
@@ -1970,6 +1972,9 @@
      but animated, so a host can tell at a glance it's actively capturing */
   .pt-ctl-btn.rec-on{border-color:#ff2d2d;color:#ff2d2d;background:rgba(255,45,45,.14)}
   .pt-ctl-btn.rec-on .pt-ctl-ico{animation:livepulse 1.1s ease-in-out infinite}
+  /* auto-highlight armed state gets the accent (not red — nothing is being
+     lost/missed the way muted mic or a dead recorder would be) */
+  .pt-ctl-btn.auto-on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 14%, transparent)}
   .pt-zoom-label{display:flex;align-items:center;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace;
     color:var(--dim);min-width:0;margin-bottom:0;font-weight:600;letter-spacing:1px}
   /* the global input rule paints every input as a filled box — a range slider
@@ -5390,6 +5395,7 @@ function ptPoint(side){
   if(!PT || PT.winner || PT.draw) return;
   sfx('point');
   ptHistory.push(ptClone(PT)); ptFuture=[];
+  const pre=ptHistory[ptHistory.length-1];
   if(PT.tiebreak){
     if(side==='a') PT.tbA++; else PT.tbB++;
     if((PT.tbA>=7||PT.tbB>=7) && Math.abs(PT.tbA-PT.tbB)>=2){
@@ -5409,6 +5415,12 @@ function ptPoint(side){
       ptCheck88(PT.ptsA,PT.ptsB);
     }
   }
+  if(PTStream && PTStream.role==='host' && PTStream.autoHighlight){
+    const drama=ptComputeDrama(pre,side);
+    if(drama) ptMaybeAutoReplay(drama.tag);
+    else if(PTStream._pendingAudioHype && Date.now()-PTStream._pendingAudioHype<10000) ptMaybeAutoReplay('CROWD REACTION');
+  }
+  if(PTStream) PTStream._pendingAudioHype=null;
   ptAfterMutate();
 }
 window.ptPoint=ptPoint;
@@ -6027,26 +6039,56 @@ function renderGhostCursors(){
    MATCH POINT tension — detects when the next point would
    clinch the whole match, and flags it for the tracker UI.
    ============================================================ */
-function ptWouldWinGame(side){
-  if(PT.tiebreak){
-    const a=PT.tbA+(side==='a'?1:0), b=PT.tbB+(side==='b'?1:0);
+/* every predicate here takes an optional explicit `state` so the auto-highlight
+   drama check (below) can ask "was this a game/set/match point?" of the PRE-point
+   snapshot in ptHistory, not just the live PT everyone else calls this with */
+function ptWouldWinGame(side,state){
+  state=state||PT;
+  if(state.tiebreak){
+    const a=state.tbA+(side==='a'?1:0), b=state.tbB+(side==='b'?1:0);
     return (side==='a'?a:b)>=7 && Math.abs(a-b)>=2;
   }
-  const a=PT.ptsA+(side==='a'?1:0), b=PT.ptsB+(side==='b'?1:0);
+  const a=state.ptsA+(side==='a'?1:0), b=state.ptsB+(side==='b'?1:0);
   return (side==='a'?a:b)>=4 && Math.abs(a-b)>=2;
 }
-function ptWouldWinSet(side){
-  if(!ptWouldWinGame(side)) return false;
-  if(PT.tiebreak) return true; // winning the breaker always closes the set
-  const gA=PT.gamesA+(side==='a'?1:0), gB=PT.gamesB+(side==='b'?1:0);
+function ptWouldWinSet(side,state){
+  state=state||PT;
+  if(!ptWouldWinGame(side,state)) return false;
+  if(state.tiebreak) return true; // winning the breaker always closes the set
+  const gA=state.gamesA+(side==='a'?1:0), gB=state.gamesB+(side==='b'?1:0);
   return (side==='a'?gA:gB)>=6 && Math.abs(gA-gB)>=2;
 }
-function ptIsMatchPoint(side){
-  if(!ptWouldWinSet(side)) return false;
-  const setsA=PT.setsA+(side==='a'?1:0), setsB=PT.setsB+(side==='b'?1:0);
+function ptIsMatchPoint(side,state){
+  state=state||PT;
+  if(!ptWouldWinSet(side,state)) return false;
+  const setsA=state.setsA+(side==='a'?1:0), setsB=state.setsB+(side==='b'?1:0);
   return (side==='a'?setsA:setsB)===2;
 }
 window.ptIsMatchPoint=ptIsMatchPoint;
+
+/* ---- Tier 1 auto-highlight: score-derived drama, no AI/audio needed ----
+   Compares the pre-point snapshot (already sitting in ptHistory, pushed
+   before every mutation in ptPoint) against the post-point PT to name
+   what just happened. Deliberately doesn't attempt "break point" — PT
+   only stores raw point counts, not who's serving, so there's no reliable
+   server to say "break" of. Game/set/match point and saves don't need
+   serve info, so those are what this looks for. */
+function ptComputeDrama(pre,side){
+  const other=side==='a'?'b':'a';
+  const gameClosed=PT.gameLog.length>pre.gameLog.length;
+  const setClosed=PT.sets.length>pre.sets.length;
+  const matchWon=!!PT.winner;
+  if(matchWon) return {tag:'MATCH POINT'};
+  if(ptIsMatchPoint(other,pre)) return {tag:'MATCH POINT SAVED'};
+  if(setClosed) return {tag:'SET POINT'};
+  if(ptWouldWinSet(other,pre)) return {tag:'SET POINT SAVED'};
+  if(gameClosed){
+    if(ptWouldWinGame(other,pre)) return {tag:'GAME POINT SAVED'};
+    const g=PT.gameLog[PT.gameLog.length-1];
+    if((g.a+g.b)>=10) return {tag:'DEUCE GRINDER'}; // a long, grinding game worth a look back
+  }
+  return null;
+}
 
 /* ============================================================
    RATING GALAXY — a live force-directed constellation of every
@@ -6226,6 +6268,7 @@ function renderPTStream(){
           <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
           <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
           <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
+          <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
           <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>
         </div>
         <div class="pt-stream-main" id="ptStreamMain">
@@ -6246,6 +6289,7 @@ function renderPTStream(){
             <button class="mini pt-ctl-btn${PTStream.camOn===false?' off':''}" onclick="ptToggleCam()"><span class="pt-ctl-ico">${PTStream.camOn===false?'🚫':'📷'}</span><span class="pt-ctl-lbl">cam</span></button>
             ${PTStream.cameras && PTStream.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
             <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
+            <button class="mini pt-ctl-btn${PTStream.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${PTStream.autoHighlight?'auto on':'auto'}</span></button>
             <button class="mini pt-ctl-btn${PTStream.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file on this device"><span class="pt-ctl-ico">${PTStream.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${PTStream.recOn?'stop rec':'record'}</span></button>
           </div>
           <div class="pt-ctl-sep"></div>
@@ -6867,6 +6911,52 @@ function ptDrawCamSwitchFrame(S){
   const live = !S.camOn || !!(S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth);
   if(ptDrawBumperFrame(ctx,canvas,cs.bump,drawFrozen,drawLive, cs.ready && live)) S.camSwitch=null;
 }
+/* ---- Tier 2 auto-highlight: crowd/mic audio spike detection ----
+   Taps the host mic track (already flowing into the broadcast) with an
+   AnalyserNode and watches rolling RMS for a sudden spike over its own
+   slow-moving baseline — the classic "the crowd just reacted" signal a
+   scoreboard has no way to see (a great get, a lucky net cord, anything
+   the score itself doesn't reflect). Deliberately NOT wired to replay
+   immediately: firing mid-rally would cut away from live play, so a spike
+   only sets a flag (_pendingAudioHype) that ptPoint checks against the
+   NEXT point actually scored — the same "wait for a dead ball" gate the
+   score-derived Tier 1 triggers get for free by construction. */
+function ptStartAudioWatch(S){
+  try{
+    const track=S.rawStream && S.rawStream.getAudioTracks()[0];
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!track || !AC) return;
+    const ctx=new AC();
+    const analyser=ctx.createAnalyser();
+    analyser.fftSize=1024;
+    ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+    S._audioCtx=ctx;
+    const buf=new Float32Array(analyser.fftSize);
+    let baseline=null;
+    const tick=()=>{
+      if(!PTStream || PTStream!==S) return; // stream ended — let the loop die
+      analyser.getFloatTimeDomainData(buf);
+      let sum=0; for(let i=0;i<buf.length;i++) sum+=buf[i]*buf[i];
+      const rms=Math.sqrt(sum/buf.length);
+      if(baseline===null) baseline=rms;
+      else{
+        if(PTStream.autoHighlight && rms>0.05 && rms>baseline*2.4 && !PTStream.replay && !PTStream.camSwitch){
+          const now=Date.now();
+          if(!S._lastAudioSpikeAt || now-S._lastAudioSpikeAt>8000){ S._lastAudioSpikeAt=now; PTStream._pendingAudioHype=now; }
+        }
+        // ambient noise level drifts over a match (wind, crowd size) — track it slowly so a real spike still stands out against it
+        baseline=baseline*0.985+rms*0.015;
+      }
+      S._audioTimer=setTimeout(tick,120);
+    };
+    tick();
+  }catch(e){ /* mic analysis is best-effort — the stream itself works fine without it */ }
+}
+function ptStopAudioWatch(S){
+  if(!S) return;
+  if(S._audioTimer) clearTimeout(S._audioTimer);
+  if(S._audioCtx) try{ S._audioCtx.close(); }catch(e){}
+}
 function ptStartProcessing(S){
   S.rawVideo=document.createElement('video');
   S.rawVideo.srcObject=S.rawStream; S.rawVideo.muted=true; S.rawVideo.playsInline=true;
@@ -6923,7 +7013,7 @@ function ptStartProcessing(S){
       S.ctx.textAlign='center'; S.ctx.textBaseline='middle';
       S.ctx.fillText('camera off', S.canvas.width/2, S.canvas.height/2);
     }
-    ptDrawScoreboard(S);
+    if(!S.sbHidden) ptDrawScoreboard(S);
     const now=Date.now();
     if(!S._dbgT || now-S._dbgT>500){
       S._dbgT=now;
@@ -6943,6 +7033,7 @@ function ptStartProcessing(S){
   const audioTrack=S.rawStream.getAudioTracks()[0];
   S.localStream=new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack?[audioTrack]:[])]);
   ptStartReplayRecorder(S);
+  ptStartAudioWatch(S);
   /* Keeping chunk #0 forever (see ptStartReplayRecorder) stops replay clips
      from being flat-out undecodable, but it doesn't stop them from being
      broken in a different way: that header chunk is from whenever the
@@ -7001,6 +7092,7 @@ function ptStopProcessing(S){
   if(S._raf) cancelAnimationFrame(S._raf);
   S._stoppingForGood=true;
   if(S._replayCycle) clearInterval(S._replayCycle);
+  ptStopAudioWatch(S);
   if(S.recorder && S.recorder.state!=='inactive'){ try{ S.recorder.stop(); }catch(e){} }
   if(S.replay){
     try{ S.replay.video.pause(); if(S.replay.video.parentNode) S.replay.video.parentNode.removeChild(S.replay.video); URL.revokeObjectURL(S.replay.url); }catch(e){}
@@ -7031,6 +7123,21 @@ function ptToggleDebug(){
   if(btn) btn.classList.toggle('on', !!PTStream.showDebug);
 }
 window.ptToggleDebug=ptToggleDebug;
+
+/* ---- scoreboard hide toggle ----
+   The score bug is baked straight into the composited canvas (see
+   ptStartProcessing's render loop), so this hides it for EVERY viewer at
+   once, not just the host's own preview — same tradeoff real broadcasts
+   make: a clean picture during a review is shared, not host-only. The flag
+   lives on PTStream (same pattern as showDebug/refOpen above) and the
+   render loop just checks it every frame — nothing to re-render here. */
+function ptToggleScoreboard(){
+  if(!PTStream) return;
+  PTStream.sbHidden=!PTStream.sbHidden;
+  const btn=document.getElementById('ptSbBtn');
+  if(btn){ btn.classList.toggle('on', !!PTStream.sbHidden); btn.innerHTML=(PTStream.sbHidden?'🙈':'👁')+' score'; }
+}
+window.ptToggleScoreboard=ptToggleScoreboard;
 
 /* ---- fullscreen chat drawer ----
    Same pattern as ptToggleDebug above: flip a flag on PTStream and poke the
@@ -7298,7 +7405,7 @@ window.ptSwitchCameraDevice=ptSwitchCameraDevice;
 /* ---- instant replay: broadcast to everyone watching, not just the host.
    See ptDrawReplayFrame/ptDrawWipe above — this just builds the clip and
    hands it to that shared canvas pipeline. ---- */
-function ptInstantReplay(){
+function ptInstantReplay(label){
   if(!PTStream || PTStream.role!=='host') return;
   if(PTStream.replay) return toast("Replay already playing",true);
   if(PTStream.camSwitch) return toast("Switching camera — try again in a second",true);
@@ -7327,10 +7434,33 @@ function ptInstantReplay(){
   });
   rv.src=url;
   PTStream.replay={video:rv, url, phase:'in', phaseStart:performance.now(), maxMs:9000,
-    bump:ptBumper('INSTANT REPLAY')};
-  toast("🔁 Replaying to everyone watching");
+    bump:ptBumper(label||'INSTANT REPLAY')};
+  toast(label ? `🔁 ${label} — replaying to everyone` : "🔁 Replaying to everyone watching");
 }
 window.ptInstantReplay=ptInstantReplay;
+
+/* ---- auto-highlight trigger: shared gate for both Tier 1 (score drama,
+   ptComputeDrama above) and Tier 2 (crowd audio spike, ptStartAudioWatch
+   below) so neither can fire back-to-back or interrupt an in-flight replay.
+   A replay takes over the whole broadcast for up to 9s — firing too often
+   turns a close set into a highlight reel of itself, so this is cooldown-
+   gated rather than firing on every qualifying point. */
+function ptMaybeAutoReplay(tag){
+  if(!PTStream || PTStream.role!=='host' || !PTStream.autoHighlight) return;
+  if(PTStream.replay || PTStream.camSwitch || PTStream.replayUnavailable) return;
+  if(!PTStream.replayChunks || !PTStream.replayChunks.length) return;
+  const now=Date.now();
+  if(PTStream._lastAutoReplayAt && now-PTStream._lastAutoReplayAt<45000) return;
+  PTStream._lastAutoReplayAt=now;
+  ptInstantReplay(tag);
+}
+function ptToggleAutoHighlight(){
+  if(!PTStream || PTStream.role!=='host') return;
+  PTStream.autoHighlight=!PTStream.autoHighlight;
+  toast(PTStream.autoHighlight ? "🎯 Auto-highlights on — hype moments replay automatically" : "Auto-highlights off");
+  renderPTStream();
+}
+window.ptToggleAutoHighlight=ptToggleAutoHighlight;
 
 /* ---- fullscreen ---- */
 function ptToggleFullscreen(){
