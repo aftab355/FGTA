@@ -6470,7 +6470,9 @@ window.renderPTStream=renderPTStream;
 /* ---- capture / composite resolution ----------------------------------------
    The camera is *asked* for full 1920x1080 (ideal, so it degrades gracefully on
    anything that can't do it), but the shared canvas everyone actually receives
-   composites at 1280x720 (720x1280 in portrait). That split is deliberate:
+   composites at a fixed 1280x720 — always landscape, regardless of how the
+   phone is physically held (see ptStartProcessing/ptCropToCanvas). That split
+   is deliberate:
 
    - Requesting a 1080p source is close to free — the sensor/ISP does it in
      hardware — and it pays off twice: downscaling 1080p into a 720p canvas is
@@ -7092,30 +7094,24 @@ function ptStartProcessing(S){
       ptDrawCamSwitchFrame(S);
     } else if(S.camOn && S.rawVideo.readyState>=2){
       const vw=S.rawVideo.videoWidth||PT_CAP_LONG, vh=S.rawVideo.videoHeight||PT_CAP_SHORT;
-      /* The camera sensor's raw frame keeps whatever orientation the phone was
-         actually held in — a canvas hardcoded to a landscape frame just
-         squishes a portrait feed into it instead of showing it upright. Match
-         the canvas to the camera's real orientation instead. Locked once
-         (not re-applied every frame): resizing a canvas mid-stream clears it
-         and breaks the MediaRecorder session feeding instant replay.
+      /* The canvas is ALWAYS landscape (PT_CAP_LONG x PT_CAP_SHORT, set once at
+         creation and never resized — resizing a canvas mid-stream clears it and
+         breaks the MediaRecorder session feeding instant replay). It used to
+         lock to whichever orientation the phone happened to be in for its very
+         first frame, portrait included, on the theory that a portrait-held
+         phone deserved a portrait canvas. That backfired badly: the far more
+         common case is starting portrait (browser default before anyone
+         thinks to rotate) and then turning the phone sideways once actually
+         filming, which meant the canvas was already locked portrait and every
+         landscape frame after that got center-cropped down to a thin vertical
+         sliver of itself — the reported "zoomed/cropped/stretched" stream.
+         Always compositing landscape, regardless of how the phone is held at
+         go-live or rotates to afterward, means viewers get a stable, correctly
+         framed picture from the first frame on; a phone held portrait just
+         contributes a center horizontal crop of that frame instead of the
+         whole thing, same as any other camera app that outputs landscape.
          See PT_CAP_LONG/PT_CAP_SHORT above for why this composites at 720p
          even though the camera is asked for 1080p. */
-      if(!S._sizeLocked){
-        const portrait=vh>vw;
-        S.canvas.width=portrait?PT_CAP_SHORT:PT_CAP_LONG;
-        S.canvas.height=portrait?PT_CAP_LONG:PT_CAP_SHORT;
-        S._sizeLocked=true;
-      }
-      /* If the phone physically rotates mid-stream, some browsers rotate the
-         raw camera track's own videoWidth/videoHeight to match the new
-         orientation — but the locked canvas above never changes shape once
-         set. ptCropToCanvas center-crops the source to the canvas's locked
-         aspect (on top of the zoom crop) so a mid-stream rotation just
-         reframes the shot instead of stretching it (reported as: go live in
-         landscape, rotate to portrait mid-stream, picture turns cropped/
-         zoomed-looking — and the reverse). No-op whenever the source
-         already matches, i.e. every normal case where the phone doesn't
-         rotate. */
       const {sw,sh,sx,sy}=ptCropToCanvas(vw,vh,S.canvas.width,S.canvas.height,S.zoom);
       S.ctx.filter=ptFilterCSS(S.filter);
       S.ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,S.canvas.width,S.canvas.height);
@@ -8006,15 +8002,18 @@ async function ptGoLive(){
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
   ptRequestWakeLock();
-  /* Streams are meant to be watched landscape (that's the composited canvas's
-     native shape when the phone starts that way) — best-effort nudge the OS
-     into landscape via the Screen Orientation API. Most browsers only honor
-     lock() in fullscreen, so this quietly no-ops outside it; the toast is the
-     fallback for everyone else, and neither blocks going live if a host is
-     deliberately filming portrait. */
+  /* The composited canvas is always landscape now regardless of how the phone
+     is held (see ptStartProcessing) — going live in portrait still produces a
+     correctly framed, un-stretched stream, just center-cropped to a horizontal
+     slice of the portrait frame instead of showing its full height. Still
+     best-effort nudge the OS into landscape via the Screen Orientation API and
+     hint the host to turn sideways, since a landscape hold gets the whole
+     frame instead of a crop — but neither is required for correctness
+     anymore, and nothing here blocks going live in portrait. Most browsers
+     only honor lock() in fullscreen, so it quietly no-ops outside it. */
   try{ if(screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); }catch(e){}
   if(window.matchMedia && window.matchMedia('(orientation: portrait)').matches){
-    toast("📱 Turn your phone sideways for the best stream");
+    toast("📱 Turn your phone sideways to capture the full frame");
   }
   ptEnumerateCameras().then(list=>{ if(PTStream && PTStream.role==='host'){ PTStream.cameras=list; renderPTStream(); } });
   const ch=sb.channel("ptstream_"+code);
