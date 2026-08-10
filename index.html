@@ -5269,6 +5269,7 @@ function ptStart(){
   const a=($("ptA").value||"").trim(), b=($("ptB").value||"").trim();
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
+  if(PTStream) PTStream.setClips=[];   // a fresh match shouldn't hand its first break the previous match's clips
   ptLogExpanded=false;
   ptPersist();
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
@@ -5293,6 +5294,8 @@ function ptCloseSet(winSide){
     PT.endedAt=Date.now();
     sfx('matchWin');
     PT.log.unshift(`🏆 ${esc(name)} wins the match ${PT.setsA}-${PT.setsB}`);
+  } else {
+    ptMaybeStartBreak(name, setScore, PT.setsA, PT.setsB);
   }
 }
 function ptCloseGame(winSide, wasTiebreak){
@@ -6392,7 +6395,9 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
+        <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" onclick="ptToggleBreakMode()" title="Cut to a ${Math.round(PT_BREAK_MS/1000)}s highlight-reel break screen between sets, looping whatever replays fired that set"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        ${S.breakMode?`<button class="mini pt-ctl-btn rec-on" onclick="ptSkipBreak()" title="End the set break early and cut back to live now"><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">resume live</span></button>`:''}
         ${driveBtn}
       </div>
       <div class="pt-ctl-sep"></div>
@@ -6570,6 +6575,9 @@ const PT_SRC_LONG=1920, PT_SRC_SHORT=1080;     // what we ask the camera for
    YouTube stream); 128 kbps audio is plenty for a courtside mic. That's
    about 23MB/min — a 90-minute match lands around 2GB instead of 18+. */
 const PT_REC_BITRATE={videoBitsPerSecond:3_000_000, audioBitsPerSecond:128_000};
+/* How long the between-sets highlight-reel break stays up before wiping back
+   to live on its own (the host's ⏭ resume-live button can always end it early). */
+const PT_BREAK_MS=45000;
 /* getUserMedia video constraints, shared by the initial request and every
    camera swap so flipping cameras never silently drops back to VGA. */
 function ptVideoConstraints(extra){
@@ -7111,7 +7119,7 @@ function ptDrawReplayFrame(S){
    replay: it freezes the OLD camera's last composited frame, holds the card
    over the swap, and reveals the new lens on the way out. ---- */
 function ptBeginCamBumper(S,label){
-  if(!S || !S.canvas || !S.ctx || S.replay || S.camSwitch) return;
+  if(!S || !S.canvas || !S.ctx || S.replay || S.camSwitch || S.breakMode) return;
   const f=S._camFreeze || (S._camFreeze=document.createElement('canvas'));
   f.width=S.canvas.width; f.height=S.canvas.height;
   try{ f.getContext('2d').drawImage(S.canvas,0,0); }catch(e){ return; }
@@ -7141,6 +7149,142 @@ function ptDrawCamSwitchFrame(S){
   const live = !S.camOn || !!(S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth);
   if(ptDrawBumperFrame(ctx,canvas,cs.bump,drawFrozen,drawLive, cs.ready && live)) S.camSwitch=null;
 }
+
+/* ---- Set Break: between-sets highlight reel ----
+   When a set finishes mid-match, the broadcast cuts to a "SET COMPLETE"
+   card and loops whatever instant-replay clips fired during that set —
+   the exact same blobs ptInstantReplay already builds for the live replay,
+   just kept around instead of only played once (see the push into
+   S.setClips in ptInstantReplay). Nothing new is recorded for this.
+   Opt-in per stream (🎬 toggle, on by default) since it takes over the
+   whole picture for PT_BREAK_MS; the host can always tap Resume Live
+   (ptSkipBreak) to cut back early. Same shared-canvas trick as replay and
+   camera-switch bumpers above: only the host draws it, every viewer gets
+   it for free because it's baked into the one composited video track. */
+function ptMaybeStartBreak(winnerName, setScore, setsA, setsB){
+  const S=PTStream;
+  if(!S || S.role!=='host' || !S.breakEnabled) return;
+  const clips=(S.setClips||[]).slice(-6);
+  S.setClips=[];                       // next set starts its own reel
+  const info={winnerName, setScore, setsA, setsB, clips};
+  let tries=0;
+  const start=()=>{
+    if(!PTStream || PTStream!==S) return;         // stream ended while waiting
+    if(S.replay || S.camSwitch || S.breakMode){
+      if(++tries>15) return;           // ~6s of a stuck transition — give up quietly
+      setTimeout(start,400); return;
+    }
+    ptBeginBreakMode(S,info);
+  };
+  start();
+}
+function ptBeginBreakMode(S,info){
+  S.breakMode={...info, phase:'in', phaseStart:performance.now(),
+    endAt:Date.now()+PT_BREAK_MS, clipIdx:-1, clipVideo:null, clipUrl:null,
+    bump:ptBumper('SET COMPLETE',{inMs:360,holdMs:280,outMs:420})};
+  toast(`🎬 Set break — back to live in ${Math.round(PT_BREAK_MS/1000)}s (or tap Resume Live)`);
+  renderPTStream();
+}
+function ptSkipBreak(){
+  if(!PTStream || !PTStream.breakMode || PTStream.breakMode.phase!=='active') return;
+  PTStream.breakMode.endAt=Date.now();
+}
+window.ptSkipBreak=ptSkipBreak;
+function ptToggleBreakMode(){
+  if(!PTStream || PTStream.role!=='host') return;
+  PTStream.breakEnabled=!PTStream.breakEnabled;
+  toast(PTStream.breakEnabled ? "🎬 Set breaks on — highlight reel plays between sets" : "Set breaks off");
+  renderPTStream();
+}
+window.ptToggleBreakMode=ptToggleBreakMode;
+function ptBreakAdvanceClip(S){
+  const b=S.breakMode; if(!b) return;
+  if(b.clipVideo){
+    try{ b.clipVideo.pause(); if(b.clipVideo.parentNode) b.clipVideo.parentNode.removeChild(b.clipVideo); }catch(e){}
+    if(b.clipUrl) URL.revokeObjectURL(b.clipUrl);
+    b.clipVideo=null; b.clipUrl=null;
+  }
+  if(!b.clips.length) return;
+  b.clipIdx=(b.clipIdx+1)%b.clips.length;
+  const clip=b.clips[b.clipIdx];
+  const url=URL.createObjectURL(clip.blob);
+  const v=document.createElement('video');
+  v.muted=true; v.playsInline=true;
+  v.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(v);
+  v.src=url; v.play().catch(()=>{});
+  b.clipUrl=url; b.clipVideo=v; b.clipLabel=clip.label; b.clipStart=performance.now();
+}
+function ptDrawBreakCard(S){
+  const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
+  const W=canvas.width, H=canvas.height, u=Math.min(W,H);
+  ctx.filter='none';
+  const clipReady=b.clipVideo && b.clipVideo.readyState>=2 && b.clipVideo.videoWidth;
+  if(clipReady){
+    const rw=b.clipVideo.videoWidth, rh=b.clipVideo.videoHeight;
+    const scale=Math.max(W/rw,H/rh), dw=rw*scale, dh=rh*scale;
+    ctx.save(); ctx.globalAlpha=0.55;
+    ctx.drawImage(b.clipVideo,(W-dw)/2,(H-dh)/2,dw,dh);
+    ctx.restore();
+    ctx.fillStyle='rgba(8,6,18,0.55)'; ctx.fillRect(0,0,W,H);
+  } else {
+    const g=ctx.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,'#0b0818'); g.addColorStop(1,'#1d1440');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+  ptDrawBrandLockup(ctx,W/2,H*0.24,u,'SET COMPLETE',C);
+  ctx.textAlign='center';
+  ctx.fillStyle='#f2eefc';
+  ctx.font=`700 ${Math.round(u*0.052)}px -apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif`;
+  ctx.fillText(ptFitText(ctx,`${b.winnerName} wins the set ${b.setScore}`,W*0.86), W/2, H*0.38);
+  ctx.font=`600 ${Math.round(u*0.032)}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle=C.dim;
+  ctx.fillText(`SETS ${b.setsA}-${b.setsB}`, W/2, H*0.44);
+  if(clipReady){
+    ctx.font=`800 ${Math.round(u*0.03)}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=C.ball;
+    ctx.fillText('🔁 '+(b.clipLabel||'HIGHLIGHT').toUpperCase(), W/2, H*0.58);
+  } else if(!b.clips.length){
+    ctx.font=`500 ${Math.round(u*0.026)}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=C.dim;
+    ctx.fillText('back to the action shortly', W/2, H*0.58);
+  }
+  const remain=Math.max(0,Math.ceil((b.endAt-Date.now())/1000));
+  const mm=String(Math.floor(remain/60)), ss=String(remain%60).padStart(2,'0');
+  ctx.font=`800 ${Math.round(u*0.09)}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='#fff';
+  ctx.fillText(`${mm}:${ss}`, W/2, H*0.82);
+  ctx.font=`700 ${Math.round(u*0.024)}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle=C.dim;
+  ctx.fillText('NEXT SET STARTING SOON', W/2, H*0.90);
+}
+function ptDrawBreakFrame(S){
+  const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, now=performance.now();
+  const drawLive=()=>{
+    if(S.camOn && S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth){
+      const {sw,sh,sx,sy}=ptCropToCanvas(S.rawVideo.videoWidth,S.rawVideo.videoHeight,canvas.width,canvas.height,S.zoom);
+      ctx.filter=ptFilterCSS(S.filter);
+      ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,canvas.width,canvas.height);
+    } else { ctx.filter='none'; ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+  };
+  const drawCard=()=>ptDrawBreakCard(S);
+  if(b.phase==='in'){
+    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawLive,drawCard,true)){
+      b.phase='active'; b.phaseStart=now;
+      ptBreakAdvanceClip(S);
+    }
+  } else if(b.phase==='active'){
+    drawCard();
+    if(b.clipVideo && (b.clipVideo.ended || now-b.clipStart>7000)) ptBreakAdvanceClip(S);
+    if(Date.now()>=b.endAt){ b.phase='out'; b.bump=ptBumper('LIVE',{holdMs:260,inMs:340,outMs:420}); }
+  } else {
+    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawCard,drawLive,true)){
+      if(b.clipVideo){ try{ b.clipVideo.pause(); if(b.clipVideo.parentNode) b.clipVideo.parentNode.removeChild(b.clipVideo); if(b.clipUrl) URL.revokeObjectURL(b.clipUrl); }catch(e){} }
+      S.breakMode=null;
+    }
+  }
+}
+
 /* ---- Tier 2 auto-highlight: crowd/mic audio spike detection ----
    Taps the host mic track (already flowing into the broadcast) with an
    AnalyserNode and watches rolling RMS for a sudden spike over its own
@@ -7202,7 +7346,9 @@ function ptStartProcessing(S){
   S.zoom=1; S.filter='none'; S.camOn=true; S.micOn=true;
   function loop(){
     if(!PTStream || PTStream!==S) return;
-    if(S.replay){
+    if(S.breakMode){
+      ptDrawBreakFrame(S);
+    } else if(S.replay){
       ptDrawReplayFrame(S);
     } else if(S.camSwitch){
       ptDrawCamSwitchFrame(S);
@@ -7237,7 +7383,7 @@ function ptStartProcessing(S){
       S.ctx.textAlign='center'; S.ctx.textBaseline='middle';
       S.ctx.fillText('camera off', S.canvas.width/2, S.canvas.height/2);
     }
-    if(!S.sbHidden) ptDrawScoreboard(S);
+    if(!S.sbHidden && !S.breakMode) ptDrawScoreboard(S);
     const now=Date.now();
     if(!S._dbgT || now-S._dbgT>500){
       S._dbgT=now;
@@ -7322,6 +7468,17 @@ function ptStopProcessing(S){
     try{ S.replay.video.pause(); if(S.replay.video.parentNode) S.replay.video.parentNode.removeChild(S.replay.video); URL.revokeObjectURL(S.replay.url); }catch(e){}
     S.replay=null;
   }
+  if(S.breakMode){
+    try{
+      if(S.breakMode.clipVideo){
+        S.breakMode.clipVideo.pause();
+        if(S.breakMode.clipVideo.parentNode) S.breakMode.clipVideo.parentNode.removeChild(S.breakMode.clipVideo);
+        if(S.breakMode.clipUrl) URL.revokeObjectURL(S.breakMode.clipUrl);
+      }
+    }catch(e){}
+    S.breakMode=null;
+  }
+  S.setClips=[];
   S.camSwitch=null; S._camFreeze=null;
   if(S.rawVideo){ S.rawVideo.srcObject=null; if(S.rawVideo.parentNode) S.rawVideo.parentNode.removeChild(S.rawVideo); }
 }
@@ -7628,7 +7785,10 @@ function ptToggleRecord(){
   if(PTStream.recOn) ptStopRecord(); else ptStartRecord();
 }
 window.ptToggleRecord=ptToggleRecord;
-function ptStartRecord(){
+/* silent=true is used only by ptGoLive's auto-record — every real error
+   (unsupported browser, no source track) still surfaces, just not the
+   routine "recording started" toast stacking on top of "you're live". */
+function ptStartRecord(silent){
   const S=PTStream;
   if(!S) return;
   const src = S.role==='host' ? S.localStream : S.remoteStream;
@@ -7652,7 +7812,7 @@ function ptStartRecord(){
   S.recRecorder=rec;
   S.recOn=true;
   renderPTStream();
-  toast(gdriveIsConnected() ? "⏺ Recording — will upload to Google Drive when you stop" : "⏺ Recording to this device — stops and saves when you tap stop, or when the stream ends");
+  if(!silent) toast(gdriveIsConnected() ? "⏺ Recording — will upload to Google Drive when you stop" : "⏺ Recording to this device — stops and saves when you tap stop, or when the stream ends");
 }
 function ptStopRecord(){
   const S=PTStream;
@@ -7926,12 +8086,20 @@ function ptInstantReplay(label){
   if(!PTStream || PTStream.role!=='host') return;
   if(PTStream.replay) return toast("Replay already playing",true);
   if(PTStream.camSwitch) return toast("Switching camera — try again in a second",true);
+  if(PTStream.breakMode) return toast("Set break in progress — hang tight",true);
   if(PTStream.replayUnavailable) return toast("Instant replay isn't supported on this browser",true);
   if(!PTStream.replayChunks || !PTStream.replayChunks.length){
     return toast("Nothing buffered yet — give it a few seconds",true);
   }
   const parts=[PTStream.replayHeaderChunk, ...PTStream.replayChunks.map(c=>c.blob)].filter(Boolean);
   const blob=new Blob(parts,{type:PTStream.replayMime||'video/webm'});
+  /* Same blob this replay plays right now also becomes part of the current
+     set's highlight reel for the next Set Break (see ptMaybeStartBreak) —
+     no extra recording, just keeping a reference around. Capped so a set
+     with a replay-happy ref doesn't grow this unbounded. */
+  if(!PTStream.setClips) PTStream.setClips=[];
+  PTStream.setClips.push({blob, label: label||'REPLAY', t:Date.now()});
+  if(PTStream.setClips.length>8) PTStream.setClips.shift();
   const url=URL.createObjectURL(blob);
   const rv=document.createElement('video');
   rv.muted=true; rv.playsInline=true; rv.playbackRate=0.55;
@@ -8012,7 +8180,7 @@ async function ptAskAIHighlight(S,tag){
    it). A confident, reachable "no" is the only thing that skips the replay. */
 async function ptMaybeAutoReplay(tag){
   if(!PTStream || PTStream.role!=='host' || !PTStream.autoHighlight) return;
-  if(PTStream.replay || PTStream.camSwitch || PTStream.replayUnavailable) return;
+  if(PTStream.replay || PTStream.camSwitch || PTStream.breakMode || PTStream.replayUnavailable) return;
   if(!PTStream.replayChunks || !PTStream.replayChunks.length) return;
   const S=PTStream;
   const now=Date.now();
@@ -8154,10 +8322,15 @@ async function ptGoLive(){
   const code=ptRandCode();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
-  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now()};
+  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
   const initTrack=stream.getVideoTracks()[0];
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
+  /* Auto-record from the first frame — a ref or player forgetting to tap
+     record was the whole point of making this automatic instead of a step
+     someone has to remember mid-match. Still fully stoppable/restartable
+     by hand via the existing record button. */
+  ptStartRecord(true);
   ptRequestWakeLock();
   /* The composited canvas is always landscape now regardless of how the phone
      is held (see ptStartProcessing) — going live in portrait still produces a
@@ -8228,7 +8401,7 @@ async function ptGoLive(){
   ch.subscribe();
   ptDirAnnounce(code);
   renderPTStream();
-  toast("You're live — share code "+code);
+  toast("You're live — share code "+code+(PTStream && PTStream.recOn ? " (recording)" : ""));
 }
 window.ptGoLive=ptGoLive;
 
