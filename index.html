@@ -1925,6 +1925,12 @@
     text-transform:uppercase;color:var(--muted)}
   .pt-ref-hint{font-size:9px;letter-spacing:.4px;color:var(--dim);text-transform:none;min-width:0}
   .pt-ref-body{padding:10px;min-width:0}
+  /* undo/redo sit above the score grid, not inside it — they act on the last
+     point scored (by anyone reffing), not on either side specifically, so
+     giving them their own row keeps them from reading as a third "team" */
+  .pt-ref-actions{display:flex;gap:6px;margin-bottom:8px}
+  .pt-ref-actions .mini{flex:1 1 0;padding:7px 6px;font-size:10.5px;letter-spacing:.6px}
+  .pt-ref-actions .mini:disabled{opacity:.4;cursor:default}
   .pt-ref-grid{display:flex;gap:8px;align-items:stretch;min-width:0}
   .pt-ref-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;
     padding:10px 8px;cursor:pointer;color:var(--ink);text-align:center;appearance:none;-webkit-appearance:none;
@@ -1948,6 +1954,11 @@
   .pt-ref-chips{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
   .pt-ref-tb{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;letter-spacing:1px;
     color:#1a1400;background:var(--gold);padding:2px 6px;border-radius:999px;white-space:nowrap}
+  /* momentum chip — same pill treatment as TIEBREAK, colour-coded to whoever's
+     on the run so it reads at a glance next to the clock, same info as the
+     canvas badge (see ptDrawScoreboard) but for the DOM ref panel */
+  .pt-ref-streak{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;letter-spacing:.6px;
+    color:#0b0714;background:var(--ac);padding:2px 6px;border-radius:999px;white-space:nowrap}
   .pt-ref-empty{font-size:12px;color:var(--dim);line-height:1.5;text-align:center;padding:6px 4px}
   .pt-ref-final{text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
     color:var(--gold);margin-top:9px}
@@ -1986,6 +1997,36 @@
   .pt-stream-foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;min-width:0}
   .pt-stream-others{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px;min-width:0}
   .pt-other-btn{display:block;width:100%;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---- the "nobody's watching yet" landing state ----
+     Used to be a plain header line + a code input in a row — functionally
+     fine, but the first thing anyone saw arriving at a match was a form
+     field, not a match. A game-day landing gives the live matches already in
+     progress top billing (same presence-driven list ptActiveStreams already
+     powered, just promoted to real cards instead of a stack of small
+     buttons) and turns "go live" into its own on-air-red action distinct
+     from "watch", instead of two same-weight .mini buttons in a row. */
+  .pt-landing-hero{margin-bottom:14px}
+  .pt-landing-title{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:800;
+    letter-spacing:.3px;color:var(--ink);margin-bottom:4px}
+  .pt-landing-sub{font-size:12px;color:var(--dim);max-width:520px;line-height:1.55}
+  .pt-live-now{margin:14px 0}
+  .pt-live-now-h{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:800;letter-spacing:1.6px;color:#ff7d7d;text-transform:uppercase;margin-bottom:8px}
+  .pt-live-now-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .pt-live-now-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;
+    padding:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);
+    cursor:pointer;text-align:left;font:inherit;color:inherit;appearance:none;-webkit-appearance:none;
+    transition:transform .14s,border-color .15s}
+  .pt-live-now-card:hover{border-color:rgba(255,45,45,.5);transform:translateY(-2px)}
+  .pt-live-now-card:active{transform:scale(.98)}
+  .pt-live-now-label{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pt-live-now-code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:1.5px}
+  .pt-join-row{margin-top:6px}
+  .pt-watch-cta{background:var(--accent);color:#04140e;font-weight:800}
+  .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#ff2d2d;color:#fff}
+  .pt-golive-cta .pt-live-dot{background:#fff;animation:none}
 
   /* ---- fullscreen (any device) ----
      Fullscreen is "let the picture own the screen" mode, so it deliberately
@@ -5214,7 +5255,7 @@ try{
 }catch(e){}
 
 function ptDefaultState(a,b){
-  return {a,b,setsA:0,setsB:0,sets:[],gamesA:0,gamesB:0,ptsA:0,ptsB:0,tiebreak:false,tbA:0,tbB:0,log:[],winner:null,draw:false,gameLog:[],startedAt:Date.now(),endedAt:null};
+  return {a,b,setsA:0,setsB:0,sets:[],gamesA:0,gamesB:0,ptsA:0,ptsB:0,tiebreak:false,tbA:0,tbB:0,log:[],winner:null,draw:false,gameLog:[],startedAt:Date.now(),endedAt:null,streakSide:null,streakCount:0};
 }
 function ptPersist(){
   try{
@@ -5452,6 +5493,15 @@ function ptPoint(side){
   sfx('point');
   ptHistory.push(ptClone(PT)); ptFuture=[];
   const pre=ptHistory[ptHistory.length-1];
+  /* momentum: a plain run of consecutive points won, independent of game/set
+     boundaries — "on a run" the way a broadcast graphic means it, not reset
+     just because the game changed hands. Lives on PT itself (not a side var)
+     so it rides along for free with undo/redo (the clone above captures it
+     pre-mutation, same as every other PT field) — just also needs adding to
+     ptSyncPayload below, since that one hand-picks its fields rather than
+     spreading the whole state. */
+  PT.streakCount = (pre.streakSide===side) ? (pre.streakCount||0)+1 : 1;
+  PT.streakSide = side;
   if(PT.tiebreak){
     if(side==='a') PT.tbA++; else PT.tbB++;
     if((PT.tbA>=7||PT.tbB>=7) && Math.abs(PT.tbA-PT.tbB)>=2){
@@ -6375,15 +6425,33 @@ function renderPTStream(){
       </div><button class="pt-more-tab" id="ptMoreTab" onclick="ptToggleMoreDrawer(event)" title="More controls" aria-label="Toggle more controls">⚙️</button>`;
   };
   if(!PTStream){
-    box.innerHTML=`
-      <div class="pt-stream-panel">
-        <div class="pt-stream-h">\ud83d\udce1 Watch or stream this match <span class="pt-stream-note">up to 3 viewers \u00b7 peer-to-peer, best-effort</span></div>
-        <div class="pt-stream-row">
-          <input id="ptWatchCode" placeholder="stream code" maxlength="5" autocomplete="off">
-          <button class="mini" onclick="ptWatch()">\u25b6 Watch</button>
-          <button class="mini" onclick="ptGoLive()">\ud83d\udd34 Go live</button>
+    /* live matches already in progress get top billing \u2014 the presence list
+       ptActiveStreams() already tracked (see ptDirAnnounce) just wasn't
+       being surfaced as anything more than a stack of small buttons below
+       the fold. A tap on a card jumps straight into watching, same as
+       ptSwitchTo used for "other angles" mid-stream. */
+    const liveNowHtml = others.length ? `<div class="pt-live-now">
+        <div class="pt-live-now-h"><i class="pt-live-dot"></i>live now \u00b7 ${others.length} match${others.length===1?'':'es'}</div>
+        <div class="pt-live-now-grid">
+          ${others.map(o=>`<button class="pt-live-now-card" onclick="ptSwitchTo('${esc(o.code)}')" aria-label="Watch ${esc(o.label||'live match')}">
+            <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
+            <span class="pt-live-now-label">${esc(o.label||'Live match')}</span>
+            <span class="pt-live-now-code">code ${esc(o.code)}</span>
+          </button>`).join('')}
         </div>
-        ${othersHtml}
+      </div>` : '';
+    box.innerHTML=`
+      <div class="pt-stream-panel pt-stream-landing">
+        <div class="pt-landing-hero">
+          <div class="pt-landing-title">\ud83d\udce1 Courtside, live</div>
+          <div class="pt-landing-sub">Stream the match yourself, or drop in as a viewer with a code \u2014 up to 3 watching at once, peer-to-peer, best-effort.</div>
+        </div>
+        ${liveNowHtml}
+        <div class="pt-stream-row pt-join-row">
+          <input id="ptWatchCode" placeholder="STREAM CODE" maxlength="5" autocomplete="off">
+          <button class="mini pt-watch-cta" onclick="ptWatch()">\u25b6 Watch</button>
+          <button class="mini pt-golive-cta" onclick="ptGoLive()"><i class="pt-live-dot"></i>Go live</button>
+        </div>
       </div>`;
     return;
   }
@@ -6763,15 +6831,43 @@ function ptDrawScoreboard(S){
   }
 
   /* live point / tiebreak: the one thing that changes every rally, so it gets
-     the brightest block and the biggest digits */
+     the brightest block and the biggest digits — plus a broadcast-style flash
+     the instant it changes. Without that flash a rally point landing in an
+     otherwise-static bug doesn't read as "live" the way a TV score bug does;
+     a fading glow ring plus a brief scale-pop on the digits is the same
+     language sports broadcasts use for "the number just moved". Tracked on S
+     (not a module-level var) so multiple concurrent streams — a viewer
+     switching between "other angles live now" — never bleed animation state
+     into each other. */
   const badgeW=Math.max(ptsW, x0+totalW-x);
+  if(S._sbLastPtsTxt!==undefined && S._sbLastPtsTxt!==ptsTxt) S._sbFlashAt=performance.now();
+  S._sbLastPtsTxt=ptsTxt;
+  const FLASH_MS=420;
+  const flashAge = S._sbFlashAt!=null ? performance.now()-S._sbFlashAt : Infinity;
+  const flashT = flashAge<FLASH_MS ? flashAge/FLASH_MS : null;
+  if(flashT!=null){
+    const grow=Math.round(barH*0.22*(1-flashT));
+    ctx.save();
+    ctx.globalAlpha=0.55*(1-flashT);
+    ptRoundRect(ctx,x-grow,y0-grow,badgeW+grow*2,barH+grow*2,rad+grow);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.restore();
+  }
   ptRoundRect(ctx,x,y0,badgeW,barH,[0,rad,rad,0]);
   ctx.fillStyle = tb ? C.gold : C.ball; ctx.fill();
   ctx.textAlign='center';
   ctx.font=fLab; ctx.fillStyle='rgba(10,8,20,0.72)';
   ctx.fillText(ptsLab, x+badgeW/2, labY);
   ctx.font=fBig; ctx.fillStyle='#0b0714';
-  ctx.fillText(ptsTxt, x+badgeW/2, valY);
+  if(flashT!=null){
+    ctx.save();
+    ctx.translate(x+badgeW/2, valY);
+    ctx.scale(1+0.16*(1-flashT), 1+0.16*(1-flashT));
+    ctx.fillText(ptsTxt, 0, 0);
+    ctx.restore();
+  } else {
+    ctx.fillText(ptsTxt, x+badgeW/2, valY);
+  }
 
   /* hairline so the bug still separates from a bright/washed-out picture */
   ctx.lineWidth=Math.max(1,Math.round(barH*0.025));
@@ -6795,6 +6891,24 @@ function ptDrawScoreboard(S){
     ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
     ctx.fillStyle=C.gold; ctx.fill();
     ctx.fillStyle='#1a1400'; ctx.textAlign='center';
+    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+  } else if((PT.streakCount||0)>=3 && PT.streakSide){
+    /* momentum badge: same slot the winner/draw banner uses (mutually
+       exclusive — a match that's over doesn't also need a "run" callout),
+       same geometry, just keyed off whoever's on a run of 3+ straight
+       points regardless of game/set boundaries (see PT.streakCount in
+       ptPoint). This is the one broadcast-graphic staple tennis coverage
+       doesn't already have baked in via the set/game/point bug above. */
+    const side=PT.streakSide;
+    const txt=`🔥 ${ptShortName(side==='a'?PT.a:PT.b).toUpperCase()} ${PT.streakCount} STRAIGHT`;
+    const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
+    ctx.font=fMid;
+    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
+    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
+    const by=y0-bh-Math.round(barH*0.20);
+    ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
+    ctx.fillStyle = side==='a'?C.a:C.b; ctx.fill();
+    ctx.fillStyle='#0b0714'; ctx.textAlign='center';
     ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
   }
   ctx.restore();
@@ -7352,11 +7466,24 @@ function ptRefBodyHTML(state,isHost){
       ${decided?'':'<span class="pt-ref-cta">+ point</span>'}
     </button>`;
   };
-  return `<div class="pt-ref-grid">
+  /* Same tap-scores-for-everyone trust model as the point buttons above, just
+     aimed at the last point instead of the next one — a mis-tap or a bad call
+     needs fixing from right here in fullscreen, not by backing out to the
+     windowed Point Tracker. Host undoes/redoes its own local history directly
+     (ptUndo/ptRedo already fully own that state and broadcast the result via
+     renderTracker → ptSyncBroadcastIfLive); a viewer has no visibility into
+     that history, so its buttons are always tappable and just forward the
+     request — same shape as ptRefViewerPoint. */
+  const actions = `<div class="pt-ref-actions">
+      <button class="mini" onclick="${isHost?'ptUndo()':'ptRefViewerUndo()'}" ${isHost&&!ptHistory.length?'disabled':''} aria-label="Undo last point">↶ undo</button>
+      <button class="mini" onclick="${isHost?'ptRedo()':'ptRefViewerRedo()'}" ${isHost&&!ptFuture.length?'disabled':''} aria-label="Redo point">↷ redo</button>
+    </div>`;
+  return `${actions}<div class="pt-ref-grid">
       ${side('a')}
       <div class="pt-ref-mid">
         <span class="pt-ref-clock" id="ptRefClock">0:00</span>
         ${state.tiebreak?'<span class="pt-ref-tb">TIEBREAK</span>':''}
+        ${(!decided && (state.streakCount||0)>=3 && state.streakSide)?`<span class="pt-ref-streak" style="--ac:${state.streakSide==='a'?'var(--accent)':'var(--court)'}">🔥 ${esc(ptShortName(state.streakSide==='a'?state.a:state.b))} ${state.streakCount}</span>`:''}
         <span class="pt-ref-chips">${chips}</span>
       </div>
       ${side('b')}
@@ -7407,6 +7534,23 @@ function ptRefViewerPoint(side){
   try{ buzz(10); }catch(e){}   // immediate feel; the real number arrives on the next pt_sync
 }
 window.ptRefViewerPoint=ptRefViewerPoint;
+/* same request-not-action shape as ptRefViewerPoint, for the ↶/↷ pair above
+   the score grid. No local guard on ptHistory/ptFuture — a viewer's PTStream
+   has no idea how deep the host's history is — so these just forward the ask
+   and let the host's own ptUndo/ptRedo no-op harmlessly if there's nothing to
+   undo/redo. */
+function ptRefViewerUndo(){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_undo",payload:{}}); }catch(e){}
+  try{ buzz(10); }catch(e){}
+}
+window.ptRefViewerUndo=ptRefViewerUndo;
+function ptRefViewerRedo(){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_redo",payload:{}}); }catch(e){}
+  try{ buzz(10); }catch(e){}
+}
+window.ptRefViewerRedo=ptRefViewerRedo;
 /* same shape as ptRefViewerPoint — a request, not an action. The host's own
    ptInstantReplay() already guards against overlapping replays/cooldowns
    not applying here (it's manual, not the auto-highlight cooldown path), so
@@ -7426,8 +7570,8 @@ window.ptRequestReplay=ptRequestReplay;
    are already the record of what happened. */
 function ptSyncPayload(){
   if(typeof PT==='undefined' || !PT) return null;
-  const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt}=PT;
-  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt};
+  const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount}=PT;
+  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount};
 }
 function ptSyncBroadcastIfLive(){
   if(!PTStream || PTStream.role!=='host' || !PTStream.channel) return;
@@ -8060,6 +8204,10 @@ async function ptGoLive(){
   ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
     if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side);
   });
+  /* a viewer's ↶/↷ ref-panel tap — ptUndo/ptRedo are already safe no-ops with
+     nothing to undo/redo, same as a stray host tap on a disabled button */
+  ch.on("broadcast",{event:"ref_undo"}, ()=>{ ptUndo(); });
+  ch.on("broadcast",{event:"ref_redo"}, ()=>{ ptRedo(); });
   /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
