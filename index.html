@@ -6441,9 +6441,9 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
-        <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" onclick="ptToggleBreakMode()" title="Cut to a ${Math.round(PT_BREAK_MS/1000)}s highlight-reel break screen between sets, looping whatever replays fired that set"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
+        <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" id="ptBreakToggleBtn" onclick="ptToggleBreakMode()" title="Run a ${Math.round(PT_BREAK_MS/1000)}s info banner between sets — camera keeps rolling (good for a half-time interview), replay clips from that set cut in automatically"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
-        ${S.breakMode?`<button class="mini pt-ctl-btn rec-on" onclick="ptSkipBreak()" title="End the set break early and cut back to live now"><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">resume live</span></button>`:''}
+        <button class="mini pt-ctl-btn rec-on" id="ptBreakResumeBtn" onclick="ptSkipBreak()" title="End the set break early and cut back to live now"${S.breakMode?'':' hidden'}><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">resume live</span></button>
         ${driveBtn}
       </div>
       <div class="pt-ctl-sep"></div>
@@ -7196,17 +7196,24 @@ function ptDrawCamSwitchFrame(S){
   if(ptDrawBumperFrame(ctx,canvas,cs.bump,drawFrozen,drawLive, cs.ready && live)) S.camSwitch=null;
 }
 
-/* ---- Set Break: between-sets highlight reel ----
-   When a set finishes mid-match, the broadcast cuts to a "SET COMPLETE"
-   card and loops whatever instant-replay clips fired during that set —
-   the exact same blobs ptInstantReplay already builds for the live replay,
-   just kept around instead of only played once (see the push into
-   S.setClips in ptInstantReplay). Nothing new is recorded for this.
-   Opt-in per stream (🎬 toggle, on by default) since it takes over the
-   whole picture for PT_BREAK_MS; the host can always tap Resume Live
-   (ptSkipBreak) to cut back early. Same shared-canvas trick as replay and
-   camera-switch bumpers above: only the host draws it, every viewer gets
-   it for free because it's baked into the one composited video track. */
+/* ---- Set Break: between-sets info banner ----
+   When a set finishes mid-match, a "SET COMPLETE" lower-third banner wipes
+   in over the picture for PT_BREAK_MS — but the picture itself keeps
+   rolling: the host's live camera stays on screen (so a half-time
+   report/interview works, camera never cuts away), and whatever
+   instant-replay clips fired during that set (the exact same blobs
+   ptInstantReplay already builds — see the push into S.setClips there)
+   cut in and out on top of it automatically. Opt-out per stream (🎬
+   toggle, on by default); the host can tap Resume Live (ptSkipBreak) to
+   end it early. Same shared-canvas trick as replay/camera-switch bumpers
+   above: only the host draws it, every viewer gets it for free because
+   it's baked into the one composited video track.
+   Deliberately never calls renderPTStream() anywhere in this flow — that
+   rebuilds #ptStreamMain's innerHTML from scratch, and destroying/
+   recreating the element the Fullscreen API is targeting force-exits
+   fullscreen. UI bits that need to change (the Resume Live button) are
+   patched directly via ptSyncBreakUI instead, same pattern already used
+   by ptToggleScoreboard/ptSyncRefDrawer elsewhere for the same reason. */
 function ptMaybeStartBreak(winnerName, setScore, setsA, setsB){
   const S=PTStream;
   if(!S || S.role!=='host' || !S.breakEnabled) return;
@@ -7224,23 +7231,30 @@ function ptMaybeStartBreak(winnerName, setScore, setsA, setsB){
   };
   start();
 }
+function ptSyncBreakUI(){
+  const btn=document.getElementById('ptBreakResumeBtn');
+  if(btn) btn.hidden = !(PTStream && PTStream.breakMode);
+}
 function ptBeginBreakMode(S,info){
   S.breakMode={...info, phase:'in', phaseStart:performance.now(),
     endAt:Date.now()+PT_BREAK_MS, clipIdx:-1, clipVideo:null, clipUrl:null,
     bump:ptBumper('SET COMPLETE',{inMs:360,holdMs:280,outMs:420})};
   toast(`🎬 Set break — back to live in ${Math.round(PT_BREAK_MS/1000)}s (or tap Resume Live)`);
-  renderPTStream();
+  ptSyncBreakUI();
 }
 function ptSkipBreak(){
   if(!PTStream || !PTStream.breakMode || PTStream.breakMode.phase!=='active') return;
   PTStream.breakMode.endAt=Date.now();
+  const btn=document.getElementById('ptBreakResumeBtn');
+  if(btn) btn.hidden=true;
 }
 window.ptSkipBreak=ptSkipBreak;
 function ptToggleBreakMode(){
   if(!PTStream || PTStream.role!=='host') return;
   PTStream.breakEnabled=!PTStream.breakEnabled;
-  toast(PTStream.breakEnabled ? "🎬 Set breaks on — highlight reel plays between sets" : "Set breaks off");
-  renderPTStream();
+  toast(PTStream.breakEnabled ? "🎬 Set breaks on — a highlights banner runs between sets" : "Set breaks off");
+  const btn=document.getElementById('ptBreakToggleBtn');
+  if(btn){ btn.classList.toggle('auto-on', !!PTStream.breakEnabled); const lbl=btn.querySelector('.pt-ctl-lbl'); if(lbl) lbl.textContent=PTStream.breakEnabled?'breaks on':'breaks'; }
 }
 window.ptToggleBreakMode=ptToggleBreakMode;
 function ptBreakAdvanceClip(S){
@@ -7261,48 +7275,95 @@ function ptBreakAdvanceClip(S){
   v.src=url; v.play().catch(()=>{});
   b.clipUrl=url; b.clipVideo=v; b.clipLabel=clip.label; b.clipStart=performance.now();
 }
-function ptDrawBreakCard(S){
-  const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
-  const W=canvas.width, H=canvas.height, u=Math.min(W,H);
+/* The picture behind the banner: whatever replay clip is currently mid-
+   playback (cover-fit, full frame — this is the "replaying shots" half of
+   the break), or failing that the plain live camera feed (the "keep
+   filming" half — a half-time report/interview just plays straight
+   through). Returns whether a clip was actually drawn, so the banner
+   knows whether to show its 🔁 REPLAY chyron. */
+function ptDrawBreakBackground(S){
+  const b=S.breakMode, ctx=S.ctx, canvas=S.canvas;
+  const W=canvas.width, H=canvas.height;
+  const clipReady=!!(b.clipVideo && b.clipVideo.readyState>=2 && b.clipVideo.videoWidth);
   ctx.filter='none';
-  const clipReady=b.clipVideo && b.clipVideo.readyState>=2 && b.clipVideo.videoWidth;
   if(clipReady){
     const rw=b.clipVideo.videoWidth, rh=b.clipVideo.videoHeight;
     const scale=Math.max(W/rw,H/rh), dw=rw*scale, dh=rh*scale;
-    ctx.save(); ctx.globalAlpha=0.55;
     ctx.drawImage(b.clipVideo,(W-dw)/2,(H-dh)/2,dw,dh);
-    ctx.restore();
-    ctx.fillStyle='rgba(8,6,18,0.55)'; ctx.fillRect(0,0,W,H);
+  } else if(S.camOn && S.rawVideo && S.rawVideo.readyState>=2 && S.rawVideo.videoWidth){
+    const {sw,sh,sx,sy}=ptCropToCanvas(S.rawVideo.videoWidth,S.rawVideo.videoHeight,W,H,S.zoom);
+    ctx.filter=ptFilterCSS(S.filter);
+    ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,W,H);
+    ctx.filter='none';
   } else {
     const g=ctx.createLinearGradient(0,0,W,H);
     g.addColorStop(0,'#0b0818'); g.addColorStop(1,'#1d1440');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   }
-  ptDrawBrandLockup(ctx,W/2,H*0.24,u,'SET COMPLETE',C);
-  ctx.textAlign='center';
-  ctx.fillStyle='#f2eefc';
-  ctx.font=`700 ${Math.round(u*0.052)}px -apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif`;
-  ctx.fillText(ptFitText(ctx,`${b.winnerName} wins the set ${b.setScore}`,W*0.86), W/2, H*0.38);
-  ctx.font=`600 ${Math.round(u*0.032)}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle=C.dim;
-  ctx.fillText(`SETS ${b.setsA}-${b.setsB}`, W/2, H*0.44);
-  if(clipReady){
-    ctx.font=`800 ${Math.round(u*0.03)}px 'JetBrains Mono',monospace`;
-    ctx.fillStyle=C.ball;
-    ctx.fillText('🔁 '+(b.clipLabel||'HIGHLIGHT').toUpperCase(), W/2, H*0.58);
-  } else if(!b.clips.length){
-    ctx.font=`500 ${Math.round(u*0.026)}px 'JetBrains Mono',monospace`;
-    ctx.fillStyle=C.dim;
-    ctx.fillText('back to the action shortly', W/2, H*0.58);
-  }
+  return clipReady;
+}
+/* A single-row lower-third — same footprint/visual language as the normal
+   score bug it temporarily replaces, just with break info instead of a
+   live score. Built as one explicit top-to-bottom flow (tag → headline →
+   countdown, all within one bar) specifically so nothing can stack on top
+   of anything else the way the old centered multi-line card used to. */
+function ptDrawBreakBanner(S, showReplayTag){
+  const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
+  const W=canvas.width, H=canvas.height, u=Math.min(W,H);
+  ctx.save();
+  ctx.filter='none';
+  const barH=Math.max(40, Math.round(u*0.115));
+  const m=Math.round(u*0.028);
+  const y0=H-m-barH, cy=y0+barH/2;
+  ptRoundRect(ctx, m, y0, W-2*m, barH, Math.round(barH*0.22));
+  ctx.fillStyle='rgba(8,6,18,0.85)'; ctx.fill();
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.stroke();
+  ctx.textBaseline='middle';
+  const pad=Math.round(barH*0.2);
+
+  const tagFs=Math.max(9,Math.round(barH*0.22));
+  ctx.font=`800 ${tagFs}px 'JetBrains Mono',monospace`;
+  const tagText='SET COMPLETE';
+  const tagPadX=Math.round(tagFs*0.9);
+  const tagW=Math.round(ctx.measureText(tagText).width+tagPadX*2);
+  const tagH=Math.round(barH*0.46);
+  const tagX=m+pad, tagY=cy-tagH/2;
+  ptRoundRect(ctx, tagX, tagY, tagW, tagH, tagH/2);
+  ctx.fillStyle=C.a; ctx.fill();
+  ctx.textAlign='center'; ctx.fillStyle='#12040c';
+  ctx.fillText(tagText, tagX+tagW/2, cy+1);
+
   const remain=Math.max(0,Math.ceil((b.endAt-Date.now())/1000));
   const mm=String(Math.floor(remain/60)), ss=String(remain%60).padStart(2,'0');
-  ctx.font=`800 ${Math.round(u*0.09)}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='#fff';
-  ctx.fillText(`${mm}:${ss}`, W/2, H*0.82);
-  ctx.font=`700 ${Math.round(u*0.024)}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle=C.dim;
-  ctx.fillText('NEXT SET STARTING SOON', W/2, H*0.90);
+  const rightText=`⏱ ${mm}:${ss}`;
+  const rightFs=Math.max(13,Math.round(barH*0.32));
+  ctx.font=`800 ${rightFs}px 'JetBrains Mono',monospace`;
+  const rightW=ctx.measureText(rightText).width;
+
+  const bx=tagX+tagW+pad*1.2;
+  const nameFs=Math.max(12,Math.round(barH*0.3));
+  ctx.font=`700 ${nameFs}px -apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif`;
+  ctx.fillStyle='#f2eefc';
+  ctx.textAlign='left';
+  const maxHeadlineW=Math.max(40,(W-m-pad)-rightW-pad*2-bx);
+  ctx.fillText(ptFitText(ctx, `${b.winnerName} wins ${b.setScore} · sets ${b.setsA}-${b.setsB}`, maxHeadlineW), bx, cy);
+
+  ctx.textAlign='right'; ctx.fillStyle=C.ball;
+  ctx.font=`800 ${rightFs}px 'JetBrains Mono',monospace`;
+  ctx.fillText(rightText, W-m-pad, cy);
+  ctx.restore();
+
+  if(showReplayTag){
+    const cf=Math.max(11,Math.round(u*0.018)), ch=Math.round(cf*2.15), cx=Math.round(u*0.02), cp=Math.round(cf*0.62);
+    ctx.save();
+    ctx.font="bold "+cf+"px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
+    const cw=Math.round(ctx.measureText('🔁 REPLAY').width+cp*2);
+    ctx.fillStyle='rgba(255,45,45,.92)';
+    ctx.fillRect(cx,cx,cw,ch);
+    ctx.fillStyle='#fff';
+    ctx.fillText('🔁 REPLAY',cx+cp,cx+ch/2);
+    ctx.restore();
+  }
 }
 function ptDrawBreakFrame(S){
   const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, now=performance.now();
@@ -7313,20 +7374,21 @@ function ptDrawBreakFrame(S){
       ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,canvas.width,canvas.height);
     } else { ctx.filter='none'; ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
   };
-  const drawCard=()=>ptDrawBreakCard(S);
+  const drawBreakScene=()=>{ const clipShown=ptDrawBreakBackground(S); ptDrawBreakBanner(S,clipShown); };
   if(b.phase==='in'){
-    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawLive,drawCard,true)){
+    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawLive,drawBreakScene,true)){
       b.phase='active'; b.phaseStart=now;
       ptBreakAdvanceClip(S);
     }
   } else if(b.phase==='active'){
-    drawCard();
+    drawBreakScene();
     if(b.clipVideo && (b.clipVideo.ended || now-b.clipStart>7000)) ptBreakAdvanceClip(S);
     if(Date.now()>=b.endAt){ b.phase='out'; b.bump=ptBumper('LIVE',{holdMs:260,inMs:340,outMs:420}); }
   } else {
-    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawCard,drawLive,true)){
+    if(ptDrawBumperFrame(ctx,canvas,b.bump,drawBreakScene,drawLive,true)){
       if(b.clipVideo){ try{ b.clipVideo.pause(); if(b.clipVideo.parentNode) b.clipVideo.parentNode.removeChild(b.clipVideo); if(b.clipUrl) URL.revokeObjectURL(b.clipUrl); }catch(e){} }
       S.breakMode=null;
+      ptSyncBreakUI();
     }
   }
 }
