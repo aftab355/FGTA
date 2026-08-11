@@ -2087,6 +2087,53 @@
      in the same box at the same scale and the swap is invisible. */
   .pt-angle-freeze{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
     background:#000;z-index:1;pointer-events:none}
+
+  /* ---- Hawk-Eye rewind ----
+     Sits over the live picture rather than under it: it is a full takeover of
+     the screen for as long as you are looking at the past, and the live stream
+     carries on untouched behind it so "back to live" is instant. Overlaying
+     .pt-video-shell (which is position:relative already) means it comes along
+     into fullscreen for free — the same reason the controls were moved inside
+     #ptStreamMain — and fullscreen landscape is where anyone reviewing a line
+     call actually is. */
+  .pt-hawk{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;gap:6px;
+    padding:8px;background:rgba(6,4,14,.94);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+  .pt-hawk-h{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.3px;
+    text-transform:uppercase;color:var(--muted)}
+  .pt-hawk-title{color:var(--accent);font-weight:800;letter-spacing:1.8px}
+  .pt-hawk-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .pt-hawk-h .pt-hawk-close{margin-left:auto;flex:0 0 auto}
+  /* every buffered camera at once, side by side — the whole point is seeing
+     the same moment from both ends of the court without choosing first */
+  .pt-hawk-grid{flex:1 1 auto;display:flex;gap:6px;min-height:0;min-width:0}
+  .pt-hawk-cell{position:relative;flex:1 1 0;min-width:0;background:#000;
+    border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .pt-hawk-cell.on-air{border-color:var(--accent)}
+  .pt-hawk-cell video{display:block;width:100%;height:100%;object-fit:contain;background:#000}
+  .pt-hawk-lbl{position:absolute;left:0;right:0;bottom:0;padding:2px 6px;color:#fff;
+    background:linear-gradient(to top,rgba(0,0,0,.86),rgba(0,0,0,0));
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.4px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* a camera that joined after the moment being reviewed has nothing to show
+     for it — say so, rather than leaving a black rectangle that reads as a
+     broken angle */
+  .pt-hawk-gap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:10px;text-align:center;background:rgba(0,0,0,.66);color:var(--dim);
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.5}
+  .pt-hawk-gap[hidden]{display:none}
+  .pt-hawk-t{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
+  .pt-hawk-t input[type=range]{flex:1 1 auto;min-width:50px;accent-color:var(--accent)}
+  .pt-hawk-btn{padding:5px 9px;font-size:11px;line-height:1;flex:0 0 auto}
+  .pt-hawk-btn.on{border-color:var(--accent);color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 14%, transparent)}
+  .pt-hawk-clock{flex:0 0 auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    font-weight:700;color:var(--accent);min-width:52px;text-align:right}
+  @media (max-width:560px){
+    .pt-hawk{padding:6px;gap:4px}
+    .pt-hawk-btn{padding:5px 7px;font-size:10px}
+    .pt-hawk-h{font-size:9px;letter-spacing:1px}
+  }
   /* relay setup + self-test: deliberately tucked behind a quiet link on the
      landing panel — almost nobody needs it, but the people who do are stuck
      without it and have no other way to tell why a stream won't connect */
@@ -6589,6 +6636,10 @@ function ptLogDiag(kind,msg,extra){
   return e;
 }
 window.ptLogDiag=ptLogDiag;
+/* the ring buffer itself, for anything driving this page from outside (the PC
+   recorder, a test) — the panel already shows it, this just makes it readable
+   without scraping the DOM */
+window.ptDiag=ptDiag;
 /* Uncaught errors are the ones that matter most and the ones nobody ever sees
    on a phone — there is no console to open at a tennis court. */
 window.addEventListener('error', e=>{
@@ -6620,7 +6671,8 @@ async function ptHealthTick(){
       const track=S.rawStream && S.rawStream.getVideoTracks()[0];
       if(S.camOn && (!track || track.readyState==='ended') && !S._camSwapping){
         ptLogDiag('fix','camera track ended on its own — re-acquiring');
-        const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:S.facingMode||'environment'}});
+        const want=S.facingWanted||S.facingMode||'environment';
+        const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:want}}, {want});
         ptLogDiag(got?'fix':'error', got?'camera recovered':'camera could not be recovered');
       }
       /* 2. The hidden <video> feeding the canvas stopped advancing while its
@@ -6645,6 +6697,11 @@ async function ptHealthTick(){
     }
 
     if(S.role==='viewer'){
+      /* 4a. A rewind buffer that stopped — an angle that reconnected onto a new
+         MediaStream, or an encoder that died — restarts here. Left alone it
+         fails silently and is only discovered by somebody reaching for a
+         rewind that isn't there. */
+      ptHawkSyncBuffers(S);
       /* 4. The angle on screen says live, but the picture is not moving. The
          connection is fine — the element is holding a stream it stopped
          rendering, which is what an unlucky angle switch or a backgrounded
@@ -6675,7 +6732,7 @@ function ptSyncHealthPanel(){
   if(!body) return;
   const rows=ptDiag.slice(-40).reverse().map(d=>{
     const time=new Date(d.t).toLocaleTimeString();
-    const icon=d.kind==='error'?'❌':d.kind==='fix'?'🔧':'•';
+    const icon=d.kind==='error'?'❌':d.kind==='fix'?'🔧':d.kind==='cam'?'📷':'•';
     return `<div class="pt-health-row pt-health-${esc(d.kind)}">${icon} <b>${time}</b> ${esc(d.msg)}</div>`;
   }).join('');
   body.innerHTML=rows||'<div class="pw-legend">Nothing to report — no errors and nothing needed repairing.</div>';
@@ -6709,15 +6766,31 @@ window.ptToggleHealth=ptToggleHealth;
 /* One tap to get the whole account out of the phone and into a message. */
 function ptCopyDiag(){
   const S=PTStream;
+  /* The camera block exists because "the flip doesn't work" is unanswerable
+     without it: which lenses this phone actually exposes to the browser, which
+     one is open, and what it says it is. Three lines that turn a guess into a
+     diagnosis. */
+  const camLines = (S && S.role==='host') ? [
+    'camera: '+(S.facingMode||'?')+(S.facingWanted&&S.facingWanted!==S.facingMode?' (asked for '+S.facingWanted+')':'')
+      +'  id: '+String(S.videoDeviceId||'-').slice(0,8)+'  on: '+(S.camOn!==false),
+    'cameras seen: '+((S.cameras||[]).length
+      ? S.cameras.map(c=>`${(c.label||'unnamed')}[${String(c.deviceId||'').slice(0,8)}]`).join(', ')
+      : 'none enumerated'),
+  ] : [];
   const head=[
     'FGTA stream report '+new Date().toISOString(),
     'role: '+(S?S.role:'not streaming')+'  code: '+(S?S.code:'-'),
     'angles: '+(S&&S.angleOrder?S.angleOrder.length:'-')+'  status: '+(S?S.status:'-'),
+    ...camLines,
     'ua: '+navigator.userAgent,
     'relay: '+(ptCustomTurn()?'custom':'public fallback'),
     '---'
   ].join('\n');
-  const body=ptDiag.map(d=>`${new Date(d.t).toISOString().slice(11,19)} [${d.kind}] ${d.msg}`).join('\n');
+  const body=ptDiag.map(d=>{
+    let extra='';
+    if(d.extra){ try{ extra=' '+JSON.stringify(d.extra); }catch(e){} }
+    return `${new Date(d.t).toISOString().slice(11,19)} [${d.kind}] ${d.msg}${extra}`;
+  }).join('\n');
   const text=head+'\n'+(body||'(no events)');
   const done=()=>toast('📋 Report copied — paste it into a message');
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done,()=>toast(text.slice(0,200),true));
@@ -6966,7 +7039,7 @@ function renderPTStream(){
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn${S.micOn===false?' off':''}" onclick="ptToggleMic()"><span class="pt-ctl-ico">${S.micOn===false?'🔇':'🎤'}</span><span class="pt-ctl-lbl">mic</span></button>
         <button class="mini pt-ctl-btn${S.camOn===false?' off':''}" onclick="ptToggleCam()"><span class="pt-ctl-ico">${S.camOn===false?'🚫':'📷'}</span><span class="pt-ctl-lbl">cam</span></button>
-        ${S.cameras && S.cameras.length>1?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
+        ${ptCanFlip(S)?`<button class="mini pt-ctl-btn" onclick="ptFlipCamera()"><span class="pt-ctl-ico">🔄</span><span class="pt-ctl-lbl">flip</span></button>`:''}
         <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
@@ -6996,6 +7069,7 @@ function renderPTStream(){
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn" onclick="ptRequestReplay()" title="Ask the host to replay the last point for everyone watching"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn" onclick="ptAddAngleHere()" title="Film this same match from your own phone — no code to type, you're already on it"><span class="pt-ctl-ico">📷</span><span class="pt-ctl-lbl">add my camera</span></button>
+        ${ptHawkSupported()?`<button class="mini pt-ctl-btn${ptHawkArmed()?' auto-on':''}" onclick="ptHawkArm()" title="Keep the last minute of every angle on this device so any moment can be rewound, frame by frame, side by side. Costs a second video encoder per camera — off by default on small phones."><span class="pt-ctl-ico">🦅</span><span class="pt-ctl-lbl">${ptHawkArmed()?'rewind on':'rewind off'}</span></button>`:''}
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save what you're watching as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
         ${driveBtn}
       </div>
@@ -7120,6 +7194,7 @@ function renderPTStream(){
     <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
     <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>
     ${(PTStream.angleOrder||[]).length>1?`<button class="pt-dbg-btn${PTStream.directing?' on':''}" id="ptDirectBtn" onclick="ptToggleDirect(event)" title="Direct the broadcast — the angle you pick becomes the angle everyone sees">🎬 ${PTStream.directing?'directing':'direct'}</button>`:''}
+    ${ptHawkSupported()&&!PTStream.hawkUnavailable?`<button class="pt-dbg-btn${PTStream.hawk?' on':''}" id="ptHawkBtn" onclick="ptHawkToggle(event)" title="${ptHawkArmed()?'Rewind the last minute — every angle at once, frame by frame':'Start keeping the last minute of every angle so it can be rewound'}">🦅 ${PTStream.hawk?'live':(ptHawkArmed()?ptHawkBtnLabel():'arm rewind')}</button>`:''}
     <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health — what broke and what was repaired automatically">🩺</button>`;
   const vwrapHtml=`
     <div class="pt-video-shell">
@@ -7168,6 +7243,10 @@ function renderPTStream(){
   }
   ptSyncAudioMix(PTStream);      // a newly connected angle joins the bed
   ptSyncAngleRail();
+  /* the rewind panel lives inside the video shell, which a shape change
+     rebuilds — re-attach it (with its <video> elements intact) rather than
+     letting a re-render close a review somebody is in the middle of */
+  if(PTStream.hawk) ptHawkRender();
   ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
   ptSyncHealthPanel();   // footHtml rebuilds the panel empty — refill it, same as the ref deck
   ptSyncRefDrawer();
@@ -8723,7 +8802,9 @@ async function ptToggleCam(){
   if(!S.camOn && S.role==='host' && (!track || track.readyState==='ended')){
     if(S._camSwapping) return toast("Switching camera — one sec",true);
     ptBeginCamBumper(S,'CAMERA');
-    const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:S.facingMode||'environment'}});
+    ptLogDiag('cam','re-acquiring the camera after it was turned back on');
+    const want=S.facingWanted||S.facingMode||'environment';
+    const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:want}}, {want});
     ptCamBumperReady(S);
     if(!got) return;                       // ptSwapVideoTrack already explained why
     S.camOn=true;
@@ -8845,7 +8926,10 @@ function ptSyncAudioMix(S){
   S=S||PTStream;
   if(!S || S.role!=='viewer' || !S.mixAC || !S.mixMaster) return;
   const nodes=S.mixNodes||(S.mixNodes={});
-  const live=S.muted===false;
+  /* a rewind takes the sound with it — live commentary carrying on over a
+     replay of something that happened a minute ago is the fastest way to lose
+     track of which one you are listening to (see ptHawkOpen) */
+  const live=S.muted===false && !S.hawk;
   for(const hid of (S.angleOrder||[])){
     const a=S.angles[hid];
     const st=a && a.remoteStream;
@@ -8878,6 +8962,540 @@ function ptStopViewerMix(S){
   Object.values(S.mixNodes||{}).forEach(n=>{ try{ n.src.disconnect(); n.gain.disconnect(); }catch(e){} });
   try{ if(S.mixAC && S.mixAC.state!=='closed') S.mixAC.close(); }catch(e){}
   S.mixNodes=null; S.mixMaster=null; S.mixAC=null; S.mixDest=null; S.mixStream=null; S.mixCanvas=null;
+}
+
+/* ============================================================
+   HAWK-EYE REWIND
+   ------------------------------------------------------------
+   Instant replay (elsewhere in this file) is the host's: one camera, the
+   host's clip, cut to everybody at once. This is the opposite — it belongs to
+   whoever is watching, it never touches the broadcast, and it shows every
+   camera on the match at the same moment, side by side, with a scrub bar. It
+   is for the argument about whether the ball was in, which the host's single
+   angle at normal speed has never once settled.
+
+   Held entirely on the viewer. Nothing is asked of the phones filming, nothing
+   crosses the wire, and a rewind is available the instant you want one rather
+   than after somebody agrees to send it.
+
+   HOW THE BUFFER WORKS, AND WHY IT IS SEGMENTED
+   A MediaRecorder writes a container header once, at the start, and every
+   chunk after it is meaningless without that header. A rolling window that
+   simply evicts old chunks therefore has to keep chunk #0 forever, and the
+   growing timestamp gap between that header and the surviving chunks is what
+   makes a spliced clip play back frozen or stuttering (the host's replay
+   recorder hit exactly this — see ptStartReplayRecorder).
+
+   So instead of one recording with holes cut in it, each angle records a chain
+   of complete ~30s recordings and keeps the last few. Every segment is a whole
+   file — its own header, its own contiguous chunks — so every segment plays,
+   seeks and scrubs like any other video. The catch is the seam: stopping and
+   starting an encoder loses a couple of frames at the boundary. Hence the
+   overlap — the next segment is started ~400ms BEFORE the previous one is
+   stopped, so the two recordings genuinely overlap in time and the timeline
+   has no hole in it at all.
+
+   Cost is why it is a toggle rather than always-on: this is a second video
+   encoder per angle, running for as long as you watch. It defaults on where
+   there is clearly headroom and off on a small phone, and can be turned either
+   way by hand. ---- */
+const PT_HAWK_SEG_MS=30000;        // one buffered segment
+const PT_HAWK_SEGS=3;              // finished segments kept per angle (+ the one recording)
+const PT_HAWK_OVERLAP_MS=400;      // how long both encoders run at a segment seam
+const PT_HAWK_WINDOW_MS=60000;     // how far back the scrub bar offers
+const PT_HAWK_MAX_ANGLES=3;        // buffering every camera on a busy match is not free
+const PT_HAWK_BITRATE={videoBitsPerSecond:1_500_000, audioBitsPerSecond:96_000};
+/* same webm-first-then-mp4 list as everywhere else here: Safari has never
+   supported MediaRecorder with webm */
+const PT_HAWK_MIMES=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4;codecs=avc1,mp4a','video/mp4'];
+
+function ptHawkDefaultOn(){
+  const mem=navigator.deviceMemory||0, cpu=navigator.hardwareConcurrency||0;
+  if(mem && mem<=4) return false;
+  if(cpu && cpu<=4) return false;
+  return true;
+}
+function ptHawkArmed(){
+  try{
+    const v=localStorage.getItem("fgta_hawk");
+    if(v==="1") return true;
+    if(v==="0") return false;
+  }catch(e){}
+  return ptHawkDefaultOn();
+}
+function ptHawkSetArmed(on){
+  try{ localStorage.setItem("fgta_hawk", on?"1":"0"); }catch(e){}
+}
+function ptHawkSupported(){
+  return !!(window.MediaRecorder && PT_HAWK_MIMES.some(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)));
+}
+
+/* ---- the buffer ---- */
+function ptHawkStartBuffer(S, hostId){
+  const a=S.angles && S.angles[hostId];
+  if(!a || !a.remoteStream || a.status!=='live') return;
+  const h=a.hawk || (a.hawk={segs:[], mime:''});
+  if(h.rec) return;
+  const mime=PT_HAWK_MIMES.find(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+  h.mime=mime||'video/webm';
+  let rec;
+  try{ rec=new MediaRecorder(a.remoteStream, {...(mime?{mimeType:mime}:{}), ...PT_HAWK_BITRATE}); }
+  catch(e){
+    S.hawkUnavailable=true;
+    ptLogDiag('error','rewind buffer unavailable: '+(e.message||e.name));
+    a.hawk=null;
+    return;
+  }
+  const sess={rec, t0:Date.now(), lastT:Date.now(), header:null, chunks:[], stream:a.remoteStream};
+  rec.ondataavailable=e=>{
+    if(!e.data || !e.data.size) return;
+    /* chunk #0 carries the container header; everything after it is timeline */
+    if(!sess.header){ sess.header=e.data; sess.lastT=Date.now(); return; }
+    sess.chunks.push(e.data);
+    sess.lastT=Date.now();
+  };
+  rec.onerror=e=>ptLogDiag('error','rewind buffer error: '+((e&&e.error&&e.error.message)||'unknown'));
+  rec.onstop=()=>ptHawkSeal(h, sess);
+  try{ rec.start(1000); }
+  catch(e){ S.hawkUnavailable=true; a.hawk=null; return; }
+  h.rec=rec; h.cur=sess;
+  sess.cycle=setTimeout(()=>ptHawkCycle(S, hostId), PT_HAWK_SEG_MS);
+}
+/* Roll onto a fresh segment. The new recorder starts first and the old one is
+   stopped a beat later, so the two recordings overlap and the seam between
+   them costs no frames — see the header comment. */
+function ptHawkCycle(S, hostId){
+  const a=S.angles && S.angles[hostId];
+  const h=a && a.hawk;
+  if(!h || !h.cur || PTStream!==S) return;
+  const old=h.cur;
+  h.cur=null; h.rec=null;
+  ptHawkStartBuffer(S, hostId);
+  setTimeout(()=>{ try{ if(old.rec.state!=='inactive') old.rec.stop(); }catch(e){} }, PT_HAWK_OVERLAP_MS);
+}
+function ptHawkSeal(h, sess){
+  if(sess.cycle){ clearTimeout(sess.cycle); sess.cycle=null; }
+  if(!sess.header || !sess.chunks.length) return;   // an encoder that produced nothing
+  h.segs.push({blob:new Blob([sess.header, ...sess.chunks], {type:h.mime}), t0:sess.t0, t1:sess.lastT});
+  while(h.segs.length>PT_HAWK_SEGS) h.segs.shift();
+}
+/* The segment still recording, as a playable file: header + everything since,
+   contiguous, so unlike a rolling window it is decodable as-is. */
+function ptHawkPartial(h){
+  const s=h && h.cur;
+  if(!s || !s.header || !s.chunks.length) return null;
+  return {blob:new Blob([s.header, ...s.chunks], {type:h.mime}), t0:s.t0, t1:s.lastT};
+}
+function ptHawkStopBuffer(a){
+  const h=a && a.hawk;
+  if(!h) return;
+  if(h.cur && h.cur.cycle) clearTimeout(h.cur.cycle);
+  try{
+    if(h.rec && h.rec.state!=='inactive'){ h.rec.onstop=null; h.rec.stop(); }
+  }catch(e){}
+  h.rec=null; h.cur=null; h.segs=[];
+  a.hawk=null;
+}
+/* Idempotent; safe to call whenever angles change. Also the repair path — a
+   reconnected angle arrives as a brand new MediaStream and a MediaRecorder
+   latched onto the old one never notices, so identity is checked, not just
+   presence. */
+function ptHawkSyncBuffers(S){
+  S=S||PTStream;
+  if(!S || S.role!=='viewer') return;
+  const want=ptHawkArmed() && !S.hawkUnavailable && ptHawkSupported();
+  const buffered=(S.angleOrder||[]).slice(0, PT_HAWK_MAX_ANGLES);
+  for(const hid of (S.angleOrder||[])){
+    const a=S.angles[hid];
+    if(!a) continue;
+    const on = want && buffered.includes(hid) && a.status==='live' && !!a.remoteStream;
+    if(!on){ if(a.hawk) ptHawkStopBuffer(a); continue; }
+    if(a.hawk && a.hawk.cur && a.hawk.cur.stream!==a.remoteStream) ptHawkStopBuffer(a);
+    if(!a.hawk || !a.hawk.rec) ptHawkStartBuffer(S, hid);
+  }
+}
+/* The button reads "rewind 42s" while the buffer fills and just "rewind" once
+   it is at its full depth — a rewind that only reaches back eight seconds and
+   doesn't say so is a broken promise the first time somebody needs it. */
+function ptHawkBtnLabel(){
+  const d=ptHawkDepth(PTStream);
+  if(!d) return 'buffering';
+  return d>=PT_HAWK_WINDOW_MS-2000 ? 'rewind' : ('rewind '+Math.round(d/1000)+'s');
+}
+/* How far back the buffer currently reaches, in ms — what the button says. */
+function ptHawkDepth(S){
+  S=S||PTStream;
+  if(!S || S.role!=='viewer') return 0;
+  let oldest=0;
+  for(const hid of (S.angleOrder||[])){
+    const h=S.angles[hid] && S.angles[hid].hawk;
+    if(!h) continue;
+    const first=h.segs[0] ? h.segs[0].t0 : (h.cur ? h.cur.t0 : 0);
+    if(first && (!oldest || first<oldest)) oldest=first;
+  }
+  if(!oldest) return 0;
+  return Math.min(Date.now()-oldest, PT_HAWK_WINDOW_MS);
+}
+
+/* ---- opening a rewind ----
+   The buffer is snapshotted the moment the panel opens rather than tracked
+   live: it fixes the window you are reviewing (a scrub bar whose contents keep
+   changing underneath the handle is unusable), and it means the blobs and
+   object URLs are built once instead of on every seek. "now" re-snapshots. */
+function ptHawkSnapshot(S){
+  const out=[];
+  for(const hid of (S.angleOrder||[])){
+    const a=S.angles[hid];
+    const h=a && a.hawk;
+    if(!h) continue;
+    const clips=h.segs.map(s=>({blob:s.blob, t0:s.t0, t1:s.t1}));
+    const partial=ptHawkPartial(h);
+    if(partial) clips.push(partial);
+    if(!clips.length) continue;
+    clips.forEach(c=>{ c.url=URL.createObjectURL(c.blob); });
+    out.push({hostId:hid, label:a.label||'Angle', clips, clip:null, video:null, pending:null});
+  }
+  return out;
+}
+function ptHawkFreeSnapshot(H){
+  if(!H) return;
+  for(const a of H.angles||[]) for(const c of a.clips||[]) { try{ URL.revokeObjectURL(c.url); }catch(e){} }
+}
+function ptHawkToggle(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  const S=PTStream;
+  if(!S || S.role!=='viewer') return;
+  if(S.hawk) return ptHawkClose();
+  if(!ptHawkSupported()) return toast("Rewind isn't supported in this browser",true);
+  /* Not armed: the honest thing is to start the buffer now and say so, rather
+     than a dead button or an error about a setting nobody was told about. */
+  if(!ptHawkArmed()){
+    ptHawkSetArmed(true);
+    S.hawkUnavailable=false;
+    ptHawkSyncBuffers(S);
+    renderPTStream();
+    return toast("🦅 Rewind armed — the last minute is being kept from now on");
+  }
+  ptHawkOpen();
+}
+window.ptHawkToggle=ptHawkToggle;
+/* the explicit on/off, from the ⚙️ drawer — the head button only ever arms */
+function ptHawkArm(){
+  const S=PTStream;
+  const on=!ptHawkArmed();
+  ptHawkSetArmed(on);
+  if(S){
+    if(!on && S.hawk) ptHawkClose();
+    if(on) S.hawkUnavailable=false;
+    ptHawkSyncBuffers(S);
+  }
+  toast(on ? "🦅 Rewind armed — the last minute of every angle is kept on this device"
+           : "Rewind off — nothing is being buffered");
+  renderPTStream();
+}
+window.ptHawkArm=ptHawkArm;
+function ptHawkOpen(){
+  const S=PTStream;
+  if(!S || S.role!=='viewer' || S.hawk) return;
+  const angles=ptHawkSnapshot(S);
+  if(!angles.length) return toast("Nothing buffered yet — give it a few seconds",true);
+  const t1=Math.max(...angles.map(a=>a.clips[a.clips.length-1].t1));
+  const t0=Math.max(Math.min(...angles.map(a=>a.clips[0].t0)), t1-PT_HAWK_WINDOW_MS);
+  S.hawk={angles, t0, t1,
+    /* open on the point just played, at half speed, paused — the position
+       somebody reaching for a rewind almost always wants */
+    T:Math.max(t0, t1-8000), playing:false, speed:0.5, raf:null,
+    audio:Math.max(0, angles.findIndex(a=>a.hostId===S.activeAngle))};
+  ptSyncAudioMix(S);                 // the live bed steps aside while you review
+  renderPTStream();                  // the 🦅 button becomes "back to live"
+  ptHawkRender();
+  ptHawkSeek(S.hawk.T);
+  S.hawk.raf=requestAnimationFrame(ptHawkTick);
+  ptLogDiag('cam','rewind opened over '+Math.round((t1-t0)/1000)+'s, '+angles.length+' angle(s)');
+}
+window.ptHawkOpen=ptHawkOpen;
+function ptHawkClose(){
+  const S=PTStream;
+  const H=S && S.hawk;
+  if(!H) return;
+  if(H.raf) cancelAnimationFrame(H.raf);
+  for(const a of H.angles){ if(a.video){ try{ a.video.pause(); a.video.removeAttribute('src'); a.video.load(); }catch(e){} } }
+  ptHawkFreeSnapshot(H);
+  S.hawk=null;
+  const el=document.getElementById('ptHawk');
+  if(el) el.remove();
+  ptSyncAudioMix(S);                 // live sound comes back up
+  renderPTStream();
+}
+window.ptHawkClose=ptHawkClose;
+/* Re-snapshot without leaving — everything since the panel opened joins the
+   window, and the playhead stays where it is if it still exists. */
+function ptHawkRefresh(){
+  const S=PTStream;
+  const H=S && S.hawk;
+  if(!H) return;
+  const at=H.T;
+  const angles=ptHawkSnapshot(S);
+  if(!angles.length) return;
+  const old=H.angles;
+  /* keep the <video> elements: rebuilding them restarts a decoder for nothing */
+  angles.forEach((a,i)=>{ const prev=old.find(o=>o.hostId===a.hostId); if(prev) a.video=prev.video; });
+  ptHawkFreeSnapshot({angles:old});
+  H.angles=angles;
+  H.t1=Math.max(...angles.map(a=>a.clips[a.clips.length-1].t1));
+  H.t0=Math.max(Math.min(...angles.map(a=>a.clips[0].t0)), H.t1-PT_HAWK_WINDOW_MS);
+  H.T=Math.max(H.t0, Math.min(at, H.t1));
+  ptHawkRender();
+  ptHawkSeek(H.T, true);
+}
+window.ptHawkRefresh=ptHawkRefresh;
+
+/* A MediaRecorder file carries no duration in its header — it cannot, the
+   recording was not over when the header was written — so browsers report
+   duration Infinity and refuse to seek past what they happen to have decoded.
+   One seek to an absurd timestamp makes the browser walk the file to its end
+   and settle on the real duration, after which ordinary seeking works. Without
+   this the scrub bar moves and the picture does not. */
+function ptHawkPrime(v, then){
+  if(v._ptPrimed || (isFinite(v.duration) && v.duration>0)){ v._ptPrimed=true; return then&&then(); }
+  v._ptPrimed=true;
+  let settled=false;
+  const finish=()=>{
+    if(settled) return;
+    settled=true;
+    v.removeEventListener('durationchange', onDur);
+    if(then) then();
+  };
+  const onDur=()=>{ if(isFinite(v.duration) && v.duration>0) finish(); };
+  v.addEventListener('durationchange', onDur);
+  setTimeout(finish, 700);      // some builds never fire it — carry on regardless
+  try{ v.currentTime=1e6; }catch(e){ finish(); }
+}
+function ptHawkSetTime(v, t){
+  try{ v.currentTime=Math.max(0, t); }catch(e){}
+}
+/* Which of an angle's clips holds a given instant. Segments overlap at the
+   seams by design, so prefer the newer one — it has more of what comes next
+   and needs no further switch a moment later. */
+function ptHawkClipAt(a, T){
+  let best=null;
+  for(const c of a.clips){
+    if(T>=c.t0-150 && T<=c.t1+400 && (!best || c.t0>best.t0)) best=c;
+  }
+  return best;
+}
+function ptHawkSeek(T, hard){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  H.T=Math.max(H.t0, Math.min(T, H.t1));
+  for(const a of H.angles){
+    const v=a.video;
+    if(!v) continue;
+    const clip=ptHawkClipAt(a, H.T);
+    a.gap=!clip;
+    if(!clip){ try{ v.pause(); }catch(e){} continue; }
+    const local=(H.T-clip.t0)/1000;
+    if(a.clip!==clip){
+      a.clip=clip;
+      a.pending=local;
+      v._ptPrimed=false;
+      v.src=clip.url;
+      try{ v.load(); }catch(e){}
+    } else if(v.readyState>=1 && Math.abs(v.currentTime-local)>(hard?0.05:0.2)){
+      ptHawkSetTime(v, local);
+    }
+  }
+  ptHawkPaint();
+}
+window.ptHawkSeek=ptHawkSeek;
+function ptHawkScrub(val){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  ptHawkSeek(H.t0 + (Number(val)/1000)*(H.t1-H.t0));
+}
+window.ptHawkScrub=ptHawkScrub;
+function ptHawkPlayPause(){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  H.playing=!H.playing;
+  if(H.playing && H.T>=H.t1-120) ptHawkSeek(H.t0);   // replay from the top rather than sitting at the end
+  for(const a of H.angles){
+    const v=a.video;
+    if(!v || !a.clip) continue;
+    v.playbackRate=H.speed;
+    if(H.playing) v.play().catch(()=>{}); else v.pause();
+  }
+  ptHawkPaint();
+}
+window.ptHawkPlayPause=ptHawkPlayPause;
+function ptHawkSpeed(){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  const steps=[0.25,0.5,1];
+  H.speed=steps[(steps.indexOf(H.speed)+1)%steps.length]||0.5;
+  for(const a of H.angles) if(a.video) a.video.playbackRate=H.speed;
+  ptHawkPaint();
+}
+window.ptHawkSpeed=ptHawkSpeed;
+/* One frame at a time, both angles together — the actual mechanism of a line
+   call, and the reason this exists at all. 40ms is one frame at the 25fps the
+   composited broadcast canvas runs closest to. */
+function ptHawkStep(dir){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  if(H.playing){ H.playing=false; for(const a of H.angles) if(a.video) a.video.pause(); }
+  ptHawkSeek(H.T + dir*40, true);
+}
+window.ptHawkStep=ptHawkStep;
+function ptHawkPickAudio(i){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  H.audio=i;
+  ptHawkPaint();
+}
+window.ptHawkPickAudio=ptHawkPickAudio;
+
+function ptHawkTick(){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  if(H.playing){
+    /* The playhead follows whichever angle is actually decoding rather than a
+       wall clock, and the others are corrected against it — a clock of our own
+       would fight the decoders and re-seek them every frame. */
+    const lead=H.angles.find(a=>a.video && a.clip && !a.video.paused && a.video.readyState>=2);
+    if(lead) H.T=Math.min(H.t1, lead.clip.t0 + lead.video.currentTime*1000);
+    for(const a of H.angles){
+      const v=a.video;
+      if(!v) continue;
+      const want=ptHawkClipAt(a, H.T);
+      a.gap=!want;
+      if(!want){ if(!v.paused) v.pause(); continue; }
+      if(want!==a.clip){ ptHawkSeek(H.T); continue; }
+      if(a===lead) continue;
+      if(v.paused) v.play().catch(()=>{});
+      const local=(H.T-want.t0)/1000;
+      if(v.readyState>=2 && Math.abs(v.currentTime-local)>0.3) ptHawkSetTime(v, local);
+    }
+    if(H.T>=H.t1-60){
+      H.playing=false;
+      for(const a of H.angles) if(a.video) a.video.pause();
+    }
+    ptHawkPaint();
+  }
+  H.raf=requestAnimationFrame(ptHawkTick);
+}
+
+function ptHawkRender(){
+  const S=PTStream, H=S && S.hawk;
+  const shell=document.querySelector('#ptVidWrap .pt-video-shell');
+  let el=document.getElementById('ptHawk');
+  if(!H || !shell){ if(el) el.remove(); return; }
+  if(!el || el.parentElement!==shell){
+    if(el) el.remove();
+    el=document.createElement('div');
+    el.id='ptHawk';
+    el.className='pt-hawk';
+    el.innerHTML=`
+      <div class="pt-hawk-h">
+        <span class="pt-hawk-title">🦅 hawk-eye</span>
+        <span class="pt-hawk-note" id="ptHawkNote"></span>
+        <button class="mini pt-hawk-btn pt-hawk-close" onclick="ptHawkClose()">↩ live</button>
+      </div>
+      <div class="pt-hawk-grid" id="ptHawkGrid"></div>
+      <div class="pt-hawk-t">
+        <button class="mini pt-hawk-btn" onclick="ptHawkStep(-1)" title="Back one frame" aria-label="Back one frame">◀|</button>
+        <button class="mini pt-hawk-btn" id="ptHawkPlay" onclick="ptHawkPlayPause()">▶</button>
+        <button class="mini pt-hawk-btn" onclick="ptHawkStep(1)" title="Forward one frame" aria-label="Forward one frame">|▶</button>
+        <button class="mini pt-hawk-btn" id="ptHawkSpeed" onclick="ptHawkSpeed()" title="Playback speed">½×</button>
+        <input type="range" id="ptHawkRange" min="0" max="1000" value="0" step="1"
+          aria-label="Scrub the rewind" oninput="ptHawkScrub(this.value)" onchange="ptHawkScrub(this.value)">
+        <span class="pt-hawk-clock" id="ptHawkClock">-0.0s</span>
+        <button class="mini pt-hawk-btn" onclick="ptHawkRefresh()" title="Pull in everything that has happened since this opened">now</button>
+      </div>`;
+    shell.appendChild(el);
+  }
+  const grid=document.getElementById('ptHawkGrid');
+  /* Cells are keyed by angle and only ever updated — recreating a <video>
+     throws its decoder away and restarts it black, the same trap as the live
+     angle rail. */
+  const byHost=new Map([...grid.children].map(c=>[c.dataset.host,c]));
+  H.angles.forEach((a,i)=>{
+    let cell=byHost.get(a.hostId);
+    if(!cell){
+      cell=document.createElement('div');
+      cell.className='pt-hawk-cell';
+      cell.dataset.host=a.hostId;
+      const v=a.video || document.createElement('video');
+      v.muted=true; v.playsInline=true; v.setAttribute('playsinline','');
+      v.preload='auto';
+      /* the element outlives its cell (a shape change rebuilds the whole shell
+         underneath it), so wire the listener to the element exactly once */
+      if(!v._ptWired){
+        v._ptWired=true;
+        v.addEventListener('loadedmetadata', ()=>{
+          const HH=PTStream && PTStream.hawk;
+          const me=HH && HH.angles.find(x=>x.video===v);
+          if(!me) return;
+          ptHawkPrime(v, ()=>{
+            if(me.pending!=null){ ptHawkSetTime(v, me.pending); me.pending=null; }
+            if(HH.playing){ v.playbackRate=HH.speed; v.play().catch(()=>{}); }
+          });
+        });
+      }
+      a.video=v;
+      const lbl=document.createElement('span');
+      lbl.className='pt-hawk-lbl';
+      const gap=document.createElement('div');
+      gap.className='pt-hawk-gap';
+      gap.hidden=true;
+      gap.textContent='this camera had not joined yet';
+      cell.appendChild(v); cell.appendChild(gap); cell.appendChild(lbl);
+      /* resolved at click time, not render time: a refresh rebuilds the angle
+         list and an index captured now would point at the wrong camera */
+      cell.addEventListener('click', ()=>{
+        const HH=PTStream && PTStream.hawk;
+        if(!HH) return;
+        const at=HH.angles.findIndex(x=>x.hostId===cell.dataset.host);
+        if(at>=0) ptHawkPickAudio(at);
+      });
+      grid.appendChild(cell);
+    } else if(a.video && cell.querySelector('video')!==a.video){
+      cell.insertBefore(a.video, cell.firstChild);
+    }
+    if(!a.video) a.video=cell.querySelector('video');
+    byHost.delete(a.hostId);
+    cell.querySelector('.pt-hawk-lbl').textContent=a.label+(H.audio===i?' 🔊':'');
+  });
+  byHost.forEach(cell=>cell.remove());
+  ptHawkPaint();
+}
+function ptHawkPaint(){
+  const S=PTStream, H=S && S.hawk;
+  if(!H) return;
+  const span=Math.max(1, H.t1-H.t0);
+  const range=document.getElementById('ptHawkRange');
+  if(range && document.activeElement!==range) range.value=String(Math.round(((H.T-H.t0)/span)*1000));
+  const clock=document.getElementById('ptHawkClock');
+  if(clock) clock.textContent='-'+((H.t1-H.T)/1000).toFixed(1)+'s';
+  const play=document.getElementById('ptHawkPlay');
+  if(play) play.textContent=H.playing?'❚❚':'▶';
+  const spd=document.getElementById('ptHawkSpeed');
+  if(spd) spd.textContent=H.speed===1?'1×':H.speed===0.5?'½×':'¼×';
+  const note=document.getElementById('ptHawkNote');
+  if(note) note.textContent=Math.round(span/1000)+'s buffered · '+H.angles.length+' angle'+(H.angles.length===1?'':'s');
+  H.angles.forEach((a,i)=>{
+    if(a.video){
+      /* one angle carries the sound: several copies of the same court playing
+         at once is noise, and the tap-to-listen cell is how you pick which */
+      a.video.muted=(i!==H.audio);
+      const cell=a.video.parentElement;
+      if(cell){
+        cell.classList.toggle('on-air', i===H.audio);
+        const gap=cell.querySelector('.pt-hawk-gap');
+        if(gap) gap.hidden=!a.gap;
+      }
+    }
+  });
 }
 
 /* ---- local recording: opt-in, saves straight to this device, never
@@ -9172,7 +9790,28 @@ function ptCameraLadder(constraints, prevDeviceId){
   ladder.push(true);
   return ladder;
 }
-async function ptSwapVideoTrack(constraints){
+/* A flip asks for several *different* cameras in turn rather than one camera
+   with progressively looser demands, so it gets its own ladder: every
+   candidate is tried at HD first and then bare, in the order the caller
+   ranked them, before falling back to whatever we were already on. */
+function ptCameraLadderFor(candidates, prevDeviceId){
+  const ladder=[];
+  for(const c of candidates){ ladder.push(ptVideoConstraints(c)); ladder.push(Object.assign({},c)); }
+  if(prevDeviceId) ladder.push(ptVideoConstraints({deviceId:{ideal:prevDeviceId}}));
+  ladder.push(true);
+  return ladder;
+}
+/* Short, readable description of a rung, for the 🩺 log. */
+function ptDescribeConstraint(c){
+  if(c===true) return 'any camera';
+  if(c && c.facingMode) return 'facing '+(c.facingMode.exact?'exact ':'')+(c.facingMode.exact||c.facingMode.ideal||c.facingMode);
+  if(c && c.deviceId) return 'device '+String(c.deviceId.exact||c.deviceId.ideal||c.deviceId).slice(0,8);
+  return 'default';
+}
+/* `constraints` is either one constraints object (recover the camera we were
+   on, turn it back on) or an ordered list of candidates (flip). `opts.want`
+   is the facing this swap is ASKING for — see S.facingWanted below. */
+async function ptSwapVideoTrack(constraints, opts){
   const S=PTStream;
   if(!S || S.role!=='host') return null;
   /* One swap at a time, tracked independently of the camSwitch bumper.
@@ -9185,16 +9824,23 @@ async function ptSwapVideoTrack(constraints){
   S._camSwapping=true;
   try{
     const prevDeviceId=S.videoDeviceId;
+    const prevFacing=S.facingMode;
     const oldTrack=S.rawStream.getVideoTracks()[0];
     if(oldTrack){ S.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
-    const ladder=ptCameraLadder(constraints, prevDeviceId);
-    let newStream=null, firstErr=null;
+    const ladder=Array.isArray(constraints)
+      ? ptCameraLadderFor(constraints, prevDeviceId)
+      : ptCameraLadder(constraints, prevDeviceId);
+    let newStream=null, firstErr=null, wonWith=null;
     for(let pass=0; pass<3 && !newStream; pass++){
       if(pass) await new Promise(r=>setTimeout(r, 250*pass));   // let the sensor finish releasing
       for(const rung of ladder){
-        try{ newStream=await ptGetCameraStream(rung); break; }
+        try{ newStream=await ptGetCameraStream(rung); wonWith=rung; break; }
         catch(e){
           if(!firstErr) firstErr=e;
+          /* Every rung that fails is a fact about this phone that nobody can
+             see from a court, and "the flip does nothing" is exactly the kind
+             of report that needs them. Kept at one line per failure. */
+          ptLogDiag('cam', `camera refused ${ptDescribeConstraint(rung)}: ${e.name||e.message||e}`);
           /* a denied permission never fixes itself by asking again — bail
              out of the whole ladder rather than burning three passes on it */
           if(e.name==='NotAllowedError' || e.name==='SecurityError'){ pass=99; break; }
@@ -9203,6 +9849,7 @@ async function ptSwapVideoTrack(constraints){
     }
     const newTrack=newStream && newStream.getVideoTracks()[0];
     if(!newTrack){
+      ptLogDiag('error','camera swap failed on every option: '+((firstErr&&firstErr.name)||'unknown'));
       /* Every rung failed. Leaving rawStream with no video track would strand
          the canvas on the outgoing camera's last frame — a stream that looks
          live but is a still photo. Flip to the honest "camera off" card
@@ -9225,35 +9872,130 @@ async function ptSwapVideoTrack(constraints){
     }
     const s=newTrack.getSettings();
     S.videoDeviceId=s.deviceId||S.videoDeviceId;
-    if(s.facingMode) S.facingMode=s.facingMode;
+    /* What the device REPORTS and what we ASKED for are two different things,
+       and only the second one is always available: plenty of Android builds,
+       every desktop browser and some iOS lenses return getSettings() with no
+       facingMode at all. The flip target used to be computed from the
+       reported value alone, so on any of those devices S.facingMode never
+       moved off 'environment' — the first tap flipped to the front camera and
+       every tap after it asked for the front camera again, which is a flip
+       button that works exactly once. Keep both: the reported value when
+       there is one (it is the truth), the requested one as the fallback. */
+    if(opts && opts.want) S.facingWanted=opts.want;
+    S.facingMode = s.facingMode || (opts && opts.want) || S.facingMode;
+    if(!S.facingWanted) S.facingWanted=S.facingMode;
+    ptLogDiag('cam', `camera now ${s.facingMode||S.facingWanted||'?'} ${s.width||'?'}x${s.height||'?'}`
+      +` via ${ptDescribeConstraint(wonWith)}${s.deviceId===prevDeviceId?' — SAME device as before':''}`,
+      {deviceId:(s.deviceId||'').slice(0,8), prev:(prevDeviceId||'').slice(0,8), prevFacing:prevFacing||null});
     /* labels and IDs both change as the OS re-enumerates around a swap, so
        refresh the picker rather than leaving it pointing at a stale entry */
     ptEnumerateCameras().then(list=>{ if(PTStream===S){ S.cameras=list; renderPTStream(); } });
+    /* the caller (a flip) needs to know whether the lens actually moved, not
+       just whether a track came back — see ptFlipCamera's verify step */
+    newTrack._ptSameDevice = !!prevDeviceId && s.deviceId===prevDeviceId;
     return newTrack;
   } finally {
     S._camSwapping=false;
   }
 }
+function ptOppositeFacing(f){ return f==='user' ? 'environment' : 'user'; }
+/* Whether to offer the flip button at all. Counting enumerated cameras alone
+   hid it on the devices that most need it: enumerateDevices can return a
+   single entry (or throw, leaving an empty list) on phones that plainly have
+   two lenses, and it is unreliable right after another app has touched the
+   camera. A track that reports a facingMode is a phone-shaped camera by
+   definition, so trust that too — a flip that turns out to have nowhere to go
+   now says so out loud rather than never being offered. */
+function ptCanFlip(S){
+  if(!S || S.role!=='host') return false;
+  return (S.cameras && S.cameras.length>1) || !!S.facingMode;
+}
+/* Which way a lens points, guessed from its label, for the devices that never
+   report a facingMode. Labels are the only other signal there is, and they are
+   remarkably consistent about the two words that matter. */
+function ptCamFacingGuess(cam){
+  const l=String((cam && cam.label)||'').toLowerCase();
+  if(/front|user|face|selfie/.test(l)) return 'user';
+  if(/back|rear|environment|world/.test(l)) return 'environment';
+  return null;
+}
+/* The cameras a flip should try, best first.
+   `exact` leads deliberately. An `ideal` facingMode is scored against every
+   other ideal in the same request — including the 1920x1080 hint every capture
+   here carries — so a front lens that tops out at 720p can lose the fitness
+   contest to the rear one that does 1080p, and getUserMedia then hands back
+   the camera you were already on while reporting complete success. That is a
+   flip button that appears to do nothing, with nothing in any log to say why.
+   `exact` cannot be traded away like that; `ideal` stays on the ladder
+   underneath it for the devices that only support one lens per facing hint. */
+function ptFlipCandidates(S, want){
+  const cams=(S.cameras||[]).filter(c=>c.deviceId && c.deviceId!==S.videoDeviceId);
+  const wanted=cams.filter(c=>ptCamFacingGuess(c)===want);
+  const unknown=cams.filter(c=>ptCamFacingGuess(c)===null);
+  return [
+    {facingMode:{exact:want}},
+    ...wanted.map(c=>({deviceId:{exact:c.deviceId}})),
+    {facingMode:{ideal:want}},
+    ...unknown.map(c=>({deviceId:{exact:c.deviceId}})),
+  ];
+}
 async function ptFlipCamera(){
-  if(!PTStream || PTStream.role!=='host') return;
-  if(PTStream._camSwapping) return toast("Switching camera — one sec",true);
-  const next = PTStream.facingMode==='environment' ? 'user' : 'environment';
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  if(S._camSwapping) return toast("Switching camera — one sec",true);
+  /* deviceIds and labels only exist once camera permission has been granted,
+     and the list captured at go-live can predate a lens the OS only exposed
+     later — re-enumerate before deciding, or the deviceId fallbacks below are
+     working from an empty list exactly when they are most needed. */
+  if(!S.cameras || S.cameras.length<2){
+    const list=await ptEnumerateCameras();
+    if(list.length) S.cameras=list;
+  }
+  const cur=S.facingWanted || S.facingMode || 'environment';
+  const want=ptOppositeFacing(cur);
+  const prevDeviceId=S.videoDeviceId;
+  ptLogDiag('cam',`flip: ${cur} → ${want}`,{cameras:(S.cameras||[]).map(c=>({id:(c.deviceId||'').slice(0,8),label:c.label||''}))});
   /* start the bumper BEFORE the swap: it freezes the outgoing camera's last
      frame, so the dead air while the new sensor spins up happens behind the
      card instead of on everyone's screen */
-  ptBeginCamBumper(PTStream, next==='user' ? 'FRONT CAMERA' : 'REAR CAMERA');
-  await ptSwapVideoTrack({facingMode:{ideal:next}});
-  ptCamBumperReady(PTStream);
+  ptBeginCamBumper(S, want==='user' ? 'FRONT CAMERA' : 'REAR CAMERA');
+  let track=await ptSwapVideoTrack(ptFlipCandidates(S,want), {want});
+  /* Verify rather than assume. If the browser handed back the same physical
+     camera, the flip silently didn't happen — say so, then ask for a specific
+     different device by ID, which is the one request a browser cannot satisfy
+     with the lens we are already on. */
+  if(track && track._ptSameDevice){
+    const other=(S.cameras||[]).find(c=>c.deviceId && c.deviceId!==prevDeviceId);
+    ptLogDiag('cam', other
+      ? 'facing request came back on the same camera — retrying by device id'
+      : 'facing request came back on the same camera, and no other camera is listed');
+    if(other) track=await ptSwapVideoTrack([{deviceId:{exact:other.deviceId}}], {want});
+  }
+  ptCamBumperReady(S);
+  if(track && track._ptSameDevice){
+    /* Genuinely nothing else to try: one usable camera, whatever it calls
+       itself. Better to say that plainly than leave someone tapping 🔄. */
+    S.facingWanted=cur;                 // don't leave the next tap chasing a lens that isn't there
+    toast("This device only offers one camera to the browser",true);
+    ptLogDiag('error','flip failed — only one camera is reachable from the browser');
+  }
   renderPTStream();
 }
 window.ptFlipCamera=ptFlipCamera;
 async function ptSwitchCameraDevice(deviceId){
   if(!deviceId) return;
-  if(!PTStream || PTStream.role!=='host') return;
-  if(PTStream._camSwapping) return toast("Switching camera — one sec",true);
-  ptBeginCamBumper(PTStream, 'NEW ANGLE');
-  await ptSwapVideoTrack({deviceId:{exact:deviceId}});
-  ptCamBumperReady(PTStream);
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  if(S._camSwapping) return toast("Switching camera — one sec",true);
+  ptBeginCamBumper(S, 'NEW ANGLE');
+  const cam=(S.cameras||[]).find(c=>c.deviceId===deviceId);
+  ptLogDiag('cam','picked camera "'+((cam&&cam.label)||deviceId.slice(0,8))+'" from the list');
+  /* Picking a lens by name is also a statement about which way it points, and
+     the flip button reads that afterwards — without it, picking the front
+     camera from the dropdown and then tapping 🔄 asks for the front camera
+     again. The label is the only clue on devices that report no facingMode. */
+  await ptSwapVideoTrack({deviceId:{exact:deviceId}}, {want:ptCamFacingGuess(cam)||undefined});
+  ptCamBumperReady(S);
   renderPTStream();
 }
 window.ptSwitchCameraDevice=ptSwitchCameraDevice;
@@ -9594,9 +10336,14 @@ async function ptGoLive(existingCode){
   const hostId=ptRandId();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
-  PTStream={code, role:'host', hostId, isExtraAngle:!!existingCode, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
+  PTStream={code, role:'host', hostId, isExtraAngle:!!existingCode, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', facingWanted:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
   const initTrack=stream.getVideoTracks()[0];
-  if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
+  if(initTrack){
+    const s=initTrack.getSettings();
+    PTStream.videoDeviceId=s.deviceId;
+    if(s.facingMode) PTStream.facingMode=s.facingMode;
+    ptLogDiag('cam',`live on ${s.facingMode||'unreported facing'} ${s.width||'?'}x${s.height||'?'}`,{deviceId:(s.deviceId||'').slice(0,8)});
+  }
   ptStartProcessing(PTStream);
   /* Auto-record from the first frame — a ref or player forgetting to tap
      record was the whole point of making this automatic instead of a step
@@ -9940,6 +10687,9 @@ window.ptSwitchAngle=ptSwitchAngle;
 function ptDropAngle(hostId, statusIfLast){
   const S=PTStream;
   if(!S || S.role!=='viewer' || !S.angles[hostId]) return;
+  /* stop the rewind buffer before the angle goes: an orphaned MediaRecorder on
+     a dead stream keeps an encoder alive for nothing */
+  ptHawkStopBuffer(S.angles[hostId]);
   try{ S.angles[hostId].pc.close(); }catch(e){}
   delete S.angles[hostId];
   S.angleOrder=S.angleOrder.filter(id=>id!==hostId);
@@ -9972,6 +10722,7 @@ function ptMarkAngleReady(hostId, angle){
   if(angle.status===next) return;                       // nothing changed — don't churn the DOM
   angle.status=next;
   if(S.activeAngle===hostId) ptSyncActiveAngleFields();
+  ptHawkSyncBuffers(S);      // an angle that just went live starts being kept
   renderPTStream();
 }
 /* A failed peer connection never heals on its own, and the host has already
@@ -10130,10 +10881,11 @@ window.ptWatch=ptWatch;
 function ptStopWatching(){
   if(!PTStream || PTStream.role!=='viewer') return;
   if(PTStream.recOn) ptStopRecord();   // save what's recorded so far rather than dropping it
+  if(PTStream.hawk) ptHawkClose();
   if(PTStream._freezeRaf) cancelAnimationFrame(PTStream._freezeRaf);
   if(PTStream._freezeTimer) clearTimeout(PTStream._freezeTimer);
   ptStopViewerMix(PTStream);
-  Object.values(PTStream.angles||{}).forEach(a=>{ try{a.pc.close();}catch(e){} });
+  Object.values(PTStream.angles||{}).forEach(a=>{ ptHawkStopBuffer(a); try{a.pc.close();}catch(e){} });
   if(PTStream.channel){ try{ PTStream.channel.send({type:"broadcast",event:"leave",payload:{viewerId:PTStream.viewerId}}); }catch(e){} try{PTStream.channel.unsubscribe();}catch(e){} }
   ptReleaseWakeLock();
   PTStream=null;

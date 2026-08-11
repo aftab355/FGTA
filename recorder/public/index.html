@@ -73,10 +73,25 @@
   .transport input[type=range]{flex:1;min-width:0;letter-spacing:normal;padding:0;background:none;border:none}
   .pw-note{color:var(--dim);font-size:11px;margin-top:8px;font-family:ui-monospace,monospace;line-height:1.6}
   .session{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;
-    border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+    border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;flex-wrap:wrap}
   .session:last-child{border-bottom:none}
   .session:hover .scode{color:var(--accent)}
   .scode{font-family:ui-monospace,monospace;font-weight:700;letter-spacing:1.5px}
+  /* ---- exports: things made FROM a match ---- */
+  .sact{display:flex;gap:6px;flex:0 0 auto}
+  .sact button{padding:6px 11px;font-size:11px}
+  .job{margin-top:12px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}
+  .job-h{display:flex;justify-content:space-between;gap:10px;font-size:12px;align-items:baseline}
+  .job-msg{color:var(--dim);font-family:ui-monospace,monospace;font-size:10.5px;margin-top:5px;
+    overflow-wrap:anywhere}
+  .bar{height:5px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);transition:width .4s ease}
+  .job.failed{border-color:rgba(255,45,45,.45)}
+  .job.failed .bar i{background:var(--red)}
+  .tag{display:inline-block;padding:2px 7px;border-radius:999px;border:1px solid var(--line);
+    font-family:ui-monospace,monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .tag.reel{border-color:var(--accent);color:var(--accent)}
+  .cap{color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -94,6 +109,7 @@
       <span id="state" class="badge off">idle</span>
     </div>
     <div id="live"></div>
+    <div id="jobs"></div>
   </div>
 
   <div class="card">
@@ -104,6 +120,7 @@
   <div class="card">
     <h2>Watch back</h2>
     <div id="sessions"><div class="empty">No matches recorded yet.</div></div>
+    <div class="pw-note" id="ffnote"></div>
   </div>
 
   <div class="card" id="playerCard" hidden>
@@ -122,6 +139,11 @@
       <span class="meta" id="clock">0:00</span>
     </div>
     <div class="pw-note" id="syncNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>Made from recordings</h2>
+    <div id="exports"><div class="empty">Nothing yet — combine a match or cut its highlights above.</div></div>
   </div>
 
   <div class="card">
@@ -184,6 +206,9 @@ async function refresh(){
     : (angles.length
         ? angles.map(a => `<div class="item"><span class="n">${a.label}</span><span class="meta">${a.status}</span></div>`).join('')
         : '<div class="empty">Nothing being recorded.</div>');
+
+  renderJobs(s.jobs);
+  if(s.ffmpeg) ffmpegOk = !!s.ffmpeg.ok;
 
   const log = (s.log||[]).join('\n');
   if(log !== lastLog){ lastLog = log; $('log').textContent = log; $('log').scrollTop = $('log').scrollHeight; }
@@ -330,21 +355,77 @@ $('closePlayer').onclick = closePlayer;
 $('seek').oninput = e => { if(P) seekTo((e.target.value/1000)*P.dur); };
 $('seek').onchange = e => { if(P) seekTo((e.target.value/1000)*P.dur); };
 
+/* ---------- exports ----------
+   A match can be turned into two other things: one combined file with every
+   camera on the same timeline (which is what you send to somebody, or drop
+   into an editor), and a set of highlight clips picked out of it. Both are
+   ffmpeg jobs that take minutes, so both are fire-and-forget and report back
+   through the job list at the top. */
+let ffmpegOk = true;
+async function startExport(kind, s, btn){
+  const row = btn.closest('.session');
+  row.querySelectorAll('button').forEach(b => b.disabled = true);
+  try{
+    const r = await post('/api/'+kind, {code:s.code, startedAt:s.startedAt});
+    if(r && r.error) alert(r.error);
+  }catch(e){ alert('could not start: '+e.message); }
+  refresh();
+  setTimeout(()=>row.querySelectorAll('button').forEach(b => b.disabled = false), 1500);
+}
+
 async function refreshSessions(){
   const r = await api('/api/sessions');
   $('sessions').innerHTML = r.items.length
     ? r.items.slice(0,25).map((s,i) => `<div class="session" data-i="${i}">
         <span class="n"><span class="scode">${s.code}</span> · ${s.angles.length} angle${s.angles.length===1?'':'s'}
           <span class="meta"> ${new Date(s.startedAt).toLocaleString()}</span></span>
-        <span class="meta">${fmt(s.durationMs/1000)} · ${mb(s.bytes)}</span></div>`).join('')
+        <span class="meta">${fmt(s.durationMs/1000)} · ${mb(s.bytes)}</span>
+        <span class="sact">
+          <button data-act="combine" data-i="${i}" ${ffmpegOk?'':'disabled'} title="Every camera on one timeline, side by side, as a single file that plays anywhere">one file</button>
+          <button data-act="clips" data-i="${i}" ${ffmpegOk?'':'disabled'} title="Find the moments worth keeping — from the score, the crowd, and an AI look at the picture — and cut them out">highlights</button>
+        </span></div>`).join('')
     : '<div class="empty">No matches recorded yet.</div>';
   $('sessions').querySelectorAll('.session').forEach(el =>
-    el.onclick = () => openSession(r.items[+el.dataset.i]));
+    el.onclick = e => { if(!e.target.closest('button')) openSession(r.items[+el.dataset.i]); });
+  $('sessions').querySelectorAll('button[data-act]').forEach(b =>
+    b.onclick = () => startExport(b.dataset.act, r.items[+b.dataset.i], b));
 }
 
-refresh(); refreshFiles(); refreshSessions();
+async function refreshExports(){
+  const r = await api('/api/exports');
+  ffmpegOk = !!(r.ffmpeg && r.ffmpeg.ok);
+  $('ffnote').textContent = ffmpegOk
+    ? `ffmpeg ${r.ffmpeg.version} · ${r.ffmpeg.source}${r.ffmpeg.hw?` · encoding on the GPU (${r.ffmpeg.hw})`:' · encoding on the CPU'}`
+    : 'No ffmpeg found — recording is unaffected, but combining and highlights need it. Run npm install in this folder, or set FGTA_FFMPEG to your own build.';
+  const kindLabel = {combined:'one file', clip:'clip', reel:'reel'};
+  $('exports').innerHTML = r.items.length
+    ? r.items.slice(0,40).map(f => `<div class="item">
+        <span class="n"><a href="/export/${encodeURIComponent(f.name)}" target="_blank">${f.caption || f.label || f.name}</a>
+          <span class="tag ${f.kind==='reel'?'reel':''}">${kindLabel[f.kind]||f.kind}</span>
+          ${f.code?`<span class="meta"> ${f.code}</span>`:''}
+          ${f.kind==='clip'&&!f.judged?'<span class="meta"> · not judged</span>':''}</span>
+        <span class="meta">${mb(f.bytes)}</span></div>`).join('')
+    : '<div class="empty">Nothing yet — combine a match or cut its highlights above.</div>';
+}
+
+function renderJobs(jobs){
+  const live = (jobs||[]).filter(j => j.status==='running' || j.status==='queued'
+    || (j.endedAt && Date.now()-j.endedAt < 90000));
+  $('jobs').innerHTML = live.map(j => `<div class="job ${j.status==='failed'?'failed':''}">
+      <div class="job-h">
+        <span>${j.kind==='combine'?'Combining':'Cutting highlights'} — ${j.label}</span>
+        <span class="meta">${j.status==='running'?Math.round((j.pct||0)*100)+'%':j.status}</span>
+      </div>
+      ${j.message?`<div class="job-msg">${j.message}</div>`:''}
+      <div class="bar"><i style="width:${Math.round((j.status==='done'?1:(j.pct||0))*100)}%"></i></div>
+    </div>`).join('');
+}
+
+refreshExports().then(refreshSessions);
+refresh(); refreshFiles();
 setInterval(refresh, 1500);
 setInterval(refreshFiles, 8000);
+setInterval(refreshExports, 6000);
 setInterval(()=>{ if(!P) refreshSessions(); }, 8000);
 </script>
 </body>

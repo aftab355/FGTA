@@ -23,12 +23,13 @@ const LAUNCH_ARGS = [
 ];
 
 class Recorder {
-  constructor({ port, appUrl, onLog, openFile, closeFile }) {
+  constructor({ port, appUrl, onLog, openFile, closeFile, onEvent }) {
     this.port = port;
     this.appUrl = appUrl;
     this.log = onLog || (() => {});
     this.openFile = openFile;
     this.closeFile = closeFile;
+    this.onEvent = onEvent || (() => {});
     this.auto = false;
     this.state = { connected: false, code: null, angles: [], watching: false, error: null };
   }
@@ -60,6 +61,7 @@ class Recorder {
     await this.page.exposeFunction('__recStart', (code, label, ext) => this.openFile(code, label, ext));
     await this.page.exposeFunction('__recStop', id => this.closeFile(id));
     await this.page.exposeFunction('__recLog', msg => this.log(msg));
+    await this.page.exposeFunction('__recEvent', (code, ev) => this.onEvent(code, ev));
 
     await this.page.goto(`http://127.0.0.1:${this.port}/app`, { waitUntil: 'load', timeout: 60000 });
 
@@ -264,7 +266,52 @@ class Recorder {
         }
       };
 
-      R.timer = setInterval(() => { R.sync().catch(() => {}); }, 1000);
+      /* ---- the match log ----
+         Alongside the pictures, write down what the score did and when. The
+         host mirrors its match state to every viewer (the pt_sync broadcast),
+         this recorder is a viewer, so the score arrives here for free — and an
+         hour later it is the difference between a highlight clipper that knows
+         a set point from an ordinary rally and one that only knows how loud
+         the court was.
+
+         Nothing is inferred that the payload does not carry: it holds raw
+         point counts, not who is serving, so there is no "break point" here.
+         Game, set, match, aces and match/set point are all it can honestly
+         say, and all it needs to. */
+      R.lastPT = null;
+      R.watchScore = () => {
+        const S = stream();
+        if (!S || S.role !== 'viewer' || !S.remotePT) { R.lastPT = null; return; }
+        const P = S.remotePT, prev = R.lastPT;
+        R.lastPT = P;
+        if (!prev) return;
+        const nameOf = side => (side === 'a' ? (P.a || 'player 1') : (P.b || 'player 2'));
+        const out = [];
+        if ((P.acesA || 0) > (prev.acesA || 0)) out.push({ kind: 'ace', label: 'ace by ' + nameOf('a') });
+        if ((P.acesB || 0) > (prev.acesB || 0)) out.push({ kind: 'ace', label: 'ace by ' + nameOf('b') });
+        if (P.winner && !prev.winner) out.push({ kind: 'match', label: 'match won by ' + P.winner });
+        else if ((P.setsA || 0) > (prev.setsA || 0)) out.push({ kind: 'set', label: 'set to ' + nameOf('a') });
+        else if ((P.setsB || 0) > (prev.setsB || 0)) out.push({ kind: 'set', label: 'set to ' + nameOf('b') });
+        else if ((P.gamesA || 0) > (prev.gamesA || 0)) out.push({ kind: 'game', label: 'game to ' + nameOf('a') });
+        else if ((P.gamesB || 0) > (prev.gamesB || 0)) out.push({ kind: 'game', label: 'game to ' + nameOf('b') });
+        /* Reaching match point is worth marking on its own — the point that
+           follows it is the one people want back, whichever way it goes. */
+        try {
+          for (const side of ['a', 'b']) {
+            const now = window.ptIsMatchPoint && window.ptIsMatchPoint(side, P);
+            const was = window.ptIsMatchPoint && window.ptIsMatchPoint(side, prev);
+            if (now && !was) out.push({ kind: 'tension', label: 'match point, ' + nameOf(side) });
+          }
+        } catch (e) {}
+        if ((P.streakCount || 0) >= 4 && (P.streakCount || 0) > (prev.streakCount || 0))
+          out.push({ kind: 'streak', label: P.streakCount + ' in a row, ' + nameOf(P.streakSide) });
+        for (const ev of out) window.__recEvent(S.code, { ...ev, t: Date.now() });
+      };
+
+      R.timer = setInterval(() => {
+        R.sync().catch(() => {});
+        try { R.watchScore(); } catch (e) {}
+      }, 1000);
     });
   }
 
