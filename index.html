@@ -5605,7 +5605,10 @@ function ptPoint(side, isAce){
       ptCheck88(PT.ptsA,PT.ptsB);
     }
   }
-  if(PTStream && PTStream.role==='host' && PTStream.autoHighlight){
+  /* isExtraAngle: this camera is filming someone else's match, so drama in the
+     local tracker says nothing about what's in front of the lens — see
+     ptMaybeStartBreak for the same guard on set breaks. */
+  if(PTStream && PTStream.role==='host' && !PTStream.isExtraAngle && PTStream.autoHighlight){
     const drama=ptComputeDrama(pre,side);
     if(drama) ptMaybeAutoReplay(drama.tag);
     else if(PTStream._pendingAudioHype && Date.now()-PTStream._pendingAudioHype<10000) ptMaybeAutoReplay('CROWD REACTION');
@@ -6401,8 +6404,12 @@ async function ptRequestWakeLock(){
 function ptReleaseWakeLock(){
   if(ptWakeLock){ try{ ptWakeLock.release(); }catch(e){} ptWakeLock=null; }
 }
+/* The OS drops a wake lock whenever the page is hidden, so it has to be taken
+   again on the way back. Watching needs this every bit as much as filming
+   does — a viewer's phone used to dim and sleep partway through a match
+   because only the host ever asked for one. */
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible' && PTStream && PTStream.role==='host') ptRequestWakeLock();
+  if(document.visibilityState==='visible' && PTStream) ptRequestWakeLock();
 });
 const PT_ICE={iceServers:[
   {urls:"stun:stun.l.google.com:19302"},
@@ -6504,8 +6511,28 @@ function ptRenderStreamShell(box, shape, headHtml, vwrapHtml, restHtml, footHtml
      around the preserved vwrap node rather than nested next to it. */
   if(rebuildShape && vwrap) vwrap.innerHTML=vwrapHtml;
   if(main && vwrap){
+    /* restHtml carries the chat panel, so this splice throws away the chat
+       <input> and anything typed into it. Messages arriving no longer trigger
+       a render (see ptPushChat), but plenty of other things still do — a
+       viewer joining, an angle connecting, the directory syncing because
+       somebody unrelated went live — and every one of them used to clear a
+       half-written message and close the phone keyboard. Carry the value and
+       the caret across the rebuild. */
+    const prevChat=document.getElementById('ptChatInput');
+    const chatVal=prevChat?prevChat.value:'';
+    const chatFocused=!!prevChat && document.activeElement===prevChat;
     while(vwrap.nextSibling) main.removeChild(vwrap.nextSibling);
     vwrap.insertAdjacentHTML('afterend', restHtml);
+    if(chatVal){
+      const nextChat=document.getElementById('ptChatInput');
+      if(nextChat){
+        nextChat.value=chatVal;
+        if(chatFocused){
+          nextChat.focus();
+          try{ nextChat.setSelectionRange(chatVal.length, chatVal.length); }catch(e){}
+        }
+      }
+    }
   }
   const foot=document.getElementById('ptStreamFoot'); if(foot) foot.innerHTML=footHtml||'';
 }
@@ -6527,7 +6554,7 @@ function renderPTStream(){
   const chatRowHtml = ptChatDisplayName() ? `<div class="pt-chat-row"><input id="ptChatInput" placeholder="say something…" autocomplete="off" onkeydown="ptChatKey(event)"><button class="mini" onclick="ptSendChat()">send</button></div>`
     : `<div class="pt-chat-row"><input id="ptChatNameInput" placeholder="pick a display name to chat…" autocomplete="off" maxlength="24" onkeydown="ptChatNameKey(event)"><button class="mini" onclick="ptSetChatDisplayName()">set name</button></div>`;
   const chatHtml = (S)=>`<div class="pt-chat${S.chatOpen?' pt-chat-open':''}" id="ptChat">
-      <div class="pt-chat-log" id="ptChatLog">${(S.chat||[]).slice(-40).map(c=>`<div class="pt-chat-msg"><b>${esc(c.author)}:</b>${esc(c.text)}</div>`).join('') || '<div class="pw-legend">say something — chat is live for everyone watching</div>'}</div>
+      <div class="pt-chat-log" id="ptChatLog">${(S.chat||[]).slice(-40).map(ptChatMsgHTML).join('') || '<div class="pw-legend">say something — chat is live for everyone watching</div>'}</div>
       ${chatRowHtml}
     </div><button class="pt-chat-tab" id="ptChatTab" onclick="ptToggleChatDrawer(event)" title="Chat" aria-label="Toggle chat">💬</button>`;
   /* host-only ref deck. Body is filled by ptSyncRefPanel() rather than being
@@ -6610,6 +6637,11 @@ function renderPTStream(){
       </div><button class="pt-more-tab" id="ptMoreTab" onclick="ptToggleMoreDrawer(event)" title="More controls" aria-label="Toggle more controls">⚙️</button>`;
   };
   if(!PTStream){
+    /* read before the rebuild below throws the old input away \u2014 see the
+       restore at the end of this branch */
+    const prevCodeEl=document.getElementById('ptWatchCode');
+    const landingCode=prevCodeEl?prevCodeEl.value:'';
+    const landingFocused=!!prevCodeEl && document.activeElement===prevCodeEl;
     /* live matches already in progress get top billing \u2014 the presence list
        ptActiveStreams() already tracked (see ptDirAnnounce) just wasn't
        being surfaced as anything more than a stack of small buttons below
@@ -6633,7 +6665,7 @@ function renderPTStream(){
         </div>
         ${liveNowHtml}
         <div class="pt-stream-row pt-join-row">
-          <input id="ptWatchCode" placeholder="STREAM CODE" maxlength="5" autocomplete="off">
+          <input id="ptWatchCode" placeholder="STREAM CODE" maxlength="5" autocomplete="off" onkeydown="ptWatchCodeKey(event)">
           <button class="mini pt-watch-cta" onclick="ptWatch()">\u25b6 Watch</button>
           <button class="mini pt-golive-cta" onclick="ptGoLive()"><i class="pt-live-dot"></i>Go live</button>
         </div>
@@ -6642,6 +6674,19 @@ function renderPTStream(){
         </div>
         <div class="pw-legend">Got a friend's code already live? Type it above and tap "add angle" to film a second camera on their same live \u2014 viewers get to switch between everyone's angle without leaving the stream.</div>
       </div>`;
+    /* This whole panel is rebuilt on every directory presence sync \u2014 i.e.
+       every time anyone, anywhere, goes live or stops. That was quietly
+       wiping a half-typed stream code (and closing the phone keyboard) at
+       random moments while somebody was trying to join a friend. Carry the
+       value and the caret across the rebuild. */
+    const codeEl=document.getElementById('ptWatchCode');
+    if(codeEl && landingCode){
+      codeEl.value=landingCode;
+      if(landingFocused){
+        codeEl.focus();
+        try{ codeEl.setSelectionRange(landingCode.length, landingCode.length); }catch(e){}
+      }
+    }
     ptStreamShape=null;   // next go-live/watch must rebuild the shell from scratch
     return;
   }
@@ -6675,6 +6720,7 @@ function renderPTStream(){
     if(badge) badge.innerHTML=`<i class="pt-live-dot"></i>live · ${PTStream.viewerCount}`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
+    ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
     ptSyncRefDrawer();
     ptSyncMoreDrawer();
     return;
@@ -6741,6 +6787,7 @@ function renderPTStream(){
        track rather than leaving its last frame up looking like a live feed */
     else if(v.srcObject) v.srcObject=null;
   }
+  ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
   ptSyncRefDrawer();
   ptSyncMoreDrawer();
 }
@@ -7440,7 +7487,12 @@ function ptDrawCamSwitchFrame(S){
    by ptToggleScoreboard/ptSyncRefDrawer elsewhere for the same reason. */
 function ptMaybeStartBreak(winnerName, setScore, setsA, setsB, stats){
   const S=PTStream;
-  if(!S || S.role!=='host' || !S.breakEnabled) return;
+  /* An extra camera angle is filming a match it isn't scoring. If whoever is
+     holding that camera also happens to be running their own match in the
+     Point Tracker, finishing a set there must not put a SET COMPLETE banner
+     over somebody else's broadcast — the local match and this camera have
+     nothing to do with each other. Same reasoning as ptScoreSrc. */
+  if(!S || S.role!=='host' || S.isExtraAngle || !S.breakEnabled) return;
   const clips=(S.setClips||[]).slice(-6);
   S.setClips=[];                       // next set starts its own reel
   const info={winnerName, setScore, setsA, setsB, clips, stats};
@@ -8156,8 +8208,12 @@ window.ptRefViewerRedo=ptRefViewerRedo;
    this doesn't need its own throttling on top. */
 function ptRequestReplay(){
   if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
-  try{ PTStream.channel.send({type:"broadcast",event:"request_replay",payload:{}}); }catch(e){}
-  toast("🔁 Asked the host to replay that");
+  /* Address the camera you're actually watching. Without this every host on
+     the code takes the request and replays at once — several cameras all
+     cutting to their own replay, and every angle's buffer spent, because one
+     viewer asked to see one moment again. */
+  try{ PTStream.channel.send({type:"broadcast",event:"request_replay",payload:{hostId:PTStream.activeAngle||null}}); }catch(e){}
+  toast("🔁 Asked for a replay of this angle");
 }
 window.ptRequestReplay=ptRequestReplay;
 
@@ -8857,6 +8913,43 @@ window.ptToggleFullscreen=ptToggleFullscreen;
    etc. elsewhere in the app (one name per device, not a separate one per
    feature) — a real signed-in player identity still takes priority when
    present, same as everywhere else. */
+/* ---- chat rendering, in place ----
+   Every chat message used to go through renderPTStream(), which rebuilds
+   #ptStreamMain's children — the chat input among them. So anyone mid-sentence
+   when somebody else said something lost what they'd typed, and on a phone the
+   keyboard closed with it; sending a message dropped focus for the same reason.
+   The log was recreated from scratch too, which meant it came back scrolled to
+   the top every time — the newest message was the one you couldn't see.
+   Append to the live DOM instead, and only fall back to a full render when the
+   log isn't on screen yet (the panel shape has to be built first). */
+const PT_CHAT_KEEP=200;        // kept in memory; the log itself shows the last 40
+function ptChatMsgHTML(c){ return `<div class="pt-chat-msg"><b>${esc(c.author)}:</b>${esc(c.text)}</div>`; }
+function ptScrollChatToEnd(){
+  const log=document.getElementById('ptChatLog');
+  if(log) log.scrollTop=log.scrollHeight;
+}
+/* Single entry point for a message from any source — the local sender, another
+   viewer, or a host — so the clamping below applies to anything off the wire
+   as well as anything typed here. */
+function ptPushChat(payload){
+  const S=PTStream; if(!S || !payload) return;
+  const msg={author:String(payload.author||'guest').trim().slice(0,24)||'guest',
+             text:String(payload.text||'').slice(0,300),
+             t:payload.t||Date.now()};
+  if(!msg.text.trim()) return;
+  S.chat=S.chat||[];
+  S.chat.push(msg);
+  /* only the last 40 are ever shown, so keeping every message of a three-set
+     match grows the array forever for nothing */
+  if(S.chat.length>PT_CHAT_KEEP) S.chat.splice(0, S.chat.length-PT_CHAT_KEEP);
+  const log=document.getElementById('ptChatLog');
+  if(!log){ renderPTStream(); return; }
+  const placeholder=log.querySelector('.pw-legend');
+  if(placeholder) placeholder.remove();
+  log.insertAdjacentHTML('beforeend', ptChatMsgHTML(msg));
+  while(log.children.length>40) log.removeChild(log.firstChild);
+  ptScrollChatToEnd();
+}
 function ptChatDisplayName(){ return myDisplayName(); }
 function ptSetChatDisplayName(){
   const inp=$("ptChatNameInput"); const name=(inp?inp.value:"").trim().slice(0,24);
@@ -8869,13 +8962,14 @@ function ptChatNameKey(e){ if(e.key==='Enter') ptSetChatDisplayName(); }
 window.ptChatNameKey=ptChatNameKey;
 function ptSendChat(){
   if(!PTStream || !PTStream.channel) return;
-  const inp=$("ptChatInput"); const text=(inp?inp.value:"").trim();
+  const inp=$("ptChatInput"); const text=(inp?inp.value:"").trim().slice(0,300);
   if(!text) return;
   const payload={author:myName()||ptChatDisplayName()||'guest', text, t:Date.now()};
-  PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload);
+  ptPushChat(payload);
   try{ PTStream.channel.send({type:"broadcast",event:"chat",payload}); }catch(e){}
-  if(inp) inp.value='';
-  renderPTStream();
+  /* clear and keep the caret where it is — re-rendering here is what used to
+     close the phone keyboard after every single message */
+  if(inp){ inp.value=''; inp.focus(); }
 }
 window.ptSendChat=ptSendChat;
 function ptChatKey(e){ if(e.key==='Enter') ptSendChat(); }
@@ -9055,13 +9149,17 @@ async function ptGoLive(existingCode){
     try{ await pc.addIceCandidate(payload.candidate); }catch(e){}
   });
   ch.on("broadcast",{event:"leave"}, ({payload})=>{
+    /* A leave with a hostId is one angle being released (a viewer retrying a
+       failed connection — see ptRetryAngle), not the viewer going away. Every
+       other host on this code must ignore it, or one angle failing would
+       knock that viewer off all the healthy ones too. A leave with no hostId
+       is the real goodbye and still drops them everywhere. */
+    if(payload.hostId && payload.hostId!==hostId) return;
     const pc=PTStream && PTStream.peers[payload.viewerId]; if(!pc) return;
     pc.close(); delete PTStream.peers[payload.viewerId];
     PTStream.viewerCount=Object.keys(PTStream.peers).length; renderPTStream();
   });
-  ch.on("broadcast",{event:"chat"}, ({payload})=>{
-    if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
-  });
+  ch.on("broadcast",{event:"chat"}, ({payload})=>{ ptPushChat(payload); });
   /* Scoring belongs to the origin host — the device whose local PT actually
      IS this match. An extra angle joined somebody else's code and its PT is
      a different match (or none), so applying ref taps there would silently
@@ -9093,7 +9191,13 @@ async function ptGoLive(existingCode){
   /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
-  ch.on("broadcast",{event:"request_replay"}, ()=>{ ptInstantReplay(); });
+  ch.on("broadcast",{event:"request_replay"}, ({payload})=>{
+    /* only the angle the asker was watching replays — see ptRequestReplay.
+       A request with no hostId is honoured by everyone so an older client
+       still gets a replay rather than silence. */
+    if(payload && payload.hostId && payload.hostId!==hostId) return;
+    ptInstantReplay();
+  });
   ch.subscribe(status=>{
     if(status==="SUBSCRIBED" && existingCode) ch.send({type:"broadcast",event:"host-hello",payload:{hostId,label:ptChatDisplayName()}});
   });
@@ -9114,6 +9218,10 @@ function ptAddAngle(){
   ptGoLive(code);
 }
 window.ptAddAngle=ptAddAngle;
+/* Enter on the code field watches, the same as the button next to it — typing
+   a code and pressing go is the obvious gesture, and it did nothing at all. */
+function ptWatchCodeKey(e){ if(e.key==='Enter'){ e.preventDefault(); ptWatch(); } }
+window.ptWatchCodeKey=ptWatchCodeKey;
 
 function ptStopLive(){
   if(!PTStream || PTStream.role!=='host') return;
@@ -9176,7 +9284,7 @@ window.ptSwitchAngle=ptSwitchAngle;
    one that's still up. Shared by the explicit host-bye goodbye and the ICE
    disconnect path, which race each other by design — whichever lands first
    wins and the other becomes a no-op. */
-function ptDropAngle(hostId){
+function ptDropAngle(hostId, statusIfLast){
   const S=PTStream;
   if(!S || S.role!=='viewer' || !S.angles[hostId]) return;
   try{ S.angles[hostId].pc.close(); }catch(e){}
@@ -9185,9 +9293,52 @@ function ptDropAngle(hostId){
   if(S.activeAngle===hostId){
     S.activeAngle=S.angleOrder[0]||null;
     ptSyncActiveAngleFields();
-    if(!S.activeAngle) S.status="the stream ended";
+    if(!S.activeAngle) S.status=statusIfLast||"the stream ended";
   }
   renderPTStream();
+}
+/* A failed peer connection never heals on its own, and the host has already
+   thrown its own side away (see the peers[vid] delete in ptGoLive's
+   connectionstatechange). The only route back is a fresh offer, and the host
+   only sends one in reply to a "join" — so ask again. Bounded, with a backoff,
+   so an angle that is genuinely unreachable reports the real ICE diagnosis
+   instead of retrying at it forever. */
+function ptRetryAngle(hostId, diag){
+  const S=PTStream;
+  if(!S || S.role!=='viewer') return;
+  const angle=S.angles[hostId];
+  if(!angle) return;
+  S.angleRetries=S.angleRetries||{};
+  const n=(S.angleRetries[hostId]||0)+1;
+  S.angleRetries[hostId]=n;
+  if(n>3){
+    angle.status="connection failed"+(diag&&diag.relay?" (relay reachable, still blocked)":diag&&diag.srflx?" (no relay found — TURN unreachable)":" (no usable network path found)");
+    if(S.activeAngle===hostId) ptSyncActiveAngleFields();
+    renderPTStream();
+    return;
+  }
+  setTimeout(()=>{
+    /* Compare the angle object, not just the key. A host that re-offered on
+       its own already healed this slot with a NEW angle under the same
+       hostId — dropping on the key alone would tear down that working
+       replacement to "retry" something that had already succeeded. */
+    if(PTStream!==S || S.angles[hostId]!==angle) return;
+    /* free the slot first — the offer handler refuses a hostId it already
+       holds, and the host's reply to this join is exactly that offer */
+    ptDropAngle(hostId, "reconnecting…");
+    if(!S.channel) return;
+    /* Release our slot on that host before asking again. Its own ICE failure
+       detection can lag ours by tens of seconds, and while it still thinks
+       this viewer is connected its join handler ignores us (see the
+       peers[vid] guard in ptGoLive) — so without this the retry would talk
+       to a host that has already stopped listening. Targeted by hostId so
+       the other angles keep their connections. */
+    try{ S.channel.send({type:"broadcast",event:"leave",payload:{viewerId:S.viewerId, hostId}}); }catch(e){}
+    setTimeout(()=>{
+      if(PTStream!==S || !S.channel || S.angles[hostId]) return;
+      try{ S.channel.send({type:"broadcast",event:"join",payload:{viewerId:S.viewerId}}); }catch(e){}
+    }, 180);
+  }, 800*n);
 }
 
 async function ptWatch(codeArg){
@@ -9202,7 +9353,17 @@ async function ptWatch(codeArg){
   ch.on("broadcast",{event:"offer"}, async ({payload})=>{
     if(!PTStream || payload.viewerId!==viewerId) return;
     const hostId=ptSafeId(payload.hostId);
-    if(!hostId || PTStream.angles[hostId]) return;
+    if(!hostId) return;
+    const existing=PTStream.angles[hostId];
+    /* A live angle ignores a duplicate offer, but a FAILED one must not — the
+       host tore its own side down the moment the connection failed, so the
+       fresh offer arriving here is the reconnection, and refusing it was what
+       made a failed angle permanent. */
+    if(existing){
+      if(!existing.failed) return;
+      ptDropAngle(hostId);
+      if(!PTStream) return;
+    }
     const pc=new RTCPeerConnection(PT_ICE);
     /* labels come from the broadcasting device's display name, so clamp them
        the same way ptSetChatDisplayName does rather than trusting the wire */
@@ -9213,20 +9374,25 @@ async function ptWatch(codeArg){
     if(!PTStream.activeAngle) PTStream.activeAngle=hostId;
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,hostId,candidate:e.candidate}}); };
     pc.ontrack=e=>{
-      if(!PTStream || !PTStream.angles[hostId]) return;
+      if(!PTStream || PTStream.angles[hostId]!==angle) return;
       angle.remoteStream=e.streams[0]; angle.status="live";
+      if(PTStream.angleRetries) delete PTStream.angleRetries[hostId];   // it came back
       if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
       renderPTStream();
     };
     pc.onconnectionstatechange=async ()=>{
-      if(!PTStream || !PTStream.angles[hostId]) return;
+      /* compare the angle object, not just the key — a reconnect installs a
+         new angle under the same hostId, and the old pc's late events must
+         not be allowed to tear the replacement down */
+      if(!PTStream || PTStream.angles[hostId]!==angle) return;
       if(pc.connectionState==='failed'){
         const diag=await ptIceDiag(pc);
         console.log('[ptStream viewer] connection failed:', diag);
-        angle.status="connection failed"+(diag.relay?" (relay reachable, still blocked)":diag.srflx?" (no relay found — TURN unreachable)":" (no usable network path found)");
         angle.failed=true;
+        angle.status="reconnecting…";
         if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
         renderPTStream();
+        ptRetryAngle(hostId, diag);
       }
       else if(['disconnected','closed'].includes(pc.connectionState)) ptDropAngle(hostId);
     };
@@ -9261,9 +9427,7 @@ async function ptWatch(codeArg){
     PTStream.failed=true;
     renderPTStream();
   });
-  ch.on("broadcast",{event:"chat"}, ({payload})=>{
-    if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
-  });
+  ch.on("broadcast",{event:"chat"}, ({payload})=>{ ptPushChat(payload); });
   /* mirrored match state from the host — see ptSyncPayload/ptSyncBroadcastIfLive.
      Only pokes the ref panel's own DOM (ptSyncRefPanel), same as the host's
      side never re-renders the whole stream panel over a score change either —
@@ -9274,6 +9438,7 @@ async function ptWatch(codeArg){
     if(PTStream.refOpen) ptSyncRefPanel();
   });
   ch.subscribe(status=>{ if(status==="SUBSCRIBED") ch.send({type:"broadcast",event:"join",payload:{viewerId}}); });
+  ptRequestWakeLock();   // watching a match is exactly as screen-on as filming one
   renderPTStream();
   ptSyncCompactChrome();
 }
@@ -9285,6 +9450,7 @@ function ptStopWatching(){
   ptStopViewerMix(PTStream);
   Object.values(PTStream.angles||{}).forEach(a=>{ try{a.pc.close();}catch(e){} });
   if(PTStream.channel){ try{ PTStream.channel.send({type:"broadcast",event:"leave",payload:{viewerId:PTStream.viewerId}}); }catch(e){} try{PTStream.channel.unsubscribe();}catch(e){} }
+  ptReleaseWakeLock();
   PTStream=null;
   renderPTStream();
   ptSyncCompactChrome();
