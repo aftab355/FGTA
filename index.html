@@ -2038,6 +2038,12 @@
     background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
   .pt-angle-btn.on{background:color-mix(in srgb,var(--accent) 16%, transparent);
     border-color:color-mix(in srgb,var(--accent) 55%, transparent);color:var(--accent);opacity:1;cursor:default}
+  /* Covers the <video> for the fraction of a second an angle switch takes to
+     decode its first frame — see ptFreezeAngleFrame. object-fit applies to a
+     canvas exactly as it does to the video underneath, so the held frame lands
+     in the same box at the same scale and the swap is invisible. */
+  .pt-angle-freeze{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+    background:#000;z-index:1;pointer-events:none}
 
   /* ---- the "nobody's watching yet" landing state ----
      Used to be a plain header line + a code input in a row — functionally
@@ -6736,6 +6742,7 @@ function renderPTStream(){
       <span class="pt-vid-badge" id="ptVidBadge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
       <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
       <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
+      <canvas id="ptAngleFreeze" class="pt-angle-freeze" hidden></canvas>
       <button class="mini pt-unmute" id="ptUnmuteBtn" onclick="ptUnmute()"${muted?'':' hidden'}>🔇 tap to unmute</button>
     </div>`;
   /* Every camera currently added to THIS code (see ptAddAngle and ptGoLive's
@@ -8320,15 +8327,31 @@ function ptViewerMixStream(S){
     /* Draws whatever #ptRemoteVideo is currently showing, which is already
        the active angle — so the switcher needs no hook into the recorder,
        and a switch costs the recording nothing but the frame it lands on. */
+    /* Timer-driven, deliberately NOT requestAnimationFrame. canvas.captureStream
+       only emits a frame when the canvas is actually redrawn, so the recording's
+       frame rate is exactly the draw rate — and rAF is throttled hard the moment
+       the page loses the foreground (and merely by CPU contention: measured at
+       ~8fps here with three pages open). That turned "record what you're
+       watching" into a recorder that reports healthy while producing almost no
+       data. A plain interval keeps feeding the encoder regardless. */
     const draw=()=>{
-      if(!PTStream || PTStream!==S || !S.mixStream){ S._mixRaf=null; return; }
-      const v=document.getElementById('ptRemoteVideo');
+      if(!PTStream || PTStream!==S || !S.mixStream){
+        if(S._mixTimer){ clearInterval(S._mixTimer); S._mixTimer=null; }
+        return;
+      }
+      /* Whatever the viewer is looking at is what gets recorded — including
+         the held frame that covers an angle switch (see ptFreezeAngleFrame).
+         Reading the <video> alone would record the half-second of black the
+         freeze exists to hide, so the file would show a dropout the viewer
+         never saw. */
+      const fz=document.getElementById('ptAngleFreeze');
+      const v=(fz && !fz.hidden && fz.width) ? fz : document.getElementById('ptRemoteVideo');
+      const vw=v && (v.videoWidth||v.width), vh=v && (v.videoHeight||v.height);
       ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-      if(v && v.readyState>=2 && v.videoWidth && v.videoHeight){
-        const {dx,dy,dw,dh}=ptFitContain(v.videoWidth,v.videoHeight,canvas.width,canvas.height);
+      if(v && vw && vh && (v.tagName==='CANVAS' || v.readyState>=2)){
+        const {dx,dy,dw,dh}=ptFitContain(vw,vh,canvas.width,canvas.height);
         try{ ctx.drawImage(v,dx,dy,dw,dh); }catch(e){}
       }
-      S._mixRaf=requestAnimationFrame(draw);
     };
     const videoTracks=canvas.captureStream(30).getVideoTracks();
     let audioTracks=[];
@@ -8343,6 +8366,7 @@ function ptViewerMixStream(S){
     S.mixStream=new MediaStream([...videoTracks, ...audioTracks]);
     ptMixBindAudio(S);
     draw();
+    S._mixTimer=setInterval(draw, 33);        // ~30fps, matching captureStream(30) above
     return S.mixStream;
   }catch(e){
     console.log('[ptStream] viewer mix bus unavailable:', e && e.message);
@@ -8366,7 +8390,7 @@ function ptMixBindAudio(S){
 }
 function ptStopViewerMix(S){
   if(!S) return;
-  if(S._mixRaf){ cancelAnimationFrame(S._mixRaf); S._mixRaf=null; }
+  if(S._mixTimer){ clearInterval(S._mixTimer); S._mixTimer=null; }
   try{ if(S.mixSrcNode) S.mixSrcNode.disconnect(); }catch(e){}
   try{ if(S.mixAC && S.mixAC.state!=='closed') S.mixAC.close(); }catch(e){}
   S.mixSrcNode=null; S.mixAC=null; S.mixDest=null; S.mixStream=null; S.mixCanvas=null;
@@ -9270,8 +9294,45 @@ function ptSyncActiveAngleFields(){
   PTStream.failed=a?!!a.failed:false;
   ptMixBindAudio(PTStream);   // keep a running recording's audio on the angle being watched
 }
+/* Keeping every angle's peer connection open means a switch needs no
+   reconnection — but the <video> element is shared, and re-pointing it at
+   another MediaStream still makes it reload: measured in-browser at roughly
+   0.4–1.2s before the first frame of the new angle decodes. That gap used to
+   be plain black. Holding the outgoing frame over the top for the duration
+   turns it into a freeze instead, which reads as a camera cut rather than a
+   dropout. Same idea as the host's camera-flip bumper, without the branding
+   card — someone switching angles wants the picture back, not a transition. */
+function ptFreezeAngleFrame(){
+  const S=PTStream;
+  if(!S || S.role!=='viewer') return;
+  const v=document.getElementById('ptRemoteVideo');
+  const c=document.getElementById('ptAngleFreeze');
+  if(!v || !c || !v.videoWidth) return;
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  try{ c.getContext('2d').drawImage(v,0,0,c.width,c.height); }catch(e){ return; }
+  c.hidden=false;
+  const clear=()=>{
+    c.hidden=true;
+    if(S._freezeRaf){ cancelAnimationFrame(S._freezeRaf); S._freezeRaf=null; }
+    if(S._freezeTimer){ clearTimeout(S._freezeTimer); S._freezeTimer=null; }
+  };
+  if(S._freezeRaf) cancelAnimationFrame(S._freezeRaf);
+  if(S._freezeTimer) clearTimeout(S._freezeTimer);
+  const tick=()=>{
+    if(!PTStream || PTStream!==S){ clear(); return; }
+    const vv=document.getElementById('ptRemoteVideo');
+    // currentTime restarts from 0 on a new stream, so >0 means it is genuinely playing again
+    if(!vv || (vv.videoWidth>0 && vv.readyState>=2 && vv.currentTime>0)){ clear(); return; }
+    S._freezeRaf=requestAnimationFrame(tick);
+  };
+  S._freezeRaf=requestAnimationFrame(tick);
+  /* never leave a still frame up pretending to be live if the angle switched
+     to simply never produces one */
+  S._freezeTimer=setTimeout(clear, 2500);
+}
 function ptSwitchAngle(hostId){
   if(!PTStream || PTStream.role!=='viewer' || !PTStream.angles[hostId] || PTStream.activeAngle===hostId) return;
+  ptFreezeAngleFrame();          // must happen while the OLD frame is still on screen
   PTStream.activeAngle=hostId;
   ptSyncActiveAngleFields();
   /* The <video> keeps its element identity across a switch (see
@@ -9291,10 +9352,34 @@ function ptDropAngle(hostId, statusIfLast){
   delete S.angles[hostId];
   S.angleOrder=S.angleOrder.filter(id=>id!==hostId);
   if(S.activeAngle===hostId){
+    /* being moved off a dead angle deserves the same held frame as choosing
+       to switch — see ptFreezeAngleFrame */
+    if(S.angleOrder.length) ptFreezeAngleFrame();
     S.activeAngle=S.angleOrder[0]||null;
     ptSyncActiveAngleFields();
     if(!S.activeAngle) S.status=statusIfLast||"the stream ended";
   }
+  renderPTStream();
+}
+/* An angle counts as live only once it has BOTH a track and a connected peer
+   connection. ontrack fires as soon as the remote description is applied —
+   before a single frame has crossed the wire — so treating that alone as
+   "live" advertised angles in the switcher that were still black when you
+   picked them, and flipped the viewer's own badge to "live" over an empty
+   video. The two events arrive in either order, so this is called from both
+   and only commits when both have happened. */
+function ptMarkAngleReady(hostId, angle){
+  const S=PTStream;
+  if(!S || S.role!=='viewer' || S.angles[hostId]!==angle) return;
+  const ready = !!angle.remoteStream && angle.pc.connectionState==='connected';
+  const next = ready ? "live" : "connecting…";
+  if(ready){
+    angle.failed=false;
+    if(S.angleRetries) delete S.angleRetries[hostId];   // it came back
+  }
+  if(angle.status===next) return;                       // nothing changed — don't churn the DOM
+  angle.status=next;
+  if(S.activeAngle===hostId) ptSyncActiveAngleFields();
   renderPTStream();
 }
 /* A failed peer connection never heals on its own, and the host has already
@@ -9375,16 +9460,15 @@ async function ptWatch(codeArg){
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,hostId,candidate:e.candidate}}); };
     pc.ontrack=e=>{
       if(!PTStream || PTStream.angles[hostId]!==angle) return;
-      angle.remoteStream=e.streams[0]; angle.status="live";
-      if(PTStream.angleRetries) delete PTStream.angleRetries[hostId];   // it came back
-      if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
-      renderPTStream();
+      angle.remoteStream=e.streams[0];
+      ptMarkAngleReady(hostId, angle);
     };
     pc.onconnectionstatechange=async ()=>{
       /* compare the angle object, not just the key — a reconnect installs a
          new angle under the same hostId, and the old pc's late events must
          not be allowed to tear the replacement down */
       if(!PTStream || PTStream.angles[hostId]!==angle) return;
+      if(pc.connectionState==='connected'){ ptMarkAngleReady(hostId, angle); return; }
       if(pc.connectionState==='failed'){
         const diag=await ptIceDiag(pc);
         console.log('[ptStream viewer] connection failed:', diag);
@@ -9447,6 +9531,8 @@ window.ptWatch=ptWatch;
 function ptStopWatching(){
   if(!PTStream || PTStream.role!=='viewer') return;
   if(PTStream.recOn) ptStopRecord();   // save what's recorded so far rather than dropping it
+  if(PTStream._freezeRaf) cancelAnimationFrame(PTStream._freezeRaf);
+  if(PTStream._freezeTimer) clearTimeout(PTStream._freezeTimer);
   ptStopViewerMix(PTStream);
   Object.values(PTStream.angles||{}).forEach(a=>{ try{a.pc.close();}catch(e){} });
   if(PTStream.channel){ try{ PTStream.channel.send({type:"broadcast",event:"leave",payload:{viewerId:PTStream.viewerId}}); }catch(e){} try{PTStream.channel.unsubscribe();}catch(e){} }
