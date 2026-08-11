@@ -7119,6 +7119,7 @@ function renderPTStream(){
     <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
     <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
     <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>
+    ${(PTStream.angleOrder||[]).length>1?`<button class="pt-dbg-btn${PTStream.directing?' on':''}" id="ptDirectBtn" onclick="ptToggleDirect(event)" title="Direct the broadcast — the angle you pick becomes the angle everyone sees">🎬 ${PTStream.directing?'directing':'direct'}</button>`:''}
     <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health — what broke and what was repaired automatically">🩺</button>`;
   const vwrapHtml=`
     <div class="pt-video-shell">
@@ -7135,7 +7136,7 @@ function renderPTStream(){
      also where a viewer finds out their recording follows whichever angle
      they pick rather than the one they started on. */
   const angleSwitchHtml = angleIds.length>1 ? `<div class="pt-angle-bar">
-    <div class="pt-stream-note">📷 ${angleIds.length} angles · tap one to put it on the big screen${PTStream.recOn?' — the recording follows':''}</div>
+    <div class="pt-stream-note">📷 ${angleIds.length} angles · tap one to put it on the big screen${PTStream.directing?' — and on everyone else\'s':''}${PTStream.recOn?' · the recording follows':''}</div>
   </div>` : '';
   const restHtml=`
     ${chatHtml(PTStream)}
@@ -7162,7 +7163,10 @@ function renderPTStream(){
     /* the angle on screen went away and nothing replaced it — drop the dead
        track rather than leaving its last frame up looking like a live feed */
     else if(v.srcObject) v.srcObject=null;
+    /* once the mixer owns the sound, the element must never play it too */
+    if(PTStream.mixAC) v.muted=true;
   }
+  ptSyncAudioMix(PTStream);      // a newly connected angle joins the bed
   ptSyncAngleRail();
   ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
   ptSyncHealthPanel();   // footHtml rebuilds the panel empty — refill it, same as the ref deck
@@ -7172,8 +7176,20 @@ function renderPTStream(){
 function ptUnmute(){
   if(!PTStream) return;
   PTStream.muted=false;
+  /* This tap is also the gesture an AudioContext needs to start, which is why
+     the whole audio bed comes up here rather than on connect. With the mixer
+     running the <video> stays muted for good — it would otherwise play the
+     on-air angle a second time, on top of the mix. */
+  const ac=ptAudioMix(PTStream);
   const v=$("ptRemoteVideo");
-  if(v){ v.muted=false; v.play().catch(()=>{}); }
+  if(ac){
+    if(ac.state==='suspended') ac.resume().catch(()=>{});
+    if(v) v.muted=true;
+    ptSyncAudioMix(PTStream);
+  } else if(v){
+    // no Web Audio here — fall back to the single on-air mic, as before
+    v.muted=false; v.play().catch(()=>{});
+  }
   // #ptVidWrap is preserved across renders now (see ptRenderStreamShell), so
   // patch the button in place rather than relying on a full re-render to drop it.
   const btn=document.getElementById('ptUnmuteBtn');
@@ -7580,19 +7596,32 @@ function ptDrawScoreboard(S){
      the two share the row without either being repositioned */
   let clockW=0;
   if(clock) clockW=ptDrawClockPill(ctx,C,barH,x0+totalW,y0-Math.round(barH*0.20),'right',clock);
+  /* The badge below shares this row with the clock, which is right-aligned to
+     the score bug's own right edge (x0+totalW) — NOT to the wider `avail`.
+     Budgeting the badge against `avail` therefore let it grow straight through
+     the clock and print on top of it, which is exactly what a GAME POINT badge
+     next to the match timer looked like. Give it the room that actually
+     exists: everything up to where the clock starts. */
+  const badgeGap=Math.round(barH*0.24);
+  const badgeRoom=Math.max(barH, totalW-(clockW?clockW+badgeGap:0));
+  /* And rather than letting ptFitText chop a word in half — "GAME POI…" says
+     less than "GAME POINT" — drop the player's name when the full line will
+     not fit. The tag is the part that carries the information. */
+  const fitBadge=(full,short,maxTextW)=>
+    ctx.measureText(full).width<=maxTextW ? full : short;
 
   if(P.winner || P.draw){
     const txt = P.draw ? 'MATCH DRAWN'
       : '🏆 '+ptShortName(P.winner==='a'?P.a:P.b).toUpperCase()+' WINS';
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
-    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
-    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
+    const label=fitBadge(txt, P.draw?'DRAWN':'🏆 WINNER', badgeRoom-bp*2);
+    const bw=Math.min(badgeRoom, Math.round(ctx.measureText(label).width+bp*2));
     const by=y0-bh-Math.round(barH*0.20);
     ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
     ctx.fillStyle=C.gold; ctx.fill();
     ctx.fillStyle='#1a1400'; ctx.textAlign='center';
-    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+    ctx.fillText(ptFitText(ctx,label,bw-bp*2), x0+bw/2, by+bh*0.54);
   } else if(ptTensionTag(P)){
     /* GAME/SET/MATCH POINT — same badge slot as the winner banner (a match
        that's over never shows this) and takes priority over the streak
@@ -7610,19 +7639,25 @@ function ptDrawScoreboard(S){
     const txt=`⚡ ${ptShortName(tension.side==='a'?P.a:P.b).toUpperCase()} — ${tension.tag}`;
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
-    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
-    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
+    const label=fitBadge(txt, `⚡ ${tension.tag}`, badgeRoom-bp*2);
+    const bw=Math.min(badgeRoom, Math.round(ctx.measureText(label).width+bp*2));
     const by=y0-bh-Math.round(barH*0.20);
     const popAge=performance.now()-S._tensionAt, pop = popAge<260 ? 1-popAge/260 : 0;
     const pulse=0.72+0.28*Math.abs(Math.sin(performance.now()/260));
+    /* The pop grows the badge outward from its centre, which means a badge
+       already filling its slot briefly renders 14% wider than the space it was
+       given — and lands on the clock. Only pop into room that is actually
+       spare: a badge that already fills the row simply does not pop. */
+    const popRoom=bw>0 ? Math.max(1, Math.min(1.14, badgeRoom/bw)) : 1;
+    const popScale=1+(popRoom-1)*pop;
     ctx.save();
     ctx.translate(x0+bw/2, by+bh/2);
-    ctx.scale(1+0.14*pop, 1+0.14*pop);
+    ctx.scale(popScale, popScale);
     ctx.translate(-(x0+bw/2), -(by+bh/2));
     ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
     ctx.globalAlpha=pulse; ctx.fillStyle=col; ctx.fill(); ctx.globalAlpha=1;
     ctx.fillStyle = tension.level===3?'#fff':'#1a1400'; ctx.textAlign='center';
-    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+    ctx.fillText(ptFitText(ctx,label,bw-bp*2), x0+bw/2, by+bh*0.54);
     ctx.restore();
   } else if((P.streakCount||0)>=3 && P.streakSide){
     /* momentum badge: same slot the winner/draw banner uses (mutually
@@ -7635,13 +7670,13 @@ function ptDrawScoreboard(S){
     const txt=`🔥 ${ptShortName(side==='a'?P.a:P.b).toUpperCase()} ${P.streakCount} STRAIGHT`;
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
-    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
-    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
+    const label=fitBadge(txt, `🔥 ${P.streakCount} STRAIGHT`, badgeRoom-bp*2);
+    const bw=Math.min(badgeRoom, Math.round(ctx.measureText(label).width+bp*2));
     const by=y0-bh-Math.round(barH*0.20);
     ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
     ctx.fillStyle = side==='a'?C.a:C.b; ctx.fill();
     ctx.fillStyle='#0b0714'; ctx.textAlign='center';
-    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+    ctx.fillText(ptFitText(ctx,label,bw-bp*2), x0+bw/2, by+bh*0.54);
   }
   ctx.restore();
 }
@@ -8761,17 +8796,12 @@ function ptViewerMixStream(S){
       }
     };
     const videoTracks=canvas.captureStream(30).getVideoTracks();
-    let audioTracks=[];
-    const AC=window.AudioContext||window.webkitAudioContext;
-    if(AC){
-      try{
-        S.mixAC=new AC();
-        S.mixDest=S.mixAC.createMediaStreamDestination();
-        audioTracks=S.mixDest.stream.getAudioTracks();
-      }catch(e){ S.mixAC=null; S.mixDest=null; }
-    }
+    /* the recording takes the same audio bed the viewer is hearing — every
+       microphone, not just the camera on screen (see ptAudioMix) */
+    ptAudioMix(S);
+    const audioTracks=S.mixDest?S.mixDest.stream.getAudioTracks():[];
     S.mixStream=new MediaStream([...videoTracks, ...audioTracks]);
-    ptMixBindAudio(S);
+    ptSyncAudioMix(S);
     draw();
     S._mixTimer=setInterval(draw, 33);        // ~30fps, matching captureStream(30) above
     return S.mixStream;
@@ -8780,27 +8810,74 @@ function ptViewerMixStream(S){
     return null;
   }
 }
-/* Re-points the bus's audio input at the active angle without ever replacing
-   the destination track the recorder is holding. Safe to call whenever the
-   active angle changes or a track arrives — it always rebuilds from scratch. */
-function ptMixBindAudio(S){
-  if(!S || !S.mixAC || !S.mixDest) return;
-  try{ if(S.mixSrcNode) S.mixSrcNode.disconnect(); }catch(e){}
-  S.mixSrcNode=null;
-  const angle=S.angles && S.angles[S.activeAngle];
-  const st=angle && angle.remoteStream;
-  if(!st || !st.getAudioTracks().length) return;
+/* ---- audio bed ----
+   Cameras cut; sound does not. A broadcast keeps every microphone open and
+   rides the on-air one forward — cutting the other mic the instant the picture
+   changes is how you lose the call that was made off camera, which is the one
+   moment you most want to hear back.
+
+   So every angle feeds one mixer: the angle on screen sits at full level and
+   the rest stay audible underneath it. Switching angle now changes the balance
+   rather than silencing anybody. All of it routes through here and the <video>
+   elements stay muted, so nothing is ever played twice, and the recording taps
+   the same bed the viewer is hearing. */
+const PT_AUDIO_ONAIR=1.0;      // the camera you are watching
+const PT_AUDIO_BED=0.4;        // every other microphone, still there underneath
+function ptAudioMix(S){
+  S=S||PTStream;
+  if(!S || S.role!=='viewer') return null;
+  if(S.mixAC) return S.mixAC;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return null;
   try{
-    S.mixSrcNode=S.mixAC.createMediaStreamSource(st);
-    S.mixSrcNode.connect(S.mixDest);
-  }catch(e){}
+    S.mixAC=new AC();
+    S.mixMaster=S.mixAC.createGain();
+    S.mixMaster.gain.value=1;
+    S.mixMaster.connect(S.mixAC.destination);          // what you hear
+    S.mixDest=S.mixAC.createMediaStreamDestination();  // what gets recorded
+    S.mixMaster.connect(S.mixDest);
+    S.mixNodes={};
+  }catch(e){ S.mixAC=null; S.mixMaster=null; S.mixDest=null; }
+  return S.mixAC;
+}
+/* Idempotent: call it whenever angles or the active angle change. */
+function ptSyncAudioMix(S){
+  S=S||PTStream;
+  if(!S || S.role!=='viewer' || !S.mixAC || !S.mixMaster) return;
+  const nodes=S.mixNodes||(S.mixNodes={});
+  const live=S.muted===false;
+  for(const hid of (S.angleOrder||[])){
+    const a=S.angles[hid];
+    const st=a && a.remoteStream;
+    if(!st || !st.getAudioTracks().length) continue;
+    let n=nodes[hid];
+    if(!n || n.stream!==st){
+      if(n){ try{ n.src.disconnect(); n.gain.disconnect(); }catch(e){} }
+      try{
+        const src=S.mixAC.createMediaStreamSource(st);
+        const gain=S.mixAC.createGain();
+        gain.gain.value=0;
+        src.connect(gain); gain.connect(S.mixMaster);
+        n=nodes[hid]={src,gain,stream:st};
+      }catch(e){ continue; }
+    }
+    const target=live ? (hid===S.activeAngle?PT_AUDIO_ONAIR:PT_AUDIO_BED) : 0;
+    /* ramp rather than jump — a hard gain change on a live mic clicks */
+    try{ n.gain.gain.setTargetAtTime(target, S.mixAC.currentTime, 0.08); }
+    catch(e){ try{ n.gain.gain.value=target; }catch(_){} }
+  }
+  for(const hid of Object.keys(nodes)){
+    if(S.angles[hid]) continue;
+    try{ nodes[hid].src.disconnect(); nodes[hid].gain.disconnect(); }catch(e){}
+    delete nodes[hid];
+  }
 }
 function ptStopViewerMix(S){
   if(!S) return;
   if(S._mixTimer){ clearInterval(S._mixTimer); S._mixTimer=null; }
-  try{ if(S.mixSrcNode) S.mixSrcNode.disconnect(); }catch(e){}
+  Object.values(S.mixNodes||{}).forEach(n=>{ try{ n.src.disconnect(); n.gain.disconnect(); }catch(e){} });
   try{ if(S.mixAC && S.mixAC.state!=='closed') S.mixAC.close(); }catch(e){}
-  S.mixSrcNode=null; S.mixAC=null; S.mixDest=null; S.mixStream=null; S.mixCanvas=null;
+  S.mixNodes=null; S.mixMaster=null; S.mixAC=null; S.mixDest=null; S.mixStream=null; S.mixCanvas=null;
 }
 
 /* ---- local recording: opt-in, saves straight to this device, never
@@ -9715,7 +9792,7 @@ function ptSyncActiveAngleFields(){
   PTStream.remoteStream=a?a.remoteStream:null;
   PTStream.status=a?a.status:"connecting…";
   PTStream.failed=a?!!a.failed:false;
-  ptMixBindAudio(PTStream);   // keep a running recording's audio on the angle being watched
+  ptSyncAudioMix(PTStream);   // rebalance the mics: on-air forward, the rest still audible
 }
 /* ---- the angle rail ----
    Every other camera on this match, live, as a strip of thumbnails beside the
@@ -9820,10 +9897,35 @@ function ptFreezeAngleFrame(){
      to simply never produces one */
   S._freezeTimer=setTimeout(clear, 2500);
 }
-function ptSwitchAngle(hostId){
+/* ---- director ----
+   A broadcast has somebody deciding what everyone sees. With 🎬 on, picking an
+   angle cuts it for every viewer at once instead of only for you — the ref
+   calling the shots, the way a match director does. Everyone else still has
+   their own tiles and can look wherever they like; the next cut simply moves
+   them again, which is exactly what happens watching television.
+   Deliberately not a lock: a director who leaves should not strand everybody
+   on a camera that has stopped, and ptDropAngle still moves people off a dead
+   angle regardless of who chose it. */
+function ptToggleDirect(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!PTStream || PTStream.role!=='viewer') return;
+  PTStream.directing=!PTStream.directing;
+  toast(PTStream.directing
+    ? "🎬 Directing — the angle you pick is the one everyone sees"
+    : "Directing off — your angle choice is yours alone again");
+  if(PTStream.directing && PTStream.activeAngle) ptBroadcastCut(PTStream.activeAngle);
+  renderPTStream();
+}
+window.ptToggleDirect=ptToggleDirect;
+function ptBroadcastCut(hostId){
+  if(!PTStream || !PTStream.channel) return;
+  try{ PTStream.channel.send({type:"broadcast",event:"director_cut",payload:{hostId}}); }catch(e){}
+}
+function ptSwitchAngle(hostId, fromDirector){
   if(!PTStream || PTStream.role!=='viewer' || !PTStream.angles[hostId] || PTStream.activeAngle===hostId) return;
   ptFreezeAngleFrame();          // must happen while the OLD frame is still on screen
   PTStream.activeAngle=hostId;
+  if(PTStream.directing && !fromDirector) ptBroadcastCut(hostId);
   ptSyncActiveAngleFields();
   /* The <video> keeps its element identity across a switch (see
      ptRenderStreamShell) so only srcObject changes — no teardown, no
@@ -9992,6 +10094,13 @@ async function ptWatch(codeArg){
      but takes seconds to do it, during which the switcher still offers an
      angle that's already gone */
   ch.on("broadcast",{event:"host-bye"}, ({payload})=>{ ptDropAngle(ptSafeId(payload && payload.hostId)); });
+  /* somebody with 🎬 on cut to an angle — follow it, unless we are the one
+     directing, in which case our own choice stands */
+  ch.on("broadcast",{event:"director_cut"}, ({payload})=>{
+    if(!PTStream || PTStream.directing) return;
+    const id=ptSafeId(payload && payload.hostId);
+    if(id && PTStream.angles[id]) ptSwitchAngle(id, true);
+  });
   ch.on("broadcast",{event:"full"}, ({payload})=>{
     if(!PTStream || payload.viewerId!==viewerId) return;
     /* per-angle, not per-stream: one full camera says nothing about the
