@@ -6375,6 +6375,35 @@ async function ptIceDiag(pc){
   return out;
 }
 
+/* Which "shape" is currently rendered inside #ptStreamBox: null (landing),
+   'host', or 'viewer'. See ptRenderStreamShell below — this is what lets a
+   same-shape re-render (which is the overwhelming majority: every point
+   scored, chat message, viewer join/leave, mic/cam/zoom/filter tap, going
+   into a Set Break, anything) skip ever touching #ptStreamMain's own node
+   identity, which is what was silently kicking the host out of fullscreen
+   on essentially every button press. */
+let ptStreamShape=null;
+/* Rebuilds #ptStreamBox's three regions (head/main/foot) only when the
+   shape actually changes (going live, stopping, switching between
+   watching/hosting) — the moments a fullscreen exit is expected anyway.
+   On every other render, the stable #ptStreamHead/#ptStreamMain/
+   #ptStreamFoot containers already exist, so this only replaces their
+   CHILDREN via innerHTML — #ptStreamMain itself, the actual element the
+   Fullscreen API is tracking, is never removed from the document, so
+   fullscreen survives regardless of what triggered the re-render. */
+function ptRenderStreamShell(box, shape, headHtml, mainHtml, footHtml){
+  if(ptStreamShape!==shape){
+    box.innerHTML=`<div class="pt-stream-panel pt-stream-live">
+      <div class="pt-stream-h" id="ptStreamHead"></div>
+      <div class="pt-stream-main" id="ptStreamMain"></div>
+      <div id="ptStreamFoot"></div>
+    </div>`;
+    ptStreamShape=shape;
+  }
+  const head=document.getElementById('ptStreamHead'); if(head) head.innerHTML=headHtml;
+  const main=document.getElementById('ptStreamMain'); if(main) main.innerHTML=mainHtml;
+  const foot=document.getElementById('ptStreamFoot'); if(foot) foot.innerHTML=footHtml||'';
+}
 function renderPTStream(){
   const box=$("ptStreamBox"); if(!box) return;
   const others = ptActiveStreams();
@@ -6504,33 +6533,30 @@ function renderPTStream(){
           <button class="mini pt-golive-cta" onclick="ptGoLive()"><i class="pt-live-dot"></i>Go live</button>
         </div>
       </div>`;
+    ptStreamShape=null;   // next go-live/watch must rebuild the shell from scratch
     return;
   }
   if(PTStream.role==='host'){
-    box.innerHTML=`
-      <div class="pt-stream-panel pt-stream-live">
-        <div class="pt-stream-h">
-          <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
-          <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
-          <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
-          <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
-          <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
-          <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>
+    const headHtml=`
+      <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
+      <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
+      <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
+      <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
+      <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
+      <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>`;
+    const mainHtml=`
+      <div class="pt-stream-vwrap">
+        <div class="pt-video-shell">
+          <span class="pt-vid-badge"><i class="pt-live-dot"></i>live · ${PTStream.viewerCount}</span>
+          <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
+          <video id="ptLocalVideo" class="pt-stream-video" autoplay playsinline muted></video>
         </div>
-        <div class="pt-stream-main" id="ptStreamMain">
-          <div class="pt-stream-vwrap">
-            <div class="pt-video-shell">
-              <span class="pt-vid-badge"><i class="pt-live-dot"></i>live · ${PTStream.viewerCount}</span>
-              <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
-              <video id="ptLocalVideo" class="pt-stream-video" autoplay playsinline muted></video>
-            </div>
-            <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>
-          </div>
-          ${chatHtml(PTStream)}
-          ${refHtml(PTStream)}
-          ${moreHtml(PTStream,true)}
-        </div>
-      </div>`;
+        <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>
+      </div>
+      ${chatHtml(PTStream)}
+      ${refHtml(PTStream)}
+      ${moreHtml(PTStream,true)}`;
+    ptRenderStreamShell(box,'host',headHtml,mainHtml,'');
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     ptSyncRefDrawer();
@@ -6538,33 +6564,30 @@ function renderPTStream(){
     return;
   }
   const muted = PTStream.muted!==false;
-  box.innerHTML=`
-    <div class="pt-stream-panel pt-stream-live">
-      <div class="pt-stream-h">
-        <span class="pt-live-badge pt-watch-badge">▶ watching</span>
-        <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
-        <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
-        <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>
+  const headHtml=`
+    <span class="pt-live-badge pt-watch-badge">▶ watching</span>
+    <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
+    <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
+    <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>`;
+  const mainHtml=`
+    <div class="pt-stream-vwrap">
+      <div class="pt-video-shell">
+        <span class="pt-vid-badge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
+        <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
+        <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
+        ${muted?'<button class="mini pt-unmute" onclick="ptUnmute()">🔇 tap to unmute</button>':''}
       </div>
-      <div class="pt-stream-main" id="ptStreamMain">
-        <div class="pt-stream-vwrap">
-          <div class="pt-video-shell">
-            <span class="pt-vid-badge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
-            <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
-            <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
-            ${muted?'<button class="mini pt-unmute" onclick="ptUnmute()">🔇 tap to unmute</button>':''}
-          </div>
-        </div>
-        ${chatHtml(PTStream)}
-        ${refHtml(PTStream)}
-        ${moreHtml(PTStream,false)}
-      </div>
-      ${othersHtml}
-      <div class="pt-stream-foot">
-        <button class="mini no" onclick="ptStopWatching()">stop watching</button>
-        ${PTStream.failed?`<button class="mini" onclick="ptRetryWatch()">↻ retry</button>`:''}
-      </div>
+    </div>
+    ${chatHtml(PTStream)}
+    ${refHtml(PTStream)}
+    ${moreHtml(PTStream,false)}`;
+  const footHtml=`
+    ${othersHtml}
+    <div class="pt-stream-foot">
+      <button class="mini no" onclick="ptStopWatching()">stop watching</button>
+      ${PTStream.failed?`<button class="mini" onclick="ptRetryWatch()">↻ retry</button>`:''}
     </div>`;
+  ptRenderStreamShell(box,'viewer',headHtml,mainHtml,footHtml);
   const v=$("ptRemoteVideo");
   if(v){
     ptBindAspect(v);
@@ -8304,7 +8327,7 @@ async function ptMaybeAutoReplay(tag){
       if(verdict.label) label=String(verdict.label).slice(0,40);
     }
     // verdict===null (timeout / network error / AI Gateway not active yet) → fall through and replay on the heuristic tag alone
-    if(!PTStream || PTStream!==S || S.replay || S.camSwitch) return;   // state moved on while we were waiting
+    if(!PTStream || PTStream!==S || S.replay || S.camSwitch || S.breakMode) return;   // state moved on while we were waiting
     if(S._lastAutoReplayAt && Date.now()-S._lastAutoReplayAt<45000) return;
   }
   S._lastAutoReplayAt=Date.now();
