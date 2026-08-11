@@ -61,6 +61,18 @@ function closeFile(id) {
   if (!w || !w.open) return;
   w.open = false;
   w.stream.end();
+  /* A file this small is not a short recording, it is an encoder that never
+     produced anything (see the watchdog in browser.js). Leaving the stub
+     behind would put an unplayable entry in the match list next to the real
+     one that replaced it. */
+  if (w.bytes < 2000) {
+    writers.delete(id);
+    setTimeout(() => {
+      try { fs.unlinkSync(w.path); } catch (e) {}
+      try { fs.unlinkSync(w.path + '.json'); } catch (e) {}
+    }, 300);
+    return;
+  }
   try {
     const p = w.path + '.json';
     const meta = JSON.parse(fs.readFileSync(p, 'utf8'));

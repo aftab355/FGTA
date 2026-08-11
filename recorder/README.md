@@ -78,6 +78,22 @@ an angle that stops closes its file and the rest keep going.
   including the burnt-in scoreboard, replays and set-break graphics, plus the
   host's audio. It is the broadcast, not a raw camera feed.
 
+- **MP4 if this PC has Google Chrome installed, WebM otherwise.** The recorder
+  uses your Chrome when it can find it, because Chrome ships the licensed
+  H.264/AAC codecs that make an MP4 play in Windows Media Player, on a phone,
+  and in any editor. Playwright's own bundled browser has no such codecs — the
+  best MP4 it can write is VP9 inside an MP4 container, which is *worse* than
+  WebM because the file name promises compatibility it does not have, so in
+  that case the recorder deliberately stays on WebM. The startup log says which
+  one it picked. If you want MP4 and do not have Chrome, installing it is the
+  whole fix.
+
+- **Recording quality follows the broadcast.** These files are as good as what
+  the phone sent, and no better — the recorder cannot add detail that never
+  arrived. Cameras send up to 720p; the app now stops WebRTC quietly collapsing
+  that to 320x180 on a nervous connection, but a genuinely poor link will still
+  send a smaller picture and the recording will show it.
+
 - **Recording keeps going even for the angle nobody is watching.** All angles
   are recorded in parallel and independently.
 
