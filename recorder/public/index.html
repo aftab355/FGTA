@@ -45,6 +45,38 @@
   .switch{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
   .switch input{width:auto;flex:none;transform:scale(1.25);margin:0}
   .live-btn{width:100%;text-align:left;margin-top:6px}
+
+  /* ---- multi-angle playback ----
+     Same shape as the live view: one big picture, the other cameras as live
+     tiles beside it. The angles are separate files (each camera recorded
+     independently, and they start at different moments) so the player lines
+     them up by offset and drives them as one timeline. */
+  .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .stage video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#000}
+  .stage-note{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.72);color:var(--muted);font-family:ui-monospace,monospace;font-size:12px;text-align:center;padding:16px}
+  /* display:flex above outranks the browser's [hidden]{display:none}, so this
+     overlay would otherwise sit on top of a camera that was running perfectly
+     well — it has to opt out of its own display rule explicitly */
+  .stage-note[hidden]{display:none}
+  .rail{display:flex;gap:8px;margin-top:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .tile{position:relative;flex:0 0 auto;width:118px;padding:0;overflow:hidden;border-radius:10px;
+    border:1px solid var(--line);background:#000;cursor:pointer}
+  .tile:hover{border-color:var(--accent)}
+  .tile video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#000}
+  .tile .lbl{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;text-align:left;color:#fff;
+    background:linear-gradient(to top,rgba(0,0,0,.86),rgba(0,0,0,0));
+    font-family:ui-monospace,monospace;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tile.dim video{opacity:.25}
+  .transport{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .transport input[type=range]{flex:1;min-width:0;letter-spacing:normal;padding:0;background:none;border:none}
+  .pw-note{color:var(--dim);font-size:11px;margin-top:8px;font-family:ui-monospace,monospace;line-height:1.6}
+  .session{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;
+    border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+  .session:last-child{border-bottom:none}
+  .session:hover .scode{color:var(--accent)}
+  .scode{font-family:ui-monospace,monospace;font-weight:700;letter-spacing:1.5px}
 </style>
 </head>
 <body>
@@ -70,7 +102,30 @@
   </div>
 
   <div class="card">
-    <h2>Saved on this PC</h2>
+    <h2>Watch back</h2>
+    <div id="sessions"><div class="empty">No matches recorded yet.</div></div>
+  </div>
+
+  <div class="card" id="playerCard" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0" id="playerTitle">Match</h2>
+      <button id="closePlayer" style="padding:6px 12px">close</button>
+    </div>
+    <div class="stage">
+      <video id="mainVid" playsinline></video>
+      <div class="stage-note" id="stageNote" hidden>this camera hadn't started yet</div>
+    </div>
+    <div class="rail" id="playRail"></div>
+    <div class="transport">
+      <button id="playBtn" class="go">play</button>
+      <input type="range" id="seek" min="0" max="1000" value="0">
+      <span class="meta" id="clock">0:00</span>
+    </div>
+    <div class="pw-note" id="syncNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>All files</h2>
     <div id="files"><div class="empty">No recordings yet.</div></div>
   </div>
 
@@ -143,9 +198,154 @@ async function refreshFiles(){
     : '<div class="empty">No recordings yet.</div>';
 }
 
-refresh(); refreshFiles();
+/* ---------- multi-angle playback ----------
+   Every camera recorded its own file, starting whenever that camera joined.
+   Playback rebuilds them into one match: session time 0 is the earliest
+   recording's start, each angle carries the offset it joined at, and all of
+   them are driven from that single clock. Switching angle is then just a
+   question of which video is on the big screen and which one you can hear —
+   they are all already playing, in step, which is what makes it feel like a
+   broadcast rather than a folder of clips. */
+let P = null;
+
+function fmt(s){ s=Math.max(0,Math.floor(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+async function openSession(sess){
+  closePlayer();
+  P = { sess, videos:{}, t:0, playing:false, active:sess.angles[0].name, dur:sess.durationMs/1000 };
+  $('playerTitle').textContent = `${sess.code} · ${new Date(sess.startedAt).toLocaleString()}`;
+  $('playerCard').hidden = false;
+
+  // one <video> per angle: the active one is the stage, the rest are tiles
+  const rail = $('playRail'); rail.innerHTML = '';
+  for(const a of sess.angles){
+    const v = document.createElement('video');
+    v.preload='auto'; v.playsInline=true; v.muted=true; v.src='/rec/'+encodeURIComponent(a.name);
+    P.videos[a.name] = v;
+    const tile = document.createElement('button');
+    tile.className='tile'; tile.dataset.name=a.name;
+    const lbl=document.createElement('span'); lbl.className='lbl'; lbl.textContent=a.label;
+    tile.appendChild(v); tile.appendChild(lbl);
+    tile.onclick = ()=>setActive(a.name);
+    rail.appendChild(tile);
+  }
+  $('syncNote').textContent = sess.angles.map(a =>
+    a.offsetMs > 1500 ? `${a.label} joined ${fmt(a.offsetMs/1000)} in` : `${a.label} from the start`).join(' · ');
+
+  setActive(sess.angles[0].name);
+  seekTo(0);
+  P.tick = setInterval(driveClock, 250);
+}
+
+/* Move one angle to the stage. The others keep playing in their tiles, so the
+   switch costs nothing — same reason the live view keeps every connection open. */
+function setActive(name){
+  if(!P) return;
+  P.active = name;
+  const main = $('mainVid');
+  const rail = $('playRail');
+  // put every video back in its tile, then lift the active one onto the stage
+  for(const a of P.sess.angles){
+    const v = P.videos[a.name];
+    v.muted = (a.name !== name);
+    const tile = rail.querySelector(`[data-name="${CSS.escape(a.name)}"]`);
+    tile.hidden = (a.name === name);
+    if(a.name === name){
+      if(v.parentElement !== main.parentElement){ main.parentElement.insertBefore(v, main); }
+      v.className = ''; v.style.cssText='display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#000';
+    } else if(v.parentElement !== tile){
+      tile.insertBefore(v, tile.firstChild);
+      v.style.cssText='';
+    }
+  }
+  main.style.display='none';   // the real stage is whichever angle's own element we lifted in
+}
+
+/* session time -> each angle's own timeline */
+function seekTo(t){
+  if(!P) return;
+  P.t = Math.max(0, Math.min(t, P.dur));
+  for(const a of P.sess.angles){
+    const v = P.videos[a.name];
+    const local = P.t - a.offsetMs/1000;
+    if(local < 0){ try{ v.pause(); v.currentTime = 0; }catch(e){} continue; }
+    if(Math.abs(v.currentTime - local) > 0.4){ try{ v.currentTime = local; }catch(e){} }
+    if(P.playing) v.play().catch(()=>{});
+  }
+  paintClock();
+}
+
+function driveClock(){
+  if(!P) return;
+  if(P.playing){
+    const lead = P.videos[P.active];
+    const a = P.sess.angles.find(x=>x.name===P.active);
+    if(lead && !lead.paused) P.t = lead.currentTime + a.offsetMs/1000;
+    /* keep the off-screen angles from drifting away from the one being watched */
+    for(const ang of P.sess.angles){
+      if(ang.name===P.active) continue;
+      const v=P.videos[ang.name], local=P.t-ang.offsetMs/1000;
+      if(local<0){ if(!v.paused) v.pause(); continue; }
+      if(v.paused) v.play().catch(()=>{});
+      if(Math.abs(v.currentTime-local)>0.6){ try{ v.currentTime=local; }catch(e){} }
+    }
+    if(P.t >= P.dur) togglePlay(false);
+  }
+  paintClock();
+}
+
+function paintClock(){
+  if(!P) return;
+  $('clock').textContent = fmt(P.t)+' / '+fmt(P.dur);
+  const seek=$('seek');
+  if(document.activeElement!==seek) seek.value = String(Math.round((P.t/(P.dur||1))*1000));
+  const a = P.sess.angles.find(x=>x.name===P.active);
+  $('stageNote').hidden = !(a && P.t < a.offsetMs/1000);
+  for(const ang of P.sess.angles){
+    const tile=$('playRail').querySelector(`[data-name="${CSS.escape(ang.name)}"]`);
+    if(tile) tile.classList.toggle('dim', P.t < ang.offsetMs/1000);
+  }
+}
+
+function togglePlay(force){
+  if(!P) return;
+  P.playing = (force===undefined) ? !P.playing : force;
+  $('playBtn').textContent = P.playing ? 'pause' : 'play';
+  for(const a of P.sess.angles){
+    const v=P.videos[a.name];
+    if(P.playing && P.t >= a.offsetMs/1000) v.play().catch(()=>{}); else v.pause();
+  }
+}
+
+function closePlayer(){
+  if(P){ clearInterval(P.tick); for(const v of Object.values(P.videos)){ v.pause(); v.src=''; } }
+  P=null;
+  $('playerCard').hidden = true;
+  $('playRail').innerHTML='';
+  $('mainVid').style.display='';
+}
+
+$('playBtn').onclick = ()=>togglePlay();
+$('closePlayer').onclick = closePlayer;
+$('seek').oninput = e => { if(P) seekTo((e.target.value/1000)*P.dur); };
+$('seek').onchange = e => { if(P) seekTo((e.target.value/1000)*P.dur); };
+
+async function refreshSessions(){
+  const r = await api('/api/sessions');
+  $('sessions').innerHTML = r.items.length
+    ? r.items.slice(0,25).map((s,i) => `<div class="session" data-i="${i}">
+        <span class="n"><span class="scode">${s.code}</span> · ${s.angles.length} angle${s.angles.length===1?'':'s'}
+          <span class="meta"> ${new Date(s.startedAt).toLocaleString()}</span></span>
+        <span class="meta">${fmt(s.durationMs/1000)} · ${mb(s.bytes)}</span></div>`).join('')
+    : '<div class="empty">No matches recorded yet.</div>';
+  $('sessions').querySelectorAll('.session').forEach(el =>
+    el.onclick = () => openSession(r.items[+el.dataset.i]));
+}
+
+refresh(); refreshFiles(); refreshSessions();
 setInterval(refresh, 1500);
 setInterval(refreshFiles, 8000);
+setInterval(()=>{ if(!P) refreshSessions(); }, 8000);
 </script>
 </body>
 </html>
