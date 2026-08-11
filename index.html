@@ -1753,7 +1753,7 @@
   @media(prefers-reduced-motion:reduce){ body[data-heat="hot"] .panel::before{animation:none} body[data-wx="rain"] .panel::after,body[data-wx="storm"] .panel::after{animation:none} }
 
   @media(prefers-reduced-motion:reduce){
-    .ticker-track,.hype-fill,.pres-dot,.ticker-live{animation:none!important}
+    .ticker-track,.hype-fill,.pres-dot,.ticker-live,.pt-ref-tension{animation:none!important}
     #wxfx{display:none}
     /* ===== ANIMATION SYSTEM: reduced-motion overrides ===== */
     #hudGrid{display:none}
@@ -1948,8 +1948,8 @@
   /* undo/redo sit above the score grid, not inside it — they act on the last
      point scored (by anyone reffing), not on either side specifically, so
      giving them their own row keeps them from reading as a third "team" */
-  .pt-ref-actions{display:flex;gap:6px;margin-bottom:8px}
-  .pt-ref-actions .mini{flex:1 1 0;padding:7px 6px;font-size:10.5px;letter-spacing:.6px}
+  .pt-ref-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .pt-ref-actions .mini{flex:1 1 auto;min-width:64px;padding:7px 6px;font-size:10.5px;letter-spacing:.6px}
   .pt-ref-actions .mini:disabled{opacity:.4;cursor:default}
   .pt-ref-grid{display:flex;gap:8px;align-items:stretch;min-width:0}
   .pt-ref-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -1979,6 +1979,14 @@
      canvas badge (see ptDrawScoreboard) but for the DOM ref panel */
   .pt-ref-streak{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;letter-spacing:.6px;
     color:#0b0714;background:var(--ac);padding:2px 6px;border-radius:999px;white-space:nowrap}
+  /* GAME/SET/MATCH POINT — same pill treatment, colour keyed off stakes (see
+     ptTensionColor), a soft pulse so it reads as "live tension" rather than
+     a static label. Same info baked into the broadcast pixels by
+     ptDrawScoreboard, this is just the DOM copy for the ref tapping here. */
+  .pt-ref-tension{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;letter-spacing:.6px;
+    color:#1a1400;background:var(--tc);padding:2px 6px;border-radius:999px;white-space:nowrap;
+    animation:ptTensionPulse 1.1s ease-in-out infinite}
+  @keyframes ptTensionPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.05)}}
   .pt-ref-empty{font-size:12px;color:var(--dim);line-height:1.5;text-align:center;padding:6px 4px}
   .pt-ref-final{text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
     color:var(--gold);margin-top:9px}
@@ -5277,7 +5285,14 @@ try{
 }catch(e){}
 
 function ptDefaultState(a,b){
-  return {a,b,setsA:0,setsB:0,sets:[],gamesA:0,gamesB:0,ptsA:0,ptsB:0,tiebreak:false,tbA:0,tbB:0,log:[],winner:null,draw:false,gameLog:[],startedAt:Date.now(),endedAt:null,streakSide:null,streakCount:0};
+  const now=Date.now();
+  /* acesA/acesB are cumulative match totals; the _setStart* fields snapshot
+     where the CURRENT set started (gameLog length / cumulative aces / clock)
+     so ptCloseSet can diff "now minus snapshot" into a per-set stat line for
+     the Set Break stats box, without a second parallel per-set log to keep
+     in sync. Reset after every set close — see ptCloseSet. */
+  return {a,b,setsA:0,setsB:0,sets:[],gamesA:0,gamesB:0,ptsA:0,ptsB:0,tiebreak:false,tbA:0,tbB:0,log:[],winner:null,draw:false,gameLog:[],startedAt:now,endedAt:null,streakSide:null,streakCount:0,
+    acesA:0,acesB:0,_setStartLogIdx:0,_setStartAcesA:0,_setStartAcesB:0,_setStartAt:now};
 }
 function ptPersist(){
   try{
@@ -5310,6 +5325,22 @@ function ptCloseSet(winSide){
   const name = winSide==='a'?PT.a:PT.b;
   PT.log.unshift(`Set → ${esc(name)} wins set ${setScore} (now ${PT.setsA}-${PT.setsB} in sets)`);
   PT.gamesA=0; PT.gamesB=0;
+  /* Set Break stats box: diff the just-finished set against the snapshot
+     taken at its start (see ptDefaultState / the reset below) — points
+     played come straight from the permanent gameLog, aces from the ref's 🎯
+     taps. No shot-level data exists to give a true rally length, so "rally
+     points" is reported as points won that weren't aces — a real, honest
+     stat, not a fabricated one. */
+  const setGames = PT.gameLog.slice(PT._setStartLogIdx||0);
+  const pointsA = setGames.reduce((s,g)=>s+(g.a||0),0);
+  const pointsB = setGames.reduce((s,g)=>s+(g.b||0),0);
+  const acesA = (PT.acesA||0)-(PT._setStartAcesA||0);
+  const acesB = (PT.acesB||0)-(PT._setStartAcesB||0);
+  const durationMs = Date.now()-(PT._setStartAt||PT.startedAt||Date.now());
+  const stats = {pointsA,pointsB,acesA,acesB,durationMs};
+  PT._setStartLogIdx=PT.gameLog.length;
+  PT._setStartAcesA=PT.acesA||0; PT._setStartAcesB=PT.acesB||0;
+  PT._setStartAt=Date.now();
   ptFireSet(name, setScore, PT.setsA, PT.setsB);
   if(PT.setsA===2||PT.setsB===2){
     PT.winner=winSide;
@@ -5317,7 +5348,7 @@ function ptCloseSet(winSide){
     sfx('matchWin');
     PT.log.unshift(`🏆 ${esc(name)} wins the match ${PT.setsA}-${PT.setsB}`);
   } else {
-    ptMaybeStartBreak(name, setScore, PT.setsA, PT.setsB);
+    ptMaybeStartBreak(name, setScore, PT.setsA, PT.setsB, stats);
   }
 }
 function ptCloseGame(winSide, wasTiebreak){
@@ -5523,11 +5554,15 @@ function ptFire88(){
 }
 function ptCheck88(pa,pb){ if(pa===8 && pb===8) ptFire88(); }
 
-function ptPoint(side){
+function ptPoint(side, isAce){
   if(!PT || PT.winner || PT.draw) return;
   sfx('point');
   ptHistory.push(ptClone(PT)); ptFuture=[];
   const pre=ptHistory[ptHistory.length-1];
+  /* the ace tally is mutated AFTER the pre-snapshot above (not before this
+     call) so an 🎯 ace tap folds into the same undo/redo step as the point
+     it won — undoing the point also undoes the ace credit. */
+  if(isAce){ PT[side==='a'?'acesA':'acesB'] = (PT[side==='a'?'acesA':'acesB']||0)+1; }
   /* momentum: a plain run of consecutive points won, independent of game/set
      boundaries — "on a run" the way a broadcast graphic means it, not reset
      just because the game changed hands. Lives on PT itself (not a side var)
@@ -5565,6 +5600,10 @@ function ptPoint(side){
   ptAfterMutate();
 }
 window.ptPoint=ptPoint;
+/* an ace both wins the point AND credits the server — same mutation, one
+   undo step, see the isAce branch inside ptPoint above */
+function ptAce(side){ ptPoint(side, true); }
+window.ptAce=ptAce;
 
 function ptUndo(){
   if(!ptHistory.length) return;
@@ -6234,6 +6273,28 @@ function ptComputeDrama(pre,side){
   return null;
 }
 
+/* ---- live GAME/SET/MATCH POINT tension tag ----
+   Unlike ptComputeDrama above (which looks BACKWARD at the point that just
+   landed, to caption an auto-replay), this looks FORWARD from the current
+   live score: "if the next point goes to this side, does it close the
+   game/set/match?" — the same question a TV score bug answers continuously
+   while it's true, not just the instant it resolves. Takes an explicit
+   state so it works against either the host's own PT or a viewer's
+   remotePT (see ptRefBodyHTML), same pattern as ptWouldWinGame etc. */
+function ptTensionTag(state){
+  state=state||PT;
+  if(!state || state.winner || state.draw) return null;
+  for(const s of ['a','b']) if(ptIsMatchPoint(s,state)) return {tag:'MATCH POINT', side:s, level:3};
+  for(const s of ['a','b']) if(ptWouldWinSet(s,state)) return {tag:'SET POINT', side:s, level:2};
+  for(const s of ['a','b']) if(ptWouldWinGame(s,state)) return {tag:'GAME POINT', side:s, level:1};
+  return null;
+}
+window.ptTensionTag=ptTensionTag;
+/* high-contrast yellow → orange → red as the stakes climb, shared by the
+   canvas score bug (ptDrawScoreboard) and the DOM ref panel pill */
+function ptTensionColor(level){ return level===3?'#ff2d2d':level===2?'#ff8a00':'#ffe600'; }
+window.ptTensionColor=ptTensionColor;
+
 /* ============================================================
    RATING GALAXY — a live force-directed constellation of every
    player, hand-rolled physics (no d3 dependency): node size =
@@ -6470,7 +6531,7 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn" onclick="ptInstantReplay()"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
         <button class="mini pt-ctl-btn${S.autoHighlight?' auto-on':''}" onclick="ptToggleAutoHighlight()" title="Auto-replay hype moments — game/set/match points saved, deuce grinders, crowd reactions"><span class="pt-ctl-ico">🎯</span><span class="pt-ctl-lbl">${S.autoHighlight?'auto on':'auto'}</span></button>
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
-        <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" id="ptBreakToggleBtn" onclick="ptToggleBreakMode()" title="Run a ${Math.round(PT_BREAK_MS/1000)}s info banner between sets — camera keeps rolling (good for a half-time interview), replay clips from that set cut in automatically"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
+        <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" id="ptBreakToggleBtn" onclick="ptToggleBreakMode()" title="Run a ${ptFmtBreakDuration()} info banner between sets — camera keeps rolling (good for a half-time interview), replay clips from that set cut in automatically"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
         <button class="mini pt-ctl-btn rec-on" id="ptBreakResumeBtn" onclick="ptSkipBreak()" title="End the set break early and cut back to live now"${S.breakMode?'':' hidden'}><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">resume live</span></button>
         ${driveBtn}
@@ -6645,8 +6706,13 @@ const PT_SRC_LONG=1920, PT_SRC_SHORT=1080;     // what we ask the camera for
    about 23MB/min — a 90-minute match lands around 2GB instead of 18+. */
 const PT_REC_BITRATE={videoBitsPerSecond:3_000_000, audioBitsPerSecond:128_000};
 /* How long the between-sets highlight-reel break stays up before wiping back
-   to live on its own (the host's ⏭ resume-live button can always end it early). */
-const PT_BREAK_MS=45000;
+   to live on its own (the host's ⏭ resume-live button can always end it early).
+   3 minutes matches a real tour-level set-break length. */
+const PT_BREAK_MS=180000;
+function ptFmtBreakDuration(){
+  const s=Math.round(PT_BREAK_MS/1000);
+  return s%60===0 ? `${s/60}m` : `${Math.floor(s/60)}m${String(s%60).padStart(2,'0')}s`;
+}
 /* getUserMedia video constraints, shared by the initial request and every
    camera swap so flipping cameras never silently drops back to VGA. */
 function ptVideoConstraints(extra){
@@ -6969,6 +7035,37 @@ function ptDrawScoreboard(S){
     ctx.fillStyle=C.gold; ctx.fill();
     ctx.fillStyle='#1a1400'; ctx.textAlign='center';
     ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+  } else if(ptTensionTag()){
+    /* GAME/SET/MATCH POINT — same badge slot as the winner banner (a match
+       that's over never shows this) and takes priority over the streak
+       flame below: what the very next point does outranks "on a run" as
+       broadcast information. High-contrast yellow→orange→red as the stakes
+       climb (ptTensionColor), plus a brief scale-pop the instant the tag
+       first appears or upgrades (e.g. GAME POINT → MATCH POINT on the same
+       point) and a slow breathing pulse for as long as it holds, so it
+       reads as live tension rather than a static label — same "flash on
+       score change" language the point-badge glow above already uses. */
+    const tension=ptTensionTag();
+    const key=tension.side+tension.tag;
+    if(S._tensionKey!==key){ S._tensionKey=key; S._tensionAt=performance.now(); }
+    const col=ptTensionColor(tension.level);
+    const txt=`⚡ ${ptShortName(tension.side==='a'?PT.a:PT.b).toUpperCase()} — ${tension.tag}`;
+    const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
+    ctx.font=fMid;
+    const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
+    const bw=Math.min(room, Math.round(ctx.measureText(txt).width+bp*2));
+    const by=y0-bh-Math.round(barH*0.20);
+    const popAge=performance.now()-S._tensionAt, pop = popAge<260 ? 1-popAge/260 : 0;
+    const pulse=0.72+0.28*Math.abs(Math.sin(performance.now()/260));
+    ctx.save();
+    ctx.translate(x0+bw/2, by+bh/2);
+    ctx.scale(1+0.14*pop, 1+0.14*pop);
+    ctx.translate(-(x0+bw/2), -(by+bh/2));
+    ptRoundRect(ctx,x0,by,bw,bh,Math.round(bh*0.5));
+    ctx.globalAlpha=pulse; ctx.fillStyle=col; ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle = tension.level===3?'#fff':'#1a1400'; ctx.textAlign='center';
+    ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
+    ctx.restore();
   } else if((PT.streakCount||0)>=3 && PT.streakSide){
     /* momentum badge: same slot the winner/draw banner uses (mutually
        exclusive — a match that's over doesn't also need a "run" callout),
@@ -7237,12 +7334,12 @@ function ptDrawCamSwitchFrame(S){
    fullscreen. UI bits that need to change (the Resume Live button) are
    patched directly via ptSyncBreakUI instead, same pattern already used
    by ptToggleScoreboard/ptSyncRefDrawer elsewhere for the same reason. */
-function ptMaybeStartBreak(winnerName, setScore, setsA, setsB){
+function ptMaybeStartBreak(winnerName, setScore, setsA, setsB, stats){
   const S=PTStream;
   if(!S || S.role!=='host' || !S.breakEnabled) return;
   const clips=(S.setClips||[]).slice(-6);
   S.setClips=[];                       // next set starts its own reel
-  const info={winnerName, setScore, setsA, setsB, clips};
+  const info={winnerName, setScore, setsA, setsB, clips, stats};
   let tries=0;
   const start=()=>{
     if(!PTStream || PTStream!==S) return;         // stream ended while waiting
@@ -7262,7 +7359,7 @@ function ptBeginBreakMode(S,info){
   S.breakMode={...info, phase:'in', phaseStart:performance.now(),
     endAt:Date.now()+PT_BREAK_MS, clipIdx:-1, clipVideo:null, clipUrl:null,
     bump:ptBumper('SET COMPLETE',{inMs:360,holdMs:280,outMs:420})};
-  toast(`🎬 Set break — back to live in ${Math.round(PT_BREAK_MS/1000)}s (or tap Resume Live)`);
+  toast(`🎬 Set break — back to live in ${ptFmtBreakDuration()} (or tap Resume Live)`);
   ptSyncBreakUI();
 }
 function ptSkipBreak(){
@@ -7298,12 +7395,29 @@ function ptBreakAdvanceClip(S){
   v.src=url; v.play().catch(()=>{});
   b.clipUrl=url; b.clipVideo=v; b.clipLabel=clip.label; b.clipStart=performance.now();
 }
+/* Shared geometry for the whole break-mode lower-third stack (stats box →
+   banner bar → ticker strip, bottom to top... drawn top to bottom on
+   screen). Single-sourced so the three draw functions below always agree
+   on where each other's edges are — computing the same formula three times
+   independently is how they'd eventually drift apart under a future edit. */
+function ptBreakLayout(canvas){
+  const W=canvas.width, H=canvas.height, u=Math.min(W,H);
+  const m=Math.round(u*0.028);
+  const barH=Math.max(40, Math.round(u*0.115));
+  const tickH=Math.max(22, Math.round(u*0.055));
+  const statsH=Math.max(34, Math.round(u*0.095));
+  const gap=Math.round(u*0.016);
+  const tickY=H-m-tickH;
+  const barY=tickY-gap-barH;
+  const statsY=barY-gap-statsH;
+  return {W,H,u,m,barH,tickH,statsH,gap,tickY,barY,statsY};
+}
 /* The picture behind the banner: whatever replay clip is currently mid-
    playback (cover-fit, full frame — this is the "replaying shots" half of
    the break), or failing that the plain live camera feed (the "keep
    filming" half — a half-time report/interview just plays straight
    through). Returns whether a clip was actually drawn, so the banner
-   knows whether to show its 🔁 REPLAY chyron. */
+   knows whether to show its 🔁 REPLAY vs ⏸ HALFTIME corner badge. */
 function ptDrawBreakBackground(S){
   const b=S.breakMode, ctx=S.ctx, canvas=S.canvas;
   const W=canvas.width, H=canvas.height;
@@ -7329,15 +7443,15 @@ function ptDrawBreakBackground(S){
    score bug it temporarily replaces, just with break info instead of a
    live score. Built as one explicit top-to-bottom flow (tag → headline →
    countdown, all within one bar) specifically so nothing can stack on top
-   of anything else the way the old centered multi-line card used to. */
+   of anything else the way the old centered multi-line card used to.
+   Sits directly above the ticker strip and below the stats box — see
+   ptBreakLayout for the shared geometry all three agree on. */
 function ptDrawBreakBanner(S, showReplayTag){
   const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
-  const W=canvas.width, H=canvas.height, u=Math.min(W,H);
+  const L=ptBreakLayout(canvas), W=L.W, H=L.H, u=L.u, m=L.m, barH=L.barH;
   ctx.save();
   ctx.filter='none';
-  const barH=Math.max(40, Math.round(u*0.115));
-  const m=Math.round(u*0.028);
-  const y0=H-m-barH, cy=y0+barH/2;
+  const y0=L.barY, cy=y0+barH/2;
   ptRoundRect(ctx, m, y0, W-2*m, barH, Math.round(barH*0.22));
   ctx.fillStyle='rgba(8,6,18,0.85)'; ctx.fill();
   ctx.lineWidth=1; ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.stroke();
@@ -7346,7 +7460,7 @@ function ptDrawBreakBanner(S, showReplayTag){
 
   const tagFs=Math.max(9,Math.round(barH*0.22));
   ctx.font=`800 ${tagFs}px 'JetBrains Mono',monospace`;
-  const tagText='SET COMPLETE';
+  const tagText='🔴 SET BREAK';
   const tagPadX=Math.round(tagFs*0.9);
   const tagW=Math.round(ctx.measureText(tagText).width+tagPadX*2);
   const tagH=Math.round(barH*0.46);
@@ -7357,9 +7471,9 @@ function ptDrawBreakBanner(S, showReplayTag){
   ctx.fillText(tagText, tagX+tagW/2, cy+1);
 
   const remain=Math.max(0,Math.ceil((b.endAt-Date.now())/1000));
-  const mm=String(Math.floor(remain/60)), ss=String(remain%60).padStart(2,'0');
-  const rightText=`⏱ ${mm}:${ss}`;
-  const rightFs=Math.max(13,Math.round(barH*0.32));
+  const mm=String(Math.floor(remain/60)).padStart(2,'0'), ss=String(remain%60).padStart(2,'0');
+  const rightText=`NEXT SET IN ${mm}:${ss}`;
+  const rightFs=Math.max(12,Math.round(barH*0.28));
   ctx.font=`800 ${rightFs}px 'JetBrains Mono',monospace`;
   const rightW=ctx.measureText(rightText).width;
 
@@ -7376,17 +7490,94 @@ function ptDrawBreakBanner(S, showReplayTag){
   ctx.fillText(rightText, W-m-pad, cy);
   ctx.restore();
 
-  if(showReplayTag){
-    const cf=Math.max(11,Math.round(u*0.018)), ch=Math.round(cf*2.15), cx=Math.round(u*0.02), cp=Math.round(cf*0.62);
-    ctx.save();
-    ctx.font="bold "+cf+"px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
-    const cw=Math.round(ctx.measureText('🔁 REPLAY').width+cp*2);
-    ctx.fillStyle='rgba(255,45,45,.92)';
-    ctx.fillRect(cx,cx,cw,ch);
-    ctx.fillStyle='#fff';
-    ctx.fillText('🔁 REPLAY',cx+cp,cx+ch/2);
-    ctx.restore();
-  }
+  /* upper-corner badge: 🔁 REPLAY while a highlight clip is on screen,
+     ⏸ HALFTIME while it's just the live camera holding (a report/interview
+     playing straight through) — always one or the other during the break,
+     never neither, so a viewer tuning in mid-break instantly knows why the
+     scoreboard just vanished. */
+  const cf=Math.max(11,Math.round(u*0.018)), ch=Math.round(cf*2.15), cx=Math.round(u*0.02), cp=Math.round(cf*0.62);
+  const badgeTxt = showReplayTag ? '🔁 REPLAY' : '⏸ HALFTIME';
+  ctx.save();
+  ctx.font="bold "+cf+"px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
+  const cw=Math.round(ctx.measureText(badgeTxt).width+cp*2);
+  ctx.fillStyle = showReplayTag ? 'rgba(255,45,45,.92)' : 'rgba(30,201,221,.92)';
+  ctx.fillRect(cx,cx,cw,ch);
+  ctx.fillStyle='#fff';
+  ctx.fillText(badgeTxt,cx+cp,cx+ch/2);
+  ctx.restore();
+}
+/* TV-style stat strip above the SET BREAK bar: aces, points won and
+   "rally points" (points won that weren't aces — the honest stand-in for a
+   true shot-by-shot rally count, which nothing in this app tracks) for the
+   set that just finished. Silently no-ops on old localStorage drafts saved
+   before PT tracked per-set stats (b.stats undefined). */
+function ptDrawBreakStats(S){
+  const b=S.breakMode; if(!b || !b.stats) return;
+  const ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
+  const L=ptBreakLayout(canvas), W=L.W, m=L.m, statsH=L.statsH, y0=L.statsY;
+  const x0=m, w=W-2*m;
+  ctx.save(); ctx.filter='none';
+  ptRoundRect(ctx,x0,y0,w,statsH,Math.round(statsH*0.2));
+  ctx.fillStyle='rgba(8,6,18,0.82)'; ctx.fill();
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(255,255,255,0.14)'; ctx.stroke();
+  const st=b.stats;
+  const cols=[
+    {lab:'ACES', a:st.acesA||0, b:st.acesB||0},
+    {lab:'POINTS', a:st.pointsA||0, b:st.pointsB||0},
+    {lab:'RALLY PTS', a:Math.max(0,(st.pointsA||0)-(st.acesA||0)), b:Math.max(0,(st.pointsB||0)-(st.acesB||0))}
+  ];
+  const colW=w/cols.length;
+  const labFs=Math.max(8,Math.round(statsH*0.2)), valFs=Math.max(11,Math.round(statsH*0.34));
+  ctx.textBaseline='middle';
+  cols.forEach((c,i)=>{
+    const cx=x0+colW*(i+0.5);
+    ctx.textAlign='center'; ctx.font=`700 ${labFs}px 'JetBrains Mono',monospace`; ctx.fillStyle=C.dim;
+    ctx.fillText(c.lab, cx, y0+statsH*0.28);
+    ctx.font=`800 ${valFs}px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right'; ctx.fillStyle=C.a; ctx.fillText(String(c.a), cx-4, y0+statsH*0.72);
+    ctx.textAlign='left'; ctx.fillStyle=C.dim; ctx.fillText('·', cx, y0+statsH*0.72);
+    ctx.textAlign='left'; ctx.fillStyle=C.b; ctx.fillText(String(c.b), cx+10, y0+statsH*0.72);
+    if(i>0){
+      ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x0+colW*i,y0+statsH*0.18); ctx.lineTo(x0+colW*i,y0+statsH*0.82); ctx.stroke();
+    }
+  });
+  ctx.restore();
+}
+/* Bottom ticker: scrolls recent stream-chat "league comments" (the same
+   PTStream.chat everyone watching can already post into) plus a couple of
+   branded fallback lines when chat's empty, right-to-left, looping. Only
+   drawn during a break — the live score bug doesn't have room for it and
+   doesn't need it, this is specifically the "something to read" filler for
+   the 3-minute gap between sets. */
+function ptDrawBreakTicker(S){
+  const b=S.breakMode; if(!b) return;
+  const ctx=S.ctx, canvas=S.canvas, C=ptSbColors();
+  const L=ptBreakLayout(canvas), W=L.W, m=L.m, tickH=L.tickH, y0=L.tickY;
+  const x0=m, w=W-2*m;
+  ctx.save(); ctx.filter='none';
+  ptRoundRect(ctx,x0,y0,w,tickH,Math.round(tickH*0.32));
+  ctx.fillStyle='rgba(8,6,18,0.82)'; ctx.fill();
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.stroke();
+  ctx.save();
+  ptRoundRect(ctx,x0,y0,w,tickH,Math.round(tickH*0.32)); ctx.clip();
+  const chatMsgs=((PTStream&&PTStream.chat)||[]).slice(-8)
+    .map(c=>`💬 ${c.author||'fan'}: ${String(c.body||'').trim()}`)
+    .filter(t=>t.length>6);
+  const items=['🎾 FGTA LIVE — SET BREAK IN PROGRESS', `📊 ${b.winnerName} takes the set ${b.setScore}`, ...chatMsgs, '👋 back to live tennis shortly'];
+  const text=items.join('      •      ')+'      •      ';
+  const fs=Math.max(10,Math.round(tickH*0.4));
+  ctx.font=`700 ${fs}px 'JetBrains Mono',monospace`;
+  ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.fillStyle=C.ball;
+  const textW=ctx.measureText(text).width, loopW=textW+60;
+  if(!b._tickerAt) b._tickerAt=performance.now();
+  const speed=Math.max(40,W*0.05); // px/sec, scales with frame width
+  const offset=((performance.now()-b._tickerAt)/1000*speed)%loopW;
+  const startX=x0+w-offset;
+  ctx.fillText(text, startX, y0+tickH/2);
+  ctx.fillText(text, startX+loopW, y0+tickH/2);
+  ctx.restore();
+  ctx.restore();
 }
 function ptDrawBreakFrame(S){
   const b=S.breakMode, ctx=S.ctx, canvas=S.canvas, now=performance.now();
@@ -7397,7 +7588,12 @@ function ptDrawBreakFrame(S){
       ctx.drawImage(S.rawVideo, sx,sy,sw,sh, 0,0,canvas.width,canvas.height);
     } else { ctx.filter='none'; ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height); }
   };
-  const drawBreakScene=()=>{ const clipShown=ptDrawBreakBackground(S); ptDrawBreakBanner(S,clipShown); };
+  const drawBreakScene=()=>{
+    const clipShown=ptDrawBreakBackground(S);
+    ptDrawBreakStats(S);
+    ptDrawBreakBanner(S,clipShown);
+    ptDrawBreakTicker(S);
+  };
   if(b.phase==='in'){
     if(ptDrawBumperFrame(ctx,canvas,b.bump,drawLive,drawBreakScene,true)){
       b.phase='active'; b.phaseStart=now;
@@ -7762,16 +7958,21 @@ function ptRefBodyHTML(state,isHost){
      renderTracker → ptSyncBroadcastIfLive); a viewer has no visibility into
      that history, so its buttons are always tappable and just forward the
      request — same shape as ptRefViewerPoint. */
+  const aceAction = isHost ? `ptAce('%K%')` : `ptRefViewerAce('%K%')`;
   const actions = `<div class="pt-ref-actions">
       <button class="mini" onclick="${isHost?'ptUndo()':'ptRefViewerUndo()'}" ${isHost&&!ptHistory.length?'disabled':''} aria-label="Undo last point">↶ undo</button>
       <button class="mini" onclick="${isHost?'ptRedo()':'ptRefViewerRedo()'}" ${isHost&&!ptFuture.length?'disabled':''} aria-label="Redo point">↷ redo</button>
+      <button class="mini" ${decided?'disabled':`onclick="${aceAction.replace('%K%','a')}"`} title="Credit ${esc(state.a)} with an ace — also scores the point">🎯 ${esc(ptShortName(state.a))}</button>
+      <button class="mini" ${decided?'disabled':`onclick="${aceAction.replace('%K%','b')}"`} title="Credit ${esc(state.b)} with an ace — also scores the point">🎯 ${esc(ptShortName(state.b))}</button>
     </div>`;
+  const tension = decided ? null : ptTensionTag(state);
   return `${actions}<div class="pt-ref-grid">
       ${side('a')}
       <div class="pt-ref-mid">
         <span class="pt-ref-clock" id="ptRefClock">0:00</span>
         ${state.tiebreak?'<span class="pt-ref-tb">TIEBREAK</span>':''}
-        ${(!decided && (state.streakCount||0)>=3 && state.streakSide)?`<span class="pt-ref-streak" style="--ac:${state.streakSide==='a'?'var(--accent)':'var(--court)'}">🔥 ${esc(ptShortName(state.streakSide==='a'?state.a:state.b))} ${state.streakCount}</span>`:''}
+        ${tension?`<span class="pt-ref-tension" style="--tc:${ptTensionColor(tension.level)}">⚡ ${esc(ptShortName(tension.side==='a'?state.a:state.b))} — ${tension.tag}</span>`
+          :((!decided && (state.streakCount||0)>=3 && state.streakSide)?`<span class="pt-ref-streak" style="--ac:${state.streakSide==='a'?'var(--accent)':'var(--court)'}">🔥 ${esc(ptShortName(state.streakSide==='a'?state.a:state.b))} ${state.streakCount}</span>`:'')}
         <span class="pt-ref-chips">${chips}</span>
       </div>
       ${side('b')}
@@ -7815,13 +8016,16 @@ window.ptSyncRefPanel=ptSyncRefPanel;
    draft — see the big comment above ptRefBodyHTML — so a viewer tap can
    never touch it. It only ever asks the host to score, over the same
    per-stream signaling channel chat/replay already use. */
-function ptRefViewerPoint(side){
+function ptRefViewerPoint(side, isAce){
   if(!PTStream || PTStream.role!=='viewer' || !PTStream.channel) return;
   if(!PTStream.remotePT || PTStream.remotePT.winner || PTStream.remotePT.draw) return;
-  try{ PTStream.channel.send({type:"broadcast",event:"ref_point",payload:{side}}); }catch(e){}
+  try{ PTStream.channel.send({type:"broadcast",event:"ref_point",payload:{side, isAce:!!isAce}}); }catch(e){}
   try{ buzz(10); }catch(e){}   // immediate feel; the real number arrives on the next pt_sync
 }
 window.ptRefViewerPoint=ptRefViewerPoint;
+/* same request-not-action shape as ptRefViewerPoint, just flagged as an ace */
+function ptRefViewerAce(side){ ptRefViewerPoint(side, true); }
+window.ptRefViewerAce=ptRefViewerAce;
 /* same request-not-action shape as ptRefViewerPoint, for the ↶/↷ pair above
    the score grid. No local guard on ptHistory/ptFuture — a viewer's PTStream
    has no idea how deep the host's history is — so these just forward the ask
@@ -7858,8 +8062,8 @@ window.ptRequestReplay=ptRequestReplay;
    are already the record of what happened. */
 function ptSyncPayload(){
   if(typeof PT==='undefined' || !PT) return null;
-  const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount}=PT;
-  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount};
+  const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB}=PT;
+  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB};
 }
 function ptSyncBroadcastIfLive(){
   if(!PTStream || PTStream.role!=='host' || !PTStream.channel) return;
@@ -8519,7 +8723,7 @@ async function ptGoLive(){
      a local host tap uses, so it goes through every existing guard (winner/
      draw bail, undo history, drama/auto-highlight triggers) identically */
   ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
-    if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side);
+    if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side, !!payload.isAce);
   });
   /* a viewer's ↶/↷ ref-panel tap — ptUndo/ptRedo are already safe no-ops with
      nothing to undo/redo, same as a stray host tap on a disabled button */
