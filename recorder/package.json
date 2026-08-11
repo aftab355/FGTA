@@ -1,0 +1,14 @@
+{
+  "name": "fgta-recorder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Records an FGTA live match to this machine — every camera angle to its own file, no phone storage limits.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

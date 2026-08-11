@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FGTA recorder</title>
+<style>
+  :root{
+    --bg:#0b0716; --panel:#151030; --panel-2:#1c1640; --line:#2c2352;
+    --ink:#efeaff; --muted:#b7aee0; --dim:#7d74a8; --accent:#c8ff2f; --red:#ff2d2d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:18px;max-width:760px;margin:0 auto}
+  h1{font-size:19px;letter-spacing:1px;margin:0 0 2px;font-family:'JetBrains Mono',ui-monospace,monospace}
+  .sub{color:var(--dim);font-size:11px;font-family:ui-monospace,monospace;letter-spacing:1px;text-transform:uppercase}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:11px 13px;font-family:ui-monospace,monospace;font-size:15px;
+    letter-spacing:3px;text-transform:uppercase;text-align:center}
+  button{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:999px;
+    padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  button.go{background:var(--accent);color:#0b1400;border-color:var(--accent);font-weight:800}
+  button.stop{background:transparent;border-color:rgba(255,45,45,.5);color:#ff8f8f}
+  button:disabled{opacity:.45;cursor:default}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;
+    font-family:ui-monospace,monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700}
+  .badge.on{background:rgba(255,45,45,.14);border:1px solid rgba(255,45,45,.45);color:#ff9d9d}
+  .badge.off{background:var(--panel-2);border:1px solid var(--line);color:var(--dim)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:p 1.6s ease-out infinite}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(255,45,45,.6)}70%{box-shadow:0 0 0 7px rgba(255,45,45,0)}100%{box-shadow:0 0 0 0 rgba(255,45,45,0)}}
+  h2{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);
+    margin:0 0 10px;font-family:ui-monospace,monospace}
+  .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;
+    border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;min-width:0}
+  .item:last-child{border-bottom:none}
+  .item .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta{color:var(--dim);font-family:ui-monospace,monospace;font-size:11px;white-space:nowrap}
+  a{color:var(--accent);text-decoration:none}
+  .empty{color:var(--dim);font-size:12.5px}
+  .log{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--dim);line-height:1.75;
+    max-height:190px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+  .switch{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+  .switch input{width:auto;flex:none;transform:scale(1.25);margin:0}
+  .live-btn{width:100%;text-align:left;margin-top:6px}
+</style>
+</head>
+<body>
+  <h1>FGTA recorder</h1>
+  <div class="sub" id="head">connecting…</div>
+
+  <div class="card">
+    <div class="row">
+      <input id="code" placeholder="CODE" maxlength="5" autocomplete="off">
+      <button class="go" id="join">record</button>
+      <button class="stop" id="stop">stop</button>
+    </div>
+    <div class="row" style="margin-top:12px;justify-content:space-between">
+      <label class="switch"><input type="checkbox" id="auto"> auto-record anything that goes live</label>
+      <span id="state" class="badge off">idle</span>
+    </div>
+    <div id="live"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recording now</h2>
+    <div id="angles"><div class="empty">Nothing being recorded.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Saved on this PC</h2>
+    <div id="files"><div class="empty">No recordings yet.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const mb = b => b > 1e9 ? (b/1e9).toFixed(2)+' GB' : (b/1e6).toFixed(1)+' MB';
+const mmss = s => Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';
+
+async function api(p, opts){ const r = await fetch(p, opts); return r.json(); }
+const post = (p, body) => api(p, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body||{})});
+
+$('join').onclick = async () => {
+  const code = $('code').value.trim().toUpperCase();
+  if(!code) return;
+  $('join').disabled = true;
+  try { await post('/api/watch', {code}); } finally { $('join').disabled = false; }
+  refresh();
+};
+$('stop').onclick = async () => { await post('/api/stop'); refresh(); };
+$('auto').onchange = async e => { await post('/api/auto', {on:e.target.checked}); };
+$('code').addEventListener('keydown', e => { if(e.key==='Enter') $('join').click(); });
+
+let lastLog = '';
+async function refresh(){
+  let s;
+  try { s = await api('/api/status'); }
+  catch(e){ $('head').textContent = 'recorder offline'; return; }
+
+  $('head').textContent = (s.watching ? 'watching ' + (s.code||'') : 'idle')
+    + (s.disk ? ' · ' + s.disk.freeGB + ' GB free' : '');
+  if(document.activeElement !== $('auto')) $('auto').checked = !!s.auto;
+
+  const rec = (s.files||[]).length;
+  $('state').className = 'badge ' + (rec ? 'on' : 'off');
+  $('state').innerHTML = rec ? '<i class="dot"></i>recording ' + rec : 'idle';
+
+  // live matches the recorder can see, straight from the app's own directory
+  const live = (s.live||[]).filter(l => l.code !== s.code);
+  $('live').innerHTML = live.length
+    ? '<h2 style="margin-top:16px">Live now</h2>' + live.map(l =>
+        `<button class="live-btn" data-code="${l.code}">▶ ${l.label||'Live match'} — ${l.code}${l.angles>1?' · '+l.angles+' angles':''}</button>`).join('')
+    : '';
+  $('live').querySelectorAll('button[data-code]').forEach(b =>
+    b.onclick = async () => { await post('/api/watch', {code:b.dataset.code}); refresh(); });
+
+  const files = s.files || [];
+  const angles = s.angles || [];
+  $('angles').innerHTML = files.length
+    ? files.map(f => `<div class="item"><span class="n">${f.name.split('__')[1]||f.name}</span>
+        <span class="meta">${mb(f.bytes)} · ${mmss(f.seconds)}</span></div>`).join('')
+    : (angles.length
+        ? angles.map(a => `<div class="item"><span class="n">${a.label}</span><span class="meta">${a.status}</span></div>`).join('')
+        : '<div class="empty">Nothing being recorded.</div>');
+
+  const log = (s.log||[]).join('\n');
+  if(log !== lastLog){ lastLog = log; $('log').textContent = log; $('log').scrollTop = $('log').scrollHeight; }
+}
+
+async function refreshFiles(){
+  const r = await api('/api/recordings');
+  $('files').innerHTML = r.items.length
+    ? r.items.slice(0,40).map(f => `<div class="item">
+        <a class="n" href="/rec/${encodeURIComponent(f.name)}" target="_blank">${f.name}</a>
+        <span class="meta">${mb(f.bytes)}</span></div>`).join('')
+    : '<div class="empty">No recordings yet.</div>';
+}
+
+refresh(); refreshFiles();
+setInterval(refresh, 1500);
+setInterval(refreshFiles, 8000);
+</script>
+</body>
+</html>
