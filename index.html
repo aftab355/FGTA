@@ -6404,7 +6404,8 @@ function ptRandId(){ return Math.random().toString(36).slice(2,10); }
    without this, a portrait stream gets squashed into a landscape box.
    Match the box to whatever the video element is really receiving. */
 function ptBindAspect(v){
-  if(!v) return;
+  if(!v || v._aspectBound) return;
+  v._aspectBound=true;
   const fit=()=>{
     // fullscreen mode fills width/height:100% with object-fit:contain instead —
     // a forced aspect-ratio there would fight that layout, so skip it.
@@ -6452,17 +6453,39 @@ let ptStreamShape=null;
    CHILDREN via innerHTML — #ptStreamMain itself, the actual element the
    Fullscreen API is tracking, is never removed from the document, so
    fullscreen survives regardless of what triggered the re-render. */
-function ptRenderStreamShell(box, shape, headHtml, mainHtml, footHtml){
-  if(ptStreamShape!==shape){
+function ptRenderStreamShell(box, shape, headHtml, vwrapHtml, restHtml, footHtml){
+  const rebuildShape = ptStreamShape!==shape;
+  if(rebuildShape){
     box.innerHTML=`<div class="pt-stream-panel pt-stream-live">
       <div class="pt-stream-h" id="ptStreamHead"></div>
-      <div class="pt-stream-main" id="ptStreamMain"></div>
+      <div class="pt-stream-main" id="ptStreamMain"><div class="pt-stream-vwrap" id="ptVidWrap"></div></div>
       <div id="ptStreamFoot"></div>
     </div>`;
     ptStreamShape=shape;
   }
   const head=document.getElementById('ptStreamHead'); if(head) head.innerHTML=headHtml;
-  const main=document.getElementById('ptStreamMain'); if(main) main.innerHTML=mainHtml;
+  const main=document.getElementById('ptStreamMain');
+  const vwrap=document.getElementById('ptVidWrap');
+  /* #ptVidWrap (holding the <video>) is only rebuilt when the shape itself
+     changes (go-live/stop/switch role) — same node-preservation trick as
+     #ptStreamMain above, one level deeper. Every renderPTStream() call
+     (a chat message arriving, a viewer joining, mic/cam toggles, etc.) used
+     to blow away and recreate <video> via innerHTML, forcing it to restart
+     decoding from scratch every time — with chat flowing during a real
+     match that meant the picture rarely got a chance to actually show a
+     frame, i.e. the reported black screen. Anything inside the wrap that
+     can change without a shape change (viewer count, connection status) is
+     patched in place by the caller instead of baked into vwrapHtml.
+     .pt-chat/.pt-ref/.pt-more must stay direct children of #ptStreamMain,
+     siblings of #ptVidWrap — not wrapped in another div — because their
+     flex order/basis (see .pt-ref{order:3;...} etc.) is computed relative
+     to their immediate parent. So the "rest" of mainHtml is spliced in
+     around the preserved vwrap node rather than nested next to it. */
+  if(rebuildShape && vwrap) vwrap.innerHTML=vwrapHtml;
+  if(main && vwrap){
+    while(vwrap.nextSibling) main.removeChild(vwrap.nextSibling);
+    vwrap.insertAdjacentHTML('afterend', restHtml);
+  }
   const foot=document.getElementById('ptStreamFoot'); if(foot) foot.innerHTML=footHtml||'';
 }
 function renderPTStream(){
@@ -6605,19 +6628,20 @@ function renderPTStream(){
       <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
       <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
       <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>`;
-    const mainHtml=`
-      <div class="pt-stream-vwrap">
-        <div class="pt-video-shell">
-          <span class="pt-vid-badge"><i class="pt-live-dot"></i>live · ${PTStream.viewerCount}</span>
-          <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
-          <video id="ptLocalVideo" class="pt-stream-video" autoplay playsinline muted></video>
-        </div>
-        <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>
+    const vwrapHtml=`
+      <div class="pt-video-shell">
+        <span class="pt-vid-badge" id="ptVidBadge"><i class="pt-live-dot"></i>live · ${PTStream.viewerCount}</span>
+        <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
+        <video id="ptLocalVideo" class="pt-stream-video" autoplay playsinline muted></video>
       </div>
+      <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>`;
+    const restHtml=`
       ${chatHtml(PTStream)}
       ${refHtml(PTStream)}
       ${moreHtml(PTStream,true)}`;
-    ptRenderStreamShell(box,'host',headHtml,mainHtml,'');
+    ptRenderStreamShell(box,'host',headHtml,vwrapHtml,restHtml,'');
+    const badge=document.getElementById('ptVidBadge');
+    if(badge) badge.innerHTML=`<i class="pt-live-dot"></i>live · ${PTStream.viewerCount}`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     ptSyncRefDrawer();
@@ -6630,15 +6654,14 @@ function renderPTStream(){
     <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
     <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
     <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>`;
-  const mainHtml=`
-    <div class="pt-stream-vwrap">
-      <div class="pt-video-shell">
-        <span class="pt-vid-badge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
-        <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
-        <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
-        ${muted?'<button class="mini pt-unmute" onclick="ptUnmute()">🔇 tap to unmute</button>':''}
-      </div>
-    </div>
+  const vwrapHtml=`
+    <div class="pt-video-shell">
+      <span class="pt-vid-badge" id="ptVidBadge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
+      <button class="pt-fs-btn" onclick="ptToggleFullscreen()" title="Fullscreen">⛶</button>
+      <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
+      <button class="mini pt-unmute" id="ptUnmuteBtn" onclick="ptUnmute()"${muted?'':' hidden'}>🔇 tap to unmute</button>
+    </div>`;
+  const restHtml=`
     ${chatHtml(PTStream)}
     ${refHtml(PTStream)}
     ${moreHtml(PTStream,false)}`;
@@ -6648,7 +6671,9 @@ function renderPTStream(){
       <button class="mini no" onclick="ptStopWatching()">stop watching</button>
       ${PTStream.failed?`<button class="mini" onclick="ptRetryWatch()">↻ retry</button>`:''}
     </div>`;
-  ptRenderStreamShell(box,'viewer',headHtml,mainHtml,footHtml);
+  ptRenderStreamShell(box,'viewer',headHtml,vwrapHtml,restHtml,footHtml);
+  const badge=document.getElementById('ptVidBadge');
+  if(badge) badge.innerHTML=PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…');
   const v=$("ptRemoteVideo");
   if(v){
     ptBindAspect(v);
@@ -6665,7 +6690,10 @@ function ptUnmute(){
   PTStream.muted=false;
   const v=$("ptRemoteVideo");
   if(v){ v.muted=false; v.play().catch(()=>{}); }
-  renderPTStream();
+  // #ptVidWrap is preserved across renders now (see ptRenderStreamShell), so
+  // patch the button in place rather than relying on a full re-render to drop it.
+  const btn=document.getElementById('ptUnmuteBtn');
+  if(btn) btn.hidden=true;
 }
 window.ptUnmute=ptUnmute;
 window.renderPTStream=renderPTStream;
@@ -7363,7 +7391,10 @@ function ptBeginBreakMode(S,info){
   ptSyncBreakUI();
 }
 function ptSkipBreak(){
-  if(!PTStream || !PTStream.breakMode || PTStream.breakMode.phase!=='active') return;
+  // allow skipping during the 'in' wipe too — it self-transitions to 'active' next
+  // frame and this endAt will already be due, so it falls straight through to 'out'.
+  // 'out' is already resuming, so there's nothing left to skip.
+  if(!PTStream || !PTStream.breakMode || PTStream.breakMode.phase==='out') return;
   PTStream.breakMode.endAt=Date.now();
   const btn=document.getElementById('ptBreakResumeBtn');
   if(btn) btn.hidden=true;
@@ -8555,8 +8586,18 @@ window.ptToggleAIHighlight=ptToggleAIHighlight;
 /* ---- fullscreen ---- */
 function ptToggleFullscreen(){
   const el=$("ptStreamMain"); if(!el) return;
+  const video=el.querySelector("video");
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  // iOS Safari has no Element.requestFullscreen — only HTMLVideoElement.webkitEnterFullscreen()
+  if(isIOS && video && video.webkitEnterFullscreen){
+    try{ video.webkitEnterFullscreen(); }
+    catch(e){ toast("Fullscreen not available",true); }
+    return;
+  }
   if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  else el.requestFullscreen ? el.requestFullscreen().catch(()=>toast("Fullscreen not available",true)) : toast("Fullscreen not supported",true);
+  else if(el.requestFullscreen) el.requestFullscreen().catch(()=>toast("Fullscreen not available",true));
+  else if(video && video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+  else toast("Fullscreen not supported",true);
 }
 window.ptToggleFullscreen=ptToggleFullscreen;
 
