@@ -9207,6 +9207,7 @@ function ptHawkOpen(){
     T:Math.max(t0, t1-8000), playing:false, speed:0.5, raf:null,
     audio:Math.max(0, angles.findIndex(a=>a.hostId===S.activeAngle))};
   ptSyncAudioMix(S);                 // the live bed steps aside while you review
+  renderPTStream();                  // the 🦅 button becomes "back to live"
   ptHawkRender();
   ptHawkSeek(S.hawk.T);
   S.hawk.raf=requestAnimationFrame(ptHawkTick);
