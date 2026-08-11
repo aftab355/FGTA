@@ -2031,13 +2031,35 @@
      places to navigate away to. Scrolls sideways instead of wrapping so a
      match with several cameras can't push the video off screen. */
   .pt-angle-bar{margin-top:10px;min-width:0}
-  .pt-angle-row{display:flex;gap:6px;margin-top:6px;min-width:0;overflow-x:auto;padding-bottom:2px;
+  /* ---- angle rail: the other cameras, live, next to the main picture ----
+     A filmstrip rather than a list of names, because the whole value is
+     seeing what the other angle is showing before you choose it. Scrolls
+     sideways instead of wrapping so it can never push the video off screen. */
+  .pt-angle-rail{display:flex;gap:8px;margin-top:8px;min-width:0;overflow-x:auto;padding-bottom:2px;
     scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .pt-angle-row::-webkit-scrollbar{display:none}
-  .pt-angle-btn{flex:0 0 auto;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
-  .pt-angle-btn.on{background:color-mix(in srgb,var(--accent) 16%, transparent);
-    border-color:color-mix(in srgb,var(--accent) 55%, transparent);color:var(--accent);opacity:1;cursor:default}
+  .pt-angle-rail::-webkit-scrollbar{display:none}
+  .pt-angle-rail[hidden]{display:none}
+  .pt-tile{position:relative;flex:0 0 auto;width:112px;padding:0;cursor:pointer;overflow:hidden;
+    border:1px solid var(--line);border-radius:10px;background:#000;transition:border-color .15s,transform .12s}
+  .pt-tile:hover{border-color:var(--accent)}
+  .pt-tile:active{transform:scale(.97)}
+  .pt-tile video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#000}
+  .pt-tile-label{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;
+    background:linear-gradient(to top,rgba(0,0,0,.86),rgba(0,0,0,0));color:#fff;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.4px;text-align:left;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* an angle still connecting is dimmed rather than hidden — knowing a camera
+     is on its way is worth more than a tile that pops in unannounced */
+  .pt-tile.waiting video{opacity:.35}
+  .pt-tile.waiting{border-style:dashed}
+
+  /* In fullscreen the rail floats over the top of the picture, centred: the
+     left and right edges are already spoken for by the ref and chat drawers,
+     and the bottom by the ⚙️ controls. */
+  .pt-stream-main:fullscreen .pt-angle-rail{position:absolute;z-index:5;top:10px;left:50%;
+    transform:translateX(-50%);margin:0;max-width:calc(100% - 150px);
+    padding:6px;border-radius:12px;background:rgba(8,6,16,.5);backdrop-filter:blur(6px)}
+  .pt-stream-main:fullscreen .pt-tile{width:100px}
   /* Covers the <video> for the fraction of a second an angle switch takes to
      decode its first frame — see ptFreezeAngleFrame. object-fit applies to a
      canvas exactly as it does to the video underneath, so the held frame lands
@@ -6912,35 +6934,20 @@ function renderPTStream(){
       <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
       <canvas id="ptAngleFreeze" class="pt-angle-freeze" hidden></canvas>
       <button class="mini pt-unmute" id="ptUnmuteBtn" onclick="ptUnmute()"${muted?'':' hidden'}>🔇 tap to unmute</button>
-    </div>`;
-  /* Every camera currently added to THIS code (see ptAddAngle and ptGoLive's
-     host-hello) — distinct from othersHtml above, which lists other, entirely
-     separate matches and does have to reconnect to reach them. Switching here
-     is instant: every angle's peer connection is already open in the
-     background, so ptSwitchAngle only repoints the <video>. Rebuilt on every
-     render, so an angle that joins mid-watch appears on its own. */
+    </div>
+    <div class="pt-angle-rail" id="ptAngleRail" hidden></div>`;
   const angleIds=PTStream.angleOrder||[];
-  const angleLabel=(hid,i)=>{
-    const ang=PTStream.angles[hid];
-    return (ang&&ang.label)||('Angle '+(i+1));
-  };
-  const angleBtnsHtml = angleIds.map((hid,i)=>{
-    const ang=PTStream.angles[hid];
-    const label=angleLabel(hid,i);
-    if(hid===PTStream.activeAngle) return `<button class="mini pt-angle-btn on" disabled>▶ ${esc(label)}</button>`;
-    return `<button class="mini pt-angle-btn" onclick="ptSwitchAngle('${esc(hid)}')">${esc(label)}${ang&&ang.status!=='live'?` · ${esc(ang.status)}`:''}</button>`;
-  }).join('');
+  /* The switcher itself is the live tile rail beside the picture — see
+     ptSyncAngleRail. All that is left here is the caption under it, which is
+     also where a viewer finds out their recording follows whichever angle
+     they pick rather than the one they started on. */
   const angleSwitchHtml = angleIds.length>1 ? `<div class="pt-angle-bar">
-    <div class="pt-stream-note">📷 ${angleIds.length} angles${PTStream.recOn?' · recording follows whichever you pick':''}</div>
-    <div class="pt-angle-row">${angleBtnsHtml}</div>
+    <div class="pt-stream-note">📷 ${angleIds.length} angles · tap one to put it on the big screen${PTStream.recOn?' — the recording follows':''}</div>
   </div>` : '';
-  /* Also inside the ⚙️ drawer, which is the one control surface that stays
-     reachable in fullscreen — switching angles shouldn't cost you the
-     fullscreen picture you switched angles to see. */
   const restHtml=`
     ${chatHtml(PTStream)}
     ${refHtml(PTStream)}
-    ${moreHtml(PTStream,false,angleIds.length>1?`<div class="pt-ctl-sep"></div><div class="pt-ctl-group pt-angle-row">${angleBtnsHtml}</div>`:'')}`;
+    ${moreHtml(PTStream,false)}`;
   const footHtml=`
     ${angleSwitchHtml}
     ${othersHtml}
@@ -6962,6 +6969,7 @@ function renderPTStream(){
        track rather than leaving its last frame up looking like a live feed */
     else if(v.srcObject) v.srcObject=null;
   }
+  ptSyncAngleRail();
   ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
   ptSyncRefDrawer();
   ptSyncMoreDrawer();
@@ -9462,6 +9470,73 @@ function ptSyncActiveAngleFields(){
   PTStream.failed=a?!!a.failed:false;
   ptMixBindAudio(PTStream);   // keep a running recording's audio on the angle being watched
 }
+/* ---- the angle rail ----
+   Every other camera on this match, live, as a strip of thumbnails beside the
+   main picture — the way a broadcast lets you see what else is available
+   rather than making you guess. It replaced a row of text buttons, which
+   technically let you switch but never let you see what you were switching to,
+   so picking an angle was a gamble you paid for with a black second.
+
+   Built imperatively rather than through renderPTStream's innerHTML, for the
+   same reason the main <video> is: re-creating a video element throws away its
+   decoder and restarts it black. Tiles are keyed by hostId, created once and
+   then only updated, so they keep playing through every re-render.
+
+   The angle currently on the big screen is deliberately absent — it is already
+   the thing you are looking at, and decoding it twice buys nothing. */
+function ptSyncAngleRail(){
+  const rail=document.getElementById('ptAngleRail');
+  if(!rail) return;
+  const S=PTStream;
+  const ids=(S && S.role==='viewer') ? (S.angleOrder||[]) : [];
+  const others=ids.filter(h=>h!==S.activeAngle);
+  rail.hidden=!others.length;
+  if(!others.length){
+    /* release the decoders rather than leaving orphaned tiles behind */
+    while(rail.firstChild){
+      const v=rail.firstChild.querySelector && rail.firstChild.querySelector('video');
+      if(v) v.srcObject=null;
+      rail.removeChild(rail.firstChild);
+    }
+    return;
+  }
+  const byHost=new Map([...rail.children].map(c=>[c.dataset.host,c]));
+  others.forEach((hid,i)=>{
+    const a=S.angles[hid]; if(!a) return;
+    let tile=byHost.get(hid);
+    if(!tile){
+      tile=document.createElement('button');
+      tile.className='pt-tile';
+      tile.dataset.host=hid;
+      tile.type='button';
+      const v=document.createElement('video');
+      v.muted=true; v.autoplay=true; v.playsInline=true; v.setAttribute('playsinline','');
+      const lbl=document.createElement('span');
+      lbl.className='pt-tile-label';
+      tile.appendChild(v); tile.appendChild(lbl);
+      tile.addEventListener('click', ()=>ptSwitchAngle(hid));
+      rail.appendChild(tile);
+    }
+    byHost.delete(hid);
+    const v=tile.querySelector('video');
+    if(a.remoteStream){
+      if(v.srcObject!==a.remoteStream){ v.srcObject=a.remoteStream; v.play().catch(()=>{}); }
+    } else if(v.srcObject) v.srcObject=null;
+    const name=a.label||('Angle '+(i+1));
+    const text=a.status==='live' ? name : `${name} · ${a.status}`;
+    const lbl=tile.querySelector('.pt-tile-label');
+    if(lbl.textContent!==text) lbl.textContent=text;
+    tile.classList.toggle('waiting', a.status!=='live');
+    tile.title='Switch to '+name;
+    tile.setAttribute('aria-label','Switch to '+name);
+  });
+  /* whatever is left in byHost is an angle that went away or got promoted */
+  byHost.forEach(tile=>{
+    const v=tile.querySelector('video'); if(v) v.srcObject=null;
+    tile.remove();
+  });
+}
+
 /* Keeping every angle's peer connection open means a switch needs no
    reconnection — but the <video> element is shared, and re-pointing it at
    another MediaStream still makes it reload: measured in-browser at roughly
