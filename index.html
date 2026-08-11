@@ -2025,6 +2025,19 @@
   .pt-stream-foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;min-width:0}
   .pt-stream-others{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px;min-width:0}
   .pt-other-btn{display:block;width:100%;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* camera-angle switcher: a horizontal rail rather than the stacked list used
+     for other matches, because these are peers of each other and switching
+     between them is cheap — it should read like a channel strip, not a list of
+     places to navigate away to. Scrolls sideways instead of wrapping so a
+     match with several cameras can't push the video off screen. */
+  .pt-angle-bar{margin-top:10px;min-width:0}
+  .pt-angle-row{display:flex;gap:6px;margin-top:6px;min-width:0;overflow-x:auto;padding-bottom:2px;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .pt-angle-row::-webkit-scrollbar{display:none}
+  .pt-angle-btn{flex:0 0 auto;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+  .pt-angle-btn.on{background:color-mix(in srgb,var(--accent) 16%, transparent);
+    border-color:color-mix(in srgb,var(--accent) 55%, transparent);color:var(--accent);opacity:1;cursor:default}
 
   /* ---- the "nobody's watching yet" landing state ----
      Used to be a plain header line + a code input in a row — functionally
@@ -6399,6 +6412,13 @@ const PT_ICE={iceServers:[
 ]};
 function ptRandCode(){ return Math.random().toString(36).slice(2,7).toUpperCase(); }
 function ptRandId(){ return Math.random().toString(36).slice(2,10); }
+/* Stream codes and host IDs arrive from other peers — anyone who knows a code
+   can join its channel and broadcast whatever they like — and they end up
+   inside inline onclick="…('…')" attributes. esc() covers <>&" but NOT the
+   single quotes those calls are delimited by, so escaping alone would let a
+   crafted ID break out into script. Reduce them to the alphanumerics they're
+   generated from above instead; anything else was never a real ID. */
+function ptSafeId(v){ return String(v==null?'':v).replace(/[^A-Za-z0-9]/g,'').slice(0,32); }
 
 /* The CSS default is a 4:3 landscape box, but the actual stream can be
    portrait (phone held upright) or any other ratio the camera reports —
@@ -6494,7 +6514,7 @@ function renderPTStream(){
   const others = ptActiveStreams();
   const othersHtml = others.length ? `<div class="pt-stream-others">
     <div class="pt-stream-note">📡 other live matches</div>
-    ${others.map(o=>`<button class="mini pt-other-btn" onclick="ptSwitchTo('${esc(o.code)}')">▶ ${esc(o.label||'Live match')} — ${esc(o.code)}</button>`).join('')}
+    ${others.map(o=>`<button class="mini pt-other-btn" onclick="ptSwitchTo('${esc(o.code)}')">▶ ${esc(o.label||'Live match')} — ${esc(o.code)}${o.angles>1?` (${o.angles} angles)`:''}</button>`).join('')}
   </div>` : '';
   /* The 💬 tab must stay the chat panel's immediate next sibling — the CSS
      slides it aside with `.pt-chat.pt-chat-open + .pt-chat-tab`. It's hidden
@@ -6537,7 +6557,7 @@ function renderPTStream(){
      broadcast request, same shape as ref_point) and recording their own
      copy of what they're watching (S.remoteStream instead of S.localStream —
      see ptStartRecord). */
-  const moreHtml = (S,isHost)=>{
+  const moreHtml = (S,isHost,extraHtml)=>{
     /* only surfaced once GOOGLE_DRIVE_CLIENT_ID is actually filled in — an
        always-visible button that just explains a missing setup step isn't
        useful to anyone but the site owner, and this appears automatically
@@ -6585,7 +6605,7 @@ function renderPTStream(){
       </div>
       <div class="pw-legend" style="margin-top:8px">mic, camera, zoom and filters belong to the host's own device — not shown here</div>`;
     return `<div class="pt-more${S.moreOpen?' pt-more-open':''}" id="ptMore">
-        <div class="pt-stream-controls">${body}</div>
+        <div class="pt-stream-controls">${body}${extraHtml||''}</div>
         ${isHost?`<div class="pt-stream-foot"><button class="mini no" onclick="ptStopLive()">stop streaming</button></div>`:''}
       </div><button class="pt-more-tab" id="ptMoreTab" onclick="ptToggleMoreDrawer(event)" title="More controls" aria-label="Toggle more controls">⚙️</button>`;
   };
@@ -6601,7 +6621,7 @@ function renderPTStream(){
           ${others.map(o=>`<button class="pt-live-now-card" onclick="ptSwitchTo('${esc(o.code)}')" aria-label="Watch ${esc(o.label||'live match')}">
             <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
             <span class="pt-live-now-label">${esc(o.label||'Live match')}</span>
-            <span class="pt-live-now-code">code ${esc(o.code)}</span>
+            <span class="pt-live-now-code">code ${esc(o.code)}${o.angles>1?` · ${o.angles} angles`:''}</span>
           </button>`).join('')}
         </div>
       </div>` : '';
@@ -6626,11 +6646,16 @@ function renderPTStream(){
     return;
   }
   if(PTStream.role==='host'){
+    /* An extra angle films a match it isn't scoring (see ptScoreSrc), so it
+       gets no ref deck — the score it shows is mirrored in from the origin
+       host, and tapping a point here would score an unrelated local match. */
+    const extra=!!PTStream.isExtraAngle;
     const headHtml=`
       <span class="pt-live-badge"><i class="pt-live-dot"></i>live</span>
       <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
+      ${extra?'<span class="pt-live-badge pt-watch-badge">📷 angle</span>':''}
       <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
-      <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>
+      ${extra?'':`<button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>`}
       <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
       <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>`;
     const vwrapHtml=`
@@ -6642,9 +6667,10 @@ function renderPTStream(){
       <div id="ptHostDebug" class="pt-dbg"${PTStream.showDebug?'':' hidden'}></div>`;
     const restHtml=`
       ${chatHtml(PTStream)}
-      ${refHtml(PTStream)}
+      ${extra?'':refHtml(PTStream)}
       ${moreHtml(PTStream,true)}`;
-    ptRenderStreamShell(box,'host',headHtml,vwrapHtml,restHtml,'');
+    ptRenderStreamShell(box,'host',headHtml,vwrapHtml,restHtml,
+      extra?`<div class="pw-legend">You're an extra camera on ${esc(PTStream.code)} — the score comes from whoever started this live, and viewers can switch to your angle at any time.</div>`:'');
     const badge=document.getElementById('ptVidBadge');
     if(badge) badge.innerHTML=`<i class="pt-live-dot"></i>live · ${PTStream.viewerCount}`;
     const v=$("ptLocalVideo");
@@ -6666,27 +6692,34 @@ function renderPTStream(){
       <video id="ptRemoteVideo" class="pt-stream-video" autoplay playsinline${muted?' muted':''}></video>
       <button class="mini pt-unmute" id="ptUnmuteBtn" onclick="ptUnmute()"${muted?'':' hidden'}>🔇 tap to unmute</button>
     </div>`;
+  /* Every camera currently added to THIS code (see ptAddAngle and ptGoLive's
+     host-hello) — distinct from othersHtml above, which lists other, entirely
+     separate matches and does have to reconnect to reach them. Switching here
+     is instant: every angle's peer connection is already open in the
+     background, so ptSwitchAngle only repoints the <video>. Rebuilt on every
+     render, so an angle that joins mid-watch appears on its own. */
+  const angleIds=PTStream.angleOrder||[];
+  const angleLabel=(hid,i)=>{
+    const ang=PTStream.angles[hid];
+    return (ang&&ang.label)||('Angle '+(i+1));
+  };
+  const angleBtnsHtml = angleIds.map((hid,i)=>{
+    const ang=PTStream.angles[hid];
+    const label=angleLabel(hid,i);
+    if(hid===PTStream.activeAngle) return `<button class="mini pt-angle-btn on" disabled>▶ ${esc(label)}</button>`;
+    return `<button class="mini pt-angle-btn" onclick="ptSwitchAngle('${esc(hid)}')">${esc(label)}${ang&&ang.status!=='live'?` · ${esc(ang.status)}`:''}</button>`;
+  }).join('');
+  const angleSwitchHtml = angleIds.length>1 ? `<div class="pt-angle-bar">
+    <div class="pt-stream-note">📷 ${angleIds.length} angles${PTStream.recOn?' · recording follows whichever you pick':''}</div>
+    <div class="pt-angle-row">${angleBtnsHtml}</div>
+  </div>` : '';
+  /* Also inside the ⚙️ drawer, which is the one control surface that stays
+     reachable in fullscreen — switching angles shouldn't cost you the
+     fullscreen picture you switched angles to see. */
   const restHtml=`
     ${chatHtml(PTStream)}
     ${refHtml(PTStream)}
-    ${moreHtml(PTStream,false)}`;
-  /* Every camera currently added to THIS code (see ptAddAngle/ptGoLive's
-     host-hello) — separate from othersHtml above, which lists other,
-     different matches entirely. Switching here is instant since every
-     angle's peer connection is already live in the background; see
-     ptSwitchAngle. Rebuilt on every render (footHtml, unlike vwrapHtml,
-     isn't gated behind a shape change) so a new angle connecting mid-watch
-     shows up without needing a reconnect. */
-  const angleIds=PTStream.angleOrder||[];
-  const angleSwitchHtml = angleIds.length>1 ? `<div class="pt-stream-others">
-    <div class="pt-stream-note">📷 ${angleIds.length} camera angles live on this match</div>
-    ${angleIds.map((hid,i)=>{
-      const ang=PTStream.angles[hid];
-      const label=(ang&&ang.label)||('Angle '+(i+1));
-      if(hid===PTStream.activeAngle) return `<button class="mini pt-other-btn" disabled>▶ ${esc(label)} — watching</button>`;
-      return `<button class="mini pt-other-btn" onclick="ptSwitchAngle('${esc(hid)}')">${esc(label)}${ang&&ang.status!=='live'?' — '+esc(ang.status):''}</button>`;
-    }).join('')}
-  </div>` : '';
+    ${moreHtml(PTStream,false,angleIds.length>1?`<div class="pt-ctl-sep"></div><div class="pt-ctl-group pt-angle-row">${angleBtnsHtml}</div>`:'')}`;
   const footHtml=`
     ${angleSwitchHtml}
     ${othersHtml}
@@ -6704,6 +6737,9 @@ function renderPTStream(){
       if(v.srcObject!==PTStream.remoteStream) v.srcObject=PTStream.remoteStream;
       v.play().catch(()=>{});
     }
+    /* the angle on screen went away and nothing replaced it — drop the dead
+       track rather than leaving its last frame up looking like a live feed */
+    else if(v.srcObject) v.srcObject=null;
   }
   ptSyncRefDrawer();
   ptSyncMoreDrawer();
@@ -6869,9 +6905,22 @@ function ptShortName(n){
      1. a tracked match       → match elapsed (freezes at PT.endedAt)
      2. live, but no match    → time on air, from PTStream.liveSince
      3. neither               → nothing at all, no empty pill */
+/* Which match the burnt-in score bug draws from. An extra camera angle
+   (see ptAddAngle) is filming somebody ELSE's match, so its own local PT is
+   either empty or — worse — a different match entirely, and drawing that
+   would burn a wrong scoreboard into that angle's video for every viewer.
+   Extra angles mirror the origin host's broadcast score instead (S.remotePT,
+   fed by the pt_sync handler); everyone else draws the match they're
+   actually scoring. Same field names either way — see ptSyncPayload, which
+   exists precisely to be a complete drawing source. */
+function ptScoreSrc(S){
+  if(S && S.isExtraAngle) return S.remotePT||null;
+  return (typeof PT!=='undefined' && PT) ? PT : null;
+}
 function ptClockReadout(S){
-  if(typeof PT!=='undefined' && PT && PT.startedAt){
-    return {txt:ptFmtElapsed((PT.endedAt||Date.now())-PT.startedAt), live:!PT.endedAt};
+  const P=ptScoreSrc(S);
+  if(P && P.startedAt){
+    return {txt:ptFmtElapsed((P.endedAt||Date.now())-P.startedAt), live:!P.endedAt};
   }
   if(S && S.liveSince) return {txt:ptFmtElapsed(Date.now()-S.liveSince), live:true, lab:'ON AIR'};
   return null;
@@ -6915,9 +6964,13 @@ function ptDrawScoreboard(S){
   const C=ptSbColors();
   const clock=ptClockReadout(S);
   const u0=Math.min(W,H);
-  if(typeof PT==='undefined' || !PT){
+  const P=ptScoreSrc(S);
+  if(!P){
     /* live, but nothing being scored yet — no bug to draw, so the clock takes
-       the bug's corner on its own rather than disappearing entirely */
+       the bug's corner on its own rather than disappearing entirely.
+       An extra angle also lands here until the origin host's first pt_sync
+       arrives, which is the right thing to show: no score is better than
+       somebody else's score. */
     if(clock){
       const bh=Math.max(30,Math.round(u0*0.095)), mm=Math.round(u0*0.11);
       ctx.save(); ctx.filter='none';
@@ -6956,11 +7009,11 @@ function ptDrawScoreboard(S){
   const fMid =`800 ${Math.max(11,Math.round(barH*0.34))}px ${MONO}`;
   const fLab =`700 ${Math.max(7,Math.round(barH*0.185))}px ${MONO}`;
 
-  const setsA=String(PT.setsA||0), setsB=String(PT.setsB||0);
-  const tb=!!PT.tiebreak;
-  const ptsTxt = tb ? `${PT.tbA||0}-${PT.tbB||0}` : `${PT.ptsA||0}-${PT.ptsB||0}`;
+  const setsA=String(P.setsA||0), setsB=String(P.setsB||0);
+  const tb=!!P.tiebreak;
+  const ptsTxt = tb ? `${P.tbA||0}-${P.tbB||0}` : `${P.ptsA||0}-${P.ptsB||0}`;
   const ptsLab = tb ? 'TIEBREAK' : 'POINT';
-  const gamesTxt = `${PT.gamesA||0}-${PT.gamesB||0}`;
+  const gamesTxt = `${P.gamesA||0}-${P.gamesB||0}`;
 
   /* --- measure, then hand whatever width is left over to the two names --- */
   ctx.font=fBig;
@@ -6981,8 +7034,8 @@ function ptDrawScoreboard(S){
   if(nameBudget < barH*1.1){ showGames=false; fixed-=gamesW; nameBudget=avail-fixed; }
   const nameMax=Math.max(Math.round(barH*0.5), Math.floor(nameBudget/2));
   ctx.font=fName;
-  const nA=ptFitText(ctx, ptShortName(PT.a).toUpperCase(), nameMax);
-  const nB=ptFitText(ctx, ptShortName(PT.b).toUpperCase(), nameMax);
+  const nA=ptFitText(ctx, ptShortName(P.a).toUpperCase(), nameMax);
+  const nB=ptFitText(ctx, ptShortName(P.b).toUpperCase(), nameMax);
   const nAW=Math.round(ctx.measureText(nA).width), nBW=Math.round(ctx.measureText(nB).width);
 
   const teamAW=nAW+pad*2+setCellW, teamBW=nBW+pad*2+setCellW;
@@ -7074,9 +7127,9 @@ function ptDrawScoreboard(S){
   let clockW=0;
   if(clock) clockW=ptDrawClockPill(ctx,C,barH,x0+totalW,y0-Math.round(barH*0.20),'right',clock);
 
-  if(PT.winner || PT.draw){
-    const txt = PT.draw ? 'MATCH DRAWN'
-      : '🏆 '+ptShortName(PT.winner==='a'?PT.a:PT.b).toUpperCase()+' WINS';
+  if(P.winner || P.draw){
+    const txt = P.draw ? 'MATCH DRAWN'
+      : '🏆 '+ptShortName(P.winner==='a'?P.a:P.b).toUpperCase()+' WINS';
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
     const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
@@ -7086,7 +7139,7 @@ function ptDrawScoreboard(S){
     ctx.fillStyle=C.gold; ctx.fill();
     ctx.fillStyle='#1a1400'; ctx.textAlign='center';
     ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
-  } else if(ptTensionTag()){
+  } else if(ptTensionTag(P)){
     /* GAME/SET/MATCH POINT — same badge slot as the winner banner (a match
        that's over never shows this) and takes priority over the streak
        flame below: what the very next point does outranks "on a run" as
@@ -7096,11 +7149,11 @@ function ptDrawScoreboard(S){
        point) and a slow breathing pulse for as long as it holds, so it
        reads as live tension rather than a static label — same "flash on
        score change" language the point-badge glow above already uses. */
-    const tension=ptTensionTag();
+    const tension=ptTensionTag(P);
     const key=tension.side+tension.tag;
     if(S._tensionKey!==key){ S._tensionKey=key; S._tensionAt=performance.now(); }
     const col=ptTensionColor(tension.level);
-    const txt=`⚡ ${ptShortName(tension.side==='a'?PT.a:PT.b).toUpperCase()} — ${tension.tag}`;
+    const txt=`⚡ ${ptShortName(tension.side==='a'?P.a:P.b).toUpperCase()} — ${tension.tag}`;
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
     const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
@@ -7117,15 +7170,15 @@ function ptDrawScoreboard(S){
     ctx.fillStyle = tension.level===3?'#fff':'#1a1400'; ctx.textAlign='center';
     ctx.fillText(ptFitText(ctx,txt,bw-bp*2), x0+bw/2, by+bh*0.54);
     ctx.restore();
-  } else if((PT.streakCount||0)>=3 && PT.streakSide){
+  } else if((P.streakCount||0)>=3 && P.streakSide){
     /* momentum badge: same slot the winner/draw banner uses (mutually
        exclusive — a match that's over doesn't also need a "run" callout),
        same geometry, just keyed off whoever's on a run of 3+ straight
        points regardless of game/set boundaries (see PT.streakCount in
        ptPoint). This is the one broadcast-graphic staple tennis coverage
        doesn't already have baked in via the set/game/point bug above. */
-    const side=PT.streakSide;
-    const txt=`🔥 ${ptShortName(side==='a'?PT.a:PT.b).toUpperCase()} ${PT.streakCount} STRAIGHT`;
+    const side=P.streakSide;
+    const txt=`🔥 ${ptShortName(side==='a'?P.a:P.b).toUpperCase()} ${P.streakCount} STRAIGHT`;
     const bh=Math.round(barH*0.56), bp=Math.round(barH*0.30);
     ctx.font=fMid;
     const room=Math.max(barH, avail-(clockW?clockW+Math.round(barH*0.24):0));
@@ -8121,6 +8174,10 @@ function ptSyncPayload(){
 }
 function ptSyncBroadcastIfLive(){
   if(!PTStream || PTStream.role!=='host' || !PTStream.channel) return;
+  /* only the origin host speaks for the score — see the ref handlers in
+     ptGoLive; an extra angle broadcasting its own PT would overwrite the
+     real match on every viewer's ref panel */
+  if(PTStream.isExtraAngle) return;
   try{ PTStream.channel.send({type:"broadcast",event:"pt_sync",payload:ptSyncPayload()}); }catch(e){}
 }
 /* tap anywhere off the drawer (i.e. on the picture) to dismiss it */
@@ -8149,19 +8206,122 @@ function ptToggleMic(){
   renderPTStream();
 }
 window.ptToggleMic=ptToggleMic;
-function ptToggleCam(){
+async function ptToggleCam(){
   if(!PTStream) return;
-  PTStream.camOn=!PTStream.camOn;
+  const S=PTStream;
+  /* Turning the camera back on when the stream has no live video track left —
+     which is where a failed swap parks it (see ptSwapVideoTrack) — has to
+     actually re-acquire a camera, not just flip the flag, or the canvas would
+     go straight back to drawing a track that already ended. This is the
+     documented "tap 📷 cam to retry" path out of a failed swap. */
+  const track=S.rawStream && S.rawStream.getVideoTracks()[0];
+  if(!S.camOn && S.role==='host' && (!track || track.readyState==='ended')){
+    if(S._camSwapping) return toast("Switching camera — one sec",true);
+    ptBeginCamBumper(S,'CAMERA');
+    const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:S.facingMode||'environment'}});
+    ptCamBumperReady(S);
+    if(!got) return;                       // ptSwapVideoTrack already explained why
+    S.camOn=true;
+    renderPTStream();
+    return;
+  }
+  S.camOn=!S.camOn;
   renderPTStream();
 }
 window.ptToggleCam=ptToggleCam;
 
+/* Letterbox rather than crop: unlike the host's own composite (which
+   deliberately centre-crops to a fixed landscape frame, see ptStartProcessing),
+   a viewer's recording has no business throwing away picture. Whatever
+   shape the angle arrives in — a phone held portrait, a 4:3 tablet, an
+   ultrawide webcam — the whole frame lands inside the recorded frame with
+   bars, so switching between differently-shaped angles mid-recording never
+   silently crops one of them. */
+function ptFitContain(vw,vh,cw,ch){
+  const scale=Math.min(cw/vw, ch/vh);
+  const dw=Math.round(vw*scale), dh=Math.round(vh*scale);
+  return {dx:Math.round((cw-dw)/2), dy:Math.round((ch-dh)/2), dw, dh};
+}
+/* ---- viewer mix bus ----
+   A MediaRecorder latches its source tracks the moment it starts and never
+   notices tracks added or removed afterwards. Recording PTStream.remoteStream
+   directly therefore meant a viewer who switched camera angles mid-recording
+   carried on recording the angle they had just left — and lost the recording
+   outright if that particular host stopped streaming. So viewers record this
+   bus instead: one canvas and one audio destination whose *contents* follow
+   the active angle while the track objects themselves never change. The
+   result is a single continuous file across any number of angle switches.
+   Built lazily on first record (a user gesture, which is also what lets the
+   AudioContext start) and torn down with the watch session. ---- */
+function ptViewerMixStream(S){
+  if(!S || S.role!=='viewer') return null;
+  if(S.mixStream) return S.mixStream;
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=PT_CAP_LONG; canvas.height=PT_CAP_SHORT;
+    const ctx=canvas.getContext('2d');
+    S.mixCanvas=canvas;
+    /* Draws whatever #ptRemoteVideo is currently showing, which is already
+       the active angle — so the switcher needs no hook into the recorder,
+       and a switch costs the recording nothing but the frame it lands on. */
+    const draw=()=>{
+      if(!PTStream || PTStream!==S || !S.mixStream){ S._mixRaf=null; return; }
+      const v=document.getElementById('ptRemoteVideo');
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      if(v && v.readyState>=2 && v.videoWidth && v.videoHeight){
+        const {dx,dy,dw,dh}=ptFitContain(v.videoWidth,v.videoHeight,canvas.width,canvas.height);
+        try{ ctx.drawImage(v,dx,dy,dw,dh); }catch(e){}
+      }
+      S._mixRaf=requestAnimationFrame(draw);
+    };
+    const videoTracks=canvas.captureStream(30).getVideoTracks();
+    let audioTracks=[];
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){
+      try{
+        S.mixAC=new AC();
+        S.mixDest=S.mixAC.createMediaStreamDestination();
+        audioTracks=S.mixDest.stream.getAudioTracks();
+      }catch(e){ S.mixAC=null; S.mixDest=null; }
+    }
+    S.mixStream=new MediaStream([...videoTracks, ...audioTracks]);
+    ptMixBindAudio(S);
+    draw();
+    return S.mixStream;
+  }catch(e){
+    console.log('[ptStream] viewer mix bus unavailable:', e && e.message);
+    return null;
+  }
+}
+/* Re-points the bus's audio input at the active angle without ever replacing
+   the destination track the recorder is holding. Safe to call whenever the
+   active angle changes or a track arrives — it always rebuilds from scratch. */
+function ptMixBindAudio(S){
+  if(!S || !S.mixAC || !S.mixDest) return;
+  try{ if(S.mixSrcNode) S.mixSrcNode.disconnect(); }catch(e){}
+  S.mixSrcNode=null;
+  const angle=S.angles && S.angles[S.activeAngle];
+  const st=angle && angle.remoteStream;
+  if(!st || !st.getAudioTracks().length) return;
+  try{
+    S.mixSrcNode=S.mixAC.createMediaStreamSource(st);
+    S.mixSrcNode.connect(S.mixDest);
+  }catch(e){}
+}
+function ptStopViewerMix(S){
+  if(!S) return;
+  if(S._mixRaf){ cancelAnimationFrame(S._mixRaf); S._mixRaf=null; }
+  try{ if(S.mixSrcNode) S.mixSrcNode.disconnect(); }catch(e){}
+  try{ if(S.mixAC && S.mixAC.state!=='closed') S.mixAC.close(); }catch(e){}
+  S.mixSrcNode=null; S.mixAC=null; S.mixDest=null; S.mixStream=null; S.mixCanvas=null;
+}
+
 /* ---- local recording: opt-in, saves straight to this device, never
    uploaded anywhere. The host records the exact composed feed (canvas +
-   mic) viewers see (S.localStream); a viewer records their own copy of
-   what they're receiving (S.remoteStream) — same recorder, same save flow,
-   just a different source track since only the host has a localStream at
-   all. Deliberately a second, independent MediaRecorder from the one in
+   mic) viewers see (S.localStream); a viewer records the mix bus above,
+   which mirrors whichever angle they're watching — same recorder, same
+   save flow, just a different source since only the host has a localStream
+   at all. Deliberately a second, independent MediaRecorder from the one in
    ptStartReplayRecorder: that one evicts anything older than ~16s and
    periodically restarts itself, which is exactly wrong for a recording
    meant to hold the whole match. This one just keeps every chunk until
@@ -8180,9 +8340,15 @@ window.ptToggleRecord=ptToggleRecord;
 function ptStartRecord(silent){
   const S=PTStream;
   if(!S) return;
-  const src = S.role==='host' ? S.localStream : S.remoteStream;
+  if(S.role==='viewer' && !S.remoteStream) return toast("Nothing to record yet — wait for the video to connect",true);
+  /* viewers record the angle-following mix bus, falling back to the raw
+     received stream if this browser has no AudioContext/captureStream */
+  const src = S.role==='host' ? S.localStream : (ptViewerMixStream(S) || S.remoteStream);
   if(!src){ if(S.role==='viewer') toast("Nothing to record yet — wait for the video to connect",true); return; }
   if(!window.MediaRecorder) return toast("Recording isn't supported in this browser",true);
+  /* an AudioContext created outside a gesture starts suspended and would
+     record silence — this call is always reached from a record-button tap */
+  if(S.mixAC && S.mixAC.state==='suspended') S.mixAC.resume().catch(()=>{});
   /* Same codec fallback as the replay recorder — iOS/Safari has never
      shipped webm support, only mp4, so a webm-only candidate list would
      silently fail there. */
@@ -8416,38 +8582,97 @@ async function ptEnumerateCameras(){
   try{ return (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'); }
   catch(e){ return []; }
 }
+/* Phones serialise access to a camera sensor, and stop() does NOT
+   synchronously hand it back — the OS releases it a beat later. A
+   getUserMedia landing inside that window fails with NotReadableError
+   ("Could not start video source"), which is by far the most common camera
+   swap failure on Android and reads to the user as "the camera is broken"
+   when the truth is "ask again in 200ms". So every attempt below is
+   retried across a few short passes before it's believed. */
+async function ptGetCameraStream(video){
+  return navigator.mediaDevices.getUserMedia({video, audio:false});
+}
+/* Progressively looser attempts, most specific first. Each rung gives up one
+   demand, because a swap that can't have exactly what it asked for should
+   still come back with a working picture rather than a dead stream:
+   the HD hint is only a hint but still shifts which pipeline the driver
+   picks; an `exact` deviceId goes stale whenever the OS re-enumerates
+   (common right after another app touches the camera); and past that,
+   whatever lens we were already on beats no lens at all. */
+function ptCameraLadder(constraints, prevDeviceId){
+  const ladder=[ptVideoConstraints(constraints)];
+  if(constraints) ladder.push(Object.assign({},constraints));
+  const exact=constraints && constraints.deviceId && constraints.deviceId.exact;
+  if(exact) ladder.push(ptVideoConstraints({deviceId:{ideal:exact}}));
+  if(prevDeviceId) ladder.push(ptVideoConstraints({deviceId:{ideal:prevDeviceId}}));
+  ladder.push(true);
+  return ladder;
+}
 async function ptSwapVideoTrack(constraints){
-  if(!PTStream || PTStream.role!=='host') return null;
-  const oldTrack=PTStream.rawStream.getVideoTracks()[0];
-  /* Most phones only let one getUserMedia call hold the camera hardware at a
-     time — requesting the new camera before releasing the old one is exactly
-     what throws NotReadableError ("Could not start video source"/"in use").
-     Release first, then request. */
-  const prevDeviceId=PTStream.videoDeviceId;
-  if(oldTrack){ PTStream.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
-  let newStream;
-  /* carry the same HD resolution request across the swap — without it a
-     camera flip silently renegotiates back down to the driver's default
-     (often 640x480) and the stream visibly softens mid-match */
+  const S=PTStream;
+  if(!S || S.role!=='host') return null;
+  /* One swap at a time, tracked independently of the camSwitch bumper.
+     Keying the guard off the bumper (as this used to) silently failed to
+     guard at all whenever ptBeginCamBumper bailed early — during a replay,
+     a set break, or an already-running swap — so a second tap fired a
+     concurrent getUserMedia at the very sensor the first one was still
+     releasing, i.e. it manufactured the exact NotReadableError above. */
+  if(S._camSwapping) return null;
+  S._camSwapping=true;
   try{
-    newStream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints(constraints),audio:false});
-  }catch(e){
-    toast("Couldn't switch camera ("+e.name+") — reconnecting previous camera",true);
-    try{
-      newStream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints(prevDeviceId?{deviceId:{ideal:prevDeviceId}}:null),audio:false});
-    }catch(e2){ toast("Camera unavailable: "+e2.name,true); return null; }
+    const prevDeviceId=S.videoDeviceId;
+    const oldTrack=S.rawStream.getVideoTracks()[0];
+    if(oldTrack){ S.rawStream.removeTrack(oldTrack); oldTrack.stop(); }
+    const ladder=ptCameraLadder(constraints, prevDeviceId);
+    let newStream=null, firstErr=null;
+    for(let pass=0; pass<3 && !newStream; pass++){
+      if(pass) await new Promise(r=>setTimeout(r, 250*pass));   // let the sensor finish releasing
+      for(const rung of ladder){
+        try{ newStream=await ptGetCameraStream(rung); break; }
+        catch(e){
+          if(!firstErr) firstErr=e;
+          /* a denied permission never fixes itself by asking again — bail
+             out of the whole ladder rather than burning three passes on it */
+          if(e.name==='NotAllowedError' || e.name==='SecurityError'){ pass=99; break; }
+        }
+      }
+    }
+    const newTrack=newStream && newStream.getVideoTracks()[0];
+    if(!newTrack){
+      /* Every rung failed. Leaving rawStream with no video track would strand
+         the canvas on the outgoing camera's last frame — a stream that looks
+         live but is a still photo. Flip to the honest "camera off" card
+         instead, which also lets the bumper finish and keeps the ⏺ recording
+         and everyone's chat/score intact so the match isn't lost. */
+      S.camOn=false;
+      toast("Camera unavailable ("+((firstErr&&firstErr.name)||'unknown')+") — tap 📷 cam to retry",true);
+      return null;
+    }
+    S.rawStream.addTrack(newTrack);
+    /* Re-latch the hidden <video> onto the stream. Chrome on Android does not
+       reliably repaint a rendering MediaStream when its video track is
+       swapped underneath it — it keeps painting the track that just ended, so
+       a swap that fully succeeded still showed a frozen picture. Assigning
+       null first forces the element to pick up the new track. The black
+       flash that costs is invisible: it happens behind the bumper card. */
+    if(S.rawVideo){
+      try{ S.rawVideo.srcObject=null; S.rawVideo.srcObject=S.rawStream; }catch(e){}
+      S.rawVideo.play().catch(()=>{});
+    }
+    const s=newTrack.getSettings();
+    S.videoDeviceId=s.deviceId||S.videoDeviceId;
+    if(s.facingMode) S.facingMode=s.facingMode;
+    /* labels and IDs both change as the OS re-enumerates around a swap, so
+       refresh the picker rather than leaving it pointing at a stale entry */
+    ptEnumerateCameras().then(list=>{ if(PTStream===S){ S.cameras=list; renderPTStream(); } });
+    return newTrack;
+  } finally {
+    S._camSwapping=false;
   }
-  const newTrack=newStream.getVideoTracks()[0];
-  if(!newTrack) return null;
-  PTStream.rawStream.addTrack(newTrack);
-  const s=newTrack.getSettings();
-  PTStream.videoDeviceId=s.deviceId||PTStream.videoDeviceId;
-  if(s.facingMode) PTStream.facingMode=s.facingMode;
-  return newTrack;
 }
 async function ptFlipCamera(){
   if(!PTStream || PTStream.role!=='host') return;
-  if(PTStream.camSwitch) return;                 // one transition at a time
+  if(PTStream._camSwapping) return toast("Switching camera — one sec",true);
   const next = PTStream.facingMode==='environment' ? 'user' : 'environment';
   /* start the bumper BEFORE the swap: it freezes the outgoing camera's last
      frame, so the dead air while the new sensor spins up happens behind the
@@ -8460,7 +8685,8 @@ async function ptFlipCamera(){
 window.ptFlipCamera=ptFlipCamera;
 async function ptSwitchCameraDevice(deviceId){
   if(!deviceId) return;
-  if(PTStream && PTStream.camSwitch) return;
+  if(!PTStream || PTStream.role!=='host') return;
+  if(PTStream._camSwapping) return toast("Switching camera — one sec",true);
   ptBeginCamBumper(PTStream, 'NEW ANGLE');
   await ptSwapVideoTrack({deviceId:{exact:deviceId}});
   ptCamBumperReady(PTStream);
@@ -8667,9 +8893,13 @@ function ptDirInit(){
     ptDirChan.subscribe();
   }catch(e){}
 }
-function ptDirAnnounce(code){
+function ptDirAnnounce(code, isExtraAngle){
+  /* An extra angle is filming somebody else's match, so its own local PT
+     state describes a different match entirely — announcing that would
+     rename the match in everyone's directory. Stay generic and let the
+     origin host's label win (see ptActiveStreams). */
   if(!ptDirChan) return;
-  const label = (typeof PT!=="undefined" && PT) ? (PT.a+" vs "+PT.b) : "Live match";
+  const label = (!isExtraAngle && typeof PT!=="undefined" && PT) ? (PT.a+" vs "+PT.b) : "Live match";
   try{ ptDirChan.track({code,label,t:Date.now()}); }catch(e){}
 }
 function ptDirWithdraw(){ if(ptDirChan) try{ ptDirChan.untrack(); }catch(e){} }
@@ -8677,15 +8907,22 @@ function ptActiveStreams(){
   if(!ptDirChan) return [];
   try{
     const state=ptDirChan.presenceState();
-    const list=[]; const seenCodes=new Set();
-    /* Multiple camera angles can now share one code (see ptAddAngle) — each
-       angle tracks its own presence entry, but this directory only needs to
-       surface one card per match, not one per camera. */
+    /* Several camera angles now share one code (see ptAddAngle) and each
+       announces itself separately, so collapse to one entry per match and
+       carry the camera count instead of listing the same match repeatedly.
+       Whoever joins as an extra angle may not have the match itself loaded,
+       so their announcement carries the generic label — never let that
+       overwrite the real "A vs B" one an angle on the same code supplied. */
+    const byCode=new Map();
     Object.values(state).forEach(arr=>arr.forEach(p=>{
-      if(!p || seenCodes.has(p.code)) return;
-      seenCodes.add(p.code); list.push(p);
+      const code=ptSafeId(p && p.code);
+      if(!code) return;
+      const cur=byCode.get(code);
+      if(!cur){ byCode.set(code,{code, label:p.label, angles:1}); return; }
+      cur.angles++;
+      if((!cur.label || cur.label==='Live match') && p.label) cur.label=p.label;
     }));
-    return list.filter(p=>!PTStream || p.code!==PTStream.code);
+    return [...byCode.values()].filter(s=>!PTStream || s.code!==PTStream.code);
   }catch(e){ return []; }
 }
 function ptSwitchTo(code){
@@ -8718,22 +8955,44 @@ async function ptGoLive(existingCode){
     return toast("Camera not available in this browser",true);
   }
   ptGoLiveStarting=true;
-  let stream;
-  try{ stream=await navigator.mediaDevices.getUserMedia({video:ptVideoConstraints({facingMode:{ideal:'environment'}}),audio:true}); }
-  catch(e){
+  /* Same release-latency and over-constraint problems as a mid-stream swap
+     (see ptSwapVideoTrack) — and hit harder here, since going live as an
+     extra angle usually happens seconds after some other app or tab let go
+     of the camera. Retry across a few passes, dropping the HD hint and then
+     the mic before giving up: a silent stream still beats no stream. */
+  let stream=null, camErr=null;
+  const openLadder=[
+    {video:ptVideoConstraints({facingMode:{ideal:'environment'}}),audio:true},
+    {video:{facingMode:{ideal:'environment'}},audio:true},
+    {video:true,audio:true},
+    {video:true,audio:false}
+  ];
+  for(let pass=0; pass<3 && !stream; pass++){
+    if(pass) await new Promise(r=>setTimeout(r, 250*pass));
+    for(const req of openLadder){
+      try{ stream=await navigator.mediaDevices.getUserMedia(req); break; }
+      catch(e){
+        if(!camErr) camErr=e;
+        if(e.name==="NotAllowedError" || e.name==="SecurityError"){ pass=99; break; }
+      }
+    }
+  }
+  if(!stream){
     ptGoLiveStarting=false;
+    const e=camErr||{};
     const msg = e.name==="NotAllowedError" ? "Camera/mic permission denied — allow access and try again"
       : e.name==="NotFoundError" ? "No camera found on this device"
-      : e.name==="NotReadableError" ? "Camera or mic is already in use by another app or tab — close it and try again"
-      : "Couldn't start camera: "+e.name;
+      : e.name==="NotReadableError" ? "Camera is already in use by another app or tab — close it and try again"
+      : "Couldn't start camera: "+(e.name||'unknown');
     return toast(msg,true);
   }
+  if(!stream.getAudioTracks().length) toast("No mic available — going live without sound",true);
   ptGoLiveStarting=false;
   const code=existingCode||ptRandCode();
   const hostId=ptRandId();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
-  PTStream={code, role:'host', hostId, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
+  PTStream={code, role:'host', hostId, isExtraAngle:!!existingCode, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
   const initTrack=stream.getVideoTracks()[0];
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
@@ -8803,16 +9062,34 @@ async function ptGoLive(existingCode){
   ch.on("broadcast",{event:"chat"}, ({payload})=>{
     if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
   });
-  /* a viewer who's opted into ref mode (ptRefViewerPoint) — same ptPoint()
-     a local host tap uses, so it goes through every existing guard (winner/
-     draw bail, undo history, drama/auto-highlight triggers) identically */
-  ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
-    if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side, !!payload.isAce);
-  });
-  /* a viewer's ↶/↷ ref-panel tap — ptUndo/ptRedo are already safe no-ops with
-     nothing to undo/redo, same as a stray host tap on a disabled button */
-  ch.on("broadcast",{event:"ref_undo"}, ()=>{ ptUndo(); });
-  ch.on("broadcast",{event:"ref_redo"}, ()=>{ ptRedo(); });
+  /* Scoring belongs to the origin host — the device whose local PT actually
+     IS this match. An extra angle joined somebody else's code and its PT is
+     a different match (or none), so applying ref taps there would silently
+     score the wrong match on that phone, and the pt_sync it then broadcast
+     would fight the real one. Extra angles are cameras, nothing more; they
+     mirror the score in (below) rather than out. */
+  if(!existingCode){
+    /* a viewer who's opted into ref mode (ptRefViewerPoint) — same ptPoint()
+       a local host tap uses, so it goes through every existing guard (winner/
+       draw bail, undo history, drama/auto-highlight triggers) identically */
+    ch.on("broadcast",{event:"ref_point"}, ({payload})=>{
+      if(payload && (payload.side==='a'||payload.side==='b')) ptPoint(payload.side, !!payload.isAce);
+    });
+    /* a viewer's ↶/↷ ref-panel tap — ptUndo/ptRedo are already safe no-ops with
+       nothing to undo/redo, same as a stray host tap on a disabled button */
+    ch.on("broadcast",{event:"ref_undo"}, ()=>{ ptUndo(); });
+    ch.on("broadcast",{event:"ref_redo"}, ()=>{ ptRedo(); });
+    /* a camera joining late has missed every score change so far — push the
+       current state the moment it announces itself, same reasoning as the
+       ptSyncBroadcastIfLive on viewer join above */
+    ch.on("broadcast",{event:"host-hello"}, ()=>{ ptSyncBroadcastIfLive(); });
+  } else {
+    /* the origin host's score, mirrored onto this angle's own burnt-in bug
+       (see ptScoreSrc) so every angle of a match shows the same numbers */
+    ch.on("broadcast",{event:"pt_sync"}, ({payload})=>{
+      if(PTStream && PTStream.isExtraAngle) PTStream.remotePT=payload;
+    });
+  }
   /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
@@ -8820,7 +9097,7 @@ async function ptGoLive(existingCode){
   ch.subscribe(status=>{
     if(status==="SUBSCRIBED" && existingCode) ch.send({type:"broadcast",event:"host-hello",payload:{hostId,label:ptChatDisplayName()}});
   });
-  ptDirAnnounce(code);
+  ptDirAnnounce(code, !!existingCode);
   renderPTStream();
   ptSyncCompactChrome();
   toast(existingCode
@@ -8849,7 +9126,14 @@ function ptStopLive(){
   ptStopProcessing(PTStream);
   if(PTStream.rawStream) PTStream.rawStream.getTracks().forEach(t=>t.stop());
   if(PTStream.localStream) PTStream.localStream.getTracks().forEach(t=>t.stop());
-  if(PTStream.channel) try{PTStream.channel.unsubscribe();}catch(e){}
+  if(PTStream.channel){
+    /* tell viewers this angle is going away before dropping the channel, so
+       the switcher stops offering it immediately instead of waiting out an
+       ICE timeout — and so a viewer watching THIS angle gets moved to
+       another one that's still live rather than staring at a frozen frame */
+    try{ PTStream.channel.send({type:"broadcast",event:"host-bye",payload:{hostId:PTStream.hostId}}); }catch(e){}
+    try{PTStream.channel.unsubscribe();}catch(e){}
+  }
   ptDirWithdraw();
   ptReleaseWakeLock();
   try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
@@ -8876,14 +9160,35 @@ function ptSyncActiveAngleFields(){
   PTStream.remoteStream=a?a.remoteStream:null;
   PTStream.status=a?a.status:"connecting…";
   PTStream.failed=a?!!a.failed:false;
+  ptMixBindAudio(PTStream);   // keep a running recording's audio on the angle being watched
 }
 function ptSwitchAngle(hostId){
   if(!PTStream || PTStream.role!=='viewer' || !PTStream.angles[hostId] || PTStream.activeAngle===hostId) return;
   PTStream.activeAngle=hostId;
   ptSyncActiveAngleFields();
+  /* The <video> keeps its element identity across a switch (see
+     ptRenderStreamShell) so only srcObject changes — no teardown, no
+     reconnect, and the mix bus above keeps drawing it without noticing. */
   renderPTStream();
 }
 window.ptSwitchAngle=ptSwitchAngle;
+/* Drops one angle and, if it was the one on screen, falls through to the next
+   one that's still up. Shared by the explicit host-bye goodbye and the ICE
+   disconnect path, which race each other by design — whichever lands first
+   wins and the other becomes a no-op. */
+function ptDropAngle(hostId){
+  const S=PTStream;
+  if(!S || S.role!=='viewer' || !S.angles[hostId]) return;
+  try{ S.angles[hostId].pc.close(); }catch(e){}
+  delete S.angles[hostId];
+  S.angleOrder=S.angleOrder.filter(id=>id!==hostId);
+  if(S.activeAngle===hostId){
+    S.activeAngle=S.angleOrder[0]||null;
+    ptSyncActiveAngleFields();
+    if(!S.activeAngle) S.status="the stream ended";
+  }
+  renderPTStream();
+}
 
 async function ptWatch(codeArg){
   if(PTStream) return toast("Already streaming or watching — stop first",true);
@@ -8895,10 +9200,14 @@ async function ptWatch(codeArg){
   const ch=sb.channel("ptstream_"+code);
   PTStream.channel=ch;
   ch.on("broadcast",{event:"offer"}, async ({payload})=>{
-    if(!PTStream || payload.viewerId!==viewerId || PTStream.angles[payload.hostId]) return;
-    const hostId=payload.hostId;
+    if(!PTStream || payload.viewerId!==viewerId) return;
+    const hostId=ptSafeId(payload.hostId);
+    if(!hostId || PTStream.angles[hostId]) return;
     const pc=new RTCPeerConnection(PT_ICE);
-    const angle={pc, hostId, remoteStream:null, status:"connecting…", failed:false, label:payload.label||('Angle '+(PTStream.angleOrder.length+1))};
+    /* labels come from the broadcasting device's display name, so clamp them
+       the same way ptSetChatDisplayName does rather than trusting the wire */
+    const angle={pc, hostId, remoteStream:null, status:"connecting…", failed:false,
+      label:String(payload.label||'').trim().slice(0,24)||('Angle '+(PTStream.angleOrder.length+1))};
     PTStream.angles[hostId]=angle;
     PTStream.angleOrder.push(hostId);
     if(!PTStream.activeAngle) PTStream.activeAngle=hostId;
@@ -8919,16 +9228,7 @@ async function ptWatch(codeArg){
         if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
         renderPTStream();
       }
-      else if(['disconnected','closed'].includes(pc.connectionState)){
-        delete PTStream.angles[hostId];
-        PTStream.angleOrder=PTStream.angleOrder.filter(id=>id!==hostId);
-        if(PTStream.activeAngle===hostId){
-          PTStream.activeAngle=PTStream.angleOrder[0]||null;
-          ptSyncActiveAngleFields();
-          if(!PTStream.activeAngle) PTStream.status="disconnected";
-        }
-        renderPTStream();
-      }
+      else if(['disconnected','closed'].includes(pc.connectionState)) ptDropAngle(hostId);
     };
     await pc.setRemoteDescription(payload.sdp);
     const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -8936,7 +9236,7 @@ async function ptWatch(codeArg){
   });
   ch.on("broadcast",{event:"ice-host"}, async ({payload})=>{
     if(!PTStream || payload.viewerId!==viewerId) return;
-    const angle=PTStream.angles[payload.hostId]; if(!angle) return;
+    const angle=PTStream.angles[ptSafeId(payload.hostId)]; if(!angle) return;
     try{ await angle.pc.addIceCandidate(payload.candidate); }catch(e){}
   });
   /* a camera that goes live on this code AFTER we started watching — we
@@ -8945,12 +9245,21 @@ async function ptWatch(codeArg){
      already connected just no-ops the resend, see the peers[vid] guard in
      ptGoLive). */
   ch.on("broadcast",{event:"host-hello"}, ({payload})=>{
-    if(!PTStream || PTStream.angles[payload.hostId]) return;
+    if(!PTStream || PTStream.angles[ptSafeId(payload && payload.hostId)]) return;
     ch.send({type:"broadcast",event:"join",payload:{viewerId}});
   });
+  /* explicit goodbye — an ICE state change eventually reports the same thing,
+     but takes seconds to do it, during which the switcher still offers an
+     angle that's already gone */
+  ch.on("broadcast",{event:"host-bye"}, ({payload})=>{ ptDropAngle(ptSafeId(payload && payload.hostId)); });
   ch.on("broadcast",{event:"full"}, ({payload})=>{
     if(!PTStream || payload.viewerId!==viewerId) return;
-    toast("One camera angle is full (3 viewers max) — other angles still work",true);
+    /* per-angle, not per-stream: one full camera says nothing about the
+       others, so this only gives up when there's nothing else connected */
+    if(PTStream.angleOrder.length) return toast("One camera angle is full (3 viewers max) — the others still work",true);
+    PTStream.status="every angle is full (3 viewers each)";
+    PTStream.failed=true;
+    renderPTStream();
   });
   ch.on("broadcast",{event:"chat"}, ({payload})=>{
     if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
@@ -8972,6 +9281,8 @@ window.ptWatch=ptWatch;
 
 function ptStopWatching(){
   if(!PTStream || PTStream.role!=='viewer') return;
+  if(PTStream.recOn) ptStopRecord();   // save what's recorded so far rather than dropping it
+  ptStopViewerMix(PTStream);
   Object.values(PTStream.angles||{}).forEach(a=>{ try{a.pc.close();}catch(e){} });
   if(PTStream.channel){ try{ PTStream.channel.send({type:"broadcast",event:"leave",payload:{viewerId:PTStream.viewerId}}); }catch(e){} try{PTStream.channel.unsubscribe();}catch(e){} }
   PTStream=null;
