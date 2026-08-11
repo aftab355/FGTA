@@ -11,11 +11,21 @@
 const fs = require('fs');
 const path = require('path');
 const srv = require('./server');
+const ffmpeg = require('./ffmpeg');
 const { Recorder } = require('./browser');
 
 const PORT = Number(process.env.FGTA_PORT || 8910);
 const APP_URL = process.env.FGTA_APP_URL || 'https://fgta.netlify.app/index.html';
 const CACHE = path.join(__dirname, '.app-cache.html');
+/* The highlight judge is the deployed site's own /api/highlight function —
+   the same one the live stream asks before it auto-replays something. Pointing
+   at it rather than at Anthropic directly means the recorder ships with no API
+   key, no account setup and no way to run up a bill; if it cannot be reached
+   the clipper falls back to its own heuristics (see exports.js). */
+const HIGHLIGHT_URL = process.env.FGTA_HIGHLIGHT_URL || (() => {
+  try { return new URL('/api/highlight', APP_URL).toString(); }
+  catch (e) { return 'https://fgta.netlify.app/api/highlight'; }
+})();
 
 const logLines = [];
 function log(msg) {
@@ -55,6 +65,7 @@ async function loadApp() {
     onLog: log,
     openFile: (code, label, ext) => srv.openFile(code, label, ext),
     closeFile: id => srv.closeFile(id),
+    onEvent: (code, ev) => { srv.appendEvent(code, ev); log(`${code}: ${ev.label || ev.kind}`); },
   });
 
   await srv.start({
@@ -65,12 +76,22 @@ async function loadApp() {
       watch: c => rec.watch(c),
       stop: () => rec.stop(),
       setAuto: v => rec.setAuto(v),
+      log,
+      highlightEndpoint: () => HIGHLIGHT_URL,
     },
   });
 
   console.log(`\n  Dashboard:  http://localhost:${PORT}`);
   for (const ip of srv.lanAddresses()) console.log(`  From phone: http://${ip}:${PORT}`);
   console.log(`  Saving to:  ${srv.RECORDINGS}\n`);
+
+  /* Recording never needs ffmpeg; combining angles into one file and cutting
+     highlights do. Say which it is at startup rather than at the moment
+     somebody presses the button. */
+  const f = ffmpeg.probe();
+  log(f.ok
+    ? `ffmpeg ${f.version} — ${f.source}${f.hw ? `, encoding on the GPU (${f.hw})` : ', encoding on the CPU'}`
+    : 'no ffmpeg found — recording works as normal; combining and highlights are unavailable');
 
   log('starting browser…');
   await rec.launch();

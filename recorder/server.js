@@ -11,8 +11,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const ff = require('./ffmpeg');
+const xp = require('./exports');
 
 const RECORDINGS = path.join(__dirname, 'recordings');
+/* Anything MADE from a recording goes in here rather than beside the
+   originals: the session grouping below reads the match code out of a
+   filename, so a combined file dropped next to its own sources would come
+   back as a fourth camera angle of the match it is a summary of. */
+const EXPORTS = path.join(RECORDINGS, 'exports');
 fs.mkdirSync(RECORDINGS, { recursive: true });
 
 function lanAddresses() {
@@ -135,6 +142,38 @@ function listSessions() {
   })).sort((a, b) => b.startedAt - a.startedAt);
 }
 
+/* ---------- match log ----------
+   The score, as it was mirrored to every viewer while the recording ran,
+   written down with the wall-clock time it happened. It is what lets the
+   clipper know a set point from a rally an hour later, and it costs one line
+   of JSON per event. Kept per match code, appended to, never rewritten — a
+   crash mid-match loses nothing that was already written.
+   Not a video file, so it is invisible to every listing above. */
+function eventsFile(code) {
+  return path.join(RECORDINGS, `${safeName(code, 'match')}__events.jsonl`);
+}
+function appendEvent(code, ev) {
+  if (!code || !ev || !ev.kind) return false;
+  const line = JSON.stringify({ t: Number(ev.t) || Date.now(), kind: String(ev.kind).slice(0, 24),
+    label: String(ev.label || '').slice(0, 120) });
+  try { fs.appendFileSync(eventsFile(code), line + '\n'); } catch (e) { return false; }
+  return true;
+}
+function readEvents(code, fromT, toT) {
+  let raw = '';
+  try { raw = fs.readFileSync(eventsFile(code), 'utf8'); } catch (e) { return []; }
+  const out = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    let e;
+    try { e = JSON.parse(line); } catch (err) { continue; }
+    if (fromT != null && e.t < fromT) continue;
+    if (toT != null && e.t > toT) continue;
+    out.push(e);
+  }
+  return out;
+}
+
 function activeFiles() {
   return [...writers.entries()]
     .filter(([, w]) => w.open)
@@ -149,6 +188,48 @@ function listRecordings() {
       return { name: f, bytes: st.size, mtime: st.mtimeMs };
     })
     .sort((a, b) => b.mtime - a.mtime);
+}
+
+function findSession(code, startedAt) {
+  const want = Number(startedAt);
+  return listSessions().find(s => s.code === code && (!want || s.startedAt === want)) || null;
+}
+
+/* Serves a video out of one of the two folders, with range support — which is
+   what makes seeking work at all. Without it the browser can only play a file
+   straight through from the start, which would leave the multi-angle player
+   unable to scrub or to line a late-joining camera up to the right moment. */
+function serveVideo(req, res, send, root, rawName) {
+  const name = path.basename(rawName);
+  const full = path.join(root, name);
+  if (!full.startsWith(root) || !fs.existsSync(full)) return send(404, { error: 'not found' });
+  const st = fs.statSync(full);
+  const type = name.endsWith('.mp4') ? 'video/mp4' : 'video/webm';
+  const range = req.headers.range;
+  const m = range && /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (m) {
+    let start = m[1] ? parseInt(m[1], 10) : 0;
+    let end = m[2] ? parseInt(m[2], 10) : st.size - 1;
+    if (isNaN(start) || isNaN(end) || start > end || start >= st.size) {
+      res.writeHead(416, { 'Content-Range': `bytes */${st.size}` });
+      return res.end();
+    }
+    end = Math.min(end, st.size - 1);
+    res.writeHead(206, {
+      'Content-Type': type,
+      'Content-Length': end - start + 1,
+      'Content-Range': `bytes ${start}-${end}/${st.size}`,
+      'Accept-Ranges': 'bytes',
+    });
+    return fs.createReadStream(full, { start, end }).pipe(res);
+  }
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Content-Length': st.size,
+    'Content-Disposition': `inline; filename="${name}"`,
+    'Accept-Ranges': 'bytes',
+  });
+  return fs.createReadStream(full).pipe(res);
 }
 
 function readBody(req, limit = 64 * 1024 * 1024) {
@@ -189,6 +270,8 @@ function start({ port, appHtml, control }) {
           ...control.status(),
           files: activeFiles(),
           disk: diskFree(),
+          jobs: xp.listJobs(),
+          ffmpeg: ff.probe(),
         });
       }
 
@@ -212,42 +295,55 @@ function start({ port, appHtml, control }) {
 
       if (url.pathname === '/api/recordings') return send(200, { items: listRecordings() });
       if (url.pathname === '/api/sessions') return send(200, { items: listSessions() });
+      if (url.pathname === '/api/exports') return send(200, { items: xp.listExports(EXPORTS), ffmpeg: ff.probe() });
+
+      /* the app page reporting the score as it happened — see appendEvent */
+      if (url.pathname === '/api/event' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req, 64 * 1024)).toString() || '{}');
+        return send(200, { ok: appendEvent(body.code, body) });
+      }
+
+      /* One match, one file: every angle stacked onto a single timeline. Runs
+         in the background — a long match takes minutes — and reports through
+         /api/status like everything else. */
+      if (url.pathname === '/api/combine' && req.method === 'POST') {
+        const { code, startedAt } = JSON.parse((await readBody(req)).toString() || '{}');
+        const session = findSession(code, startedAt);
+        if (!session) return send(404, { error: 'no such match' });
+        if (xp.busy()) return send(409, { error: 'another export is already running' });
+        const job = xp.newJob('combine', `${session.code} · ${session.angles.length} angle${session.angles.length === 1 ? '' : 's'}`);
+        xp.withJob(job, j => xp.combineSession(session, {
+          dir: RECORDINGS, exportsDir: EXPORTS,
+          onProgress: p => { if (p != null) j.pct = p; },
+        })).catch(e => control.log('combine failed: ' + e.message));
+        return send(200, { ok: true, job: job.id });
+      }
+
+      /* Highlights: score + crowd noise pick the moments, the AI judge keeps
+         the ones worth watching, ffmpeg cuts them. Also background. */
+      if (url.pathname === '/api/clips' && req.method === 'POST') {
+        const { code, startedAt } = JSON.parse((await readBody(req)).toString() || '{}');
+        const session = findSession(code, startedAt);
+        if (!session) return send(404, { error: 'no such match' });
+        if (xp.busy()) return send(409, { error: 'another export is already running' });
+        const job = xp.newJob('clips', `${session.code} · highlights`);
+        xp.withJob(job, j => xp.clipSession(session, {
+          dir: RECORDINGS, exportsDir: EXPORTS,
+          /* a little slack either side: an event logged the instant a game
+             ended can land just outside the recording's own start/stop */
+          events: readEvents(session.code, session.startedAt - 5000, session.startedAt + session.durationMs + 5000),
+          endpoint: control.highlightEndpoint(),
+          onProgress: p => { if (p != null) j.pct = p; },
+          onLog: m => { j.message = m; control.log('clips: ' + m); },
+        })).catch(e => control.log('clipping failed: ' + e.message));
+        return send(200, { ok: true, job: job.id });
+      }
 
       if (url.pathname.startsWith('/rec/')) {
-        const name = path.basename(decodeURIComponent(url.pathname.slice(5)));
-        const full = path.join(RECORDINGS, name);
-        if (!full.startsWith(RECORDINGS) || !fs.existsSync(full)) return send(404, { error: 'not found' });
-        const st = fs.statSync(full);
-        const type = name.endsWith('.mp4') ? 'video/mp4' : 'video/webm';
-        /* Range support is what makes seeking work at all — without it the
-           browser can only play a file straight through from the start, which
-           would leave the multi-angle player unable to scrub or to line a
-           late-joining camera up to the right moment. */
-        const range = req.headers.range;
-        const m = range && /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-        if (m) {
-          let start = m[1] ? parseInt(m[1], 10) : 0;
-          let end = m[2] ? parseInt(m[2], 10) : st.size - 1;
-          if (isNaN(start) || isNaN(end) || start > end || start >= st.size) {
-            res.writeHead(416, { 'Content-Range': `bytes */${st.size}` });
-            return res.end();
-          }
-          end = Math.min(end, st.size - 1);
-          res.writeHead(206, {
-            'Content-Type': type,
-            'Content-Length': end - start + 1,
-            'Content-Range': `bytes ${start}-${end}/${st.size}`,
-            'Accept-Ranges': 'bytes',
-          });
-          return fs.createReadStream(full, { start, end }).pipe(res);
-        }
-        res.writeHead(200, {
-          'Content-Type': type,
-          'Content-Length': st.size,
-          'Content-Disposition': `inline; filename="${name}"`,
-          'Accept-Ranges': 'bytes',
-        });
-        return fs.createReadStream(full).pipe(res);
+        return serveVideo(req, res, send, RECORDINGS, decodeURIComponent(url.pathname.slice(5)));
+      }
+      if (url.pathname.startsWith('/export/')) {
+        return serveVideo(req, res, send, EXPORTS, decodeURIComponent(url.pathname.slice(8)));
       }
 
       if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -271,4 +367,5 @@ function diskFree() {
   } catch (e) { return null; }
 }
 
-module.exports = { start, openFile, closeFile, activeFiles, listRecordings, listSessions, lanAddresses, RECORDINGS };
+module.exports = { start, openFile, closeFile, activeFiles, listRecordings, listSessions,
+  appendEvent, readEvents, lanAddresses, RECORDINGS, EXPORTS };

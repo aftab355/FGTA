@@ -25,7 +25,9 @@ they are already streaming with.
    ```
 
    This pulls in Playwright and downloads a private copy of Chromium
-   (~150 MB). It does not touch the Chrome you already use.
+   (~150 MB) plus its own ffmpeg (~80 MB, used only for combining angles and
+   cutting highlights — see below). It does not touch the Chrome you already
+   use and does not put anything on your PATH.
 
 4. **Run it:**
 
@@ -65,6 +67,57 @@ While recording you get a file per angle, named after the camera:
 They appear under *Saved on this PC* and play in the browser, VLC, or anything
 else. Angles that join late get their own file from the moment they connect;
 an angle that stops closes its file and the rest keep going.
+
+---
+
+## After the match: one file, and the highlights
+
+Under *Watch back*, every recorded match has two buttons.
+
+**one file** puts every camera onto a single timeline, side by side, with all
+of their microphones mixed together, and writes it as one MP4 that plays
+anywhere. Cameras that joined late are padded with black at the front, so a
+given moment in the output is the same moment in every cell — the file is
+genuinely synchronised, not just concatenated.
+
+Two cameras make a 1920x540 file (two 960x540 cells, nothing wasted), three or
+four make a 1920x1080 grid, more go to smaller cells.
+
+**highlights** finds the moments worth keeping and cuts them out, then joins
+them into a reel. Three things decide, in order:
+
+1. **The score.** While recording, the recorder is a viewer like any other, so
+   the host's live match state arrives here — games, sets, aces, match points —
+   and is written down with the time it happened, next to the video.
+2. **The crowd.** A rally worth watching ends in noise. Loudness is measured
+   across the recording and peaks are picked out relative to how loud this
+   particular court usually is, which works even when nobody was scoring.
+3. **Claude.** Each surviving moment is sent as three stills to the same
+   `/api/highlight` endpoint the live stream already asks before it auto-replays
+   something, which answers whether it is actually worth watching and gives it
+   a short caption. Clips are named after that caption.
+
+If the endpoint cannot be reached — this PC is offline, or the site has not
+been deployed — the clipper falls back to its own verdict and marks those clips
+*not judged* rather than producing nothing. No API key lives on this PC.
+
+Both are ffmpeg jobs. They take minutes on a long match, run one at a time so
+they never compete with a recording in progress, and report progress at the top
+of the dashboard. The results land under *Made from recordings*, deliberately
+kept apart from the originals so they are never mistaken for another camera
+angle of the match they were made from.
+
+### ffmpeg
+
+`npm install` brings its own ffmpeg (the `ffmpeg-static` package), so there is
+nothing to install by hand and nothing added to your PATH. If this PC has an
+NVIDIA card the encoder is the GPU (`h264_nvenc`), which is several times
+faster than the CPU and leaves it free for the match that may still be
+recording; Intel and AMD hardware encoders are used the same way when they are
+there. The startup log and the dashboard both say which one is in use.
+
+Recording itself never touches ffmpeg. If it is missing, everything above is
+unavailable and everything else works exactly as before.
 
 ---
 
@@ -118,6 +171,8 @@ Environment variables, if you need them:
 |---|---|---|
 | `FGTA_PORT` | `8910` | dashboard / API port |
 | `FGTA_APP_URL` | `https://fgta.netlify.app/index.html` | which deployment to join |
+| `FGTA_FFMPEG` | the bundled one | path to your own ffmpeg build |
+| `FGTA_HIGHLIGHT_URL` | `/api/highlight` on the app URL | where the highlight judge lives |
 
 ```powershell
 $env:FGTA_PORT=9000; npm start
@@ -135,8 +190,20 @@ The dashboard's **Log** panel is the first place to look.
 - **Nothing under *Live now*** — the recorder only sees matches that are
   actually streaming. Check the phone says `live` and share the code manually.
 
+- **"No ffmpeg found"** — `npm install` did not finish, or it was skipped. Run
+  it again in this folder, or point `FGTA_FFMPEG` at a build you already have.
+  Recording is unaffected either way.
+- **"nothing stood out in this recording"** — no score was being kept and the
+  court was quiet throughout, so there was nothing for the clipper to find. The
+  combined file is still the useful thing there.
+
 ## What this is not
 
-It does not re-encode, transcode, or produce a single combined multi-angle
-video. Each angle is stored as it arrived. Editing them together afterwards is
-a job for a video editor.
+It is not a video editor. What it records is what the cameras broadcast, and
+what it makes from that is one combined file and a set of clips — good enough
+to watch and to hand to somebody, not a substitute for cutting a match properly
+if that is what you want.
+
+The recordings themselves are never re-encoded. Each angle is stored exactly as
+it arrived; combining and clipping produce new files and leave the originals
+untouched.

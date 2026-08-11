@@ -18,7 +18,7 @@ if errorlevel 1 (
 if not exist "node_modules" (
   echo.
   echo   First run - installing. This downloads a private copy of Chromium
-  echo   (about 150 MB) and takes a couple of minutes.
+  echo   and ffmpeg (about 230 MB) and takes a couple of minutes.
   echo.
   call npm install || (echo. & echo   Install failed - see the messages above. & pause & exit /b 1)
 )
