@@ -2044,6 +2044,20 @@
      in the same box at the same scale and the swap is invisible. */
   .pt-angle-freeze{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
     background:#000;z-index:1;pointer-events:none}
+  /* relay setup + self-test: deliberately tucked behind a quiet link on the
+     landing panel — almost nobody needs it, but the people who do are stuck
+     without it and have no other way to tell why a stream won't connect */
+  .pt-conn-row{margin-top:12px}
+  .pt-conn-link{background:none;border:none;padding:0;cursor:pointer;color:var(--dim);
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.6px}
+  .pt-conn-link:hover{color:var(--accent)}
+  .pt-conn-panel{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:var(--r-md);
+    background:var(--panel-2);min-width:0}
+  .pt-conn-form{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+  .pt-conn-form input{width:100%;min-width:0;font-size:12px;letter-spacing:normal;text-align:left;text-transform:none}
+  .pt-conn-result{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+  .pt-conn-result .pw-legend{margin-top:6px}
 
   /* ---- the "nobody's watching yet" landing state ----
      Used to be a plain header line + a code input in a row — functionally
@@ -6417,12 +6431,65 @@ function ptReleaseWakeLock(){
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState==='visible' && PTStream) ptRequestWakeLock();
 });
-const PT_ICE={iceServers:[
+/* ---- ICE configuration ----
+   Two phones on the same wifi find each other directly. Two phones on
+   different networks — one on mobile data at the court, one at home — usually
+   cannot, because both sit behind NAT that refuses unsolicited inbound
+   packets. The only way through is a TURN relay: a server with a public
+   address that both sides can reach outbound, which forwards the media.
+
+   The defaults below include a free, shared, public TURN service. It is
+   genuinely useful and costs nothing, but it is rate-limited, heavily
+   oversubscribed and frequently unavailable — and when it is, the stream
+   simply fails to connect with no obvious reason. That is the single most
+   likely cause of "it works at home but not at the court".
+
+   So the relay is configurable. Point it at a TURN server you control (see
+   ptConnectionTest / the connection panel on the stream landing screen) and
+   the cross-network path stops depending on somebody else's free tier. */
+const PT_ICE_DEFAULTS=[
   {urls:"stun:stun.l.google.com:19302"},
+  {urls:"stun:stun1.l.google.com:19302"},
+  {urls:"stun:stun.cloudflare.com:3478"},
   {urls:"turn:openrelay.metered.ca:80", username:"openrelayproject", credential:"openrelayproject"},
   {urls:"turn:openrelay.metered.ca:443", username:"openrelayproject", credential:"openrelayproject"},
   {urls:"turn:openrelay.metered.ca:443?transport=tcp", username:"openrelayproject", credential:"openrelayproject"}
-]};
+];
+const PT_TURN_KEY="fgta_turn";
+/* {urls:[...], username, credential} — stored per device, never synced, since
+   it usually holds a credential for someone's own machine. */
+function ptCustomTurn(){
+  try{
+    const raw=localStorage.getItem(PT_TURN_KEY);
+    if(!raw) return null;
+    const t=JSON.parse(raw);
+    const urls=(Array.isArray(t.urls)?t.urls:[t.urls]).filter(Boolean);
+    if(!urls.length) return null;
+    return {urls, username:t.username||undefined, credential:t.credential||undefined};
+  }catch(e){ return null; }
+}
+function ptSaveCustomTurn(t){
+  try{
+    if(!t) localStorage.removeItem(PT_TURN_KEY);
+    else localStorage.setItem(PT_TURN_KEY, JSON.stringify(t));
+  }catch(e){}
+}
+/* Your own relay goes first so ICE prefers it, with the public fallbacks kept
+   behind it — a misconfigured private TURN degrades to today's behaviour
+   rather than taking the stream down with it. */
+function ptIceServers(){
+  const custom=ptCustomTurn();
+  return custom ? [custom, ...PT_ICE_DEFAULTS] : PT_ICE_DEFAULTS.slice();
+}
+function ptIceConfig(){
+  const cfg={iceServers:ptIceServers()};
+  /* opt-in, for proving the relay actually works: it bans direct paths, so a
+     connection that succeeds under it succeeded THROUGH the TURN server */
+  if(ptForceRelay()) cfg.iceTransportPolicy='relay';
+  return cfg;
+}
+function ptForceRelay(){ try{ return localStorage.getItem("fgta_force_relay")==="1"; }catch(e){ return false; } }
+function ptSetForceRelay(on){ try{ localStorage.setItem("fgta_force_relay", on?"1":"0"); }catch(e){} }
 function ptRandCode(){ return Math.random().toString(36).slice(2,7).toUpperCase(); }
 function ptRandId(){ return Math.random().toString(36).slice(2,10); }
 /* Stream codes and host IDs arrive from other peers — anyone who knows a code
@@ -6470,6 +6537,91 @@ async function ptIceDiag(pc){
   }catch(e){}
   return out;
 }
+
+/* ---- connection self-test ----
+   Gathers ICE candidates against the configured servers and reports what
+   actually came back, so "will this work from the court?" is answerable before
+   a match instead of during one. A relay candidate is the one that matters: it
+   means a TURN server allocated for this device, which is what carries a
+   stream between two phones on different networks. Uses a data channel purely
+   to make the gatherer run — nothing is sent and no media is touched. */
+async function ptGatherCandidates(cfg, ms){
+  const out={host:0, srflx:0, relay:0, errors:[], relayFrom:null};
+  let pc;
+  try{ pc=new RTCPeerConnection(cfg); }
+  catch(e){ out.errors.push('config rejected: '+(e.message||e.name)); return out; }
+  try{
+    pc.onicecandidate=e=>{
+      const c=e.candidate;
+      if(!c || !c.candidate) return;
+      if(c.type==='relay'){ out.relay++; if(!out.relayFrom) out.relayFrom=c.relatedAddress?('via '+c.address):'ok'; }
+      else if(c.type==='srflx') out.srflx++;
+      else if(c.type==='host') out.host++;
+    };
+    /* surfaces the real reason a TURN server refused — wrong credential,
+       unreachable port, expired allocation — instead of a silent absence */
+    pc.onicecandidateerror=e=>{
+      if(e && (e.errorCode||e.errorText)) out.errors.push(`${e.url||'server'}: ${e.errorCode||''} ${e.errorText||''}`.trim());
+    };
+    pc.createDataChannel('probe');
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise(res=>{
+      const done=()=>res();
+      const t=setTimeout(done, ms||6000);
+      pc.onicegatheringstatechange=()=>{ if(pc.iceGatheringState==='complete'){ clearTimeout(t); done(); } };
+    });
+  }catch(e){ out.errors.push(e.message||String(e)); }
+  try{ pc.close(); }catch(e){}
+  return out;
+}
+async function ptConnectionTest(){
+  const btn=document.getElementById('ptConnTestBtn');
+  const outEl=document.getElementById('ptConnResult');
+  if(btn){ btn.disabled=true; btn.textContent='testing…'; }
+  if(outEl) outEl.innerHTML='<span class="pw-legend">probing STUN and TURN…</span>';
+  const custom=ptCustomTurn();
+  const r=await ptGatherCandidates({iceServers:ptIceServers()}, 7000);
+  const lines=[];
+  lines.push(r.host ? '✅ local network — fine on the same wifi'
+                    : '⚠️ no local candidates at all (very unusual)');
+  /* A relay allocation proves the TURN server was reached, which makes a
+     missing STUN result a detail rather than a fault — calling it a blocked
+     firewall while the relay is plainly working is just alarming for nothing.
+     It only genuinely matters when there is no relay either. */
+  lines.push(r.srflx ? '✅ STUN reachable — your public address is discoverable'
+                     : r.relay ? '• no STUN reply, but the relay works — nothing to fix'
+                     : '❌ STUN unreachable — a firewall is likely blocking UDP');
+  lines.push(r.relay ? `✅ TURN relay allocated${custom?' on your own server':' (public fallback)'} — cross-network streaming should work`
+                     : '❌ no TURN relay — streaming between different networks will fail');
+  if(!r.relay && !custom){
+    lines.push('<span class="pw-legend">The shared public relay is rate-limited and often unavailable. Point this at a TURN server you control to fix it for good.</span>');
+  }
+  const errs=[...new Set(r.errors)].slice(0,4);
+  if(errs.length) lines.push('<span class="pw-legend">'+errs.map(esc).join('<br>')+'</span>');
+  if(outEl) outEl.innerHTML=lines.map(l=>`<div>${l}</div>`).join('');
+  if(btn){ btn.disabled=false; btn.textContent='test connection'; }
+  return r;
+}
+window.ptConnectionTest=ptConnectionTest;
+function ptSaveTurnFromForm(){
+  const u=(document.getElementById('ptTurnUrl')||{}).value||'';
+  const n=(document.getElementById('ptTurnUser')||{}).value||'';
+  const p=(document.getElementById('ptTurnPass')||{}).value||'';
+  const urls=u.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+  if(!urls.length){ ptSaveCustomTurn(null); toast("Custom relay cleared — back to the public fallback"); }
+  else{
+    if(!urls.every(x=>/^(turns?|stun):/i.test(x))) return toast("URLs must start with turn:, turns: or stun:",true);
+    ptSaveCustomTurn({urls, username:n, credential:p});
+    toast("Relay saved on this device — run the test to check it");
+  }
+  renderPTStream();
+}
+window.ptSaveTurnFromForm=ptSaveTurnFromForm;
+function ptToggleConnPanel(){
+  const el=document.getElementById('ptConnPanel');
+  if(el) el.hidden=!el.hidden;
+}
+window.ptToggleConnPanel=ptToggleConnPanel;
 
 /* Which "shape" is currently rendered inside #ptStreamBox: null (landing),
    'host', or 'viewer'. See ptRenderStreamShell below — this is what lets a
@@ -6679,6 +6831,22 @@ function renderPTStream(){
           <button class="mini pt-angle-cta" onclick="ptAddAngle()">\ud83d\udcf7 add angle to code above</button>
         </div>
         <div class="pw-legend">Got a friend's code already live? Type it above and tap "add angle" to film a second camera on their same live \u2014 viewers get to switch between everyone's angle without leaving the stream.</div>
+        <div class="pt-conn-row">
+          <button class="pt-conn-link" onclick="ptToggleConnPanel()">\ud83d\udef0 connection${ptCustomTurn()?' \u00b7 own relay':''}</button>
+        </div>
+        <div class="pt-conn-panel" id="ptConnPanel" hidden>
+          <div class="pw-legend">Phones on the same wifi connect directly. On different networks \u2014 one at the court on mobile data, one at home \u2014 the stream has to go through a TURN relay. The built-in one is free, shared and often unavailable, which is what a stream that "just won't connect" usually is. Point this at a relay you control and that stops being luck. Setup guide: <b>docs/self-hosted-relay.md</b> in the repo.</div>
+          <div class="pt-conn-form">
+            <input id="ptTurnUrl" placeholder="turn:your-host:3478" autocomplete="off" spellcheck="false" value="${esc((ptCustomTurn()&&ptCustomTurn().urls.join(' '))||'')}">
+            <input id="ptTurnUser" placeholder="username" autocomplete="off" spellcheck="false" value="${esc((ptCustomTurn()&&ptCustomTurn().username)||'')}">
+            <input id="ptTurnPass" type="password" placeholder="password" autocomplete="off" value="${esc((ptCustomTurn()&&ptCustomTurn().credential)||'')}">
+          </div>
+          <div class="pt-stream-row">
+            <button class="mini" onclick="ptSaveTurnFromForm()">save relay</button>
+            <button class="mini pt-watch-cta" id="ptConnTestBtn" onclick="ptConnectionTest()">test connection</button>
+          </div>
+          <div class="pt-conn-result" id="ptConnResult"></div>
+        </div>
       </div>`;
     /* This whole panel is rebuilt on every directory presence sync \u2014 i.e.
        every time anyone, anywhere, goes live or stops. That was quietly
@@ -9147,7 +9315,7 @@ async function ptGoLive(existingCode){
     const vid=payload.viewerId;
     if(PTStream.peers[vid]) return;
     if(Object.keys(PTStream.peers).length>=3){ ch.send({type:"broadcast",event:"full",payload:{viewerId:vid,hostId:PTStream.hostId}}); return; }
-    const pc=new RTCPeerConnection(PT_ICE);
+    const pc=new RTCPeerConnection(ptIceConfig());
     PTStream.peers[vid]=pc;
     PTStream.localStream.getTracks().forEach(t=>pc.addTrack(t,PTStream.localStream));
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-host",payload:{viewerId:vid,hostId:PTStream.hostId,candidate:e.candidate}}); };
@@ -9449,7 +9617,7 @@ async function ptWatch(codeArg){
       ptDropAngle(hostId);
       if(!PTStream) return;
     }
-    const pc=new RTCPeerConnection(PT_ICE);
+    const pc=new RTCPeerConnection(ptIceConfig());
     /* labels come from the broadcasting device's display name, so clamp them
        the same way ptSetChatDisplayName does rather than trusting the wire */
     const angle={pc, hostId, remoteStream:null, status:"connecting…", failed:false,
