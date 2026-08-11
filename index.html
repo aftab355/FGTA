@@ -7022,6 +7022,35 @@ const PT_SRC_LONG=1920, PT_SRC_SHORT=1080;     // what we ask the camera for
    YouTube stream); 128 kbps audio is plenty for a courtside mic. That's
    about 23MB/min — a 90-minute match lands around 2GB instead of 18+. */
 const PT_REC_BITRATE={videoBitsPerSecond:3_000_000, audioBitsPerSecond:128_000};
+/* ---- what we let WebRTC spend on the outgoing picture ----
+   The composite canvas is 1280x720, but that is only what we hand the encoder;
+   what it actually SENDS is its own decision, and left alone it decides badly.
+   With no encoding parameters set at all, Chrome applies a conservative
+   default ceiling and, the moment its bandwidth estimator gets nervous, throws
+   away resolution first — measured collapsing a 720p source to 320x180 at 7fps
+   with qualityLimitationReason "bandwidth", on a link with bandwidth to spare.
+   That is where the tiny, soft recordings came from: not the camera, not the
+   canvas, and not the recorder, all of which were already 720p.
+
+   maxBitrate is a ceiling rather than a target — the estimator still decides
+   what to actually use, so raising it costs nothing on a poor connection and
+   removes an artificial cap on a good one. */
+const PT_MAX_SEND_BITRATE=4_000_000;
+/* 'maintain-resolution' tells the encoder to give up frames before pixels.
+   For tennis that is the right way round: a soft 320p picture makes the ball
+   and the burnt-in score unreadable, while a few dropped frames does not. */
+async function ptTuneVideoSender(pc){
+  try{
+    const sender=pc.getSenders().find(s=>s.track && s.track.kind==='video');
+    if(!sender || !sender.getParameters) return;
+    const p=sender.getParameters();
+    if(!p.encodings || !p.encodings.length) p.encodings=[{}];
+    p.encodings[0].maxBitrate=PT_MAX_SEND_BITRATE;
+    delete p.encodings[0].scaleResolutionDownBy;      // never pre-shrink the frame
+    p.degradationPreference='maintain-resolution';
+    await sender.setParameters(p);
+  }catch(e){ console.log('[ptStream] could not tune video sender:', e && e.message); }
+}
 /* How long the between-sets highlight-reel break stays up before wiping back
    to live on its own (the host's ⏭ resume-live button can always end it early).
    3 minutes matches a real tour-level set-break length. */
@@ -8071,6 +8100,13 @@ function ptStartProcessing(S){
   const canvasStream=S.canvas.captureStream(30);
   const audioTrack=S.rawStream.getAudioTracks()[0];
   S.localStream=new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack?[audioTrack]:[])]);
+  /* A canvas track carries no hint about what is on it, so the encoder assumes
+     camera-like motion and trades resolution away cheaply. Telling it this is
+     detail — which it is, a framed court with a score bug burnt into the
+     corner — makes it hold the frame size instead. Pairs with the
+     degradationPreference in ptTuneVideoSender; either alone is weaker. */
+  const outTrack=S.localStream.getVideoTracks()[0];
+  if(outTrack) try{ outTrack.contentHint='detail'; }catch(e){}
   ptStartReplayRecorder(S);
   ptStartAudioWatch(S);
   /* Keeping chunk #0 forever (see ptStartReplayRecorder) stops replay clips
@@ -9326,6 +9362,7 @@ async function ptGoLive(existingCode){
     const pc=new RTCPeerConnection(ptIceConfig());
     PTStream.peers[vid]=pc;
     PTStream.localStream.getTracks().forEach(t=>pc.addTrack(t,PTStream.localStream));
+    ptTuneVideoSender(pc);        // otherwise this viewer gets 320x180 — see PT_MAX_SEND_BITRATE
     pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-host",payload:{viewerId:vid,hostId:PTStream.hostId,candidate:e.candidate}}); };
     pc.onconnectionstatechange=async ()=>{
       if(pc.connectionState==='failed') console.log('[ptStream host] peer failed:', await ptIceDiag(pc));
