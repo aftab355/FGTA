@@ -212,11 +212,20 @@ class Recorder {
               continue;
             }
             R.bytes[hostId] = 0;
-            rec.ondataavailable = async e => {
+            /* Uploads are in flight when the recorder stops, and MediaRecorder
+               emits one last chunk on its way out. Closing the file the moment
+               onstop fires meant those arrived at a server that had already
+               finished with them — the "410 (Gone)" in the log — and the tail
+               of the recording went in the bin. Track them and close only once
+               they have all landed. */
+            const pending = [];
+            rec.ondataavailable = e => {
               if (!e.data || !e.data.size) return;
               R.bytes[hostId] += e.data.size;
-              try { await fetch('/api/chunk?f=' + encodeURIComponent(id), { method: 'POST', body: e.data }); }
-              catch (err) { /* server gone; the next chunk will fail too and the file is already flushed */ }
+              const p = fetch('/api/chunk?f=' + encodeURIComponent(id), { method: 'POST', body: e.data })
+                .catch(() => {});     // server gone: nothing left to do, the file is already flushed
+              pending.push(p);
+              if (pending.length > 400) pending.splice(0, pending.length - 400);
             };
             /* A MediaRecorder can start, report itself healthy and produce
                nothing — measured on a browser whose H.264 encoder accepted a
@@ -235,7 +244,10 @@ class Recorder {
               delete R.files[hostId];
             }, 8000);
             rec.onerror = e => window.__recLog('recorder error: ' + (e && e.error && e.error.message));
-            rec.onstop = () => window.__recStop(id);
+            rec.onstop = async () => {
+              try { await Promise.allSettled(pending); } catch (e) {}
+              window.__recStop(id);
+            };
             rec.start(2000);
             R.recs[hostId] = rec;
             R.files[hostId] = id;

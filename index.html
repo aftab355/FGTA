@@ -1876,8 +1876,14 @@
   .pt-stream-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;min-width:0}
   .pt-stream-row input{width:120px;text-transform:uppercase;letter-spacing:2px;text-align:center}
 
-  .pt-stream-main{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;max-width:900px;min-width:0}
-  .pt-stream-vwrap{position:relative;flex:1 1 380px;min-width:0;max-width:560px;
+  /* ---- windowed layout ----
+     The picture is the thing anybody opened this for, so it takes whatever
+     width is going and the chat sits beside it as a fixed rail rather than an
+     equal partner. It used to be the other way round: the whole row was capped
+     at 900px and the video at 560 of it, which on a laptop left a postage
+     stamp of tennis next to a tall column of empty chat. */
+  .pt-stream-main{display:flex;gap:14px;flex-wrap:wrap;align-items:stretch;max-width:1360px;min-width:0}
+  .pt-stream-vwrap{position:relative;flex:1 1 620px;min-width:0;max-width:none;
     display:flex;flex-direction:column;gap:8px}
   /* the shell is the thing overlays anchor to, so chips/buttons sit on the
      picture itself rather than on whatever else lives in the wrapper */
@@ -1887,7 +1893,7 @@
      size off the video element — it matches the canvas's landscape capture
      ratio so the box doesn't visibly jump on the first frame */
   .pt-stream-video{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;display:block;
-    max-height:min(72vh,620px)}
+    max-height:min(78vh,760px)}
   .pt-vid-badge{position:absolute;top:8px;left:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;
     padding:4px 9px;border-radius:var(--r-pill);background:rgba(8,6,16,.62);border:1px solid rgba(255,255,255,.18);
     color:#fff;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1.4px;
@@ -1913,9 +1919,12 @@
   .pt-dbg-btn:hover{color:var(--muted);border-color:var(--muted)}
   .pt-dbg-btn.on{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%, transparent)}
 
-  .pt-chat{flex:1 1 240px;min-width:0;max-width:300px;display:flex;flex-direction:column;
+  /* a rail of its own, not a column that grows into the picture's space —
+     and it matches the video's height instead of floating at a fixed 340px
+     beside a much taller frame */
+  .pt-chat{flex:0 1 300px;min-width:0;max-width:320px;display:flex;flex-direction:column;
     background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);
-    height:min(340px,60vh);overflow:hidden}
+    align-self:stretch;max-height:min(78vh,760px);overflow:hidden}
   .pt-chat-log{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px;
     display:flex;flex-direction:column;gap:6px;font-size:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
   .pt-chat-msg{line-height:1.45;overflow-wrap:anywhere;min-width:0}
@@ -2030,6 +2039,18 @@
      between them is cheap — it should read like a channel strip, not a list of
      places to navigate away to. Scrolls sideways instead of wrapping so a
      match with several cameras can't push the video off screen. */
+  /* stream health log — normally closed, and normally empty */
+  .pt-health{margin-top:10px;padding:12px;min-width:0;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:var(--r-md)}
+  .pt-health[hidden]{display:none}
+  .pt-health-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+  .pt-health-body{max-height:220px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    line-height:1.7;color:var(--dim);overflow-wrap:anywhere}
+  .pt-health-row{padding:1px 0}
+  .pt-health-row b{color:var(--muted);font-weight:600;margin-right:4px}
+  .pt-health-error{color:#ff9d9d}
+  .pt-health-fix{color:var(--accent)}
   .pt-angle-bar{margin-top:10px;min-width:0}
   /* ---- angle rail: the other cameras, live, next to the main picture ----
      A filmstrip rather than a list of names, because the whole value is
@@ -2209,7 +2230,7 @@
   @media(max-width:820px){
     .pt-stream-main{flex-direction:column;align-items:stretch}
     .pt-stream-vwrap{max-width:none;width:100%;flex:none}
-    .pt-chat{max-width:none;width:100%;height:min(260px,38vh)}
+    .pt-chat{max-width:none;width:100%;flex:none;height:min(260px,38vh);max-height:none}
   }
 
   /* ---- phones / narrow viewports ---- */
@@ -2223,7 +2244,7 @@
     /* portrait video gets real estate but never eats the whole screen */
     .pt-stream-video{max-height:min(58vh,520px)}
     .pt-fs-btn{width:42px;height:42px;font-size:18px}
-    .pt-chat{max-width:none;width:100%;height:min(210px,32vh)}
+    .pt-chat{max-width:none;width:100%;flex:none;height:min(210px,32vh);max-height:none}
     .pt-chat-row{padding:8px}
     /* 16px keeps iOS from zooming the whole page in on focus */
     .pt-chat-row input{font-size:16px;padding:11px 12px}
@@ -6541,6 +6562,173 @@ function ptBindAspect(v){
   fit();
 }
 
+/* ============================================================
+   STREAM HEALTH: a watchdog that notices the stream has broken and
+   repairs what it can, without anybody having to spot it first.
+
+   Nothing here rewrites code — a page cannot fix a bug in itself. What it can
+   do is catch the failures that are *recoverable at runtime* and recover from
+   them, which is most of what actually goes wrong in a live stream: a decoder
+   that quietly stops, a camera another app took away, a video element left
+   holding a track that ended. Left alone every one of those looks identical
+   from the outside — the picture stops — and every one used to need the stream
+   restarted by hand.
+
+   What it cannot fix, it records. Every repair, every uncaught error and every
+   rejected promise lands in a ring buffer that the 🩺 panel shows and can copy
+   to the clipboard, so "it didn't work" becomes a timestamped account of what
+   broke. ---- */
+const PT_DIAG_MAX=120;
+let ptDiag=[];
+function ptLogDiag(kind,msg,extra){
+  const e={t:Date.now(), kind, msg:String(msg).slice(0,300), extra:extra||null};
+  ptDiag.push(e);
+  if(ptDiag.length>PT_DIAG_MAX) ptDiag.splice(0, ptDiag.length-PT_DIAG_MAX);
+  if(kind==='fix'||kind==='error') console.log(`[ptHealth:${kind}]`, e.msg, extra||'');
+  ptSyncHealthPanel();
+  return e;
+}
+window.ptLogDiag=ptLogDiag;
+/* Uncaught errors are the ones that matter most and the ones nobody ever sees
+   on a phone — there is no console to open at a tennis court. */
+window.addEventListener('error', e=>{
+  try{ ptLogDiag('error', (e.message||'script error')+' @ '+((e.filename||'').split('/').pop()||'?')+':'+(e.lineno||0)); }catch(_){}
+});
+window.addEventListener('unhandledrejection', e=>{
+  try{ ptLogDiag('error', 'unhandled promise: '+((e.reason&&(e.reason.message||e.reason))||'unknown')); }catch(_){}
+});
+
+/* One pass of checks. Each one is a specific, observed failure with a specific
+   repair — deliberately not a generic "restart everything", which would cut
+   the picture for problems that fix themselves. */
+async function ptHealthTick(){
+  const S=PTStream;
+  if(!S) return;
+  /* A hidden page is *supposed* to stop painting — the browser suspends
+     decoding on purpose. Treating that as a fault would have the watchdog
+     tearing down and re-attaching a perfectly healthy stream every few
+     seconds while somebody has another app open, which is worse than the
+     problem it exists to solve. Wait until we are being looked at again. */
+  if(document.visibilityState==='hidden'){ S._lastRawT=undefined; S._lastViewT=undefined; return; }
+  const now=Date.now();
+  try{
+    if(S.role==='host'){
+      /* 1. The camera track ended under us. Another app taking the camera, or
+         the OS reclaiming it on a backgrounded phone, both land here — and the
+         canvas then composites the last frame it saw forever, so the stream
+         looks live and is a photograph. */
+      const track=S.rawStream && S.rawStream.getVideoTracks()[0];
+      if(S.camOn && (!track || track.readyState==='ended') && !S._camSwapping){
+        ptLogDiag('fix','camera track ended on its own — re-acquiring');
+        const got=await ptSwapVideoTrack(S.videoDeviceId?{deviceId:{ideal:S.videoDeviceId}}:{facingMode:{ideal:S.facingMode||'environment'}});
+        ptLogDiag(got?'fix':'error', got?'camera recovered':'camera could not be recovered');
+      }
+      /* 2. The hidden <video> feeding the canvas stopped advancing while its
+         track is still live — a suspended decoder, which mobile browsers do
+         under memory pressure. Nudging play() restarts it. */
+      else if(S.camOn && S.rawVideo && track && track.readyState==='live'){
+        const ct=S.rawVideo.currentTime;
+        if(S._lastRawT!==undefined && ct===S._lastRawT && now-(S._lastRawTAt||0)>6000){
+          ptLogDiag('fix','camera decoder stalled — restarting playback');
+          try{ S.rawVideo.play().catch(()=>{}); }catch(e){}
+          S._lastRawTAt=now;
+        } else if(ct!==S._lastRawT){ S._lastRawT=ct; S._lastRawTAt=now; }
+        if(S._lastRawT===undefined){ S._lastRawT=ct; S._lastRawTAt=now; }
+      }
+      /* 3. The rolling replay recorder died. It restarts itself on every stop
+         (see ptStartReplayRecorder), so 'inactive' while live means it failed,
+         and instant replay is silently gone until the stream is restarted. */
+      if(!S._stoppingForGood && !S.replayUnavailable && S.recorder && S.recorder.state==='inactive'){
+        ptLogDiag('fix','replay buffer stopped — restarting it');
+        ptStartReplayRecorder(S);
+      }
+    }
+
+    if(S.role==='viewer'){
+      /* 4. The angle on screen says live, but the picture is not moving. The
+         connection is fine — the element is holding a stream it stopped
+         rendering, which is what an unlucky angle switch or a backgrounded
+         tab leaves behind. Re-point it at the same stream and play. */
+      const a=S.angles && S.angles[S.activeAngle];
+      const v=document.getElementById('ptRemoteVideo');
+      if(a && a.status==='live' && a.remoteStream && v){
+        const ct=v.currentTime;
+        if(S._lastViewT!==undefined && ct===S._lastViewT && now-(S._lastViewTAt||0)>7000){
+          ptLogDiag('fix','picture frozen while the angle is live — re-attaching');
+          try{ v.srcObject=null; v.srcObject=a.remoteStream; v.play().catch(()=>{}); }catch(e){}
+          S._lastViewTAt=now;
+        } else if(ct!==S._lastViewT){ S._lastViewT=ct; S._lastViewTAt=now; }
+        if(S._lastViewT===undefined){ S._lastViewT=ct; S._lastViewTAt=now; }
+      }
+    }
+  }catch(e){ ptLogDiag('error','health check itself failed: '+(e.message||e)); }
+}
+setInterval(()=>{ ptHealthTick(); }, 4000);
+
+function ptHealthSummary(){
+  const errs=ptDiag.filter(d=>d.kind==='error').length;
+  const fixes=ptDiag.filter(d=>d.kind==='fix').length;
+  return {errs, fixes};
+}
+function ptSyncHealthPanel(){
+  const body=document.getElementById('ptHealthBody');
+  if(!body) return;
+  const rows=ptDiag.slice(-40).reverse().map(d=>{
+    const time=new Date(d.t).toLocaleTimeString();
+    const icon=d.kind==='error'?'❌':d.kind==='fix'?'🔧':'•';
+    return `<div class="pt-health-row pt-health-${esc(d.kind)}">${icon} <b>${time}</b> ${esc(d.msg)}</div>`;
+  }).join('');
+  body.innerHTML=rows||'<div class="pw-legend">Nothing to report — no errors and nothing needed repairing.</div>';
+  const btn=document.getElementById('ptHealthBtn');
+  if(btn){
+    const {errs}=ptHealthSummary();
+    btn.classList.toggle('on', errs>0);
+    btn.textContent = errs ? `🩺 ${errs}` : '🩺';
+  }
+}
+function ptHealthHtml(){
+  const open=!!(PTStream && PTStream.healthOpen);
+  return `<div class="pt-health" id="ptHealth"${open?'':' hidden'}>
+      <div class="pt-health-h">
+        <span>🩺 stream health</span>
+        <button class="mini" onclick="ptCopyDiag()">copy report</button>
+      </div>
+      <div class="pt-health-body" id="ptHealthBody"></div>
+      <div class="pw-legend">Repairs happen on their own — this is the record of them. If something is still wrong, copy the report and send it on.</div>
+    </div>`;
+}
+function ptToggleHealth(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  if(!PTStream) return;
+  PTStream.healthOpen=!PTStream.healthOpen;
+  const el=document.getElementById('ptHealth');
+  if(el) el.hidden=!PTStream.healthOpen;
+  ptSyncHealthPanel();
+}
+window.ptToggleHealth=ptToggleHealth;
+/* One tap to get the whole account out of the phone and into a message. */
+function ptCopyDiag(){
+  const S=PTStream;
+  const head=[
+    'FGTA stream report '+new Date().toISOString(),
+    'role: '+(S?S.role:'not streaming')+'  code: '+(S?S.code:'-'),
+    'angles: '+(S&&S.angleOrder?S.angleOrder.length:'-')+'  status: '+(S?S.status:'-'),
+    'ua: '+navigator.userAgent,
+    'relay: '+(ptCustomTurn()?'custom':'public fallback'),
+    '---'
+  ].join('\n');
+  const body=ptDiag.map(d=>`${new Date(d.t).toISOString().slice(11,19)} [${d.kind}] ${d.msg}`).join('\n');
+  const text=head+'\n'+(body||'(no events)');
+  const done=()=>toast('📋 Report copied — paste it into a message');
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done,()=>toast(text.slice(0,200),true));
+  else{
+    const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+    ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ toast('Could not copy',true); }
+    ta.remove();
+  }
+}
+window.ptCopyDiag=ptCopyDiag;
+
 /* ---- ICE failure diagnostics: on a failed connection, inspect what candidate
    types were actually gathered so we can tell "TURN relay never allocated"
    (shared free credentials rate-limited/blocked) apart from "relay allocated
@@ -6807,6 +6995,7 @@ function renderPTStream(){
       </div>` : `
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn" onclick="ptRequestReplay()" title="Ask the host to replay the last point for everyone watching"><span class="pt-ctl-ico">🔁</span><span class="pt-ctl-lbl">replay</span></button>
+        <button class="mini pt-ctl-btn" onclick="ptAddAngleHere()" title="Film this same match from your own phone — no code to type, you're already on it"><span class="pt-ctl-ico">📷</span><span class="pt-ctl-lbl">add my camera</span></button>
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save what you're watching as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
         ${driveBtn}
       </div>
@@ -6898,7 +7087,8 @@ function renderPTStream(){
       <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
       ${extra?'':`<button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>`}
       <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
-      <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>`;
+      <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>
+      <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health — what broke and what was repaired automatically">🩺</button>`;
     const vwrapHtml=`
       <div class="pt-video-shell">
         <span class="pt-vid-badge" id="ptVidBadge"><i class="pt-live-dot"></i>live · ${PTStream.viewerCount}</span>
@@ -6911,12 +7101,14 @@ function renderPTStream(){
       ${extra?'':refHtml(PTStream)}
       ${moreHtml(PTStream,true)}`;
     ptRenderStreamShell(box,'host',headHtml,vwrapHtml,restHtml,
-      extra?`<div class="pw-legend">You're an extra camera on ${esc(PTStream.code)} — the score comes from whoever started this live, and viewers can switch to your angle at any time.</div>`:'');
+      (extra?`<div class="pw-legend">You're an extra camera on ${esc(PTStream.code)} — the score comes from whoever started this live, and viewers can switch to your angle at any time.</div>`:'')
+      + ptHealthHtml());
     const badge=document.getElementById('ptVidBadge');
     if(badge) badge.innerHTML=`<i class="pt-live-dot"></i>live · ${PTStream.viewerCount}`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
+    ptSyncHealthPanel();   // footHtml rebuilds the panel empty — refill it, same as the ref deck
     ptSyncRefDrawer();
     ptSyncMoreDrawer();
     return;
@@ -6926,7 +7118,8 @@ function renderPTStream(){
     <span class="pt-live-badge pt-watch-badge">▶ watching</span>
     <span>code <b class="pt-stream-code">${esc(PTStream.code)}</b></span>
     <span class="pt-stream-note">${esc(PTStream.status||'connecting…')}</span>
-    <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>`;
+    <button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Opt into ref mode — score this match yourself, same as the host">⚖️ ref</button>
+    <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health — what broke and what was repaired automatically">🩺</button>`;
   const vwrapHtml=`
     <div class="pt-video-shell">
       <span class="pt-vid-badge" id="ptVidBadge">${PTStream.status==='live'?'<i class="pt-live-dot"></i>live':esc(PTStream.status||'connecting…')}</span>
@@ -6950,6 +7143,7 @@ function renderPTStream(){
     ${moreHtml(PTStream,false)}`;
   const footHtml=`
     ${angleSwitchHtml}
+    ${ptHealthHtml()}
     ${othersHtml}
     <div class="pt-stream-foot">
       <button class="mini no" onclick="ptStopWatching()">stop watching</button>
@@ -6971,6 +7165,7 @@ function renderPTStream(){
   }
   ptSyncAngleRail();
   ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
+  ptSyncHealthPanel();   // footHtml rebuilds the panel empty — refill it, same as the ref deck
   ptSyncRefDrawer();
   ptSyncMoreDrawer();
 }
@@ -9459,6 +9654,21 @@ window.ptAddAngle=ptAddAngle;
    a code and pressing go is the obvious gesture, and it did nothing at all. */
 function ptWatchCodeKey(e){ if(e.key==='Enter'){ e.preventDefault(); ptWatch(); } }
 window.ptWatchCodeKey=ptWatchCodeKey;
+/* Point your own camera at the match you are already watching, in one tap.
+   Adding an angle used to mean stopping the stream, going back to the landing
+   panel and typing in a code you had to have written down — while the match
+   you wanted to film was still going on. The code is right there on screen;
+   asking for it again was pure ceremony.
+   This does swap you from watching to filming, which is unavoidable: a device
+   sends one camera or receives, not both. */
+async function ptAddAngleHere(){
+  if(!PTStream || PTStream.role!=='viewer') return;
+  const code=PTStream.code;
+  ptStopWatching();
+  await new Promise(r=>setTimeout(r,200));   // let the channel unsubscribe cleanly first
+  ptGoLive(code);
+}
+window.ptAddAngleHere=ptAddAngleHere;
 
 function ptStopLive(){
   if(!PTStream || PTStream.role!=='host') return;
