@@ -2055,6 +2055,7 @@
   .pt-watch-cta{background:var(--accent);color:#04140e;font-weight:800}
   .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#ff2d2d;color:#fff}
   .pt-golive-cta .pt-live-dot{background:#fff;animation:none}
+  .pt-angle-cta{width:100%;background:transparent;border:1px dashed var(--accent);color:var(--accent)}
 
   /* ---- fullscreen (any device) ----
      Fullscreen is "let the picture own the screen" mode, so it deliberately
@@ -6492,7 +6493,7 @@ function renderPTStream(){
   const box=$("ptStreamBox"); if(!box) return;
   const others = ptActiveStreams();
   const othersHtml = others.length ? `<div class="pt-stream-others">
-    <div class="pt-stream-note">📡 other angles live now</div>
+    <div class="pt-stream-note">📡 other live matches</div>
     ${others.map(o=>`<button class="mini pt-other-btn" onclick="ptSwitchTo('${esc(o.code)}')">▶ ${esc(o.label||'Live match')} — ${esc(o.code)}</button>`).join('')}
   </div>` : '';
   /* The 💬 tab must stay the chat panel's immediate next sibling — the CSS
@@ -6616,6 +6617,10 @@ function renderPTStream(){
           <button class="mini pt-watch-cta" onclick="ptWatch()">\u25b6 Watch</button>
           <button class="mini pt-golive-cta" onclick="ptGoLive()"><i class="pt-live-dot"></i>Go live</button>
         </div>
+        <div class="pt-stream-row pt-join-row">
+          <button class="mini pt-angle-cta" onclick="ptAddAngle()">\ud83d\udcf7 add angle to code above</button>
+        </div>
+        <div class="pw-legend">Got a friend's code already live? Type it above and tap "add angle" to film a second camera on their same live \u2014 viewers get to switch between everyone's angle without leaving the stream.</div>
       </div>`;
     ptStreamShape=null;   // next go-live/watch must rebuild the shell from scratch
     return;
@@ -6665,7 +6670,25 @@ function renderPTStream(){
     ${chatHtml(PTStream)}
     ${refHtml(PTStream)}
     ${moreHtml(PTStream,false)}`;
+  /* Every camera currently added to THIS code (see ptAddAngle/ptGoLive's
+     host-hello) — separate from othersHtml above, which lists other,
+     different matches entirely. Switching here is instant since every
+     angle's peer connection is already live in the background; see
+     ptSwitchAngle. Rebuilt on every render (footHtml, unlike vwrapHtml,
+     isn't gated behind a shape change) so a new angle connecting mid-watch
+     shows up without needing a reconnect. */
+  const angleIds=PTStream.angleOrder||[];
+  const angleSwitchHtml = angleIds.length>1 ? `<div class="pt-stream-others">
+    <div class="pt-stream-note">📷 ${angleIds.length} camera angles live on this match</div>
+    ${angleIds.map((hid,i)=>{
+      const ang=PTStream.angles[hid];
+      const label=(ang&&ang.label)||('Angle '+(i+1));
+      if(hid===PTStream.activeAngle) return `<button class="mini pt-other-btn" disabled>▶ ${esc(label)} — watching</button>`;
+      return `<button class="mini pt-other-btn" onclick="ptSwitchAngle('${esc(hid)}')">${esc(label)}${ang&&ang.status!=='live'?' — '+esc(ang.status):''}</button>`;
+    }).join('')}
+  </div>` : '';
   const footHtml=`
+    ${angleSwitchHtml}
     ${othersHtml}
     <div class="pt-stream-foot">
       <button class="mini no" onclick="ptStopWatching()">stop watching</button>
@@ -8654,8 +8677,14 @@ function ptActiveStreams(){
   if(!ptDirChan) return [];
   try{
     const state=ptDirChan.presenceState();
-    const list=[];
-    Object.values(state).forEach(arr=>arr.forEach(p=>list.push(p)));
+    const list=[]; const seenCodes=new Set();
+    /* Multiple camera angles can now share one code (see ptAddAngle) — each
+       angle tracks its own presence entry, but this directory only needs to
+       surface one card per match, not one per camera. */
+    Object.values(state).forEach(arr=>arr.forEach(p=>{
+      if(!p || seenCodes.has(p.code)) return;
+      seenCodes.add(p.code); list.push(p);
+    }));
     return list.filter(p=>!PTStream || p.code!==PTStream.code);
   }catch(e){ return []; }
 }
@@ -8673,7 +8702,12 @@ window.ptSwitchTo=ptSwitchTo;
    still in flight". This flag closes that window; every exit path below
    resets it, success or failure. */
 let ptGoLiveStarting=false;
-async function ptGoLive(){
+/* existingCode: pass a friend's live code to join THAT match as an extra
+   camera instead of starting a new one (see ptAddAngle). Every broadcaster
+   under a code gets its own hostId so the shared "ptstream_<code>" channel
+   can carry offers/ICE from several hosts at once without them colliding \u2014
+   see the "join"/"answer"/"ice-viewer" handlers below, all keyed by it. */
+async function ptGoLive(existingCode){
   if(PTStream) return toast("Already streaming or watching \u2014 stop first",true);
   if(ptGoLiveStarting) return;
   if(!sb || !sb.channel) return toast("Not connected",true);
@@ -8695,10 +8729,11 @@ async function ptGoLive(){
     return toast(msg,true);
   }
   ptGoLiveStarting=false;
-  const code=ptRandCode();
+  const code=existingCode||ptRandCode();
+  const hostId=ptRandId();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
-  PTStream={code, role:'host', channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
+  PTStream={code, role:'host', hostId, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
   const initTrack=stream.getVideoTracks()[0];
   if(initTrack){ const s=initTrack.getSettings(); PTStream.videoDeviceId=s.deviceId; if(s.facingMode) PTStream.facingMode=s.facingMode; }
   ptStartProcessing(PTStream);
@@ -8724,15 +8759,21 @@ async function ptGoLive(){
   ptEnumerateCameras().then(list=>{ if(PTStream && PTStream.role==='host'){ PTStream.cameras=list; renderPTStream(); } });
   const ch=sb.channel("ptstream_"+code);
   PTStream.channel=ch;
+  /* "join" is untargeted — every host currently on this code's channel
+     receives it and independently offers this viewer its own camera, so a
+     viewer connecting after several angles are already live picks up all
+     of them from one broadcast. A host who arrives LATER (ptAddAngle on an
+     already-watched match) instead announces itself via "host-hello" below,
+     which existing viewers answer by re-sending "join" — see ptWatch. */
   ch.on("broadcast",{event:"join"}, async ({payload})=>{
     if(!PTStream) return;
     const vid=payload.viewerId;
     if(PTStream.peers[vid]) return;
-    if(Object.keys(PTStream.peers).length>=3){ ch.send({type:"broadcast",event:"full",payload:{viewerId:vid}}); return; }
+    if(Object.keys(PTStream.peers).length>=3){ ch.send({type:"broadcast",event:"full",payload:{viewerId:vid,hostId:PTStream.hostId}}); return; }
     const pc=new RTCPeerConnection(PT_ICE);
     PTStream.peers[vid]=pc;
     PTStream.localStream.getTracks().forEach(t=>pc.addTrack(t,PTStream.localStream));
-    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-host",payload:{viewerId:vid,candidate:e.candidate}}); };
+    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-host",payload:{viewerId:vid,hostId:PTStream.hostId,candidate:e.candidate}}); };
     pc.onconnectionstatechange=async ()=>{
       if(pc.connectionState==='failed') console.log('[ptStream host] peer failed:', await ptIceDiag(pc));
       if(PTStream && ['disconnected','failed','closed'].includes(pc.connectionState)){
@@ -8740,16 +8781,18 @@ async function ptGoLive(){
       }
     };
     const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-    ch.send({type:"broadcast",event:"offer",payload:{viewerId:vid,sdp:offer}});
+    ch.send({type:"broadcast",event:"offer",payload:{viewerId:vid,hostId:PTStream.hostId,label:ptChatDisplayName(),sdp:offer}});
     PTStream.viewerCount=Object.keys(PTStream.peers).length; renderPTStream();
     ptSyncBroadcastIfLive();   // a viewer joining mid-match needs the current score, not just the next point
   });
   ch.on("broadcast",{event:"answer"}, async ({payload})=>{
-    const pc=PTStream && PTStream.peers[payload.viewerId]; if(!pc||pc.currentRemoteDescription) return;
+    if(!PTStream || payload.hostId!==PTStream.hostId) return;
+    const pc=PTStream.peers[payload.viewerId]; if(!pc||pc.currentRemoteDescription) return;
     await pc.setRemoteDescription(payload.sdp);
   });
   ch.on("broadcast",{event:"ice-viewer"}, async ({payload})=>{
-    const pc=PTStream && PTStream.peers[payload.viewerId]; if(!pc) return;
+    if(!PTStream || payload.hostId!==PTStream.hostId) return;
+    const pc=PTStream.peers[payload.viewerId]; if(!pc) return;
     try{ await pc.addIceCandidate(payload.candidate); }catch(e){}
   });
   ch.on("broadcast",{event:"leave"}, ({payload})=>{
@@ -8774,13 +8817,26 @@ async function ptGoLive(){
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
   ch.on("broadcast",{event:"request_replay"}, ()=>{ ptInstantReplay(); });
-  ch.subscribe();
+  ch.subscribe(status=>{
+    if(status==="SUBSCRIBED" && existingCode) ch.send({type:"broadcast",event:"host-hello",payload:{hostId,label:ptChatDisplayName()}});
+  });
   ptDirAnnounce(code);
   renderPTStream();
   ptSyncCompactChrome();
-  toast("You're live — share code "+code+(PTStream && PTStream.recOn ? " (recording)" : ""));
+  toast(existingCode
+    ? "Your camera is live on "+code+" — viewers can switch to your angle"
+    : "You're live — share code "+code+(PTStream && PTStream.recOn ? " (recording)" : ""));
 }
 window.ptGoLive=ptGoLive;
+/* Join an already-live match as an extra camera instead of starting a new
+   one — reuses the code input on the landing panel so typing a friend's
+   code and tapping this is symmetrical with typing it and tapping Watch. */
+function ptAddAngle(){
+  const codeEl=$("ptWatchCode"); const code=(codeEl?codeEl.value:"").trim().toUpperCase();
+  if(!code) return toast("Enter the match's stream code first",true);
+  ptGoLive(code);
+}
+window.ptAddAngle=ptAddAngle;
 
 function ptStopLive(){
   if(!PTStream || PTStream.role!=='host') return;
@@ -8804,43 +8860,97 @@ function ptStopLive(){
 }
 window.ptStopLive=ptStopLive;
 
+/* A match can have several cameras live under one code (see ptAddAngle) —
+   PTStream.angles holds one entry per hostId, each with its own
+   RTCPeerConnection and remote track, and PTStream.activeAngle picks which
+   one is currently on screen. All the peer connections stay open in the
+   background while watching, so switching angles is instant (no
+   reconnect) — unlike ptSwitchTo, which hops between different matches
+   and does have to tear down and reconnect.
+   PTStream.remoteStream/status/failed are kept mirroring whichever angle
+   is active, so the rest of the stream code (renderPTStream, recording,
+   etc.) can keep reading those same three fields unchanged. */
+function ptSyncActiveAngleFields(){
+  if(!PTStream || PTStream.role!=='viewer') return;
+  const a=PTStream.angles[PTStream.activeAngle];
+  PTStream.remoteStream=a?a.remoteStream:null;
+  PTStream.status=a?a.status:"connecting…";
+  PTStream.failed=a?!!a.failed:false;
+}
+function ptSwitchAngle(hostId){
+  if(!PTStream || PTStream.role!=='viewer' || !PTStream.angles[hostId] || PTStream.activeAngle===hostId) return;
+  PTStream.activeAngle=hostId;
+  ptSyncActiveAngleFields();
+  renderPTStream();
+}
+window.ptSwitchAngle=ptSwitchAngle;
+
 async function ptWatch(codeArg){
   if(PTStream) return toast("Already streaming or watching — stop first",true);
   const codeEl=$("ptWatchCode"); const code=(codeArg || (codeEl?codeEl.value:"")).trim().toUpperCase();
   if(!code) return toast("Enter a stream code",true);
   if(!sb || !sb.channel) return toast("Not connected",true);
   const viewerId=ptRandId();
-  PTStream={code, role:'viewer', channel:null, viewerId, remoteStream:null, pc:null, status:"connecting…", chat:[]};
+  PTStream={code, role:'viewer', channel:null, viewerId, angles:{}, angleOrder:[], activeAngle:null, remoteStream:null, status:"connecting…", chat:[]};
   const ch=sb.channel("ptstream_"+code);
   PTStream.channel=ch;
   ch.on("broadcast",{event:"offer"}, async ({payload})=>{
-    if(!PTStream || payload.viewerId!==viewerId) return;
+    if(!PTStream || payload.viewerId!==viewerId || PTStream.angles[payload.hostId]) return;
+    const hostId=payload.hostId;
     const pc=new RTCPeerConnection(PT_ICE);
-    PTStream.pc=pc;
-    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,candidate:e.candidate}}); };
-    pc.ontrack=e=>{ if(PTStream){ PTStream.remoteStream=e.streams[0]; PTStream.status="live"; renderPTStream(); } };
+    const angle={pc, hostId, remoteStream:null, status:"connecting…", failed:false, label:payload.label||('Angle '+(PTStream.angleOrder.length+1))};
+    PTStream.angles[hostId]=angle;
+    PTStream.angleOrder.push(hostId);
+    if(!PTStream.activeAngle) PTStream.activeAngle=hostId;
+    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,hostId,candidate:e.candidate}}); };
+    pc.ontrack=e=>{
+      if(!PTStream || !PTStream.angles[hostId]) return;
+      angle.remoteStream=e.streams[0]; angle.status="live";
+      if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
+      renderPTStream();
+    };
     pc.onconnectionstatechange=async ()=>{
-      if(!PTStream) return;
+      if(!PTStream || !PTStream.angles[hostId]) return;
       if(pc.connectionState==='failed'){
         const diag=await ptIceDiag(pc);
         console.log('[ptStream viewer] connection failed:', diag);
-        PTStream.status="connection failed"+(diag.relay?" (relay reachable, still blocked)":diag.srflx?" (no relay found — TURN unreachable)":" (no usable network path found)");
-        PTStream.failed=true; renderPTStream();
+        angle.status="connection failed"+(diag.relay?" (relay reachable, still blocked)":diag.srflx?" (no relay found — TURN unreachable)":" (no usable network path found)");
+        angle.failed=true;
+        if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
+        renderPTStream();
       }
-      else if(['disconnected','closed'].includes(pc.connectionState)){ PTStream.status="disconnected"; renderPTStream(); }
+      else if(['disconnected','closed'].includes(pc.connectionState)){
+        delete PTStream.angles[hostId];
+        PTStream.angleOrder=PTStream.angleOrder.filter(id=>id!==hostId);
+        if(PTStream.activeAngle===hostId){
+          PTStream.activeAngle=PTStream.angleOrder[0]||null;
+          ptSyncActiveAngleFields();
+          if(!PTStream.activeAngle) PTStream.status="disconnected";
+        }
+        renderPTStream();
+      }
     };
     await pc.setRemoteDescription(payload.sdp);
     const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
-    ch.send({type:"broadcast",event:"answer",payload:{viewerId,sdp:answer}});
+    ch.send({type:"broadcast",event:"answer",payload:{viewerId,hostId,sdp:answer}});
   });
   ch.on("broadcast",{event:"ice-host"}, async ({payload})=>{
-    if(!PTStream || payload.viewerId!==viewerId || !PTStream.pc) return;
-    try{ await PTStream.pc.addIceCandidate(payload.candidate); }catch(e){}
+    if(!PTStream || payload.viewerId!==viewerId) return;
+    const angle=PTStream.angles[payload.hostId]; if(!angle) return;
+    try{ await angle.pc.addIceCandidate(payload.candidate); }catch(e){}
+  });
+  /* a camera that goes live on this code AFTER we started watching — we
+     already sent our one-time untargeted "join" before it existed, so it
+     never saw us; re-sending "join" here reaches it (and every other host
+     already connected just no-ops the resend, see the peers[vid] guard in
+     ptGoLive). */
+  ch.on("broadcast",{event:"host-hello"}, ({payload})=>{
+    if(!PTStream || PTStream.angles[payload.hostId]) return;
+    ch.send({type:"broadcast",event:"join",payload:{viewerId}});
   });
   ch.on("broadcast",{event:"full"}, ({payload})=>{
     if(!PTStream || payload.viewerId!==viewerId) return;
-    toast("That stream already has 3 viewers",true);
-    ptStopWatching();
+    toast("One camera angle is full (3 viewers max) — other angles still work",true);
   });
   ch.on("broadcast",{event:"chat"}, ({payload})=>{
     if(!PTStream) return; PTStream.chat=PTStream.chat||[]; PTStream.chat.push(payload); renderPTStream();
@@ -8862,7 +8972,7 @@ window.ptWatch=ptWatch;
 
 function ptStopWatching(){
   if(!PTStream || PTStream.role!=='viewer') return;
-  if(PTStream.pc) try{PTStream.pc.close();}catch(e){}
+  Object.values(PTStream.angles||{}).forEach(a=>{ try{a.pc.close();}catch(e){} });
   if(PTStream.channel){ try{ PTStream.channel.send({type:"broadcast",event:"leave",payload:{viewerId:PTStream.viewerId}}); }catch(e){} try{PTStream.channel.unsubscribe();}catch(e){} }
   PTStream=null;
   renderPTStream();
