@@ -10228,25 +10228,80 @@ window.ptChatKey=ptChatKey;
 /* ---- perspective directory: lets a viewer discover and hop between every
    currently-live stream (e.g. multiple friends filming different angles of
    the same match) via Realtime presence, no manual code re-entry needed. ---- */
-let ptDirChan=null;
+let ptDirChan=null, ptDirRetryT=null, ptDirTries=0, ptDirMine=null, ptDirWatch=null;
+/* This channel is the only way the "live now" list — and the PC recorder's
+   auto-record, which reads the same directory — ever learn that a match
+   exists. A Realtime socket does not stay up forever: a wifi blip, a token
+   refresh or a laptop sleeping drops it, and the channel goes to "closed"
+   without anything else in the app noticing.
+
+   This used to be join-once-and-hope. ptDirInit returned early forever after
+   the first call because ptDirChan was still set, so a dropped socket left a
+   dead channel in place, presenceState() stayed empty, and nothing ever
+   rejoined. On a phone that is a stale list until reload; on a PC recorder
+   left running for a match it is worse — it goes silently deaf and records
+   nothing, with no error anywhere, which is exactly how a match gets lost.
+
+   So: rejoin on any non-joined state, with backoff, and re-announce our own
+   presence afterwards — a rejoined channel starts empty, so a host that was
+   live before the drop would otherwise vanish from everyone else's list. */
 function ptDirInit(){
+  ptDirStartWatch();
   if(ptDirChan || !sb || !sb.channel) return;
   try{
-    ptDirChan=sb.channel("ptstream_directory",{config:{presence:{key:ptRandId()}}});
-    ptDirChan.on("presence",{event:"sync"}, ()=>{ renderPTStream(); });
-    ptDirChan.subscribe();
-  }catch(e){}
+    const ch=sb.channel("ptstream_directory",{config:{presence:{key:ptRandId()}}});
+    ptDirChan=ch;
+    ch.on("presence",{event:"sync"}, ()=>{ renderPTStream(); });
+    ch.subscribe(status=>{
+      if(ptDirChan!==ch) return;          // a later rejoin already replaced us
+      if(status==="SUBSCRIBED"){
+        ptDirTries=0;
+        if(ptDirMine){ try{ ch.track({...ptDirMine, t:Date.now()}); }catch(e){} }
+        renderPTStream();
+      } else if(status==="CLOSED" || status==="CHANNEL_ERROR" || status==="TIMED_OUT"){
+        ptDirRejoin();
+      }
+    });
+  }catch(e){ ptDirChan=null; ptDirRejoin(); }
 }
+function ptDirRejoin(){
+  if(ptDirRetryT) return;
+  const wait=Math.min(30000, 1000*Math.pow(2, Math.min(ptDirTries++, 5)));
+  ptDirRetryT=setTimeout(()=>{
+    ptDirRetryT=null;
+    const old=ptDirChan; ptDirChan=null;
+    if(old){ try{ sb && sb.removeChannel ? sb.removeChannel(old) : old.unsubscribe(); }catch(e){} }
+    ptDirInit();
+  }, wait);
+}
+/* Cheap liveness poke, safe to call as often as you like. The subscribe
+   callback catches a clean close; this catches everything else, including a
+   channel that errored before its callback was ever wired up. */
+function ptDirEnsure(){
+  if(!ptDirChan){ ptDirInit(); return; }
+  const st=ptDirChan.state;
+  if(st && st!=="joined" && st!=="joining") ptDirRejoin();
+}
+function ptDirStartWatch(){
+  if(ptDirWatch) return;
+  ptDirWatch=setInterval(()=>{ try{ ptDirEnsure(); }catch(e){} }, 15000);
+}
+window.ptDirEnsure=ptDirEnsure;
 function ptDirAnnounce(code, isExtraAngle){
   /* An extra angle is filming somebody else's match, so its own local PT
      state describes a different match entirely — announcing that would
      rename the match in everyone's directory. Stay generic and let the
      origin host's label win (see ptActiveStreams). */
-  if(!ptDirChan) return;
   const label = (!isExtraAngle && typeof PT!=="undefined" && PT) ? (PT.a+" vs "+PT.b) : "Live match";
+  /* Remembered independently of the channel: if the socket is down right now
+     the rejoin re-tracks this for us, so going live during a blip still ends
+     up in everyone's directory instead of being lost. */
+  ptDirMine={code,label};
+  ptDirEnsure();
+  if(!ptDirChan) return;
   try{ ptDirChan.track({code,label,t:Date.now()}); }catch(e){}
 }
-function ptDirWithdraw(){ if(ptDirChan) try{ ptDirChan.untrack(); }catch(e){} }
+function ptDirWithdraw(){ ptDirMine=null; if(ptDirChan) try{ ptDirChan.untrack(); }catch(e){} }
 function ptActiveStreams(){
   if(!ptDirChan) return [];
   try{
