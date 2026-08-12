@@ -180,7 +180,19 @@ $env:FGTA_PORT=9000; npm start
 
 ## If something is wrong
 
-The dashboard's **Log** panel is the first place to look.
+The dashboard's **Log** panel is the first place to look. It only holds the
+last 300 lines and starts empty after a restart, so for anything that happened
+overnight read **`recorder.log`** in this folder instead — every line the
+dashboard shows is mirrored there with a full timestamp, and it survives
+restarts.
+
+The log also records what the recorder can see: a line every time the list of
+live matches changes, and a line when it joins one. If a match was live and the
+log never mentions it, the recorder never saw it announced — that is a
+directory problem, not a recording one, and restarting the recorder clears it.
+
+If the browser crashes the recorder now says so and rebuilds it rather than
+sitting there silently doing nothing; auto-record carries on afterwards.
 
 - **"Could not load the FGTA app"** — no internet on first run. After one
   successful start it caches a copy and can run without it.
