@@ -9506,8 +9506,10 @@ function ptHawkPaint(){
    at all. Deliberately a second, independent MediaRecorder from the one in
    ptStartReplayRecorder: that one evicts anything older than ~16s and
    periodically restarts itself, which is exactly wrong for a recording
-   meant to hold the whole match. This one just keeps every chunk until
-   stopped. `S` is captured at start time (not read from the PTStream
+   meant to hold the whole match. This one keeps every chunk until stopped,
+   writing them to IndexedDB as they arrive (see ptRecPut) rather than
+   holding a match's worth of video in memory. `S` is captured at start time
+   (not read from the PTStream
    global later) so a recording started on one stream session always
    finishes and saves itself even if the global has already moved on to
    null or a new session by the time the browser fires 'stop'. ---- */
@@ -9542,7 +9544,30 @@ function ptStartRecord(silent){
   S.recChunks=[];
   S.recMime=mime||'video/webm';
   S.recStartT=Date.now();
-  rec.ondataavailable=e=>{ if(e.data && e.data.size) S.recChunks.push(e.data); };
+  /* Chunks go to IndexedDB as they arrive and are dropped from memory, so a
+     three-hour match costs the tab no more than a three-minute one and an
+     interrupted recording is still on the device afterwards. recChunks stays
+     as the fallback for a browser with no usable IndexedDB, and for a store
+     that fills up or starts refusing writes mid-match. */
+  S.recId="r"+S.recStartT+"-"+Math.random().toString(36).slice(2,8);
+  S.recPersist=true;
+  S.recPending=[];
+  ptRecBegin({rid:S.recId, code:S.code||'live', startedAt:S.recStartT, mime:S.recMime, ext:(S.recMime||'').includes('mp4')?'mp4':'webm'})
+    .catch(()=>{ S.recPersist=false; });
+  rec.ondataavailable=e=>{
+    if(!e.data || !e.data.size) return;
+    if(!S.recChunks) return;                 // already finished and handed off
+    if(!S.recPersist){ S.recChunks.push(e.data); return; }
+    const p=ptRecPut(S.recId, e.data).catch(()=>{
+      /* Storage gone or full: keep recording into memory rather than
+         dropping the rest of the match on the floor. Everything already
+         written stays in the store and is stitched back on in front. */
+      S.recPersist=false;
+      if(S.recChunks) S.recChunks.push(e.data);
+    });
+    S.recPending.push(p);
+    if(S.recPending.length>200) S.recPending.splice(0, S.recPending.length-200);
+  };
   rec.onerror=e=>console.log('[ptStream] local record error:', e && e.error && e.error.message);
   rec.onstop=()=>ptFinishRecord(S);
   rec.start(1000);
@@ -9558,16 +9583,33 @@ function ptStopRecord(){
   try{ if(S.recRecorder.state!=='inactive') S.recRecorder.stop(); }catch(e){}
   renderPTStream();
 }
-function ptFinishRecord(S){
-  if(!S || !S.recChunks || !S.recChunks.length){ if(S) S.recRecorder=null; return; }
-  const blob=new Blob(S.recChunks,{type:S.recMime||'video/webm'});
-  const ext=(S.recMime||'').includes('mp4')?'mp4':'webm';
-  const stamp=new Date(S.recStartT||Date.now()).toISOString().replace(/[:.]/g,'-').slice(0,19);
-  const filename=`fgta-match-${S.code||'live'}-${stamp}.${ext}`;
-  if(gdriveIsConnected()) gdriveUploadRecording(blob, filename);
-  else ptSaveRecording(blob, filename);
-  S.recChunks=null;
-  S.recRecorder=null;
+async function ptFinishRecord(S){
+  if(!S) return;
+  const rid=S.recId, mem=S.recChunks||[];
+  S.recChunks=null; S.recRecorder=null; S.recId=null;
+  let parts=[];
+  if(rid){
+    /* the last few chunks are still in flight to the store */
+    try{ await Promise.allSettled(S.recPending||[]); }catch(e){}
+    try{ parts=await ptRecChunks(rid); }catch(e){ parts=[]; }
+  }
+  parts=parts.concat(mem);            // stored first, then any memory fallback
+  if(!parts.length){ if(rid) ptRecDrop(rid); return; }
+  const meta={code:S.code, startedAt:S.recStartT, mime:S.recMime, ext:(S.recMime||'').includes('mp4')?'mp4':'webm'};
+  const saved=await ptRecDeliver(parts, meta);
+  /* Only let go of the stored copy once it is demonstrably somewhere else. */
+  if(rid && saved) ptRecDrop(rid);
+}
+/* Turns a set of chunks into the file, by whichever route is configured.
+   Shared by a normal stop and by the recovery of an interrupted recording. */
+async function ptRecDeliver(parts, meta){
+  const blob=new Blob(parts,{type:meta.mime||'video/webm'});
+  const stamp=new Date(meta.startedAt||Date.now()).toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const filename=`fgta-match-${meta.code||'live'}-${stamp}.${meta.ext||'webm'}`;
+  try{
+    return gdriveIsConnected() ? await gdriveUploadRecording(blob, filename)
+                               : ptSaveRecording(blob, filename);
+  }catch(e){ return false; }
 }
 /* Plain anchor-download, same technique already used by exportData() for
    backups: works on desktop everywhere and on Android Chrome as a real
@@ -9584,9 +9626,131 @@ function ptSaveRecording(blob, filename){
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 4000);
     toast("📥 Recording saved — "+filename);
+    return true;
   }catch(e){
     toast("Couldn't save the recording: "+(e.message||e.name),true);
+    return false;
   }
+}
+
+/* ---- interrupted-recording store ----------------------------------------
+   A recording used to live entirely in a chunk array until it stopped. At the
+   3 Mbps this records at that is roughly 1.4GB of tab memory an hour, and a
+   phone that killed the tab — backgrounded too long, low memory, a crash,
+   someone swiping the app away — took the whole match with it. Nothing was
+   written, nothing warned, and there was no second copy anywhere because the
+   stream itself is peer-to-peer.
+
+   So chunks are written here as they arrive. Memory stays flat, and whatever
+   was recorded before an interruption is still on the device next time the
+   app opens, where ptRecOffer hands it back. ---- */
+const PTREC_DB="fgta_recordings";
+let _ptRecDB=null;
+function ptRecDB(){
+  if(_ptRecDB) return _ptRecDB;
+  _ptRecDB=new Promise((resolve,reject)=>{
+    if(!window.indexedDB) return reject(new Error("no IndexedDB"));
+    const req=indexedDB.open(PTREC_DB,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains("meta")) db.createObjectStore("meta",{keyPath:"rid"});
+      if(!db.objectStoreNames.contains("chunks")){
+        /* autoIncrement keys mean an index lookup comes back in insertion
+           order, which is the order the chunks have to be stitched in */
+        db.createObjectStore("chunks",{autoIncrement:true}).createIndex("rid","rid",{unique:false});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error("IndexedDB unavailable"));
+    req.onblocked=()=>reject(new Error("IndexedDB blocked"));
+  });
+  _ptRecDB.catch(()=>{ _ptRecDB=null; });
+  return _ptRecDB;
+}
+function ptRecTx(stores, mode, fn){
+  return ptRecDB().then(db=>new Promise((resolve,reject)=>{
+    let out;
+    const tx=db.transaction(stores, mode);
+    tx.oncomplete=()=>resolve(out);
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error||new Error("write aborted"));
+    try{ out=fn(tx); }catch(e){ try{ tx.abort(); }catch(_){} reject(e); }
+  }));
+}
+function ptRecBegin(meta){
+  return ptRecTx("meta","readwrite",tx=>tx.objectStore("meta").put(meta));
+}
+function ptRecPut(rid, blob){
+  return ptRecTx("chunks","readwrite",tx=>tx.objectStore("chunks").add({rid, blob}));
+}
+function ptRecChunks(rid){
+  return ptRecTx("chunks","readonly",tx=>{
+    const out=[];
+    tx.objectStore("chunks").index("rid").openCursor(IDBKeyRange.only(rid)).onsuccess=e=>{
+      const c=e.target.result;
+      if(!c) return;
+      if(c.value && c.value.blob) out.push(c.value.blob);
+      c.continue();
+    };
+    return out;
+  });
+}
+function ptRecDrop(rid){
+  return ptRecTx(["meta","chunks"],"readwrite",tx=>{
+    tx.objectStore("meta").delete(rid);
+    tx.objectStore("chunks").index("rid").openCursor(IDBKeyRange.only(rid)).onsuccess=e=>{
+      const c=e.target.result;
+      if(!c) return;
+      c.delete(); c.continue();
+    };
+  }).catch(()=>{});
+}
+function ptRecOrphans(){
+  return ptRecTx("meta","readonly",tx=>{
+    const out=[];
+    tx.objectStore("meta").openCursor().onsuccess=e=>{
+      const c=e.target.result;
+      if(!c) return;
+      out.push(c.value); c.continue();
+    };
+    return out;
+  });
+}
+/* Anything still in the store when the app opens is by definition a
+   recording that never got the chance to finish. Offer it — silently
+   downloading a multi-GB file on page load would be worse than the bug. */
+async function ptRecOffer(){
+  let metas=[];
+  try{ metas=(await ptRecOrphans())||[]; }catch(e){ return; }
+  if(!metas.length) return;
+  metas.sort((a,b)=>(b.startedAt||0)-(a.startedAt||0));
+  const m=metas[0];
+  let parts=[];
+  try{ parts=await ptRecChunks(m.rid); }catch(e){}
+  /* a store entry with no chunks is just litter from a recording that was
+     interrupted in its first second */
+  if(!parts.length){ metas.forEach(x=>ptRecDrop(x.rid)); return; }
+  const mb=Math.round(parts.reduce((n,b)=>n+b.size,0)/1048576);
+  const when=new Date(m.startedAt||Date.now());
+  const bar=document.createElement("div");
+  bar.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;background:#12213a;color:#eaf1ff;border:1px solid #2b4a7d;border-radius:12px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.45);font:14px/1.45 system-ui,sans-serif;display:flex;gap:10px;align-items:center;flex-wrap:wrap";
+  const txt=document.createElement("div");
+  txt.style.cssText="flex:1;min-width:200px";
+  txt.textContent=`🛟 An interrupted recording of ${m.code||"a match"} (${mb} MB, ${when.toLocaleString()}) is still on this device.`;
+  const save=document.createElement("button");
+  save.className="mini"; save.textContent=gdriveIsConnected()?"upload it":"save it";
+  const drop=document.createElement("button");
+  drop.className="mini"; drop.textContent="discard";
+  save.onclick=async()=>{
+    save.disabled=drop.disabled=true; save.textContent="saving…";
+    const ok=await ptRecDeliver(parts,m);
+    if(ok) ptRecDrop(m.rid);
+    bar.remove();
+    if(metas.length>1) setTimeout(ptRecOffer,1500);
+  };
+  drop.onclick=()=>{ ptRecDrop(m.rid); bar.remove(); if(metas.length>1) setTimeout(ptRecOffer,300); };
+  bar.append(txt,save,drop);
+  document.body.appendChild(bar);
 }
 
 /* ============================================================
@@ -9749,9 +9913,10 @@ async function gdriveUploadRecording(blob, filename){
       if(pct%20===0) toast(`☁️ Uploading… ${pct}%`);
     });
     toast("☁️ Recording uploaded to Google Drive — "+filename);
+    return true;
   }catch(e){
     toast("Drive upload failed, saving locally instead: "+(e.message||e),true);
-    ptSaveRecording(blob, filename);
+    return ptSaveRecording(blob, filename);
   }
 }
 
@@ -10228,25 +10393,80 @@ window.ptChatKey=ptChatKey;
 /* ---- perspective directory: lets a viewer discover and hop between every
    currently-live stream (e.g. multiple friends filming different angles of
    the same match) via Realtime presence, no manual code re-entry needed. ---- */
-let ptDirChan=null;
+let ptDirChan=null, ptDirRetryT=null, ptDirTries=0, ptDirMine=null, ptDirWatch=null;
+/* This channel is the only way the "live now" list — and the PC recorder's
+   auto-record, which reads the same directory — ever learn that a match
+   exists. A Realtime socket does not stay up forever: a wifi blip, a token
+   refresh or a laptop sleeping drops it, and the channel goes to "closed"
+   without anything else in the app noticing.
+
+   This used to be join-once-and-hope. ptDirInit returned early forever after
+   the first call because ptDirChan was still set, so a dropped socket left a
+   dead channel in place, presenceState() stayed empty, and nothing ever
+   rejoined. On a phone that is a stale list until reload; on a PC recorder
+   left running for a match it is worse — it goes silently deaf and records
+   nothing, with no error anywhere, which is exactly how a match gets lost.
+
+   So: rejoin on any non-joined state, with backoff, and re-announce our own
+   presence afterwards — a rejoined channel starts empty, so a host that was
+   live before the drop would otherwise vanish from everyone else's list. */
 function ptDirInit(){
+  ptDirStartWatch();
   if(ptDirChan || !sb || !sb.channel) return;
   try{
-    ptDirChan=sb.channel("ptstream_directory",{config:{presence:{key:ptRandId()}}});
-    ptDirChan.on("presence",{event:"sync"}, ()=>{ renderPTStream(); });
-    ptDirChan.subscribe();
-  }catch(e){}
+    const ch=sb.channel("ptstream_directory",{config:{presence:{key:ptRandId()}}});
+    ptDirChan=ch;
+    ch.on("presence",{event:"sync"}, ()=>{ renderPTStream(); });
+    ch.subscribe(status=>{
+      if(ptDirChan!==ch) return;          // a later rejoin already replaced us
+      if(status==="SUBSCRIBED"){
+        ptDirTries=0;
+        if(ptDirMine){ try{ ch.track({...ptDirMine, t:Date.now()}); }catch(e){} }
+        renderPTStream();
+      } else if(status==="CLOSED" || status==="CHANNEL_ERROR" || status==="TIMED_OUT"){
+        ptDirRejoin();
+      }
+    });
+  }catch(e){ ptDirChan=null; ptDirRejoin(); }
 }
+function ptDirRejoin(){
+  if(ptDirRetryT) return;
+  const wait=Math.min(30000, 1000*Math.pow(2, Math.min(ptDirTries++, 5)));
+  ptDirRetryT=setTimeout(()=>{
+    ptDirRetryT=null;
+    const old=ptDirChan; ptDirChan=null;
+    if(old){ try{ sb && sb.removeChannel ? sb.removeChannel(old) : old.unsubscribe(); }catch(e){} }
+    ptDirInit();
+  }, wait);
+}
+/* Cheap liveness poke, safe to call as often as you like. The subscribe
+   callback catches a clean close; this catches everything else, including a
+   channel that errored before its callback was ever wired up. */
+function ptDirEnsure(){
+  if(!ptDirChan){ ptDirInit(); return; }
+  const st=ptDirChan.state;
+  if(st && st!=="joined" && st!=="joining") ptDirRejoin();
+}
+function ptDirStartWatch(){
+  if(ptDirWatch) return;
+  ptDirWatch=setInterval(()=>{ try{ ptDirEnsure(); }catch(e){} }, 15000);
+}
+window.ptDirEnsure=ptDirEnsure;
 function ptDirAnnounce(code, isExtraAngle){
   /* An extra angle is filming somebody else's match, so its own local PT
      state describes a different match entirely — announcing that would
      rename the match in everyone's directory. Stay generic and let the
      origin host's label win (see ptActiveStreams). */
-  if(!ptDirChan) return;
   const label = (!isExtraAngle && typeof PT!=="undefined" && PT) ? (PT.a+" vs "+PT.b) : "Live match";
+  /* Remembered independently of the channel: if the socket is down right now
+     the rejoin re-tracks this for us, so going live during a blip still ends
+     up in everyone's directory instead of being lost. */
+  ptDirMine={code,label};
+  ptDirEnsure();
+  if(!ptDirChan) return;
   try{ ptDirChan.track({code,label,t:Date.now()}); }catch(e){}
 }
-function ptDirWithdraw(){ if(ptDirChan) try{ ptDirChan.untrack(); }catch(e){} }
+function ptDirWithdraw(){ ptDirMine=null; if(ptDirChan) try{ ptDirChan.untrack(); }catch(e){} }
 function ptActiveStreams(){
   if(!ptDirChan) return [];
   try{
@@ -18586,6 +18806,8 @@ const FGTA_IS_MOBILE = window.matchMedia("(max-width:760px)").matches || (naviga
 setTimeout(()=>{ try{ initPresence(); setTimeout(wireCheerReceiver,600); if(!FGTA_IS_MOBILE) setTimeout(()=>{ initGhostCursors(); }, 800); }catch(e){} }, 900);
 try{ initTicker(); renderTickerBar(); }catch(e){}
 try{ ptDirInit(); }catch(e){}
+/* after the first paint, so a recovery offer never delays the app opening */
+setTimeout(()=>{ try{ ptRecOffer(); }catch(e){} }, 1200);
 renderComposerIdentity();
 ssRefreshLabels();
 (function(){
