@@ -32,9 +32,21 @@ class Recorder {
     this.onEvent = onEvent || (() => {});
     this.auto = false;
     this.state = { connected: false, code: null, angles: [], watching: false, error: null };
+    this.failures = 0;
+    this.relaunching = false;
+    this.closing = false;
+    this._needRelaunch = false;
+    this._lastLive = '';
   }
 
   async launch() {
+    await this._boot();
+    /* One interval for the life of the process — a relaunch reuses it rather
+       than stacking a second poller on top. */
+    if (!this.poll) this.poll = setInterval(() => this.tick().catch(e => this._tickFailed(e)), 1500);
+  }
+
+  async _boot() {
     /* Prefer the Chrome already installed on this machine, and only fall back
        to Playwright's own Chromium. The difference is codecs: Playwright ships
        the open-source build, which has no H.264/AAC, so the best MP4 it can
@@ -57,6 +69,15 @@ class Recorder {
 
     this.page.on('pageerror', e => this.log('page error: ' + e.message));
     this.page.on('console', m => { if (m.type() === 'error') this.log('console: ' + m.text().slice(0, 200)); });
+
+    /* A headless tab running several MediaRecorders is exactly the kind of
+       thing that gets killed by the OS or crashes its renderer, and nothing
+       here used to notice: the poll below swallowed the resulting errors and
+       the recorder sat for hours reporting itself connected while doing
+       nothing at all. Flag it and let tick() rebuild the browser. */
+    this.page.on('crash', () => { if (!this.closing) { this.log('the browser tab crashed'); this._needRelaunch = true; } });
+    this.page.on('close', () => { if (!this.closing) this._needRelaunch = true; });
+    this.browser.on('disconnected', () => { if (!this.closing) this._needRelaunch = true; });
 
     await this.page.exposeFunction('__recStart', (code, label, ext) => this.openFile(code, label, ext));
     await this.page.exposeFunction('__recStop', id => this.closeFile(id));
@@ -90,8 +111,46 @@ class Recorder {
     await this.installRecordingLayer();
     this.log('browser ready');
     this.state.connected = true;
+    this.state.error = null;
+    this.failures = 0;
+  }
 
-    this.poll = setInterval(() => this.tick().catch(() => {}), 1500);
+  /* Rebuild the browser from scratch after a crash. Auto-record picks the
+     match back up on the next tick; a manual watch is restored by hand since
+     nothing else would. */
+  async relaunch() {
+    if (this.relaunching || this.closing) return;
+    this.relaunching = true;
+    this._needRelaunch = false;
+    const wasWatching = this.state.watching ? this.state.code : null;
+    this.log('restarting the browser…');
+    try { await this.browser.close(); } catch (e) {}
+    this.page = null;
+    try {
+      await this._boot();
+      this.log('browser restarted' + (this.auto ? ' — auto-record still on' : ''));
+      if (wasWatching && !this.auto) {
+        try { await this.watch(wasWatching); } catch (e) { this.log('could not rejoin ' + wasWatching + ': ' + e.message); }
+      }
+    } catch (e) {
+      this.log('restart failed: ' + e.message + ' — will try again shortly');
+      this._needRelaunch = true;
+    } finally {
+      this.relaunching = false;
+    }
+  }
+
+  /* Never silently. A recorder that has stopped working has to say so, both
+     in the log and in the status the dashboard renders, or the first anybody
+     hears about it is a match that was never recorded. */
+  _tickFailed(e) {
+    const msg = (e && e.message) || String(e);
+    this.failures++;
+    this.state.connected = false;
+    this.state.error = msg;
+    if (this.failures === 1 || this.failures % 40 === 0) this.log(`poll failed (${this.failures}x): ${msg}`);
+    const fatal = /Target closed|Target crashed|has been closed|Session closed|Execution context was destroyed|Protocol error/i.test(msg);
+    if (fatal || this.failures >= 5) this.relaunch();
   }
 
   /* Decides the recording format by trying each candidate for real: record a
@@ -316,9 +375,16 @@ class Recorder {
   }
 
   async tick() {
+    if (this.relaunching) return;
+    if (this._needRelaunch) return this.relaunch();
     if (!this.page) return;
     const s = await this.page.evaluate(() => {
       const S = (typeof PTStream !== 'undefined' ? PTStream : null);   // see installRecordingLayer
+      /* The directory's Realtime socket drops over a long session and used to
+         stay dead, which left auto-record permanently blind — the page heals
+         itself now, and this is the belt-and-braces poke for a deployment
+         that predates that fix. */
+      try { if (typeof ptDirEnsure === 'function') ptDirEnsure(); } catch (e) {}
       const dir = (() => { try { return ptActiveStreams(); } catch (e) { return []; } })();
       return {
         watching: !!(S && S.role === 'viewer'),
@@ -333,7 +399,17 @@ class Recorder {
         live: dir.map(d => ({ code: d.code, label: d.label, angles: d.angles || 1 })),
       };
     });
-    this.state = { ...this.state, ...s, connected: true };
+    this.state = { ...this.state, ...s, connected: true, error: null, lastTickAt: Date.now() };
+    this.failures = 0;
+
+    /* Say what the directory can see, so "it never noticed my match" is
+       answerable from the log afterwards instead of being invisible. */
+    const seen = s.live.map(l => l.code).sort().join(',');
+    if (seen !== this._lastLive) {
+      this._lastLive = seen;
+      this.log(seen ? 'live now: ' + s.live.map(l => `${l.code} (${l.angles} angle${l.angles === 1 ? '' : 's'})`).join(', ')
+                    : 'no matches live');
+    }
 
     /* auto mode: pick up whatever is live without anybody touching the PC */
     if (this.auto && !s.watching && s.live.length) {
@@ -383,6 +459,7 @@ class Recorder {
   status() { return { ...this.state, auto: this.auto }; }
 
   async close() {
+    this.closing = true;
     if (this.poll) clearInterval(this.poll);
     try { await this.stop(); } catch (e) {}
     try { await this.browser.close(); } catch (e) {}

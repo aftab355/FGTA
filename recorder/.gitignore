@@ -1,3 +1,5 @@
 node_modules/
 recordings/
 .app-cache.html
+recorder.log
+recorder.log.1
