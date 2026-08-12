@@ -2013,6 +2013,12 @@
   .pt-ctl-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
   .pt-ctl-sep{flex:none;width:1px;align-self:stretch;min-height:24px;background:var(--line)}
   .pt-ctl-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  /* display:inline-flex above outranks the browser's [hidden]{display:none},
+     so "resume live" — which only belongs on screen during a set break — was
+     sitting in every host's control drawer for the whole match. Same trap the
+     recorder dashboard's .stage-note hit: a rule that sets display has to opt
+     out of hiding explicitly. */
+  .pt-ctl-btn[hidden]{display:none}
   .pt-ctl-ico{font-size:14px;line-height:1}
   .pt-ctl-btn.off{border-color:rgba(255,45,45,.45);color:#ff7d7d;background:rgba(255,45,45,.08)}
   /* recording is opt-in and destructive to miss, so it gets a louder, pulsing
@@ -2043,7 +2049,7 @@
   .pt-health{margin-top:10px;padding:12px;min-width:0;background:var(--panel-2);
     border:1px solid var(--line);border-radius:var(--r-md)}
   .pt-health[hidden]{display:none}
-  .pt-health-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;
+  .pt-health-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;
     font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
   .pt-health-body{max-height:220px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;
     line-height:1.7;color:var(--dim);overflow-wrap:anywhere}
@@ -2051,6 +2057,14 @@
   .pt-health-row b{color:var(--muted);font-weight:600;margin-right:4px}
   .pt-health-error{color:#ff9d9d}
   .pt-health-fix{color:var(--accent)}
+  /* the camera's own cut list — same panel furniture as 🩺, since it is the
+     same kind of thing: a small deck that is normally closed */
+  .pt-cut-body{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .pt-cut-btn{display:inline-flex;align-items:baseline;gap:7px;max-width:100%}
+  .pt-cut-btn.on{border-color:var(--accent);color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 14%, transparent)}
+  .pt-cut-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pt-cut-state{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:.6px}
   .pt-angle-bar{margin-top:10px;min-width:0}
   /* ---- angle rail: the other cameras, live, next to the main picture ----
      A filmstrip rather than a list of names, because the whole value is
@@ -6663,6 +6677,36 @@ async function ptHealthTick(){
   if(document.visibilityState==='hidden'){ S._lastRawT=undefined; S._lastViewT=undefined; return; }
   const now=Date.now();
   try{
+    /* 0. The ⏺ recording says it is recording and is producing almost nothing.
+       This is the failure that costs the most and shows the least: a frozen
+       canvas (backgrounded page, screen lock, a camera another app took) still
+       encodes, at a few hundred bytes a second, so the recorder reports itself
+       perfectly healthy while an hour of tennis turns into a file of a few
+       megabytes. Nobody finds out until they open it, by which time the match
+       is gone. This is deliberately measured in BYTES, not chunks — a frozen
+       picture still emits a chunk every second, it is just an empty one.
+       ~390 KB/s is what this recording targets; 1 KB/s is a photograph. */
+    if(S.recOn && S.recRecorder && S.camOn!==false){
+      const bytes=S.recBytes||0;
+      if(S._recBytesAt===undefined){ S._recBytesSeen=bytes; S._recBytesAt=now; }
+      const secs=(now-S._recBytesAt)/1000;
+      if(secs>=15){
+        /* Measured on a deliberately frozen composite: about 3 KB/s with the
+           microphone still open. A real recording of this stream runs at
+           roughly 390 KB/s. Anything under 25 KB/s, sustained, is a still
+           photograph with a soundtrack, whatever the recorder believes. */
+        const rate=(bytes-(S._recBytesSeen||0))/secs;
+        if(rate<25000){
+          if(!S._recStalled){
+            S._recStalled=true;
+            ptLogDiag('error','recording is producing only '+Math.round(rate/1000)+' KB/s — the picture is frozen, not filming');
+            toast("⏺ The recording has nearly stopped — the picture looks frozen. Check the camera.",true);
+          }
+        } else S._recStalled=false;
+        S._recBytesSeen=bytes; S._recBytesAt=now;
+      }
+    } else { S._recBytesAt=undefined; S._recBytesSeen=0; S._recStalled=false; }
+
     if(S.role==='host'){
       /* 1. The camera track ended under us. Another app taking the camera, or
          the OS reclaiming it on a backgrounded phone, both land here — and the
@@ -6694,6 +6738,10 @@ async function ptHealthTick(){
         ptLogDiag('fix','replay buffer stopped — restarting it');
         ptStartReplayRecorder(S);
       }
+      /* 3b. Same for the rewind buffers this camera keeps — its own picture,
+         and any angle it is monitoring. Silent when it fails, and only
+         discovered by somebody reaching for a rewind that isn't there. */
+      if(!S._stoppingForGood) ptHawkSyncBuffers(S);
     }
 
     if(S.role==='viewer'){
@@ -7045,6 +7093,7 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn${S.aiHighlight?' auto-on':''}" onclick="ptToggleAIHighlight()" title="Have AI double-check each auto-highlight before replaying it — needs 🎯 auto on, and only works once this is deployed to Netlify (not in local preview)"><span class="pt-ctl-ico">🤖</span><span class="pt-ctl-lbl">${S.aiHighlight?'AI on':'AI'}</span></button>
         <button class="mini pt-ctl-btn${S.breakEnabled?' auto-on':''}" id="ptBreakToggleBtn" onclick="ptToggleBreakMode()" title="Run a ${ptFmtBreakDuration()} info banner between sets — camera keeps rolling (good for a half-time interview), replay clips from that set cut in automatically"><span class="pt-ctl-ico">🎬</span><span class="pt-ctl-lbl">${S.breakEnabled?'breaks on':'breaks'}</span></button>
         <button class="mini pt-ctl-btn${S.recOn?' rec-on':''}" onclick="ptToggleRecord()" title="Save this stream as a video file${gdriveIsConnected()?' to Google Drive':' on this device'}"><span class="pt-ctl-ico">${S.recOn?'⏹':'⏺'}</span><span class="pt-ctl-lbl">${S.recOn?'stop rec':'record'}</span></button>
+        ${ptHawkSupported()?`<button class="mini pt-ctl-btn${ptHawkArmed()?' auto-on':''}" onclick="ptHawkArm()" title="Keep the last minute of your own camera — and of any camera you are watching — on this device, so any moment can be rewound frame by frame. Costs a second video encoder while you are filming."><span class="pt-ctl-ico">🦅</span><span class="pt-ctl-lbl">${ptHawkArmed()?'rewind on':'rewind off'}</span></button>`:''}
         <button class="mini pt-ctl-btn rec-on" id="ptBreakResumeBtn" onclick="ptSkipBreak()" title="End the set break early and cut back to live now"${S.breakMode?'':' hidden'}><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">resume live</span></button>
         ${driveBtn}
       </div>
@@ -7160,6 +7209,8 @@ function renderPTStream(){
       ${extra?'<span class="pt-live-badge pt-watch-badge">📷 angle</span>':''}
       <span class="pt-stream-note">👁 ${PTStream.viewerCount}/3 watching</span>
       ${extra?'':`<button class="pt-dbg-btn pt-ref-btn${PTStream.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving the stream">⚖️ ref</button>`}
+      ${Object.keys(PTStream.roster||{}).length?`<button class="pt-dbg-btn${PTStream.cutOpen?' on':''}" id="ptCutBtn" onclick="ptToggleCutPanel(event)" title="Cut the broadcast to another camera — the angle everyone watching sees">🎬 cut</button>`:''}
+      ${ptHawkSupported()&&!PTStream.hawkUnavailable?`<button class="pt-dbg-btn${PTStream.hawk?' on':''}" id="ptHawkBtn" onclick="ptHawkToggle(event)" title="${ptHawkArmed()?'Rewind the last minute — your own camera, plus any you are watching':'Start keeping the last minute of your camera so it can be rewound'}">🦅 ${PTStream.hawk?'live':(ptHawkArmed()?ptHawkBtnLabel():'arm rewind')}</button>`:''}
       <button class="pt-dbg-btn${PTStream.sbHidden?' on':''}" id="ptSbBtn" onclick="ptToggleScoreboard()" title="Hide the scoreboard for everyone watching — for reviewing a call without it in the way">${PTStream.sbHidden?'🙈':'👁'} score</button>
       <button class="pt-dbg-btn${PTStream.showDebug?' on':''}" id="ptDbgBtn" onclick="ptToggleDebug()" title="camera pipeline diagnostics">🐛</button>
       <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health — what broke and what was repaired automatically">🩺</button>`;
@@ -7176,13 +7227,15 @@ function renderPTStream(){
       ${moreHtml(PTStream,true)}`;
     ptRenderStreamShell(box,'host',headHtml,vwrapHtml,restHtml,
       (extra?`<div class="pw-legend">You're an extra camera on ${esc(PTStream.code)} — the score comes from whoever started this live, and viewers can switch to your angle at any time.</div>`:'')
-      + ptHealthHtml());
+      + ptCutHtml() + ptHealthHtml());
     const badge=document.getElementById('ptVidBadge');
     if(badge) badge.innerHTML=`<i class="pt-live-dot"></i>live · ${PTStream.viewerCount}`;
     const v=$("ptLocalVideo");
     if(v){ if(v.srcObject!==PTStream.localStream) v.srcObject=PTStream.localStream; ptBindAspect(v); }
     ptScrollChatToEnd();   // a rebuilt log starts at the top; the newest line is the point of it
     ptSyncHealthPanel();   // footHtml rebuilds the panel empty — refill it, same as the ref deck
+    ptSyncCutPanel();      // same reason: the body is filled here, not templated
+    if(PTStream.hawk) ptHawkRender();
     ptSyncRefDrawer();
     ptSyncMoreDrawer();
     return;
@@ -8351,8 +8404,8 @@ function ptStartProcessing(S){
   S.canvas=document.createElement('canvas'); S.canvas.width=PT_CAP_LONG; S.canvas.height=PT_CAP_SHORT;
   S.ctx=S.canvas.getContext('2d');
   S.zoom=1; S.filter='none'; S.camOn=true; S.micOn=true;
-  function loop(){
-    if(!PTStream || PTStream!==S) return;
+  function drawFrame(){
+    S._lastDraw=Date.now();
     if(S.breakMode){
       ptDrawBreakFrame(S);
     } else if(S.replay){
@@ -8403,9 +8456,34 @@ function ptStartProcessing(S){
           `rawTrack:${vt?vt.readyState+(vt.enabled?'/on':'/off'):'none'} outTrack:${ct?ct.readyState+(ct.enabled?'/on':'/off'):'none'}`;
       }
     }
+  }
+  /* requestAnimationFrame is the right driver while somebody is looking at
+     this page and the wrong one the moment nobody is: it stops dead when the
+     tab goes to the background or the phone's screen locks. The canvas then
+     stops being drawn — and because captureStream only emits a frame when the
+     canvas is actually redrawn, everything downstream quietly stops with it.
+     The outgoing picture freezes for every viewer, and the ⏺ recording carries
+     on "recording" a frame that never changes, which compresses to nearly
+     nothing: that is how an hour-long match ends up as a file of a few
+     megabytes with no error anywhere.
+
+     The viewer's mix bus already learned this the hard way (see
+     ptViewerMixStream). Here rAF stays the primary driver — smoother, and
+     aligned to the display while the page is visible — with a timer underneath
+     that takes over whenever rAF has not fired recently. A backgrounded page
+     throttles that timer too, but a throttled timer still produces frames,
+     and frames are the difference between a recording and a still photograph. */
+  function loop(){
+    if(!PTStream || PTStream!==S) return;
+    drawFrame();
     S._raf=requestAnimationFrame(loop);
   }
   loop();
+  S._drawTimer=setInterval(()=>{
+    if(!PTStream || PTStream!==S) return;
+    if(Date.now()-(S._lastDraw||0)<80) return;      // rAF is keeping up on its own
+    drawFrame();
+  }, 40);
   const canvasStream=S.canvas.captureStream(30);
   const audioTrack=S.rawStream.getAudioTracks()[0];
   S.localStream=new MediaStream([...canvasStream.getVideoTracks(), ...(audioTrack?[audioTrack]:[])]);
@@ -8474,6 +8552,7 @@ function ptStartReplayRecorder(S){
 function ptStopProcessing(S){
   if(!S) return;
   if(S._raf) cancelAnimationFrame(S._raf);
+  if(S._drawTimer){ clearInterval(S._drawTimer); S._drawTimer=null; }
   S._stoppingForGood=true;
   if(S._replayCycle) clearInterval(S._replayCycle);
   ptStopAudioWatch(S);
@@ -9011,8 +9090,12 @@ const PT_HAWK_MIMES=['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video
 
 function ptHawkDefaultOn(){
   const mem=navigator.deviceMemory||0, cpu=navigator.hardwareConcurrency||0;
-  if(mem && mem<=4) return false;
-  if(cpu && cpu<=4) return false;
+  /* A camera is already encoding and uploading a live picture; a rewind
+     buffer is a second encoder on top of that, so the bar for switching it on
+     without being asked is higher when this device is the one filming. */
+  const filming=!!(PTStream && PTStream.role==='host');
+  if(mem && mem<=(filming?6:4)) return false;
+  if(cpu && cpu<=(filming?6:4)) return false;
   return true;
 }
 function ptHawkArmed(){
@@ -9031,11 +9114,43 @@ function ptHawkSupported(){
 }
 
 /* ---- the buffer ---- */
+/* Browsers only decode an incoming track that something is actually
+   rendering, and a MediaRecorder does not count as that something for a
+   *remote* stream. It is why a viewer's buffers work without any help — every
+   angle is on screen, either as the big picture or as a tile in the rail —
+   and why a camera's monitored angles, which are displayed nowhere at all,
+   recorded a header and then nothing, forever. Measured: five seconds of
+   "recording" state and zero bytes.
+
+   Same fix as the raw camera in ptStartProcessing, for the same reason: keep
+   it in the DOM, just invisible. Muted, so a camera monitoring the court it is
+   standing on cannot feed its own broadcast back into its microphone. */
+function ptKeepAliveVideo(a){
+  if(!a || a.self || !a.remoteStream) return;
+  let v=a._keepVideo;
+  if(!v){
+    v=a._keepVideo=document.createElement('video');
+    v.muted=true; v.playsInline=true; v.setAttribute('playsinline','');
+    v.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
+    document.body.appendChild(v);
+  }
+  if(v.srcObject!==a.remoteStream) v.srcObject=a.remoteStream;
+  v.play().catch(()=>{});
+}
+function ptDropKeepAlive(a){
+  const v=a && a._keepVideo;
+  if(!v) return;
+  try{ v.pause(); v.srcObject=null; if(v.parentNode) v.parentNode.removeChild(v); }catch(e){}
+  a._keepVideo=null;
+}
 function ptHawkStartBuffer(S, hostId){
   const a=S.angles && S.angles[hostId];
   if(!a || !a.remoteStream || a.status!=='live') return;
   const h=a.hawk || (a.hawk={segs:[], mime:''});
   if(h.rec) return;
+  /* a camera has nowhere on screen showing the angles it monitors; a viewer
+     already has, so this is a no-op there beyond one hidden element */
+  if(S.role==='host') ptKeepAliveVideo(a);
   const mime=PT_HAWK_MIMES.find(m=>MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
   h.mime=mime||'video/webm';
   let rec;
@@ -9087,6 +9202,7 @@ function ptHawkPartial(h){
   return {blob:new Blob([s.header, ...s.chunks], {type:h.mime}), t0:s.t0, t1:s.lastT};
 }
 function ptHawkStopBuffer(a){
+  ptDropKeepAlive(a);
   const h=a && a.hawk;
   if(!h) return;
   if(h.cur && h.cur.cycle) clearTimeout(h.cur.cycle);
@@ -9102,7 +9218,10 @@ function ptHawkStopBuffer(a){
    presence. */
 function ptHawkSyncBuffers(S){
   S=S||PTStream;
-  if(!S || S.role!=='viewer') return;
+  if(!S || !S.angles) return;
+  /* a camera keeps its OWN picture without connecting to anything — see
+     ptHostSelfAngle. Monitored angles, if any, sit alongside it. */
+  if(S.role==='host') ptHostSelfAngle(S);
   const want=ptHawkArmed() && !S.hawkUnavailable && ptHawkSupported();
   const buffered=(S.angleOrder||[]).slice(0, PT_HAWK_MAX_ANGLES);
   for(const hid of (S.angleOrder||[])){
@@ -9125,7 +9244,7 @@ function ptHawkBtnLabel(){
 /* How far back the buffer currently reaches, in ms — what the button says. */
 function ptHawkDepth(S){
   S=S||PTStream;
-  if(!S || S.role!=='viewer') return 0;
+  if(!S || !S.angles) return 0;
   let oldest=0;
   for(const hid of (S.angleOrder||[])){
     const h=S.angles[hid] && S.angles[hid].hawk;
@@ -9164,7 +9283,7 @@ function ptHawkFreeSnapshot(H){
 function ptHawkToggle(e){
   if(e && e.stopPropagation) e.stopPropagation();
   const S=PTStream;
-  if(!S || S.role!=='viewer') return;
+  if(!S || !S.angles) return;
   if(S.hawk) return ptHawkClose();
   if(!ptHawkSupported()) return toast("Rewind isn't supported in this browser",true);
   /* Not armed: the honest thing is to start the buffer now and say so, rather
@@ -9196,7 +9315,7 @@ function ptHawkArm(){
 window.ptHawkArm=ptHawkArm;
 function ptHawkOpen(){
   const S=PTStream;
-  if(!S || S.role!=='viewer' || S.hawk) return;
+  if(!S || !S.angles || S.hawk) return;
   const angles=ptHawkSnapshot(S);
   if(!angles.length) return toast("Nothing buffered yet — give it a few seconds",true);
   const t1=Math.max(...angles.map(a=>a.clips[a.clips.length-1].t1));
@@ -9205,7 +9324,12 @@ function ptHawkOpen(){
     /* open on the point just played, at half speed, paused — the position
        somebody reaching for a rewind almost always wants */
     T:Math.max(t0, t1-8000), playing:false, speed:0.5, raf:null,
-    audio:Math.max(0, angles.findIndex(a=>a.hostId===S.activeAngle))};
+    audio:Math.max(0, angles.findIndex(a=>a.hostId===S.activeAngle)),
+    /* A camera reviews in silence. Its microphone is live the whole time this
+       panel is open — playing a recording of that same court out of the same
+       device would put it straight back into the broadcast, which is a
+       feedback loop with a delay on it. */
+    silent:S.role==='host'};
   ptSyncAudioMix(S);                 // the live bed steps aside while you review
   renderPTStream();                  // the 🦅 button becomes "back to live"
   ptHawkRender();
@@ -9252,27 +9376,43 @@ window.ptHawkRefresh=ptHawkRefresh;
 
 /* A MediaRecorder file carries no duration in its header — it cannot, the
    recording was not over when the header was written — so browsers report
-   duration Infinity and refuse to seek past what they happen to have decoded.
-   One seek to an absurd timestamp makes the browser walk the file to its end
-   and settle on the real duration, after which ordinary seeking works. Without
-   this the scrub bar moves and the picture does not. */
+   duration Infinity, and a seek against that simply never completes: the
+   element sits at readyState 1 with seeking stuck true, which on screen is a
+   scrub bar that moves over a picture that does not.
+
+   One seek past the end makes the browser walk to the last cluster and work
+   the real length out. The target seek is then issued IMMEDIATELY after it,
+   deliberately without waiting for a durationchange: measured across Chromium,
+   a target seek landing during the prime's own seek resolves both, while the
+   same seek issued a few hundred milliseconds later can leave the element
+   seeking forever. So this primes and returns, and the caller seeks straight
+   away. */
 function ptHawkPrime(v, then){
-  if(v._ptPrimed || (isFinite(v.duration) && v.duration>0)){ v._ptPrimed=true; return then&&then(); }
-  v._ptPrimed=true;
-  let settled=false;
-  const finish=()=>{
-    if(settled) return;
-    settled=true;
-    v.removeEventListener('durationchange', onDur);
-    if(then) then();
-  };
-  const onDur=()=>{ if(isFinite(v.duration) && v.duration>0) finish(); };
-  v.addEventListener('durationchange', onDur);
-  setTimeout(finish, 700);      // some builds never fire it — carry on regardless
-  try{ v.currentTime=1e6; }catch(e){ finish(); }
+  if(!v._ptPrimed && !(isFinite(v.duration) && v.duration>0)){
+    v._ptPrimed=true;
+    try{ v.currentTime=1e6; }catch(e){}
+  }
+  if(then) then();
 }
+/* Seeks, then checks it actually landed. Nothing about seeking these files is
+   reliable enough to fire and forget — see the note above — and a review that
+   silently shows the wrong frame is worse than one that takes an extra
+   moment. The nudge exists because re-assigning the same currentTime is not
+   necessarily a new seek; 40ms is one frame, i.e. invisible. */
 function ptHawkSetTime(v, t){
-  try{ v.currentTime=Math.max(0, t); }catch(e){}
+  const target=Math.max(0, t);
+  if(v._ptSeekWatch){ clearTimeout(v._ptSeekWatch); v._ptSeekWatch=null; }
+  try{ v.currentTime=target; }catch(e){ return; }
+  let tries=0;
+  const check=()=>{
+    v._ptSeekWatch=null;
+    if(!v.isConnected || !v.src) return;
+    if(v.readyState>=2 && !v.seeking) return;         // landed, frame decoded
+    if(++tries>4) return;
+    try{ v.currentTime=target + (tries%2 ? 0.04 : 0); }catch(e){}
+    v._ptSeekWatch=setTimeout(check, 350);
+  };
+  v._ptSeekWatch=setTimeout(check, 350);
 }
 /* Which of an angle's clips holds a given instant. Segments overlap at the
    seams by design, so prefer the newer one — it has more of what comes next
@@ -9464,7 +9604,7 @@ function ptHawkRender(){
     }
     if(!a.video) a.video=cell.querySelector('video');
     byHost.delete(a.hostId);
-    cell.querySelector('.pt-hawk-lbl').textContent=a.label+(H.audio===i?' 🔊':'');
+    cell.querySelector('.pt-hawk-lbl').textContent=a.label+(!H.silent&&H.audio===i?' 🔊':'');
   });
   byHost.forEach(cell=>cell.remove());
   ptHawkPaint();
@@ -9482,12 +9622,13 @@ function ptHawkPaint(){
   const spd=document.getElementById('ptHawkSpeed');
   if(spd) spd.textContent=H.speed===1?'1×':H.speed===0.5?'½×':'¼×';
   const note=document.getElementById('ptHawkNote');
-  if(note) note.textContent=Math.round(span/1000)+'s buffered · '+H.angles.length+' angle'+(H.angles.length===1?'':'s');
+  if(note) note.textContent=Math.round(span/1000)+'s buffered · '+H.angles.length+' angle'+(H.angles.length===1?'':'s')
+    +(H.silent?' · muted, your mic is live':'');
   H.angles.forEach((a,i)=>{
     if(a.video){
       /* one angle carries the sound: several copies of the same court playing
          at once is noise, and the tap-to-listen cell is how you pick which */
-      a.video.muted=(i!==H.audio);
+      a.video.muted=H.silent || (i!==H.audio);
       const cell=a.video.parentElement;
       if(cell){
         cell.classList.toggle('on-air', i===H.audio);
@@ -9542,7 +9683,8 @@ function ptStartRecord(silent){
   S.recChunks=[];
   S.recMime=mime||'video/webm';
   S.recStartT=Date.now();
-  rec.ondataavailable=e=>{ if(e.data && e.data.size) S.recChunks.push(e.data); };
+  S.recBytes=0;
+  rec.ondataavailable=e=>{ if(e.data && e.data.size){ S.recChunks.push(e.data); S.recBytes+=e.data.size; } };
   rec.onerror=e=>console.log('[ptStream] local record error:', e && e.error && e.error.message);
   rec.onstop=()=>ptFinishRecord(S);
   rec.start(1000);
@@ -10336,7 +10478,13 @@ async function ptGoLive(existingCode){
   const hostId=ptRandId();
   /* liveSince is the fallback the baked-in scoreboard clock uses when the
      stream is on air but no match has been started yet (see ptClockReadout) */
-  PTStream={code, role:'host', hostId, isExtraAngle:!!existingCode, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', facingWanted:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true};
+  /* roster/angles/monitorId are the "a camera is also a spectator" half of
+     this object: who else is filming (learned from host-hello), their video
+     if this device opted into monitoring them, and the id it answers offers
+     to. A camera that never monitors leaves angles holding only its own
+     picture, which is what its rewind buffer records. */
+  PTStream={code, role:'host', hostId, isExtraAngle:!!existingCode, channel:null, rawStream:stream, peers:{}, viewerCount:0, chat:[], facingMode:'environment', facingWanted:'environment', cameras:[], liveSince:Date.now(), setClips:[], breakEnabled:true,
+    roster:{}, angles:{}, angleOrder:[], monitorId:null};
   const initTrack=stream.getVideoTracks()[0];
   if(initTrack){
     const s=initTrack.getSettings();
@@ -10345,6 +10493,9 @@ async function ptGoLive(existingCode){
     ptLogDiag('cam',`live on ${s.facingMode||'unreported facing'} ${s.width||'?'}x${s.height||'?'}`,{deviceId:(s.deviceId||'').slice(0,8)});
   }
   ptStartProcessing(PTStream);
+  /* the composed picture exists now, so the camera's own rewind buffer can
+     start on it — see ptHostSelfAngle */
+  ptHawkSyncBuffers(PTStream);
   /* Auto-record from the first frame — a ref or player forgetting to tap
      record was the whole point of making this automatic instead of a step
      someone has to remember mid-match. Still fully stoppable/restartable
@@ -10376,6 +10527,10 @@ async function ptGoLive(existingCode){
   ch.on("broadcast",{event:"join"}, async ({payload})=>{
     if(!PTStream) return;
     const vid=payload.viewerId;
+    /* our own join, sent to ask the OTHER cameras for their pictures (see
+       ptToggleMonitor). Answering it would have this camera stream to itself,
+       burning one of its own three viewer slots on a picture it already has. */
+    if(vid && vid===PTStream.monitorId) return;
     if(PTStream.peers[vid]) return;
     if(Object.keys(PTStream.peers).length>=3){ ch.send({type:"broadcast",event:"full",payload:{viewerId:vid,hostId:PTStream.hostId}}); return; }
     const pc=new RTCPeerConnection(ptIceConfig());
@@ -10444,6 +10599,50 @@ async function ptGoLive(existingCode){
       if(PTStream && PTStream.isExtraAngle) PTStream.remotePT=payload;
     });
   }
+  /* ---- knowing who else is filming ----
+     A camera used to know nothing about the other cameras on its code: it
+     talks to viewers, and viewers talk to it, but two cameras never exchanged
+     a word. That is why the person filming could neither direct nor review —
+     not a missing button, a missing roster. Hellos fix it for free, since
+     every camera is already on this channel.
+
+     Answered exactly once, by whoever did not already know the sender, so two
+     cameras converge in three messages instead of greeting each other
+     forever. */
+  ch.on("broadcast",{event:"host-hello"}, ({payload})=>{
+    const S=PTStream;
+    if(!S || S.role!=='host') return;
+    const hid=ptSafeId(payload && payload.hostId);
+    if(!hid || hid===S.hostId) return;
+    const known=!!S.roster[hid];
+    S.roster[hid]={label:String((payload&&payload.label)||'').trim().slice(0,24)||'Angle', t:Date.now()};
+    if(known) return;
+    try{ ch.send({type:"broadcast",event:"host-hello",payload:{hostId:S.hostId,label:ptChatDisplayName()}}); }catch(e){}
+    /* monitoring is a standing request: a camera that joins later should be
+       picked up the same way the ones already live were */
+    if(S.monitorId) ptMonitorJoin();
+    renderPTStream();
+  });
+  ch.on("broadcast",{event:"host-bye"}, ({payload})=>{
+    const S=PTStream;
+    if(!S || S.role!=='host') return;
+    const hid=ptSafeId(payload && payload.hostId);
+    if(!hid) return;
+    delete S.roster[hid];
+    ptDropAngle(hid);            // no-op unless we were monitoring it
+    renderPTStream();
+  });
+  /* a camera at its three-viewer limit turning us away — worth saying out
+     loud, because the reason monitoring is quietly missing an angle is
+     otherwise invisible */
+  ch.on("broadcast",{event:"full"}, ({payload})=>{
+    const S=PTStream;
+    if(!S || S.role!=='host' || !S.monitorId || payload.viewerId!==S.monitorId) return;
+    const hid=ptSafeId(payload.hostId);
+    const label=(S.roster[hid]&&S.roster[hid].label)||'That camera';
+    toast(label+" is full (3 watching) — monitoring it isn't possible right now",true);
+  });
+  ptBindAngleSignalling(ch);     // inert until this camera starts monitoring
   /* a viewer's 🔁 replay request — ptInstantReplay() already no-ops with a
      toast if a replay is already running or nothing's buffered yet, same as
      if the host had tapped it locally */
@@ -10454,8 +10653,13 @@ async function ptGoLive(existingCode){
     if(payload && payload.hostId && payload.hostId!==hostId) return;
     ptInstantReplay();
   });
+  /* Every camera says hello now, not just one arriving on somebody else's
+     code. The first camera on a match used to stay silent, so a second one
+     could learn about it only if it happened to speak first — and a viewer
+     that subscribed a beat before this host did never got the nudge to
+     re-join. One hello covers all three. */
   ch.subscribe(status=>{
-    if(status==="SUBSCRIBED" && existingCode) ch.send({type:"broadcast",event:"host-hello",payload:{hostId,label:ptChatDisplayName()}});
+    if(status==="SUBSCRIBED") ch.send({type:"broadcast",event:"host-hello",payload:{hostId,label:ptChatDisplayName()}});
   });
   ptDirAnnounce(code, !!existingCode);
   renderPTStream();
@@ -10496,6 +10700,9 @@ window.ptAddAngleHere=ptAddAngleHere;
 
 function ptStopLive(){
   if(!PTStream || PTStream.role!=='host') return;
+  if(PTStream.hawk) ptHawkClose();
+  ptMonitorStop(PTStream);      // hands back the viewer slots on the other cameras
+  Object.values(PTStream.angles||{}).forEach(a=>{ ptHawkStopBuffer(a); try{ if(a.pc) a.pc.close(); }catch(e){} });
   Object.values(PTStream.peers).forEach(pc=>{ try{pc.close();}catch(e){} });
   /* finalize+save a still-running local recording before the tracks it
      depends on get stopped below — ptStopRecord/ptFinishRecord operate on
@@ -10684,11 +10891,16 @@ window.ptSwitchAngle=ptSwitchAngle;
    one that's still up. Shared by the explicit host-bye goodbye and the ICE
    disconnect path, which race each other by design — whichever lands first
    wins and the other becomes a no-op. */
+/* Both a viewer and a monitoring camera hold angles, so these three work off
+   "is there an angle under this id" rather than off the role. Everything
+   viewer-specific inside them (the angle on the big screen, the audio bed) is
+   keyed on activeAngle, which a camera never sets. */
 function ptDropAngle(hostId, statusIfLast){
   const S=PTStream;
-  if(!S || S.role!=='viewer' || !S.angles[hostId]) return;
+  if(!S || !S.angles || !S.angles[hostId]) return;
   /* stop the rewind buffer before the angle goes: an orphaned MediaRecorder on
-     a dead stream keeps an encoder alive for nothing */
+     a dead stream keeps an encoder alive for nothing (and takes its hidden
+     keep-alive element with it) */
   ptHawkStopBuffer(S.angles[hostId]);
   try{ S.angles[hostId].pc.close(); }catch(e){}
   delete S.angles[hostId];
@@ -10712,7 +10924,7 @@ function ptDropAngle(hostId, statusIfLast){
    and only commits when both have happened. */
 function ptMarkAngleReady(hostId, angle){
   const S=PTStream;
-  if(!S || S.role!=='viewer' || S.angles[hostId]!==angle) return;
+  if(!S || !S.angles || S.angles[hostId]!==angle) return;
   const ready = !!angle.remoteStream && angle.pc.connectionState==='connected';
   const next = ready ? "live" : "connecting…";
   if(ready){
@@ -10733,7 +10945,7 @@ function ptMarkAngleReady(hostId, angle){
    instead of retrying at it forever. */
 function ptRetryAngle(hostId, diag){
   const S=PTStream;
-  if(!S || S.role!=='viewer') return;
+  if(!S || !S.angles) return;
   const angle=S.angles[hostId];
   if(!angle) return;
   S.angleRetries=S.angleRetries||{};
@@ -10761,28 +10973,172 @@ function ptRetryAngle(hostId, diag){
        peers[vid] guard in ptGoLive) — so without this the retry would talk
        to a host that has already stopped listening. Targeted by hostId so
        the other angles keep their connections. */
-    try{ S.channel.send({type:"broadcast",event:"leave",payload:{viewerId:S.viewerId, hostId}}); }catch(e){}
+    try{ S.channel.send({type:"broadcast",event:"leave",payload:{viewerId:ptMyPeerId(S), hostId}}); }catch(e){}
     setTimeout(()=>{
       if(PTStream!==S || !S.channel || S.angles[hostId]) return;
-      try{ S.channel.send({type:"broadcast",event:"join",payload:{viewerId:S.viewerId}}); }catch(e){}
+      try{ S.channel.send({type:"broadcast",event:"join",payload:{viewerId:ptMyPeerId(S)}}); }catch(e){}
     }, 180);
   }, 800*n);
 }
 
-async function ptWatch(codeArg){
-  if(PTStream) return toast("Already streaming or watching — stop first",true);
-  const codeEl=$("ptWatchCode"); const code=(codeArg || (codeEl?codeEl.value:"")).trim().toUpperCase();
-  if(!code) return toast("Enter a stream code",true);
-  if(!sb || !sb.channel) return toast("Not connected",true);
-  const viewerId=ptRandId();
-  PTStream={code, role:'viewer', channel:null, viewerId, angles:{}, angleOrder:[], activeAngle:null, remoteStream:null, status:"connecting…", chat:[]};
-  const ch=sb.channel("ptstream_"+code);
-  PTStream.channel=ch;
+/* ============================================================
+   A CAMERA IS ALSO A SPECTATOR
+   ------------------------------------------------------------
+   Filming used to cost you the match. A phone that went live could score it,
+   flip its camera and cut replays, but it could not direct the broadcast and
+   could not rewind anything, while somebody who contributed nothing but a
+   join code could do both. That was never a decision — a host simply had no
+   idea the other cameras existed (it exchanges offers with viewers, never
+   with other hosts) and received none of their video.
+
+   Two things fix it, at very different prices, so they are two separate
+   features rather than one switch:
+
+   - Knowing WHO is filming costs nothing: one hello on a channel every camera
+     is already sitting on. That alone is enough to direct — you are choosing
+     between people, by name, and on a friend-group match the person behind a
+     camera knows perfectly well what "put it on Aakif" means.
+
+   - SEEING them costs a viewer slot on each of the other cameras (three each,
+     and the PC recorder may hold one), plus decoding their video on a phone
+     that is already encoding and uploading its own. That is monitoring, it is
+     off by default, and it says what it costs before you turn it on.
+
+   Rewinding your OWN camera needs neither: the composed broadcast is already
+   in hand. ---- */
+
+/* The camera you are filming with, as an angle shaped exactly like a received
+   one, so the rewind buffer, the snapshot and the panel all work on a camera
+   with no special cases anywhere. It holds localStream — the composed picture
+   everyone watching sees, scoreboard and replays baked in — not the raw
+   sensor, because reviewing what you broadcast is the point. */
+function ptHostSelfAngle(S){
+  if(!S || S.role!=='host' || !S.localStream) return;
+  const cur=S.angles['self'];
+  if(cur && cur.remoteStream===S.localStream) return;
+  S.angles['self']={hostId:'self', self:true, pc:null, remoteStream:S.localStream,
+    status:'live', failed:false, label:'my camera'};
+  if(!S.angleOrder.includes('self')) S.angleOrder.unshift('self');
+}
+/* Ask every other camera on this code for its picture. Sent as an ordinary
+   viewer "join" — from the other side this device simply is a viewer, which
+   is exactly why it takes one of their three slots and why this is opt-in. */
+function ptMonitorJoin(){
+  const S=PTStream;
+  if(!S || S.role!=='host' || !S.monitorId || !S.channel) return;
+  try{ S.channel.send({type:"broadcast",event:"join",payload:{viewerId:S.monitorId}}); }catch(e){}
+}
+function ptMonitorStop(S){
+  if(!S || S.role!=='host') return;
+  const id=S.monitorId;
+  S.monitorId=null;
+  for(const hid of (S.angleOrder||[]).slice()){
+    if(hid==='self') continue;
+    ptDropAngle(hid);
+  }
+  if(id && S.channel){
+    try{ S.channel.send({type:"broadcast",event:"leave",payload:{viewerId:id}}); }catch(e){}
+  }
+}
+function ptToggleMonitor(){
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  if(S.monitorId){
+    ptMonitorStop(S);
+    toast("Stopped watching the other cameras — their slots are free again");
+  } else {
+    if(!Object.keys(S.roster||{}).length) return toast("No other camera is live on this code yet",true);
+    S.monitorId=ptRandId();
+    ptMonitorJoin();
+    toast("📺 Pulling in the other cameras — this uses one of their 3 viewer slots each");
+  }
+  ptHawkSyncBuffers(S);
+  renderPTStream();
+}
+window.ptToggleMonitor=ptToggleMonitor;
+
+/* ---- directing from behind a camera ----
+   Same broadcast a viewer's 🎬 sends (see ptBroadcastCut) — the difference is
+   only how the choice is made. A viewer picks a tile it can see; a camera
+   picks a name, unless it is monitoring, in which case it gets the picture
+   too. Nobody is granted authority here that a viewer did not already have:
+   the last cut wins, exactly as it does between two viewers both directing. */
+function ptHostCut(hostId){
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  const id = hostId==='self' ? S.hostId : hostId;
+  ptBroadcastCut(id);
+  S.lastCut=id;
+  const label = hostId==='self' ? 'your camera' : ((S.roster[hostId]&&S.roster[hostId].label)||'that angle');
+  toast('🎬 Cut to '+label+' for everyone watching');
+  ptSyncCutPanel();
+}
+window.ptHostCut=ptHostCut;
+function ptToggleCutPanel(e){
+  if(e && e.stopPropagation) e.stopPropagation();
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  S.cutOpen=!S.cutOpen;
+  const el=document.getElementById('ptCut');
+  if(el) el.hidden=!S.cutOpen;
+  ptSyncCutPanel();
+  renderPTStream();
+}
+window.ptToggleCutPanel=ptToggleCutPanel;
+function ptCutHtml(){
+  const S=PTStream;
+  if(!S || S.role!=='host') return '';
+  return `<div class="pt-health pt-cut" id="ptCut"${S.cutOpen?'':' hidden'}>
+      <div class="pt-health-h">
+        <span>🎬 cut the broadcast</span>
+        <button class="mini${S.monitorId?' on':''}" onclick="ptToggleMonitor()" title="Also pull in the other cameras' pictures, so you can see what you are cutting to and rewind them. Uses one of their 3 viewer slots each.">${S.monitorId?'📺 watching them':'📺 watch them too'}</button>
+      </div>
+      <div class="pt-cut-body" id="ptCutBody"></div>
+      <div class="pw-legend">Everyone watching moves to the camera you pick, the same way a viewer with 🎬 on can. Whoever cuts last wins — this is a nudge, not a lock.</div>
+    </div>`;
+}
+function ptSyncCutPanel(){
+  const S=PTStream;
+  const body=document.getElementById('ptCutBody');
+  if(!body || !S || S.role!=='host') return;
+  const rows=[{id:'self', label:'my camera', mine:true}]
+    .concat(Object.keys(S.roster||{}).map(hid=>({id:hid, label:S.roster[hid].label})));
+  body.innerHTML=rows.map(r=>{
+    const live=r.mine ? true : !!(S.angles[r.id] && S.angles[r.id].status==='live');
+    const on=(r.mine ? S.hostId : r.id)===S.lastCut;
+    return `<button class="mini pt-cut-btn${on?' on':''}" onclick="ptHostCut('${esc(r.id)}')">
+        <span class="pt-cut-name">${esc(r.label)}</span>
+        ${S.monitorId&&!r.mine?`<span class="pt-cut-state">${live?'watching':'connecting…'}</span>`:''}
+      </button>`;
+  }).join('');
+}
+window.ptSyncCutPanel=ptSyncCutPanel;
+
+/* ---- receiving an angle ----
+   Answering another camera's offer is the same job whether the receiver is a
+   plain viewer or a camera that is ALSO watching the others (see
+   ptToggleMonitor): same peer connection, same answer, same ICE, same "not
+   live until it has both a track and a connected pc" rule, same reconnection
+   behaviour. What differs afterwards — putting an angle on the big screen,
+   the audio bed, the tile rail — is already role-guarded inside the functions
+   this calls, so both sides can share one copy of the part that matters.
+
+   Whose offers to answer is the only thing that changes, hence ptMyPeerId:
+   a viewer answers offers addressed to its viewerId, a monitoring camera to
+   its monitorId, and a camera that is not monitoring has no id at all, which
+   makes this handler inert rather than absent. */
+function ptMyPeerId(S){
+  if(!S) return null;
+  return S.role==='viewer' ? S.viewerId : (S.monitorId||null);
+}
+function ptBindAngleSignalling(ch){
   ch.on("broadcast",{event:"offer"}, async ({payload})=>{
-    if(!PTStream || payload.viewerId!==viewerId) return;
+    const S=PTStream;
+    const me=ptMyPeerId(S);
+    if(!S || !me || payload.viewerId!==me) return;
     const hostId=ptSafeId(payload.hostId);
-    if(!hostId) return;
-    const existing=PTStream.angles[hostId];
+    if(!hostId || hostId===S.hostId) return;      // never answer our own camera
+    const existing=S.angles[hostId];
     /* A live angle ignores a duplicate offer, but a FAILED one must not — the
        host tore its own side down the moment the connection failed, so the
        fresh offer arriving here is the reconnection, and refusing it was what
@@ -10796,11 +11152,11 @@ async function ptWatch(codeArg){
     /* labels come from the broadcasting device's display name, so clamp them
        the same way ptSetChatDisplayName does rather than trusting the wire */
     const angle={pc, hostId, remoteStream:null, status:"connecting…", failed:false,
-      label:String(payload.label||'').trim().slice(0,24)||('Angle '+(PTStream.angleOrder.length+1))};
-    PTStream.angles[hostId]=angle;
-    PTStream.angleOrder.push(hostId);
-    if(!PTStream.activeAngle) PTStream.activeAngle=hostId;
-    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId,hostId,candidate:e.candidate}}); };
+      label:String(payload.label||'').trim().slice(0,24)||('Angle '+(S.angleOrder.length+1))};
+    S.angles[hostId]=angle;
+    S.angleOrder.push(hostId);
+    if(S.role==='viewer' && !S.activeAngle) S.activeAngle=hostId;
+    pc.onicecandidate=e=>{ if(e.candidate) ch.send({type:"broadcast",event:"ice-viewer",payload:{viewerId:me,hostId,candidate:e.candidate}}); };
     pc.ontrack=e=>{
       if(!PTStream || PTStream.angles[hostId]!==angle) return;
       angle.remoteStream=e.streams[0];
@@ -10814,7 +11170,7 @@ async function ptWatch(codeArg){
       if(pc.connectionState==='connected'){ ptMarkAngleReady(hostId, angle); return; }
       if(pc.connectionState==='failed'){
         const diag=await ptIceDiag(pc);
-        console.log('[ptStream viewer] connection failed:', diag);
+        console.log('[ptStream] angle connection failed:', diag);
         angle.failed=true;
         angle.status="reconnecting…";
         if(PTStream.activeAngle===hostId) ptSyncActiveAngleFields();
@@ -10825,13 +11181,27 @@ async function ptWatch(codeArg){
     };
     await pc.setRemoteDescription(payload.sdp);
     const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
-    ch.send({type:"broadcast",event:"answer",payload:{viewerId,hostId,sdp:answer}});
+    ch.send({type:"broadcast",event:"answer",payload:{viewerId:me,hostId,sdp:answer}});
   });
   ch.on("broadcast",{event:"ice-host"}, async ({payload})=>{
-    if(!PTStream || payload.viewerId!==viewerId) return;
-    const angle=PTStream.angles[ptSafeId(payload.hostId)]; if(!angle) return;
+    const S=PTStream;
+    const me=ptMyPeerId(S);
+    if(!S || !me || payload.viewerId!==me) return;
+    const angle=S.angles[ptSafeId(payload.hostId)]; if(!angle || !angle.pc) return;
     try{ await angle.pc.addIceCandidate(payload.candidate); }catch(e){}
   });
+}
+
+async function ptWatch(codeArg){
+  if(PTStream) return toast("Already streaming or watching — stop first",true);
+  const codeEl=$("ptWatchCode"); const code=(codeArg || (codeEl?codeEl.value:"")).trim().toUpperCase();
+  if(!code) return toast("Enter a stream code",true);
+  if(!sb || !sb.channel) return toast("Not connected",true);
+  const viewerId=ptRandId();
+  PTStream={code, role:'viewer', channel:null, viewerId, angles:{}, angleOrder:[], activeAngle:null, remoteStream:null, status:"connecting…", chat:[]};
+  const ch=sb.channel("ptstream_"+code);
+  PTStream.channel=ch;
+  ptBindAngleSignalling(ch);
   /* a camera that goes live on this code AFTER we started watching — we
      already sent our one-time untargeted "join" before it existed, so it
      never saw us; re-sending "join" here reaches it (and every other host
