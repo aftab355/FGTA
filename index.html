@@ -15718,8 +15718,23 @@ async function installApp(){
 window.installApp = installApp;
 
 // hide the button once running as an installed app
-if(window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone){
+const runningInstalled = window.matchMedia("(display-mode: standalone)").matches
+  || window.matchMedia("(display-mode: fullscreen)").matches
+  || window.navigator.standalone;
+if(runningInstalled){
   const b=$("installBtn"); if(b) b.style.display="none";
+}
+
+/* Installed apps get the manifest's "fullscreen" display mode (hides the
+   status bar) where Chrome supports it, but collapsing the Samsung-style
+   bottom nav bar also needs the Fullscreen API, which browsers only allow
+   from a real tap. So on an installed app's first tap, ask for fullscreen;
+   if the OS/browser declines (e.g. iOS has no such API) this just no-ops. */
+if(runningInstalled && document.documentElement.requestFullscreen && !document.fullscreenElement){
+  document.addEventListener("pointerdown", function goFullscreen(){
+    document.removeEventListener("pointerdown", goFullscreen);
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }, {once:true});
 }
 
 </script>
