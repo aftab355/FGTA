@@ -4581,13 +4581,20 @@ const COURT = {
 };
 
 /* ---- Live streaming ----
-   There is nothing to configure here: the broadcast lives on YouTube and
-   the site finds it through /api/youtube, which reads YOUTUBE_API_KEY and
-   YOUTUBE_CHANNEL_ID from the Netlify environment (never from this file —
-   an API key shipped in a static page is a key anyone can spend).
+   The broadcast lives on YouTube and the site finds it through
+   /api/youtube, which reads YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID from
+   the Netlify environment. The key never appears here — a key shipped in a
+   static page is a key anyone can spend. Without those variables set,
+   "what's live" lookup is unavailable and the stream panel says so;
+   pasting a YouTube link still works.
    Setup, including OBS and the scoreboard overlay: docs/youtube-live.md.
-   Without those variables set, "what's live" lookup is unavailable and the
-   stream panel says so; pasting a YouTube link still works. */
+
+   The channel id below is a different matter: it is public — it is in the
+   channel's own URL — and is used only to build the "go live" link into
+   YouTube Studio. Keeping a copy here means that link is right on a fresh
+   deploy, before the environment variables exist. The lookup still uses
+   the environment's copy, so that is the one that has to be correct. */
+const YOUTUBE_CHANNEL = "UCrmIz7Kmkh1UtFh40fVuqfQ";
 
 /* Elo settings */
 const K = 32;
@@ -7500,8 +7507,9 @@ function ptOverlayUrl(code){
   return base+'overlay.html?code='+encodeURIComponent(code);
 }
 function ptStudioUrl(){
-  return PTLive.channelId
-    ? `https://studio.youtube.com/channel/${encodeURIComponent(PTLive.channelId)}/livestreaming`
+  const id=PTLive.channelId||YOUTUBE_CHANNEL;
+  return id
+    ? `https://studio.youtube.com/channel/${encodeURIComponent(id)}/livestreaming`
     : 'https://studio.youtube.com/';
 }
 function ptObsPanelHtml(S, detected){
