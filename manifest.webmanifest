@@ -1,6 +1,6 @@
 {
   "name": "FGTA Ladder",
-  "short_name": "Ladder",
+  "short_name": "FGTA",
   "description": "FGTA tennis ladder: report matches, track Elo rankings, run tournaments, and watch live streams.",
   "start_url": "/?source=pwa",
   "scope": "/",
