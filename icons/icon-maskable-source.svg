@@ -1,0 +1,7 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#0a0814"/>
+  <circle cx="256" cy="236" r="92" fill="#d4ff2b"/>
+  <path d="M172 236a84 84 0 0 1 168 0" fill="none" stroke="#0a0814" stroke-width="6"/>
+  <path d="M172 236a84 84 0 0 0 168 0" fill="none" stroke="#0a0814" stroke-width="6"/>
+  <text x="256" y="356" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="56" letter-spacing="3" fill="#ff2d78">FGTA</text>
+</svg>
