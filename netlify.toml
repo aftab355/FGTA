@@ -1,7 +1,10 @@
-## Adds Netlify Functions (for the AI-highlight-judge endpoint the live-stream
-## point tracker calls) without touching how the static site itself is built
-## or published — there's deliberately no [build] block here, so the
+## Adds Netlify Functions (currently the /api/youtube live-broadcast lookup
+## the stream panel calls) without touching how the static site itself is
+## built or published — there's deliberately no [build] block here, so the
 ## publish directory stays whatever's already configured in the Netlify UI.
+##
+## The function needs YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID set as
+## environment variables — see docs/youtube-live.md.
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
