@@ -81,13 +81,31 @@ and pasting a link still works. It resets at midnight Pacific.
 
 ## Part 2 · Every time you film
 
+Most of this is only real work the *first* time. What's actually true every
+single match:
+
+- **YouTube hands out a new video for every broadcast.** There is no way
+  around this — it's how YouTube's live model works — so "Go live" in Studio
+  and pasting the resulting link into the app are the two steps you cannot
+  skip.
+- Everything else below — the app's code, OBS's stream key, the overlay
+  browser source — is remembered and reused automatically. Set it up once and
+  leave it alone; the walkthrough below just also covers that first time.
+
 ### 2.1 In the app
 
 **Matches → Point Tracker → Set up a broadcast.**
 
-That gives you a five-character **code**. The code is what ties the score to
-this broadcast — the OBS overlay uses it, and so does everyone watching. It
-is not a password; anyone with it can chat and ref.
+That gives you a **code** — five characters the first time, and the *same*
+one every time after, because the app remembers it on this device
+(`localStorage`, not synced anywhere). The code is what ties the score to a
+broadcast — the OBS overlay uses it, and so does everyone watching. It is not
+a password; anyone with it can chat and ref.
+
+Because the code doesn't change, the OBS browser source in step 2.3 doesn't
+either — add it once and forget it. The only reason to touch the code again
+is on purpose (tap **change** next to it in the panel): a code that leaked,
+or streaming two courts at once from the same laptop, which needs two.
 
 Leave the panel open. It walks through the rest and is where you paste the
 YouTube link at the end.
@@ -105,9 +123,12 @@ YouTube link at the end.
   than off the court. *Normal* is the only one to avoid; it is ~20 seconds
   behind.)
 - **DVR**: on. This is what lets viewers scrub back during the match.
-- Copy the **stream key**.
+- **Turn on "reusable stream key"** in the stream's settings, if this is your
+  first time. With it on, the key you copy below works for every future
+  broadcast, and step 2.3 becomes something you never open again either.
+- Copy the **stream key** — first time only, if you did the above.
 
-### 2.3 In OBS
+### 2.3 In OBS — first time only, with a reusable key
 
 **Settings → Stream**
 
@@ -144,9 +165,15 @@ frames — a court at 30fps is fine, a court at 15fps is not.
    it needs no chroma key and no cropping.
 
    The app's panel shows **🟢 overlay** once it connects. If it stays ⚪,
-   the URL is wrong or the code doesn't match.
+   the URL is wrong or the code doesn't match. Once it's in your scene
+   collection, this stays — the URL is only wrong again if you deliberately
+   change the code (2.1).
 
 Then **Start Streaming**.
+
+**Every match after this one**, assuming a reusable stream key: open OBS,
+confirm the scoreboard source shows 🟢 in the app's panel (it will — nothing
+here changed), and click **Start Streaming**. That's the entire OBS side.
 
 ### 2.4 Back in the app
 

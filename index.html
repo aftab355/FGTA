@@ -7518,31 +7518,45 @@ function ptObsPanelHtml(S, detected){
       <div class="pw-legend">Live on the channel right now — tap the one that's yours:</div>
       ${detected.map(v=>`<button class="mini pt-obs-pick" onclick="ptLinkStream('${esc(v.id)}')">▶ ${esc(v.title)}${v.viewers!=null?` · ${v.viewers} watching`:''}</button>`).join('')}
     </div>` : '';
+  /* The code — and so the OBS overlay's URL — is remembered on this device
+     (see ptSavedStreamCode) and reused every time "set up a broadcast" is
+     tapped, specifically so the browser source in OBS is a set-once thing,
+     not a per-match chore. This edit row is the escape hatch for the one
+     time that matters: picking a fresh code on purpose (a leaked code, or
+     two courts streaming at once from the same laptop). */
+  const codeEditHtml = S.codeEditOpen ? `<div class="pt-stream-row" style="margin-top:8px">
+      <input id="ptCodeInput" placeholder="CODE" maxlength="12" autocomplete="off" spellcheck="false" onkeydown="ptCodeInputKey(event)">
+      <button class="mini pt-watch-cta" onclick="ptApplyCodeInput()">use it</button>
+      <button class="mini" onclick="ptChangeStreamCode(ptRandCode())">🎲 random</button>
+    </div>
+    <div class="pw-legend">Changing it means updating the overlay URL in OBS too — this is only worth doing on purpose, not before every match.</div>` : '';
   return `<div class="pt-obs">
-    <div class="pt-obs-h">🎥 broadcast setup <span class="pt-obs-code">code ${esc(S.code)}</span></div>
+    <div class="pt-obs-h">🎥 broadcast setup <span class="pt-obs-code">code ${esc(S.code)}</span>
+      <button class="pt-conn-link" onclick="ptToggleCodeEdit()">${S.codeEditOpen?'cancel':'change'}</button></div>
+    ${codeEditHtml}
 
     <div class="pt-obs-step">
       <b>1 · Start the stream in YouTube</b>
-      <div class="pw-legend">Open <a href="${esc(ptStudioUrl())}" target="_blank" rel="noopener">YouTube Studio → Go live ↗</a>, create the stream, and copy its <b>stream key</b>. Set latency to <b>Low</b> (Ultra-low if nobody needs 1080p) and visibility to Public or Unlisted.</div>
+      <div class="pw-legend">Open <a href="${esc(ptStudioUrl())}" target="_blank" rel="noopener">YouTube Studio → Go live ↗</a> and create the stream. Set latency to <b>Low</b> (Ultra-low if nobody needs 1080p), visibility to Public or Unlisted, and <b>turn on "reusable stream key"</b> in the stream settings — with that on, step 2 is only ever done once, because the same key works for every future match too.</div>
     </div>
 
     <div class="pt-obs-step">
       <b>2 · Point OBS at it</b>
       <div class="pw-legend">OBS → Settings → Stream → Service <b>YouTube - RTMPS</b>, then paste the stream key. Or, on the custom server: </div>
       <div class="pt-copy-row"><code>${esc(PT_RTMP)}</code><button class="mini" onclick="ptCopy('${esc(PT_RTMP)}','Ingest URL copied')">copy</button></div>
-      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin.</div>
+      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin. With a reusable key (step 1), this is a one-time setup — leave it exactly as is next time.</div>
     </div>
 
     <div class="pt-obs-step">
       <b>3 · Add the scoreboard</b>
-      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture.</div>
+      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture. The code in it is the one remembered on this device, so this source stays in your scene collection and needs adding only once too — unless you deliberately change the code above.</div>
       <div class="pt-copy-row"><code class="pt-overlay-url">${esc(url)}</code><button class="mini" onclick="ptCopy('${esc(url)}','Overlay URL copied')">copy</button></div>
       <div class="pw-legend">${S.overlaySeen && Date.now()-S.overlaySeen<120000 ? '🟢 The overlay is connected — the score is reaching OBS.' : '⚪ Nothing has connected on this code yet. Add the browser source and it lights up here.'}</div>
     </div>
 
     <div class="pt-obs-step">
       <b>4 · Link it here</b>
-      <div class="pw-legend">Paste the stream's YouTube link so everyone else's app plays the right thing under the right match name. Unlisted streams only reach people this way — they are never discovered automatically.</div>
+      <div class="pw-legend">Paste the stream's YouTube link so everyone else's app plays the right thing under the right match name. Unlisted streams only reach people this way — they are never discovered automatically. This is the one step YouTube genuinely requires every match: it hands out a new video for every broadcast, with no way around that.</div>
       ${detectedHtml}
       <div class="pt-stream-row">
         <input id="ptLinkInput" class="pt-link-input" placeholder="https://youtube.com/watch?v=…" autocomplete="off" spellcheck="false" onkeydown="ptLinkKey(event)">
@@ -7554,10 +7568,26 @@ function ptObsPanelHtml(S, detected){
     <div class="pw-legend pt-obs-foot">Full walk-through, including doing this from a phone: <b>docs/youtube-live.md</b>.</div>
   </div>`;
 }
+/* The code — and everything that's keyed off it, chiefly the OBS overlay's
+   URL — is remembered per device and reused on every "set up a broadcast",
+   so pointing OBS at it is a one-time setup rather than something redone
+   before every match. Only ptChangeStreamCode below (an explicit, opt-in
+   action from the panel) ever picks a new one. */
+const PT_STREAM_CODE_KEY="fgta_stream_code";
+function ptSavedStreamCode(){
+  try{
+    const v=(localStorage.getItem(PT_STREAM_CODE_KEY)||'').toUpperCase();
+    return /^[A-Z0-9]{3,12}$/.test(v) ? v : null;
+  }catch(e){ return null; }
+}
+function ptPersistStreamCode(code){
+  try{ localStorage.setItem(PT_STREAM_CODE_KEY, code); }catch(e){}
+}
 function ptStartBroadcast(){
   if(PTStream) return toast("Already in a stream — stop first",true);
   if(!sb || !sb.channel) return toast("Not connected",true);
-  const code=ptRandCode();
+  const code=ptSavedStreamCode()||ptRandCode();
+  ptPersistStreamCode(code);
   PTStream={role:'host', code, videoId:null, title:'', channel:null, chat:[],
     liveSince:Date.now(), bugOn:false, bugQueue:[], viewers:null, ytLive:false};
   ptJoinChannel(code, true);
@@ -7570,6 +7600,43 @@ function ptStartBroadcast(){
   toast("Broadcast "+code+" — follow the steps to point OBS at YouTube");
 }
 window.ptStartBroadcast=ptStartBroadcast;
+/* The escape hatch: swap to a different code mid-setup, without ending and
+   restarting the whole broadcast panel. Leaves the old Realtime channel
+   (nobody should still be sending to it) and joins the new one exactly the
+   way ptStartBroadcast does, then persists it as the new default for next
+   time too. */
+function ptChangeStreamCode(newCodeRaw){
+  const S=PTStream;
+  if(!S || S.role!=='host') return;
+  const code=ptSafeId(String(newCodeRaw||'').toUpperCase()).slice(0,12);
+  if(!code) return toast("Enter a code, or tap random",true);
+  if(code===S.code){ S.codeEditOpen=false; renderPTStream(); return; }
+  if(S.channel){ try{ S.channel.unsubscribe(); }catch(e){} }
+  ptDirWithdraw();
+  S.code=code;
+  S.overlaySeen=null;
+  ptPersistStreamCode(code);
+  ptJoinChannel(code, true);
+  ptDirAnnounce();
+  S.codeEditOpen=false;
+  ptLogDiag('yt','switched to broadcast code '+code);
+  renderPTStream();
+  toast("Code is now "+code+" — update the overlay URL in OBS's browser source");
+}
+window.ptChangeStreamCode=ptChangeStreamCode;
+function ptApplyCodeInput(){
+  const v=((document.getElementById('ptCodeInput')||{}).value||'').trim();
+  ptChangeStreamCode(v||ptRandCode());
+}
+window.ptApplyCodeInput=ptApplyCodeInput;
+function ptCodeInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); ptApplyCodeInput(); } }
+window.ptCodeInputKey=ptCodeInputKey;
+function ptToggleCodeEdit(){
+  const S=PTStream; if(!S || S.role!=='host') return;
+  S.codeEditOpen=!S.codeEditOpen;
+  renderPTStream();
+}
+window.ptToggleCodeEdit=ptToggleCodeEdit;
 function ptLinkStream(idArg){
   const S=PTStream;
   if(!S || S.role!=='host') return;
