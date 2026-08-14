@@ -2111,6 +2111,14 @@
   .pt-obs-once{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:1px;
     text-transform:uppercase;color:var(--dim);background:var(--bg);border:1px solid var(--line);
     border-radius:var(--r-pill);padding:2px 8px;margin-left:6px;vertical-align:middle}
+  /* which encoder is filming — a wording switch, not a real setting, so it
+     reads as a quiet segmented control rather than something with stakes */
+  .pt-obs-encoder{display:flex;gap:6px;margin:2px 0 12px;flex-wrap:wrap}
+  .pt-obs-enc-btn{flex:1 1 160px;padding:8px 10px;border-radius:var(--r-sm);
+    border:1px solid var(--line);background:var(--bg);color:var(--dim);cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.3px;transition:.15s}
+  .pt-obs-enc-btn.on{border-color:var(--accent);color:var(--ink);
+    background:color-mix(in srgb,var(--accent) 14%, transparent)}
   .pt-obs-step>b{display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;
     letter-spacing:.6px;color:var(--ink);margin-bottom:5px}
   .pt-obs-step .pw-legend{margin-top:0}
@@ -7332,7 +7340,7 @@ function renderPTStream(){
         <button class="mini pt-ctl-btn" onclick="ptSeekLive()" title="Jump back to the live edge"><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">go live</span></button>
         <a class="mini pt-ctl-btn" href="${esc(ytWatchUrl(S.videoId||''))}" target="_blank" rel="noopener" title="Open this broadcast on YouTube"><span class="pt-ctl-ico">▶</span><span class="pt-ctl-lbl">on YouTube</span></a>
       </div>
-      <div class="pw-legend" style="margin-top:8px">Camera, mic, framing, zoom and filters are OBS's job now — it does all of them better than a phone browser did, and none of them touch this page.</div>` : `
+      <div class="pw-legend" style="margin-top:8px">Camera, mic, framing, zoom and filters are your streaming app's job now (Larix, OBS, whichever) — it does all of them better than a phone browser did, and none of them touch this page.</div>` : `
       <div class="pt-ctl-group pt-ctl-keys">
         <button class="mini pt-ctl-btn${S.bugOn?' auto-on':''}" onclick="ptToggleBug()" title="Show the live score over the picture. Useful when the broadcast has no burnt-in scoreboard, or when watching one back."><span class="pt-ctl-ico">🔢</span><span class="pt-ctl-lbl">${S.bugOn?'score on':'score'}</span></button>
         <button class="mini pt-ctl-btn" onclick="ptSeekLive()" title="Jump back to the live edge after scrubbing back"><span class="pt-ctl-ico">⏭</span><span class="pt-ctl-lbl">go live</span></button>
@@ -7374,7 +7382,7 @@ function renderPTStream(){
       <div class="pt-stream-panel pt-stream-landing">
         <div class="pt-landing-hero">
           <div class="pt-landing-title">📡 Courtside, live</div>
-          <div class="pt-landing-sub">Broadcast from OBS to YouTube — any number of people can watch, from any network, and the whole match stays up afterwards on its own. Chat, the ref deck and the score bug all still live here.</div>
+          <div class="pt-landing-sub">Broadcast from your phone or a laptop to YouTube — any number of people can watch, from any network, and the whole match stays up afterwards on its own. Chat, the ref deck and the score bug all still live here.</div>
         </div>
         ${ptApiNoticeHtml()}
         ${liveNowHtml}
@@ -7387,7 +7395,7 @@ function renderPTStream(){
         <div class="pt-stream-row pt-join-row">
           <button class="mini pt-golive-cta" onclick="ptStartBroadcast()"><i class="pt-live-dot"></i>Set up a broadcast</button>
         </div>
-        <div class="pw-legend">Streaming needs OBS (or any RTMP app) pointed at YouTube — a one-time setup on whatever device is filming. "Set up a broadcast" walks through it and gives you the scoreboard overlay to drop into OBS.</div>
+        <div class="pw-legend">Streaming needs a streaming app (a phone app like Larix, or OBS on a laptop) pointed at YouTube — a one-time setup on whatever device is filming. "Set up a broadcast" walks through it.</div>
         ${ptArchiveHtml()}
       </div>`;
     /* This panel is rebuilt on every directory sync and every poll — i.e.
@@ -7412,13 +7420,17 @@ function renderPTStream(){
   if(S.role==='host'){
     const linked=!!S.videoId;
     const detected=(PTLive.live||[]).filter(v=>v.id!==S.videoId);
+    const phone=ptEncoderPref()!=='obs';
     const overlayLive=S.overlaySeen && Date.now()-S.overlaySeen<120000;
+    /* The overlay indicator only means anything on the OBS path — a phone
+       encoder was never going to connect one, so showing ⚪ there would read
+       as something broken rather than something that doesn't apply. */
     const headHtml=`
       <span class="pt-live-badge${linked&&S.ytLive?'':' pt-watch-badge'}"><i class="pt-live-dot"></i>${linked&&S.ytLive?'on air':'setting up'}</span>
       <span>code <b class="pt-stream-code">${esc(S.code)}</b></span>
       <span class="pt-stream-note">${linked?(S.viewers!=null?esc(ptViewersLabel(S.viewers)):'YouTube'):'not linked to a stream yet'}</span>
       <button class="pt-dbg-btn pt-ref-btn${S.refOpen?' on':''}" id="ptRefBtn" onclick="ptToggleRefPanel(event)" title="Ref controls — score the match without leaving this panel">⚖️ ref</button>
-      <button class="pt-dbg-btn${overlayLive?' on':''}" title="${overlayLive?'The OBS overlay is connected and receiving the score':'No OBS overlay has said hello on this code yet'}">${overlayLive?'🟢':'⚪'} overlay</button>
+      ${phone?'':`<button class="pt-dbg-btn${overlayLive?' on':''}" title="${overlayLive?'The OBS overlay is connected and receiving the score':'No OBS overlay has said hello on this code yet'}">${overlayLive?'🟢':'⚪'} overlay</button>`}
       <button class="pt-dbg-btn" id="ptHealthBtn" onclick="ptToggleHealth(event)" title="Stream health">🩺</button>`;
     const vwrapHtml = linked ? `
       <div class="pt-video-shell">
@@ -7428,7 +7440,7 @@ function renderPTStream(){
         <div class="pt-bug" id="ptBug" hidden></div>
         <button class="mini pt-unmute" id="ptUnmuteBtn" onclick="ptUnmute()"${S.muted===false?' hidden':''}>🔇 tap to unmute</button>
       </div>
-      <div class="pw-legend" style="margin-top:8px">This is your own broadcast coming back from YouTube, several seconds behind — a check that it is really going out, not a monitor to frame the shot with. Use OBS's preview for that, and keep this muted or the room will howl.</div>`
+      <div class="pw-legend" style="margin-top:8px">This is your own broadcast coming back from YouTube, several seconds behind — a check that it is really going out, not a monitor to frame the shot with. Use ${phone?"your streaming app's":"OBS's"} own preview for that, and keep this muted or the room will howl.</div>`
       : `<div class="pt-obs-empty">
           <div class="pt-obs-empty-ico">🎥</div>
           <div class="pt-obs-empty-t">No stream linked yet</div>
@@ -7520,6 +7532,7 @@ function ptStudioUrl(){
 }
 function ptObsPanelHtml(S, detected){
   const url=ptOverlayUrl(S.code);
+  const phone=ptEncoderPref()!=='obs';
   const detectedHtml = detected.length ? `<div class="pt-obs-detected">
       <div class="pw-legend">Live on the channel right now — tap the one that's yours:</div>
       ${detected.map(v=>`<button class="mini pt-obs-pick" onclick="ptLinkStream('${esc(v.id)}')">▶ ${esc(v.title)}${v.viewers!=null?` · ${v.viewers} watching`:''}</button>`).join('')}
@@ -7536,33 +7549,57 @@ function ptObsPanelHtml(S, detected){
       <button class="mini" onclick="ptChangeStreamCode(ptRandCode())">🎲 random</button>
     </div>
     <div class="pw-legend">Changing it means updating the overlay URL in OBS too — this is only worth doing on purpose, not before every match.</div>` : '';
+  /* Two genuinely different setups, not two ways of describing one — a phone
+     app can't run an HTML browser-source overlay, so step 3 doesn't merely
+     read differently, it's a different STEP (skipped) for a phone. Picking
+     wrong just shows the wrong instructions; it changes nothing about the
+     broadcast itself, so it's safe to leave on the default and switch later. */
+  const encoderToggle = `<div class="pt-obs-encoder">
+      <button class="pt-obs-enc-btn${phone?' on':''}" onclick="ptSetEncoderPref('phone')">📱 just a phone</button>
+      <button class="pt-obs-enc-btn${phone?'':' on'}" onclick="ptSetEncoderPref('obs')">💻 laptop, running OBS</button>
+    </div>`;
+  const step2 = phone ? `
+    <div class="pt-obs-step">
+      <b>2 · Point a streaming app at it</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">Install <b>Larix Broadcaster</b> (App Store / Google Play, free, no account). <b>Connections → +</b> → add an RTMP connection with:</div>
+      <div class="pt-copy-row"><code>${esc(PT_RTMP)}</code><button class="mini" onclick="ptCopy('${esc(PT_RTMP)}','Ingest URL copied')">copy</button></div>
+      <div class="pw-legend">and the <b>stream key</b> from step 1 as the connection's key/name. Save it. 1920×1080 (or 1280×720 if your upload is thin), 30fps, ~4500 kbps (2500 if thin) — Larix's defaults are close; worth checking once. This stays exactly as-is for every match from here on.</div>
+    </div>` : `
+    <div class="pt-obs-step">
+      <b>2 · Point OBS at it</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">OBS → Settings → Stream → Service <b>YouTube - RTMPS</b>, then paste the key from step 1. Or, on the custom server: </div>
+      <div class="pt-copy-row"><code>${esc(PT_RTMP)}</code><button class="mini" onclick="ptCopy('${esc(PT_RTMP)}','Ingest URL copied')">copy</button></div>
+      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin. This stays exactly as-is for every match from here on.</div>
+    </div>`;
+  const step3 = phone ? `
+    <div class="pt-obs-step">
+      <b>3 · Scoreboard</b> <span class="pt-obs-once">skipped on a phone</span>
+      <div class="pw-legend">A phone streaming app has no way to composite an overlay onto the outgoing video the way OBS does, so there's nothing to set up here. Instead, anyone watching turns on the <b>in-page score bug</b> from their own ⚙️ menu once they're watching — it's drawn by the site over the player, so it costs you nothing to leave off. Switch to "laptop, running OBS" above if you'd rather have it burnt into the broadcast itself.</div>
+    </div>` : `
+    <div class="pt-obs-step">
+      <b>3 · Add the scoreboard</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture. The code in it is the one remembered on this device, so this source stays in your scene collection for good — unless you deliberately change the code above.</div>
+      <div class="pt-copy-row"><code class="pt-overlay-url">${esc(url)}</code><button class="mini" onclick="ptCopy('${esc(url)}','Overlay URL copied')">copy</button></div>
+      <div class="pw-legend">${S.overlaySeen && Date.now()-S.overlaySeen<120000 ? '🟢 The overlay is connected — the score is reaching OBS.' : '⚪ Nothing has connected on this code yet. Add the browser source and it lights up here.'}</div>
+    </div>`;
+  const step4Verb = phone ? 'tap the broadcast button in Larix' : 'hit Start Streaming in OBS';
   return `<div class="pt-obs">
     <div class="pt-obs-h">🎥 broadcast setup <span class="pt-obs-code">code ${esc(S.code)}</span>
       <button class="pt-conn-link" onclick="ptToggleCodeEdit()">${S.codeEditOpen?'cancel':'change'}</button></div>
     ${codeEditHtml}
+    ${encoderToggle}
 
     <div class="pt-obs-step">
       <b>1 · Get a reusable stream key</b> <span class="pt-obs-once">first time only</span>
       <div class="pw-legend">Open <a href="${esc(ptStudioUrl())}" target="_blank" rel="noopener">YouTube Studio → Go live ↗</a>, and in the stream's settings <b>turn on "reusable" / "persistent" stream key</b>, latency <b>Low</b>, DVR on. Copy the key. Do this once, ahead of a match day, somewhere with a proper screen — never at the court, and never again after today.</div>
     </div>
 
-    <div class="pt-obs-step">
-      <b>2 · Point OBS at it</b> <span class="pt-obs-once">first time only</span>
-      <div class="pw-legend">OBS → Settings → Stream → Service <b>YouTube - RTMPS</b>, then paste the key from step 1. Or, on the custom server: </div>
-      <div class="pt-copy-row"><code>${esc(PT_RTMP)}</code><button class="mini" onclick="ptCopy('${esc(PT_RTMP)}','Ingest URL copied')">copy</button></div>
-      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin. This stays exactly as-is for every match from here on.</div>
-    </div>
+    ${step2}
+    ${step3}
 
     <div class="pt-obs-step">
-      <b>3 · Add the scoreboard</b> <span class="pt-obs-once">first time only</span>
-      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture. The code in it is the one remembered on this device, so this source stays in your scene collection for good — unless you deliberately change the code above.</div>
-      <div class="pt-copy-row"><code class="pt-overlay-url">${esc(url)}</code><button class="mini" onclick="ptCopy('${esc(url)}','Overlay URL copied')">copy</button></div>
-      <div class="pw-legend">${S.overlaySeen && Date.now()-S.overlaySeen<120000 ? '🟢 The overlay is connected — the score is reaching OBS.' : '⚪ Nothing has connected on this code yet. Add the browser source and it lights up here.'}</div>
-    </div>
-
-    <div class="pt-obs-step">
-      <b>4 · At the court: hit Start Streaming, then link it here</b>
-      <div class="pw-legend">This is the actual match-day routine — nothing above, just this. With a reusable key, YouTube creates a new broadcast automatically the moment OBS starts sending video; there is no Studio page to visit. Wait ~20–30s and it should appear below, already labelled — tap it. If it hasn't shown up yet, the YouTube app on your phone (not Studio) has it at the top of your channel the same way; copy that link in instead. This paste is the one thing that's genuinely different every match: YouTube hands out a new video per broadcast and there's no way around that.</div>
+      <b>4 · At the court: ${step4Verb}, then link it here</b>
+      <div class="pw-legend">This is the actual match-day routine — nothing above, just this. With a reusable key, YouTube creates a new broadcast automatically the moment your ${phone?'phone':'laptop'} starts sending video; there is no Studio page to visit. Wait ~20–30s and it should appear below, already labelled — tap it. If it hasn't shown up yet, the YouTube app on your phone (not Studio) has it at the top of your channel the same way; copy that link in instead. This paste is the one thing that's genuinely different every match: YouTube hands out a new video per broadcast and there's no way around that.</div>
       ${detectedHtml}
       <div class="pt-stream-row">
         <input id="ptLinkInput" class="pt-link-input" placeholder="https://youtube.com/watch?v=…" autocomplete="off" spellcheck="false" onkeydown="ptLinkKey(event)">
@@ -7571,9 +7608,26 @@ function ptObsPanelHtml(S, detected){
       ${S.videoId?`<div class="pw-legend">Linked to <b>${esc(S.videoId)}</b> — <button class="pt-conn-link" onclick="ptUnlinkStream()">change</button></div>`:''}
     </div>
 
-    <div class="pw-legend pt-obs-foot">Full walk-through, including doing this from a phone: <b>docs/youtube-live.md</b>.</div>
+    <div class="pw-legend pt-obs-foot">Full walk-through: <b>docs/youtube-live.md</b>.</div>
   </div>`;
 }
+/* ---- which encoder is filming: a phone app (Larix etc.) or OBS on a
+   laptop. Purely a wording switch — nothing about the stream, the channel,
+   or the score depends on it — but the two need genuinely different
+   instructions (a phone can't run a browser-source overlay) and asking
+   every render would be worse than remembering the answer, so it lives
+   next to the stream code in localStorage. Defaults to phone: it's what
+   most people are actually holding at a court, and OBS is the one that
+   needs a deliberate opt-in anyway (it requires a whole separate machine). */
+const PT_ENCODER_KEY="fgta_encoder";
+function ptEncoderPref(){
+  try{ return localStorage.getItem(PT_ENCODER_KEY)==='obs' ? 'obs' : 'phone'; }catch(e){ return 'phone'; }
+}
+function ptSetEncoderPref(v){
+  try{ localStorage.setItem(PT_ENCODER_KEY, v==='obs'?'obs':'phone'); }catch(e){}
+  renderPTStream();
+}
+window.ptSetEncoderPref=ptSetEncoderPref;
 /* The code — and everything that's keyed off it, chiefly the OBS overlay's
    URL — is remembered per device and reused on every "set up a broadcast",
    so pointing OBS at it is a one-time setup rather than something redone
@@ -7603,7 +7657,7 @@ function ptStartBroadcast(){
   renderPTStream();
   ptSyncCompactChrome();
   ptLogDiag('yt','broadcast session '+code+' opened');
-  toast("Broadcast "+code+" — follow the steps to point OBS at YouTube");
+  toast("Broadcast "+code+" — follow the steps to point your streaming app at YouTube");
 }
 window.ptStartBroadcast=ptStartBroadcast;
 /* The escape hatch: swap to a different code mid-setup, without ending and
@@ -7687,7 +7741,7 @@ function ptEndBroadcast(){
   PTStream=null;
   renderPTStream();
   ptSyncCompactChrome();
-  toast("Broadcast panel closed — stop the stream in OBS too");
+  toast("Broadcast panel closed — stop the stream in your streaming app too");
 }
 window.ptEndBroadcast=ptEndBroadcast;
 

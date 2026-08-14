@@ -81,19 +81,32 @@ and pasting a link still works. It resets at midnight Pacific.
 
 ## Part 2 · Streaming a match
 
+Two ways to get a picture out. Pick whichever matches what you actually
+carry to a court — this is a hardware choice, not an app setting, and it's
+made once:
+
+| | **Just a phone** | **A laptop** |
+|---|---|---|
+| streaming app | Larix Broadcaster (free, no account) | OBS |
+| burnt-in scoreboard | no — use the in-page score bug instead | yes |
+| everything else | identical | identical |
+
+The rest of this doc is written for the phone path first, since that's what
+most people are actually holding at a court, with OBS's equivalents alongside.
+
 ### At the court, this is the whole routine
 
 Assuming the one-time setup below is done:
 
 1. App → Matches → Point Tracker → **Set up a broadcast**.
-2. OBS → **Start Streaming**.
+2. **Larix → tap the broadcast button.** (OBS → Start Streaming.)
 3. Wait ~20–30s. The app auto-detects the new broadcast and shows it as a
    tappable card in step 4 of the panel — tap it. (If it hasn't shown up yet,
    the regular **YouTube app** on your phone — not Studio — has it at the top
    of your channel; copy that link in instead.)
 4. Score.
 
-No Studio, no typing a stream key, no re-adding the overlay. That's only
+No Studio, no typing a stream key, no reconfiguring anything. That's only
 true because of the setup below — do that first, once, not at the court.
 
 ### 2.0 One-time setup — do this before match day
@@ -101,51 +114,51 @@ true because of the setup below — do that first, once, not at the court.
 **a. A reusable stream key.** <https://studio.youtube.com> → **Create → Go
 live** → *Streaming software*, and in the stream's settings turn on
 **"reusable" / "persistent" stream key**. This is the whole trick: with it
-on, YouTube auto-creates a new broadcast the instant OBS starts sending
-video to that key — no visit to Studio's create-broadcast screen, ever
-again. Set latency to **Low** (*Ultra-low* is ~2s faster and caps quality at
-1080p; *Normal* is the one to avoid, ~20s behind) and DVR on. Copy the key.
+on, YouTube auto-creates a new broadcast the instant your phone starts
+sending it video — no visit to Studio's create-broadcast screen, ever again.
+Set latency to **Low** (*Ultra-low* is ~2s faster and caps quality at 1080p;
+*Normal* is the one to avoid, ~20s behind) and DVR on. Copy the key.
 
-**b. Point OBS at it.** Settings → Stream → Service **YouTube - RTMPS**,
-paste the key. Or, on the custom server: `rtmp://a.rtmp.youtube.com/live2`
-with the same key.
+**b. Point Larix at it.**
 
-Settings → Output (Simple mode is fine):
+1. Install *Larix Broadcaster* — App Store / Google Play, free, no sign-up.
+2. **Connections → +** → add an RTMP connection:
 
-| setting | value |
-|---|---|
-| Video bitrate | 4500 kbps (2500 if the upload is thin) |
-| Encoder | hardware if the machine has it, x264 otherwise |
-| Audio bitrate | 160 kbps |
+   | field | value |
+   |---|---|
+   | URL | `rtmp://a.rtmp.youtube.com/live2` |
+   | Stream name / key | the key from step (a) |
 
-Settings → Video: 1920×1080, 30fps. Go to 1280×720 rather than dropping
-frames — a court at 30fps is fine, a court at 15fps is not.
+3. Save it. It stays in the app from here on — this is the one-time part.
+4. Video settings: 1920×1080 (or 1280×720 if your upload is thin), 30fps,
+   ~4500 kbps (2500 if thin). Larix picks sane defaults; these are worth
+   checking once.
 
-**c. Add the scoreboard.** In the app: Matches → Point Tracker → Set up a
-broadcast → copy the overlay URL from step 3 of the panel. In OBS: **+ →
-Browser**:
+*(On a laptop instead: OBS → Settings → Stream → Service **YouTube - RTMPS**
+→ paste the key. Same one-time deal.)*
 
-| field | value |
-|---|---|
-| URL | the overlay URL — `…/overlay.html?code=ABCDE` |
-| Width | 1920 |
-| Height | 1080 |
-| Shutdown source when not visible | **off** |
-| Refresh browser when scene becomes active | off |
+**c. The scoreboard is OBS-only — skip this on a phone.** A phone streaming
+app has no way to composite an HTML overlay onto outgoing video the way
+OBS's Browser Source does, so there's no burnt-in scoreboard to set up.
+Instead, anyone watching turns on the **in-page score bug** from the stream
+panel (⚙️ → score) — it's drawn by the site over the player, not by your
+phone, so it costs you nothing to leave off. See [Latency](#latency) for why
+it's delayed by default.
 
-Drag it over your camera source. It's transparent except for the scoreboard
-— no chroma key, no cropping. The panel shows **🟢 overlay** once it
-connects.
+*(On a laptop: In the app's stream panel, copy the overlay URL from step 3.
+In OBS: **+ → Browser**, paste it, 1920×1080, "Shutdown source when not
+visible" **off**. Drag it over your camera source — it's transparent except
+for the scoreboard. The panel shows **🟢 overlay** once it connects, and
+because the code in that URL is remembered on this device (see below), this
+source is correct forever once it's added.)*
 
-This URL's code is remembered on this device and reused every time you tap
-"Set up a broadcast" (`localStorage`, not synced anywhere), so this browser
-source is correct forever — it isn't a password, it's just what ties the
-overlay, chat, and everyone watching to the same broadcast. The only reason
-to revisit it is on purpose, via **change** next to the code in the app's
-panel: a leaked code, or two courts streaming at once from the same laptop.
-
-That's it — (a), (b), (c) are each done exactly once. Everything from here
-on is the four-step routine at the top of this section.
+The session **code** itself — visible in the app's panel, and part of the
+overlay URL if you're using one — is remembered on this device
+(`localStorage`, not synced anywhere) and reused automatically every time
+you tap "Set up a broadcast." It isn't a password; anyone with it can chat
+and ref. The only reason to change it is on purpose, via **change** next to
+the code in the panel: a leaked code, or two courts streaming at once from
+the same device.
 
 ### Visibility, every match
 
@@ -158,9 +171,9 @@ that step can't be automated away.
 ### Scoring
 
 Start the match in the Point Tracker as usual, or open **⚖️ ref** in the
-stream panel. Every tap goes out over Realtime and lands in three places at
-once: the app, everyone watching, and the OBS overlay, which redraws the
-burnt-in scoreboard immediately.
+stream panel. Every tap goes out over Realtime and lands wherever it's
+needed: the app, everyone watching, and — if you set up the OBS overlay —
+the burnt-in scoreboard, redrawn instantly.
 
 Anyone watching can open ⚖️ ref and score too. Their taps are requests; the
 device running the Point Tracker is the only one that owns the match state,
@@ -168,9 +181,10 @@ so there is no way for two people scoring to fork it.
 
 ### Ending
 
-Stop the stream **in OBS**. Closing the app's panel does not stop YouTube —
-it never had control of it. A minute or so later the finished broadcast
-appears under *past broadcasts* on the stream panel, and stays there.
+Stop the stream in whatever's sending it — Larix's broadcast button again,
+or OBS. Closing the app's panel does not stop YouTube; it never had control
+of it. A minute or so later the finished broadcast appears under *past
+broadcasts* on the stream panel, and stays there.
 
 ---
 
@@ -179,9 +193,10 @@ appears under *past broadcasts* on the stream panel, and stays there.
 YouTube is a few seconds behind: roughly 2–5s on Ultra-low, 5–15s on Low,
 15–30s on Normal.
 
-**The burnt-in scoreboard is unaffected.** OBS composites `overlay.html` over
-the camera *before* encoding, so the score and the picture it sits on are the
-same instant by construction, however far behind both of them arrive.
+**The burnt-in scoreboard (OBS only) is unaffected.** OBS composites
+`overlay.html` over the camera *before* encoding, so the score and the
+picture it sits on are the same instant by construction, however far behind
+both of them arrive.
 
 **The in-page score bug is affected**, because it is drawn by the site on top
 of an already-delayed picture. Left alone it would announce the point several
@@ -192,23 +207,16 @@ same moment. Ten seconds is right for the Low setting.
 
 ---
 
-## Filming from a phone
+## Other streaming apps
 
-OBS itself is desktop-only, but nothing above requires OBS specifically —
-anything that speaks RTMP works, and it's the same reusable key from step
-2.0a. The at-the-court routine is identical: open the app, open the RTMP
-app, hit go, wait, link.
+Larix is the recommendation because it's free, needs no account, and just
+works — but anything that speaks RTMP is a drop-in replacement, using the
+same URL and key from step 2.0b: *Streamlabs*, *Prism Live Studio*, and
+others.
 
-- **iOS / Android**: *Streamlabs*, *Larix Broadcaster*, *Prism Live Studio*.
-  Larix is free and has no account. Paste the same persistent key into it
-  once, the same way as OBS.
-- **The YouTube app's own "Go live"** works and is the simplest option, but
-  it needs 50+ subscribers on the channel and gives you no way to add the
-  scoreboard overlay.
-
-Without OBS there is no browser source, so no burnt-in scoreboard. Viewers
-can still turn the in-page score bug on (⚙️ → score), which is what it is
-there for.
+**The YouTube app's own "Go live"** also works and is the simplest option of
+all, but it needs 50+ subscribers on the channel to unlock, and gives no way
+to add a scoreboard overlay even on a laptop.
 
 ---
 
