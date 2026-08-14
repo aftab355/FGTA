@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>FGTA · broadcast overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!--
+  FGTA broadcast overlay — an OBS Browser Source.
+
+  The old stream composited the scoreboard onto a canvas in the phone's browser
+  before sending it over WebRTC. With OBS doing the encoding, that job moves
+  here: this page draws the same score bug on a transparent background, OBS
+  layers it over the camera, and it goes out burnt into the video exactly as
+  before — except now at whatever resolution OBS is streaming, instead of a
+  phone's 720p composite.
+
+  It reads the live score off the same Supabase Realtime channel the app
+  broadcasts on ("pt_sync" on ptstream_<code>), so whoever is reffing in the
+  app — host or viewer — is what this shows, with no extra step.
+
+  Because it sits BEFORE the encoder, it needs no latency compensation: the
+  score and the picture it is drawn over are the same instant by construction.
+  (Compare the in-page bug the website shows over the YouTube player, which is
+  after the encoder and does have to be delayed to match.)
+
+  Add in OBS:  + → Browser →  URL: <site>/overlay.html?code=ABCDE
+               Width 1920  Height 1080   (leave "Shutdown when not visible" off)
+
+  Query parameters:
+    code   the 5-character session code shown in the app's broadcast panel
+    pos    bl (default) · br · tl · tr — which corner the bug sits in
+    scale  1 (default) — multiplies every dimension, for non-1080p canvases
+    idle   1 (default) shows a small "waiting" chip until the app connects;
+           idle=0 stays fully transparent until there is a score to show
+-->
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:transparent;overflow:hidden;
+    font-family:'JetBrains Mono',ui-monospace,monospace;-webkit-font-smoothing:antialiased}
+  :root{
+    --accent:#ff2d78; --court:#1ec9dd; --ball:#d4ff2b; --gold:#ffcc00;
+    --dim:#6e6795; --ink:#f2eefc;
+    --plate:rgba(8,6,18,.88); --hair:rgba(255,255,255,.16);
+    --u:1px;                    /* set from ?scale — every size is a multiple */
+  }
+  #stage{position:fixed;inset:0}
+  .bug{position:absolute;display:none;flex-direction:column;gap:calc(6*var(--u));
+    filter:drop-shadow(0 calc(10*var(--u)) calc(30*var(--u)) rgba(0,0,0,.55))}
+  .bug.on{display:flex}
+  .pos-bl{left:calc(48*var(--u));bottom:calc(48*var(--u));align-items:flex-start}
+  .pos-br{right:calc(48*var(--u));bottom:calc(48*var(--u));align-items:flex-end}
+  .pos-tl{left:calc(48*var(--u));top:calc(48*var(--u));align-items:flex-start}
+  .pos-tr{right:calc(48*var(--u));top:calc(48*var(--u));align-items:flex-end}
+
+  /* ---- the plate: two player rows, the same hot-pink / cyan split the app
+     uses everywhere else, so the broadcast and the site read as one thing ---- */
+  .plate{background:var(--plate);border:var(--u) solid var(--hair);
+    border-radius:calc(10*var(--u));overflow:hidden;backdrop-filter:blur(calc(6*var(--u)))}
+  .row{display:grid;grid-template-columns:calc(6*var(--u)) minmax(calc(200*var(--u)),auto) auto auto;
+    align-items:center;height:calc(46*var(--u))}
+  .row+.row{border-top:var(--u) solid var(--hair)}
+  .flag{width:calc(6*var(--u));height:100%;background:var(--ac)}
+  .nm{padding:0 calc(16*var(--u)) 0 calc(14*var(--u));font-size:calc(20*var(--u));font-weight:700;
+    letter-spacing:calc(1*var(--u));color:#fff;text-transform:uppercase;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .srv{color:var(--ball);margin-left:calc(8*var(--u))}
+  .setbox{display:flex;height:100%}
+  .set{display:flex;align-items:center;justify-content:center;min-width:calc(38*var(--u));
+    font-size:calc(19*var(--u));font-weight:700;color:var(--dim);
+    border-left:var(--u) solid var(--hair)}
+  .set.cur{color:#fff}
+  .set.won{color:var(--gold)}
+  .pts{display:flex;align-items:center;justify-content:center;min-width:calc(64*var(--u));height:100%;
+    font-size:calc(24*var(--u));font-weight:800;color:#04140e;background:var(--ac);
+    border-left:var(--u) solid var(--hair)}
+  .row.lead .nm{color:#fff}
+
+  /* ---- the strip under the plate: match clock, tiebreak / streak / stakes ---- */
+  .strip{display:flex;gap:calc(6*var(--u));align-items:center;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:calc(7*var(--u));
+    background:var(--plate);border:var(--u) solid var(--hair);border-radius:calc(99*var(--u));
+    padding:calc(5*var(--u)) calc(12*var(--u));font-size:calc(13*var(--u));font-weight:700;
+    letter-spacing:calc(.8*var(--u));color:#fff;white-space:nowrap}
+  .pill .dot{width:calc(7*var(--u));height:calc(7*var(--u));border-radius:50%;background:var(--ball)}
+  .pill.tension{background:var(--tc);border-color:transparent;color:#0b0710;
+    animation:tense 1.15s ease-in-out infinite}
+  .pill.tb{color:var(--gold);border-color:rgba(255,204,0,.45)}
+  .pill.streak{color:var(--ac)}
+  .pill.final{color:var(--gold);border-color:rgba(255,204,0,.5);font-size:calc(15*var(--u))}
+  .pill .lab{color:var(--dim);font-weight:700;font-size:calc(11*var(--u))}
+  @keyframes tense{0%,100%{opacity:1}50%{opacity:.62}}
+
+  /* ---- the mark, so a clip lifted off the VOD still says where it came from ---- */
+  .mark{display:inline-flex;align-items:center;gap:calc(7*var(--u));
+    font-size:calc(12*var(--u));font-weight:800;letter-spacing:calc(2.5*var(--u));color:var(--dim)}
+  .mark .ball{width:calc(11*var(--u));height:calc(11*var(--u));border-radius:50%;
+    background:var(--ball);box-shadow:0 0 calc(10*var(--u)) rgba(212,255,43,.55)}
+
+  /* ---- waiting chip: only so the operator can see in OBS that it connected ---- */
+  #idle{position:absolute;left:calc(48*var(--u));bottom:calc(48*var(--u));display:none;
+    align-items:center;gap:calc(9*var(--u));background:var(--plate);
+    border:var(--u) solid var(--hair);border-radius:calc(99*var(--u));
+    padding:calc(8*var(--u)) calc(16*var(--u));font-size:calc(13*var(--u));
+    letter-spacing:calc(1*var(--u));color:var(--dim)}
+  #idle.on{display:flex}
+  #idle b{color:var(--accent);letter-spacing:calc(2.5*var(--u))}
+  #idle .dot{width:calc(8*var(--u));height:calc(8*var(--u));border-radius:50%;background:var(--dim);
+    animation:blink 1.6s ease-in-out infinite}
+  #idle.live .dot{background:var(--ball);animation:none}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bug" id="bug">
+    <div class="plate" id="plate"></div>
+    <div class="strip" id="strip"></div>
+  </div>
+  <div id="idle"><span class="dot"></span><span>FGTA overlay · <b id="idleCode">—</b></span><span id="idleMsg">waiting for the app</span></div>
+</div>
+<script>
+const SUPABASE_URL = "https://fzmuixlxnhervxzrinbh.supabase.co";
+const SUPABASE_KEY = "sb_publishable_7G4BHKqWSxbWjOWP5NB5KA_f2V3E6jE";
+
+const Q = new URLSearchParams(location.search);
+const CODE = (Q.get("code") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 32).toUpperCase();
+const POS = ["bl", "br", "tl", "tr"].includes(Q.get("pos")) ? Q.get("pos") : "bl";
+const SCALE = Math.max(0.25, Math.min(4, Number(Q.get("scale")) || 1));
+const SHOW_IDLE = Q.get("idle") !== "0";
+
+document.documentElement.style.setProperty("--u", SCALE + "px");
+const bug = document.getElementById("bug");
+bug.classList.add("pos-" + POS);
+document.getElementById("idleCode").textContent = CODE || "no code";
+
+/* The score as last broadcast by whoever is reffing. Null until the first
+   pt_sync lands — which is also true when a stream starts before anyone taps
+   "Start tracking", so "no score yet" is a normal state, not an error. */
+let state = null;
+let connected = false;
+
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const shortName = (n) => {
+  const p = String(n == null ? "" : n).trim().split(/\s+/).filter(Boolean);
+  return (p.length > 1 ? p[p.length - 1] : p[0]) || "—";
+};
+const fmtElapsed = (ms) => {
+  const s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60), h = Math.floor(m / 60);
+  return h > 0
+    ? `${h}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
+    : `${m}:${String(s % 60).padStart(2, "0")}`;
+};
+
+/* Same forward-looking stakes the app's own bug shows — "if the next point
+   goes here, does it close the game/set/match?". Copied rather than imported
+   because this page deliberately loads nothing from index.html: an overlay
+   that can be broken by an unrelated change to the app is an overlay that
+   goes wrong live, in front of everyone. */
+const wouldWinGame = (side, s) => {
+  if (s.tiebreak) {
+    const a = s.tbA + (side === "a" ? 1 : 0), b = s.tbB + (side === "b" ? 1 : 0);
+    return (side === "a" ? a : b) >= 7 && Math.abs(a - b) >= 2;
+  }
+  const a = s.ptsA + (side === "a" ? 1 : 0), b = s.ptsB + (side === "b" ? 1 : 0);
+  return (side === "a" ? a : b) >= 4 && Math.abs(a - b) >= 2;
+};
+const wouldWinSet = (side, s) => {
+  if (!wouldWinGame(side, s)) return false;
+  if (s.tiebreak) return true;
+  const gA = s.gamesA + (side === "a" ? 1 : 0), gB = s.gamesB + (side === "b" ? 1 : 0);
+  return (side === "a" ? gA : gB) >= 6 && Math.abs(gA - gB) >= 2;
+};
+const isMatchPoint = (side, s) => {
+  if (!wouldWinSet(side, s)) return false;
+  const setsA = s.setsA + (side === "a" ? 1 : 0), setsB = s.setsB + (side === "b" ? 1 : 0);
+  return (side === "a" ? setsA : setsB) === 2;
+};
+function tensionTag(s) {
+  if (!s || s.winner || s.draw) return null;
+  for (const k of ["a", "b"]) if (isMatchPoint(k, s)) return { tag: "MATCH POINT", side: k, level: 3 };
+  for (const k of ["a", "b"]) if (wouldWinSet(k, s)) return { tag: "SET POINT", side: k, level: 2 };
+  for (const k of ["a", "b"]) if (wouldWinGame(k, s)) return { tag: "GAME POINT", side: k, level: 1 };
+  return null;
+}
+const tensionColor = (lvl) => (lvl === 3 ? "#ff2d2d" : lvl === 2 ? "#ff8a00" : "#ffe600");
+
+function rowHTML(side, s) {
+  const isA = side === "a";
+  const name = isA ? s.a : s.b;
+  const decided = !!(s.winner || s.draw);
+  const ac = isA ? "var(--accent)" : "var(--court)";
+  /* Finished sets as their own columns, then the running one — the layout every
+     tennis broadcast uses, so it needs no explaining to anyone watching. */
+  const done = (s.sets || []).map((set) => {
+    const mine = isA ? set.a : set.b, theirs = isA ? set.b : set.a;
+    return `<span class="set${mine > theirs ? " won" : ""}">${mine}</span>`;
+  }).join("");
+  const cur = decided ? "" :
+    `<span class="set cur">${isA ? s.gamesA : s.gamesB}</span>`;
+  const pt = s.tiebreak ? (isA ? s.tbA : s.tbB) : (isA ? s.ptsA : s.ptsB);
+  const ptCell = decided
+    ? `<span class="pts" style="--ac:${s.winner === side ? "var(--gold)" : "var(--dim)"}">${isA ? s.setsA : s.setsB}</span>`
+    : `<span class="pts" style="--ac:${ac}">${pt}</span>`;
+  return `<div class="row" style="--ac:${ac}">
+      <span class="flag"></span>
+      <span class="nm">${esc(shortName(name))}</span>
+      <span class="setbox">${done}${cur}</span>
+      ${ptCell}
+    </div>`;
+}
+
+function render() {
+  const s = state;
+  const idle = document.getElementById("idle");
+  if (!s || !s.a) {
+    bug.classList.remove("on");
+    idle.classList.toggle("on", SHOW_IDLE);
+    idle.classList.toggle("live", connected);
+    document.getElementById("idleMsg").textContent =
+      !CODE ? "add ?code=YOURCODE to the URL"
+      : connected ? "connected · waiting for a match to start"
+      : "connecting…";
+    return;
+  }
+  idle.classList.remove("on");
+  bug.classList.add("on");
+
+  document.getElementById("plate").innerHTML = rowHTML("a", s) + rowHTML("b", s);
+
+  const decided = !!(s.winner || s.draw);
+  const bits = [];
+  if (s.startedAt) {
+    const t = fmtElapsed((s.endedAt || Date.now()) - s.startedAt);
+    bits.push(`<span class="pill"><span class="dot"></span>${t}</span>`);
+  }
+  if (!decided && s.tiebreak) bits.push(`<span class="pill tb">TIEBREAK</span>`);
+  const tension = decided ? null : tensionTag(s);
+  if (tension) {
+    bits.push(`<span class="pill tension" style="--tc:${tensionColor(tension.level)}">
+      ${esc(shortName(tension.side === "a" ? s.a : s.b))} — ${tension.tag}</span>`);
+  } else if (!decided && (s.streakCount || 0) >= 3 && s.streakSide) {
+    bits.push(`<span class="pill streak" style="--ac:${s.streakSide === "a" ? "var(--accent)" : "var(--court)"}">
+      🔥 ${esc(shortName(s.streakSide === "a" ? s.a : s.b))} ${s.streakCount}</span>`);
+  }
+  if (decided) {
+    bits.push(`<span class="pill final">${s.draw ? "🤝 DRAWN"
+      : `🏆 ${esc(shortName(s.winner === "a" ? s.a : s.b))} ${s.setsA}–${s.setsB}`}</span>`);
+  }
+  bits.push(`<span class="mark"><span class="ball"></span>FGTA</span>`);
+  document.getElementById("strip").innerHTML = bits.join("");
+}
+
+/* The clock is the only thing that moves on its own; everything else changes
+   only when a point is scored. One second is the smallest unit shown. */
+setInterval(() => { if (state && state.startedAt && !state.endedAt) render(); }, 1000);
+
+let sb = null;
+function connect() {
+  if (!CODE) return render();
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch (e) {
+    document.getElementById("idleMsg").textContent = "could not reach Supabase";
+    return render();
+  }
+  const ch = sb.channel("ptstream_" + CODE);
+  ch.on("broadcast", { event: "pt_sync" }, ({ payload }) => {
+    state = payload || null;
+    render();
+  });
+  ch.subscribe((status) => {
+    connected = status === "SUBSCRIBED";
+    /* Announce ourselves so the app's broadcast panel can say "overlay
+       connected" — the one thing an operator wants confirmed before going
+       live, and otherwise only visible by looking at OBS. */
+    if (connected) {
+      try { ch.send({ type: "broadcast", event: "overlay_hello", payload: { t: Date.now() } }); } catch (e) {}
+    }
+    render();
+  });
+  /* Someone opening the overlay mid-match has missed every point so far. Ask
+     for the current score rather than staying blank until the next one. */
+  const ask = () => { try { ch.send({ type: "broadcast", event: "overlay_hello", payload: { t: Date.now() } }); } catch (e) {} };
+  setTimeout(ask, 1500);
+  setInterval(() => { if (!state) ask(); }, 10000);
+}
+connect();
+render();
+</script>
+</body>
+</html>

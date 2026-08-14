@@ -1,10 +1,10 @@
 # Handoff: FGTA Tennis Ladder App
 
 ## Overview
-FGTA is a competitive tennis ladder web app for a friend group: report/track 1v1 and doubles matches, run tournaments, browse Elo-style rankings and analytics, watch live peer-to-peer streams of matches, log casual sessions, and manage a shared calendar. It runs against Supabase (Postgres + Realtime) for data and live features, plus the free Open-Meteo API for ambient weather theming.
+FGTA is a competitive tennis ladder web app for a friend group: report/track 1v1 and doubles matches, run tournaments, browse Elo-style rankings and analytics, watch matches live on YouTube, log casual sessions, and manage a shared calendar. It runs against Supabase (Postgres + Realtime) for data and live features, plus the free Open-Meteo API for ambient weather theming.
 
 ## About the Design Files
-The bundled file (ladder-merged.html) is a **working HTML/CSS/vanilla-JS prototype**, not production code to copy as-is. It was built as a single-file app directly against Supabase's JS client, with no build step, no component framework, and all styling inline/in one <style> block. Treat it as a **design and behavior reference**: recreate the same screens, interactions, and visual language in the target codebase's actual stack (React/Vue/native/etc., whichever the project already uses — or the most sensible choice if starting fresh). Reuse its logic (Elo/Glicko math, calendar aggregation, tilt/hover effects, etc.) as the source of truth for *what* to build, not the file structure for *how*.
+The bundled file (index.html) is a **working HTML/CSS/vanilla-JS prototype**, not production code to copy as-is. It was built as a single-file app directly against Supabase's JS client, with no build step, no component framework, and all styling inline/in one <style> block. Treat it as a **design and behavior reference**: recreate the same screens, interactions, and visual language in the target codebase's actual stack (React/Vue/native/etc., whichever the project already uses — or the most sensible choice if starting fresh). Reuse its logic (Elo/Glicko math, calendar aggregation, tilt/hover effects, etc.) as the source of truth for *what* to build, not the file structure for *how*.
 
 ## Fidelity
 **High-fidelity.** Colors, spacing, typography, copy, and interaction timings in the HTML are final — implement them pixel-for-pixel using the target codebase's own component/styling system (design tokens below map directly to whatever token system exists there, e.g. Tailwind config, CSS-in-JS theme, etc.).
@@ -28,9 +28,29 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
 - **Point Tracker**: Enter player 1 / player 2 names → "Start tracking" begins a live point-by-point 1v1. Best-of-3, games to 6 win-by-2, tiebreak to 7 at 6-6. Plain incrementing point counts (0,1,2,3…), not tennis scoring. Every tap is undo/redo-able; nothing writes to the ladder until final Submit.
   - Live celebrations: 8-8 in a game triggers a full-screen rainbow/confetti overlay; a game win shows a gold banner with the game number; a set win shows a flame overlay.
   - "Ref mode" pill badge next to the section title.
-  - Built-in livestream panel: "Go live" (WebRTC peer-to-peer via Supabase Realtime signaling, capped at 3 viewers), a stream code, viewer count, fullscreen toggle, live chat, mic/camera toggles, video filters (grayscale/sepia/neon/VHS), a zoom slider, instant replay (slow-mo clip with a "REPLAY" bug), and a perspective switcher to watch other camera angles of the same match if others are also streaming it.
-  - Camera flip (🔄) asks for the opposite lens with an `exact` constraint, falls back to the opposite-facing device by id, and verifies afterwards that the camera actually changed — an `ideal` facing hint loses to the resolution hint on a lot of phones and silently returns the lens you were already on. What the flip asked for is remembered separately from what the device reports, because plenty of devices report nothing. Every camera event lands in the 🩺 stream-health log.
-  - Hawk-Eye rewind (🦅, viewer side): the last ~60s of every camera is kept on the watching device as a chain of short overlapping recordings, and can be scrubbed side by side, at ¼/½/1× or a frame at a time, without touching the broadcast or asking anyone filming for anything. A toggle — it is a second video encoder per angle — on by default where there is headroom, off on a small phone.
+  - Built-in livestream panel: the match is broadcast from **OBS to YouTube
+    Live**, and the app embeds the resulting stream (YouTube IFrame API) with
+    the FGTA layer wrapped around it — live chat, ref-mode scoring from any
+    device, a live-match directory, and fullscreen with chat/ref drawers over
+    the picture. Any number of viewers, no relay, and the VOD stays on
+    YouTube for free once the match ends.
+    - "Set up a broadcast" is a four-step checklist, not a button: it mints a
+      session code, links the YouTube video, and hands over the OBS settings.
+      Nothing about the stream itself is controlled from the browser — camera,
+      mic, framing, zoom and filters are all OBS's job now.
+    - **The scoreboard overlay** (`overlay.html?code=XXXXX`) is an OBS Browser
+      Source: a transparent page rendering the same score bug the old stream
+      composited on-device, driven live off the ref's taps over Supabase
+      Realtime. Because OBS composites it before encoding, it is always in
+      step with the picture regardless of YouTube's latency.
+    - An optional in-page score bug over the player covers streams with no
+      burnt-in scoreboard, and watching a VOD back with the score. It is
+      delayed by an adjustable amount (default 10s) to match YouTube's
+      latency, since Realtime would otherwise announce a point before you see
+      it.
+    - `/api/youtube` (a Netlify function holding the API key) answers "what is
+      live on the channel right now", cached and quota-conscious; see
+      `docs/youtube-live.md` for the full setup and the quota arithmetic.
   - Live score "bug" overlay and a Match Point tension banner when the score is close.
 - **Archive**: past-match history, editable "fix a game" flow that lets you flip a game's recorded winner if the point math still supports it, CSV export.
 - **Rivalries**: pick two players to see head-to-head history, rating swing, and trend; a "fiercest rivalries" leaderboard by games played.
@@ -116,5 +136,8 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 No custom illustrations or photography — avatars are generated from initials (a small avatar(name, size) helper drawing colored circles + initials). Fonts are loaded from Google Fonts (Outfit, JetBrains Mono). Weather icons/emoji are used inline (no icon font/library). No other external image assets.
 
 ## Files
-- ladder-merged.html — the full app (single file, ~13.7k lines: styles, markup for every view, and all JS logic including Supabase calls, Elo/Glicko/Markov models, calendar, livestream/WebRTC, and realtime presence).
-- FGTA Ladder (standalone).html — the same app pre-bundled as a self-contained offline-loadable file (fonts/scripts inlined); useful for opening/reviewing without a dev server, not meant as a build artifact.
+- index.html — the full app (single file, ~15.7k lines: styles, markup for every view, and all JS logic including Supabase calls, Elo/Glicko/Markov models, calendar, the YouTube livestream panel, and realtime presence).
+- overlay.html — the OBS Browser Source that burns the live scoreboard into the broadcast. Standalone by design: it loads nothing from index.html, so an unrelated change to the app can never break the graphic that is going out live.
+- netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
+- docs/youtube-live.md — how to set streaming up, once for the league and once per match.
+- FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
