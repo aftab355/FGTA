@@ -2093,9 +2093,12 @@
   }
 
   /* ---- broadcast setup ----
-     Going live is no longer a button, it is four steps done in two other
-     apps. Numbered blocks with the thing to copy sitting in its own row,
-     because every one of them is a string somebody has to move between
+     Steps 1-3 are done once, ever — a reusable stream key and a browser
+     source, both of which stay put once they're in place. Step 4 is the
+     actual match-day routine, and everything above it is tagged "first time
+     only" so that's visually obvious rather than something to infer from
+     the prose. Numbered blocks with the thing to copy sitting in its own
+     row, because every one of them is a string somebody has to move between
      YouTube Studio, OBS and here — and mistyping any of them fails in a way
      that looks like the site is broken. */
   .pt-obs{margin-top:12px;padding:14px;min-width:0;background:var(--panel-2);
@@ -2105,6 +2108,9 @@
     text-transform:uppercase;color:var(--muted)}
   .pt-obs-code{color:var(--accent);letter-spacing:2px}
   .pt-obs-step{padding:10px 0;border-top:1px solid var(--line-soft);min-width:0}
+  .pt-obs-once{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:1px;
+    text-transform:uppercase;color:var(--dim);background:var(--bg);border:1px solid var(--line);
+    border-radius:var(--r-pill);padding:2px 8px;margin-left:6px;vertical-align:middle}
   .pt-obs-step>b{display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;
     letter-spacing:.6px;color:var(--ink);margin-bottom:5px}
   .pt-obs-step .pw-legend{margin-top:0}
@@ -7536,27 +7542,27 @@ function ptObsPanelHtml(S, detected){
     ${codeEditHtml}
 
     <div class="pt-obs-step">
-      <b>1 · Start the stream in YouTube</b>
-      <div class="pw-legend">Open <a href="${esc(ptStudioUrl())}" target="_blank" rel="noopener">YouTube Studio → Go live ↗</a> and create the stream. Set latency to <b>Low</b> (Ultra-low if nobody needs 1080p), visibility to Public or Unlisted, and <b>turn on "reusable stream key"</b> in the stream settings — with that on, step 2 is only ever done once, because the same key works for every future match too.</div>
+      <b>1 · Get a reusable stream key</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">Open <a href="${esc(ptStudioUrl())}" target="_blank" rel="noopener">YouTube Studio → Go live ↗</a>, and in the stream's settings <b>turn on "reusable" / "persistent" stream key</b>, latency <b>Low</b>, DVR on. Copy the key. Do this once, ahead of a match day, somewhere with a proper screen — never at the court, and never again after today.</div>
     </div>
 
     <div class="pt-obs-step">
-      <b>2 · Point OBS at it</b>
-      <div class="pw-legend">OBS → Settings → Stream → Service <b>YouTube - RTMPS</b>, then paste the stream key. Or, on the custom server: </div>
+      <b>2 · Point OBS at it</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">OBS → Settings → Stream → Service <b>YouTube - RTMPS</b>, then paste the key from step 1. Or, on the custom server: </div>
       <div class="pt-copy-row"><code>${esc(PT_RTMP)}</code><button class="mini" onclick="ptCopy('${esc(PT_RTMP)}','Ingest URL copied')">copy</button></div>
-      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin. With a reusable key (step 1), this is a one-time setup — leave it exactly as is next time.</div>
+      <div class="pw-legend">1920×1080, 30fps, 4500 kbps and the x264 encoder is a good default for a court; drop to 720p if the upload is thin. This stays exactly as-is for every match from here on.</div>
     </div>
 
     <div class="pt-obs-step">
-      <b>3 · Add the scoreboard</b>
-      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture. The code in it is the one remembered on this device, so this source stays in your scene collection and needs adding only once too — unless you deliberately change the code above.</div>
+      <b>3 · Add the scoreboard</b> <span class="pt-obs-once">first time only</span>
+      <div class="pw-legend">In OBS: <b>+ → Browser</b>, width <b>1920</b>, height <b>1080</b>, and this URL. It draws the same score bug the old stream burnt in, live off whoever is reffing — and because OBS composites it before encoding, it is always in step with the picture. The code in it is the one remembered on this device, so this source stays in your scene collection for good — unless you deliberately change the code above.</div>
       <div class="pt-copy-row"><code class="pt-overlay-url">${esc(url)}</code><button class="mini" onclick="ptCopy('${esc(url)}','Overlay URL copied')">copy</button></div>
       <div class="pw-legend">${S.overlaySeen && Date.now()-S.overlaySeen<120000 ? '🟢 The overlay is connected — the score is reaching OBS.' : '⚪ Nothing has connected on this code yet. Add the browser source and it lights up here.'}</div>
     </div>
 
     <div class="pt-obs-step">
-      <b>4 · Link it here</b>
-      <div class="pw-legend">Paste the stream's YouTube link so everyone else's app plays the right thing under the right match name. Unlisted streams only reach people this way — they are never discovered automatically. This is the one step YouTube genuinely requires every match: it hands out a new video for every broadcast, with no way around that.</div>
+      <b>4 · At the court: hit Start Streaming, then link it here</b>
+      <div class="pw-legend">This is the actual match-day routine — nothing above, just this. With a reusable key, YouTube creates a new broadcast automatically the moment OBS starts sending video; there is no Studio page to visit. Wait ~20–30s and it should appear below, already labelled — tap it. If it hasn't shown up yet, the YouTube app on your phone (not Studio) has it at the top of your channel the same way; copy that link in instead. This paste is the one thing that's genuinely different every match: YouTube hands out a new video per broadcast and there's no way around that.</div>
       ${detectedHtml}
       <div class="pt-stream-row">
         <input id="ptLinkInput" class="pt-link-input" placeholder="https://youtube.com/watch?v=…" autocomplete="off" spellcheck="false" onkeydown="ptLinkKey(event)">

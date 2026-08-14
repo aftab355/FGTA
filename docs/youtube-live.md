@@ -79,64 +79,38 @@ and pasting a link still works. It resets at midnight Pacific.
 
 ---
 
-## Part 2 · Every time you film
+## Part 2 · Streaming a match
 
-Most of this is only real work the *first* time. What's actually true every
-single match:
+### At the court, this is the whole routine
 
-- **YouTube hands out a new video for every broadcast.** There is no way
-  around this — it's how YouTube's live model works — so "Go live" in Studio
-  and pasting the resulting link into the app are the two steps you cannot
-  skip.
-- Everything else below — the app's code, OBS's stream key, the overlay
-  browser source — is remembered and reused automatically. Set it up once and
-  leave it alone; the walkthrough below just also covers that first time.
+Assuming the one-time setup below is done:
 
-### 2.1 In the app
+1. App → Matches → Point Tracker → **Set up a broadcast**.
+2. OBS → **Start Streaming**.
+3. Wait ~20–30s. The app auto-detects the new broadcast and shows it as a
+   tappable card in step 4 of the panel — tap it. (If it hasn't shown up yet,
+   the regular **YouTube app** on your phone — not Studio — has it at the top
+   of your channel; copy that link in instead.)
+4. Score.
 
-**Matches → Point Tracker → Set up a broadcast.**
+No Studio, no typing a stream key, no re-adding the overlay. That's only
+true because of the setup below — do that first, once, not at the court.
 
-That gives you a **code** — five characters the first time, and the *same*
-one every time after, because the app remembers it on this device
-(`localStorage`, not synced anywhere). The code is what ties the score to a
-broadcast — the OBS overlay uses it, and so does everyone watching. It is not
-a password; anyone with it can chat and ref.
+### 2.0 One-time setup — do this before match day
 
-Because the code doesn't change, the OBS browser source in step 2.3 doesn't
-either — add it once and forget it. The only reason to touch the code again
-is on purpose (tap **change** next to it in the panel): a code that leaked,
-or streaming two courts at once from the same laptop, which needs two.
+**a. A reusable stream key.** <https://studio.youtube.com> → **Create → Go
+live** → *Streaming software*, and in the stream's settings turn on
+**"reusable" / "persistent" stream key**. This is the whole trick: with it
+on, YouTube auto-creates a new broadcast the instant OBS starts sending
+video to that key — no visit to Studio's create-broadcast screen, ever
+again. Set latency to **Low** (*Ultra-low* is ~2s faster and caps quality at
+1080p; *Normal* is the one to avoid, ~20s behind) and DVR on. Copy the key.
 
-Leave the panel open. It walks through the rest and is where you paste the
-YouTube link at the end.
+**b. Point OBS at it.** Settings → Stream → Service **YouTube - RTMPS**,
+paste the key. Or, on the custom server: `rtmp://a.rtmp.youtube.com/live2`
+with the same key.
 
-### 2.2 In YouTube Studio
-
-<https://studio.youtube.com> → **Create → Go live** → *Streaming software*.
-
-- **Title**: whatever. The app shows the match name instead, if it knows it.
-- **Visibility**: *Public* or *Unlisted*. Both work. Unlisted streams are
-  never discovered automatically — nobody outside the app can stumble on
-  them, and the only way anyone finds one is the link you paste in step 2.4.
-- **Latency**: **Low**. (*Ultra-low* is about two seconds faster and caps
-  quality at 1080p — worth it if somebody is reffing off the stream rather
-  than off the court. *Normal* is the only one to avoid; it is ~20 seconds
-  behind.)
-- **DVR**: on. This is what lets viewers scrub back during the match.
-- **Turn on "reusable stream key"** in the stream's settings, if this is your
-  first time. With it on, the key you copy below works for every future
-  broadcast, and step 2.3 becomes something you never open again either.
-- Copy the **stream key** — first time only, if you did the above.
-
-### 2.3 In OBS — first time only, with a reusable key
-
-**Settings → Stream**
-
-- Service: **YouTube - RTMPS**, then paste the stream key.
-- Or, if you would rather use a custom server: `rtmp://a.rtmp.youtube.com/live2`
-  with the stream key.
-
-**Settings → Output** (Simple mode is fine)
+Settings → Output (Simple mode is fine):
 
 | setting | value |
 |---|---|
@@ -144,45 +118,44 @@ YouTube link at the end.
 | Encoder | hardware if the machine has it, x264 otherwise |
 | Audio bitrate | 160 kbps |
 
-**Settings → Video**: 1920×1080, 30fps. Go to 1280×720 rather than dropping
+Settings → Video: 1920×1080, 30fps. Go to 1280×720 rather than dropping
 frames — a court at 30fps is fine, a court at 15fps is not.
 
-**Sources**
+**c. Add the scoreboard.** In the app: Matches → Point Tracker → Set up a
+broadcast → copy the overlay URL from step 3 of the panel. In OBS: **+ →
+Browser**:
 
-1. Your camera (a capture card, a webcam, or a phone via the *Camo* /
-   *DroidCam* style apps — anything OBS sees as a camera).
-2. **+ → Browser**, and this is the important one:
+| field | value |
+|---|---|
+| URL | the overlay URL — `…/overlay.html?code=ABCDE` |
+| Width | 1920 |
+| Height | 1080 |
+| Shutdown source when not visible | **off** |
+| Refresh browser when scene becomes active | off |
 
-   | field | value |
-   |---|---|
-   | URL | the overlay URL from the app's panel — `…/overlay.html?code=ABCDE` |
-   | Width | 1920 |
-   | Height | 1080 |
-   | Shutdown source when not visible | **off** |
-   | Refresh browser when scene becomes active | off |
+Drag it over your camera source. It's transparent except for the scoreboard
+— no chroma key, no cropping. The panel shows **🟢 overlay** once it
+connects.
 
-   Drag it over the camera. It is transparent except for the scoreboard, so
-   it needs no chroma key and no cropping.
+This URL's code is remembered on this device and reused every time you tap
+"Set up a broadcast" (`localStorage`, not synced anywhere), so this browser
+source is correct forever — it isn't a password, it's just what ties the
+overlay, chat, and everyone watching to the same broadcast. The only reason
+to revisit it is on purpose, via **change** next to the code in the app's
+panel: a leaked code, or two courts streaming at once from the same laptop.
 
-   The app's panel shows **🟢 overlay** once it connects. If it stays ⚪,
-   the URL is wrong or the code doesn't match. Once it's in your scene
-   collection, this stays — the URL is only wrong again if you deliberately
-   change the code (2.1).
+That's it — (a), (b), (c) are each done exactly once. Everything from here
+on is the four-step routine at the top of this section.
 
-Then **Start Streaming**.
+### Visibility, every match
 
-**Every match after this one**, assuming a reusable stream key: open OBS,
-confirm the scoreboard source shows 🟢 in the app's panel (it will — nothing
-here changed), and click **Start Streaming**. That's the entire OBS side.
+**Public** or **Unlisted**, set once inside your persistent stream's default
+settings so you don't have to think about it per match. Unlisted streams are
+never auto-discovered outside the app — the link paste in step 3 of the
+routine above is the only way anyone finds one, which is also exactly why
+that step can't be automated away.
 
-### 2.4 Back in the app
-
-Paste the stream's YouTube link into step 4 of the panel, or tap it if it has
-already been detected. That is what makes everyone else's app play the right
-video under the right match name — and the only way an unlisted stream
-reaches anyone.
-
-### 2.5 Scoring
+### Scoring
 
 Start the match in the Point Tracker as usual, or open **⚖️ ref** in the
 stream panel. Every tap goes out over Realtime and lands in three places at
@@ -193,7 +166,7 @@ Anyone watching can open ⚖️ ref and score too. Their taps are requests; the
 device running the Point Tracker is the only one that owns the match state,
 so there is no way for two people scoring to fork it.
 
-### 2.6 Ending
+### Ending
 
 Stop the stream **in OBS**. Closing the app's panel does not stop YouTube —
 it never had control of it. A minute or so later the finished broadcast
@@ -222,10 +195,13 @@ same moment. Ten seconds is right for the Low setting.
 ## Filming from a phone
 
 OBS itself is desktop-only, but nothing above requires OBS specifically —
-anything that speaks RTMP works, and the RTMP URL and stream key are the same.
+anything that speaks RTMP works, and it's the same reusable key from step
+2.0a. The at-the-court routine is identical: open the app, open the RTMP
+app, hit go, wait, link.
 
 - **iOS / Android**: *Streamlabs*, *Larix Broadcaster*, *Prism Live Studio*.
-  Larix is free and has no account.
+  Larix is free and has no account. Paste the same persistent key into it
+  once, the same way as OBS.
 - **The YouTube app's own "Go live"** works and is the simplest option, but
   it needs 50+ subscribers on the channel and gives you no way to add the
   scoreboard overlay.
