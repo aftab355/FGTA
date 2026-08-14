@@ -52,7 +52,7 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
       live on the channel right now", cached and quota-conscious; see
       `docs/youtube-live.md` for the full setup and the quota arithmetic.
   - Live score "bug" overlay and a Match Point tension banner when the score is close.
-- **Archive**: past-match history, editable "fix a game" flow that lets you flip a game's recorded winner if the point math still supports it, CSV export.
+- **Archive**: past-match history, editable "fix a game" flow that lets you flip a game's recorded winner if the point math still supports it, CSV export. Each match card also has **AI commentary** and **AI roast** buttons, backed by `/api/ai` (a Netlify function holding the Anthropic key — same pattern as `/api/youtube`); needs `ANTHROPIC_API_KEY` set on the deploy, and says so plainly instead of looking broken if it isn't.
 - **Rivalries**: pick two players to see head-to-head history, rating swing, and trend; a "fiercest rivalries" leaderboard by games played.
 
 ### 4. Predict
@@ -139,6 +139,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - index.html — the full app (single file, ~15.7k lines: styles, markup for every view, and all JS logic including Supabase calls, Elo/Glicko/Markov models, calendar, the YouTube livestream panel, and realtime presence).
 - overlay.html — the OBS Browser Source that burns the live scoreboard into the broadcast. Standalone by design: it loads nothing from index.html, so an unrelated change to the app can never break the graphic that is going out live.
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
+- netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
 - manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
