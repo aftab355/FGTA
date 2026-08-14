@@ -141,3 +141,9 @@ No custom illustrations or photography — avatars are generated from initials (
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
+- manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
+
+## Installable app (PWA)
+The site is installable on Android and iPhone as-is — no native app store build. `manifest.webmanifest` (linked from index.html's `<head>`) gives it a name, icon set, and standalone display mode; `sw.js` is a minimal service worker that makes install prompts eligible and caches an offline shell. Android/Chrome shows an install prompt (wired to the "Install app" button via `beforeinstallprompt`); iOS/Safari has no such prompt, so `installApp()` shows the manual "Share → Add to Home Screen" steps instead — this is a Safari limitation, not something fixable from the app.
+
+Updates stay instant on purpose: `sw.js` is network-first for navigations, so every time the installed app is opened it fetches whatever is currently deployed and only falls back to the cached shell if there's no network. There's no build/publish step for updates — push to the branch Netlify deploys and the next app open picks it up, exactly like the website. `netlify.toml` sets `Cache-Control: no-cache` on `/sw.js` and `/manifest.webmanifest` so browsers don't sit on a stale copy of either. Bump the `VERSION` string at the top of `sw.js` when changing what's precached in `SHELL_URLS`, so old caches get dropped on activate.

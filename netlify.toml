@@ -8,3 +8,16 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+## The service worker file itself must never be cached by the browser/CDN -
+## browsers already re-check it on every navigation, but a stale cached copy
+## of sw.js would silently block that check and delay app updates.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
