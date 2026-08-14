@@ -6112,8 +6112,12 @@ function exportMatchesCSV(){
 window.exportMatchesCSV=exportMatchesCSV;
 
 /* ============================================================
-   AI MATCH COMMENTARY / ROAST — window.claude.complete generates
-   real, match-specific text from the actual score data.
+   AI MATCH COMMENTARY / ROAST — /api/ai proxies a short completion
+   from the actual score data. (This used to call window.claude.complete
+   directly, which only exists inside Claude.ai's own Artifact preview
+   sandbox — never in a real browser on the deployed site, so every tap
+   failed. /api/ai holds the real key server-side, same pattern as
+   /api/youtube.)
    ============================================================ */
 async function generateCommentary(matchId, mode){
   const m=matches.find(x=>x.id===matchId); if(!m) return;
@@ -6130,8 +6134,21 @@ async function generateCommentary(matchId, mode){
     prompt=`Write one short, funny, PG-13 roast (max 2 sentences) of ${loser}, who just lost to ${winner} ${m.sets||''} in casual amateur tennis between friends. Be witty and specific to the score. Friendly ribbing, not mean-spirited.`;
   }
   try{
-    const text = await window.claude.complete(prompt);
-    box.innerHTML=`<div class="epic-story" style="margin-top:10px">"${esc(String(text).trim())}"</div>`;
+    const res=await fetch('/api/ai', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({prompt})
+    });
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok || d.error==='not_configured'){
+      box.innerHTML='<div class="c-empty" style="margin-top:10px">AI isn\'t set up on this deploy yet.</div>';
+      return;
+    }
+    if(d.error || !d.text){
+      box.innerHTML='<div class="c-empty" style="margin-top:10px">Couldn\'t reach the AI right now.</div>';
+      return;
+    }
+    box.innerHTML=`<div class="epic-story" style="margin-top:10px">"${esc(String(d.text).trim())}"</div>`;
   }catch(e){
     box.innerHTML='<div class="c-empty" style="margin-top:10px">Couldn\'t reach the AI right now.</div>';
   }
