@@ -4156,7 +4156,437 @@
     min-width:clamp(150px,34vw,230px);
   }
 
-  /* -- 8. motion & mobile budget ----------------------------------- */
+  /* -- 8. THE MARQUEE ----------------------------------------------
+     The event, promoted. Every one of these classes is dead markup
+     until the skin turns it on, so the cup can outrank the ladder on
+     the landing page for two weeks and leave no trace afterwards.
+
+     The slab is the same jet black glass as a panel, but this one is
+     lit from inside: a neon filament welded along its top edge, a
+     court grid receding into the floor behind the type, one specular
+     sweeping across the face every few seconds, and the countdown
+     burning through it all as exposed tube. Everything else in the
+     app is a surface. This is the only light source. */
+
+  /* the mounts are inert markup off-skin, and collapse when empty so
+     they never leave a gap in a view they aren't promoting */
+  .cup-mount:empty{display:none}
+  .cup-flag{display:none}
+  .ms-cup{display:none}
+
+  /* ---- the slab ---- */
+  :root[data-skin="ffcup"] .cupmark{
+    position:relative;isolation:isolate;overflow:hidden;
+    margin:0 0 24px;padding:0;
+    border-radius:var(--r-lg);
+    border:1px solid transparent;
+    background:
+      /* sky in the top of the glass */
+      linear-gradient(178deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.045) 6%,
+        rgba(255,255,255,.012) 18%, transparent 36%) padding-box,
+      /* raking specular off the upper-left corner */
+      linear-gradient(148deg, rgba(255,255,255,.09) 0%, rgba(255,255,255,.02) 14%,
+        transparent 33%) padding-box,
+      /* the body — lifted at both ends, so the slab reads as curved glass
+         rather than a flat rectangle of dark grey */
+      linear-gradient(180deg, #121514 0%, #080a09 26%, #000 60%, #040605 86%, #0f1413 100%) padding-box,
+      var(--chrome-rim) border-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.4),
+      inset 0 -1px 0 rgba(255,255,255,.13),
+      inset 0 16px 26px -22px rgba(255,255,255,.6),
+      inset 0 -44px 70px -50px rgba(61,255,110,.5),
+      inset 0 0 70px -30px rgba(61,255,110,.3),
+      0 60px 110px -40px rgba(0,0,0,1),
+      0 0 60px -26px rgba(61,255,110,.22);
+    animation:ffHover 9s ease-in-out infinite;
+  }
+  /* the filament along the top edge — one lit tube, fading out at both
+     ends so it reads as light in glass and not as a border */
+  :root[data-skin="ffcup"] .cupmark::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:1px;z-index:3;
+    background:linear-gradient(90deg,
+      transparent 0%, rgba(61,255,110,.4) 12%,
+      var(--neon) 34%, var(--neon-hot) 50%, var(--neon) 66%,
+      rgba(61,255,110,.4) 88%, transparent 100%);
+    box-shadow:0 0 12px rgba(61,255,110,.65), 0 0 34px rgba(61,255,110,.24);
+  }
+  /* one hard light crossing the face. It travels, then rests off-frame —
+     a constant shimmer would read as a loading state, a single pass every
+     nine seconds reads as something turning under a studio lamp. */
+  :root[data-skin="ffcup"] .cupmark::after{
+    content:'';position:absolute;inset:0;z-index:2;pointer-events:none;border-radius:inherit;
+    background:linear-gradient(104deg,
+      transparent 38%, rgba(255,255,255,.05) 46%,
+      rgba(204,255,221,.14) 50%, rgba(255,255,255,.05) 54%, transparent 62%);
+    background-size:260% 100%;background-position:150% 0;
+    animation:cupSweep 9s cubic-bezier(.45,0,.55,1) infinite;
+  }
+  @keyframes cupSweep{0%{background-position:150% 0}58%,100%{background-position:-70% 0}}
+
+  /* ---- what's behind the type: a court floor falling away into the void ---- */
+  :root[data-skin="ffcup"] .cupmark-void{
+    position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit;
+  }
+  /* the grid is drawn flat and then laid down in perspective, so the lines
+     converge on their own — a hand-faked trapezoid never gets the spacing
+     right. Masked at both ends: it has no beginning and no horizon, it just
+     comes out of the dark and goes back into it. */
+  :root[data-skin="ffcup"] .cupmark-void::before{
+    content:'';position:absolute;left:-55%;right:-55%;bottom:0;height:78%;
+    background:
+      repeating-linear-gradient(90deg, rgba(61,255,110,.42) 0 1px, transparent 1px 78px),
+      repeating-linear-gradient(0deg,  rgba(61,255,110,.34) 0 1px, transparent 1px 58px);
+    transform:perspective(420px) rotateX(71deg);transform-origin:50% 100%;
+    -webkit-mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 28%, #000 62%, rgba(0,0,0,.3) 88%, transparent 100%);
+    mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 28%, #000 62%, rgba(0,0,0,.3) 88%, transparent 100%);
+    opacity:.55;
+    animation:cupFloor 5.5s linear infinite;
+  }
+  /* only the horizontal lines move, and they move toward the viewer — a grid
+     scrolling in both axes reads as a texture, in one it reads as ground */
+  @keyframes cupFloor{from{background-position:0 0, 0 0}to{background-position:0 0, 0 58px}}
+  /* the light the floor is standing in, and — painted over it — the scrim
+     that keeps the footer readable. The grid has to be visible in the middle
+     of its run and gone by the time it reaches the last line of type; without
+     the scrim the glow climbs into the text and everything reads foggy. */
+  :root[data-skin="ffcup"] .cupmark-void::after{
+    content:'';position:absolute;left:50%;bottom:0;width:130%;height:80%;transform:translateX(-50%);
+    background:
+      linear-gradient(180deg, transparent 42%, rgba(0,0,0,.42) 80%, rgba(0,0,0,.72) 100%),
+      radial-gradient(56% 100% at 50% 100%,
+        rgba(61,255,110,.14) 0%, rgba(61,255,110,.055) 34%, rgba(61,255,110,.015) 60%, transparent 78%);
+  }
+
+  :root[data-skin="ffcup"] .cupmark-body{
+    position:relative;z-index:1;
+    padding:clamp(20px,3.4vw,34px) clamp(18px,3.2vw,34px) clamp(18px,2.8vw,28px);
+  }
+  /* Wide: the clock moves off the bottom of the wordmark and stands beside it.
+     A marquee that runs edge to edge with everything stacked down the left is
+     a poster with a hole in it — the two halves have to balance. The rail and
+     the footer stay full-bleed underneath, because they measure the whole
+     event and not either column. */
+  @media(min-width:900px){
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-body{
+      display:grid;grid-template-columns:minmax(0,1fr) auto;
+      column-gap:clamp(24px,4vw,56px);align-items:start;
+    }
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-head,
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-name,
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-sub,
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cup-facts{grid-column:1}
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cup-clockbox{
+      grid-column:2;grid-row:1 / span 4;align-self:center;margin-top:0;
+    }
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cup-rail,
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-foot{grid-column:1 / -1}
+  }
+
+  /* ---- what the clock is counting to ---- */
+  :root[data-skin="ffcup"] .cup-clockbox{margin-top:22px}
+  :root[data-skin="ffcup"] .cup-cd-cap{
+    font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;
+    letter-spacing:2.8px;text-transform:uppercase;color:var(--neon);
+    text-shadow:0 0 12px rgba(61,255,110,.55);margin-bottom:9px;
+  }
+
+  /* ---- status line ---- */
+  :root[data-skin="ffcup"] .cupmark-head{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+  }
+  :root[data-skin="ffcup"] .cupmark-status{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:5px 13px 6px;border-radius:var(--r-pill);
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:800;
+    letter-spacing:2.6px;text-transform:uppercase;color:var(--neon);
+    border:1px solid rgba(61,255,110,.4);
+    background:linear-gradient(180deg, rgba(61,255,110,.14), rgba(61,255,110,.025));
+    box-shadow:0 0 20px -6px var(--accent-glow), inset 0 0 16px -9px var(--neon);
+    text-shadow:0 0 12px rgba(61,255,110,.75);
+  }
+  :root[data-skin="ffcup"] .cupmark-status i{
+    width:6px;height:6px;border-radius:50%;background:var(--neon-hot);
+    box-shadow:0 0 8px var(--neon), 0 0 18px rgba(61,255,110,.7);
+  }
+  /* only a running event gets a heartbeat; an upcoming one sits still */
+  :root[data-skin="ffcup"] .cupmark[data-phase="live"] .cupmark-status i{
+    animation:hudPulse 1.8s ease-in-out infinite;
+  }
+  :root[data-skin="ffcup"] .cupmark-window{
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);
+    padding:5px 11px 6px;border-radius:var(--r-pill);
+    border:1px solid var(--line);background:rgba(255,255,255,.02);
+  }
+
+  /* ---- the wordmark: the biggest piece of chrome in the app ---- */
+  :root[data-skin="ffcup"] .cupmark-name{
+    margin:0;font-family:'JetBrains Mono',monospace;font-weight:800;
+    font-size:clamp(27px,6.6vw,56px);line-height:1.02;
+    letter-spacing:clamp(1px,.75vw,6px);text-transform:uppercase;
+    background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    /* two shadows doing different jobs: a hard black one so the metal has an
+       edge to sit against, and a wide green one so the letters look like they
+       are being lit by the floor rather than pasted onto it */
+    filter:drop-shadow(0 2px 0 rgba(0,0,0,.92)) drop-shadow(0 0 30px rgba(61,255,110,.28));
+  }
+  :root[data-skin="ffcup"] .cupmark-sub{
+    margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:1.4px;color:var(--muted);text-transform:uppercase;
+  }
+
+  /* ---- exposed tube: the countdown ---- */
+  :root[data-skin="ffcup"] .cup-cd{
+    display:grid;grid-template-columns:repeat(4,minmax(64px,1fr));gap:9px;
+    max-width:460px;
+  }
+  :root[data-skin="ffcup"] .cup-cd-cell{
+    position:relative;overflow:hidden;text-align:center;
+    padding:13px 5px 10px;border-radius:var(--r-sm);
+    border:1px solid transparent;
+    background:linear-gradient(180deg,#0b0d0c 0%,#000 58%,#070908 100%) padding-box,
+               var(--chrome-rim) border-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.3),
+      inset 0 -22px 30px -26px rgba(61,255,110,.55),
+      0 22px 36px -26px rgba(0,0,0,1);
+  }
+  /* a very fine scanline over the wells — the digits should look like they
+     are being read off a screen, not set in a font */
+  :root[data-skin="ffcup"] .cup-cd-cell::after{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.42) 0 1px, transparent 1px 3px);
+    opacity:.5;
+  }
+  :root[data-skin="ffcup"] .cup-cd-cell b{
+    display:block;font-family:'JetBrains Mono',monospace;font-weight:800;
+    font-size:clamp(21px,4.8vw,32px);line-height:1;letter-spacing:.5px;
+    font-variant-numeric:tabular-nums;color:var(--neon-hot);
+    text-shadow:0 0 6px var(--neon), 0 0 20px rgba(61,255,110,.75), 0 0 46px rgba(61,255,110,.35);
+  }
+  :root[data-skin="ffcup"] .cup-cd-cell i{
+    display:block;margin-top:7px;font-style:normal;
+    font-family:'JetBrains Mono',monospace;font-size:7.5px;font-weight:700;
+    letter-spacing:2.4px;text-transform:uppercase;color:var(--muted);
+  }
+  /* the seconds well is the one that is actually moving, so it gets the glow */
+  :root[data-skin="ffcup"] .cup-cd-cell[data-unit="s"] b{
+    animation:cupSecond 1s steps(1,end) infinite;
+  }
+  @keyframes cupSecond{0%,60%{opacity:1}61%,100%{opacity:.82}}
+
+  /* ---- the facts strip ---- */
+  :root[data-skin="ffcup"] .cup-facts{
+    display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;
+  }
+  :root[data-skin="ffcup"] .cup-fact{
+    display:inline-flex;align-items:baseline;gap:7px;
+    padding:6px 12px 7px;border-radius:var(--r-pill);
+    border:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0));
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);
+  }
+  :root[data-skin="ffcup"] .cup-fact b{
+    font-size:11px;font-weight:800;color:var(--ink);letter-spacing:1px;
+  }
+
+  /* ---- the stage rail: six dots on a wire ---- */
+  :root[data-skin="ffcup"] .cup-rail{
+    display:flex;align-items:flex-start;margin-top:22px;
+  }
+  :root[data-skin="ffcup"] .cup-step{
+    flex:1 1 0;position:relative;min-width:0;padding-top:17px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;
+    letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  /* the wire runs through the label, not above it, so the rail is one object */
+  :root[data-skin="ffcup"] .cup-step::before{
+    content:'';position:absolute;top:4px;left:0;right:0;height:1px;
+    background:rgba(255,255,255,.075);
+  }
+  :root[data-skin="ffcup"] .cup-step:first-child::before{left:50%}
+  :root[data-skin="ffcup"] .cup-step:last-child::before{right:50%}
+  :root[data-skin="ffcup"] .cup-step::after{
+    content:'';position:absolute;top:1px;left:50%;margin-left:-3.5px;
+    width:7px;height:7px;border-radius:50%;
+    background:#0a0c0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);
+  }
+  /* burnt through: everything the event has already been */
+  :root[data-skin="ffcup"] .cup-step.done{color:var(--muted)}
+  :root[data-skin="ffcup"] .cup-step.done::before{background:rgba(61,255,110,.45)}
+  :root[data-skin="ffcup"] .cup-step.done::after{
+    background:var(--neon);box-shadow:0 0 10px var(--neon), 0 0 22px rgba(61,255,110,.4);
+  }
+  /* where it is right now — the only element on the rail that moves */
+  :root[data-skin="ffcup"] .cup-step.now{
+    color:var(--neon-hot);text-shadow:0 0 14px rgba(61,255,110,.6);
+  }
+  :root[data-skin="ffcup"] .cup-step.now::before{
+    background:linear-gradient(90deg, rgba(61,255,110,.45), rgba(61,255,110,.08));
+  }
+  /* the live dot is a white-hot core, which on its own reads DIMMER than the
+     saturated green ones behind it — the halo is what makes it the brightest
+     thing on the wire */
+  :root[data-skin="ffcup"] .cup-step.now::after{
+    background:radial-gradient(circle, var(--neon-hot) 0 40%, var(--neon) 100%);
+    box-shadow:
+      0 0 0 4px rgba(61,255,110,.22),
+      0 0 0 7px rgba(61,255,110,.08),
+      0 0 16px var(--neon), 0 0 40px rgba(61,255,110,.8);
+    animation:hudPulse 2.1s ease-in-out infinite;
+  }
+
+  /* ---- the line and the way in ---- */
+  :root[data-skin="ffcup"] .cupmark-foot{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    margin-top:22px;padding-top:18px;border-top:1px solid var(--line);
+  }
+  :root[data-skin="ffcup"] .cupmark-line{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;
+    color:var(--ink);min-width:0;
+  }
+  :root[data-skin="ffcup"] .cupmark-line b{color:var(--neon);text-shadow:0 0 12px rgba(61,255,110,.55)}
+  :root[data-skin="ffcup"] .cup-cta{
+    display:inline-flex;align-items:center;gap:10px;cursor:pointer;
+    padding:11px 20px;border-radius:var(--r-pill);
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;
+    letter-spacing:2.4px;text-transform:uppercase;color:#00180a;
+    border:1px solid rgba(204,255,221,.65);
+    /* the only filled element in the skin: the tube pointed straight at you */
+    background:linear-gradient(180deg, var(--neon-hot) 0%, var(--neon) 42%, #14bf46 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.8),
+      inset 0 -8px 12px -10px rgba(0,0,0,.5),
+      0 0 28px -4px var(--accent-glow),
+      0 20px 38px -20px rgba(0,0,0,1);
+    transition:transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease, filter .35s ease;
+  }
+  :root[data-skin="ffcup"] .cup-cta span{font-size:14px;line-height:1;transition:transform .35s cubic-bezier(.16,1,.3,1)}
+  :root[data-skin="ffcup"] .cup-cta:hover{
+    transform:translateY(-2px);filter:brightness(1.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.9),
+      inset 0 -8px 12px -10px rgba(0,0,0,.45),
+      0 0 44px -2px var(--accent-glow),
+      0 28px 50px -20px rgba(0,0,0,1);
+  }
+  :root[data-skin="ffcup"] .cup-cta:hover span{transform:translateX(4px)}
+  :root[data-skin="ffcup"] .cup-cta:active{transform:translateY(0)}
+
+  /* ---- mini: the same object seen from further away ----------------
+     Archive and ref mode get a single lit bar rather than the full slab —
+     enough to keep the cup present on every screen without shouting over
+     a view somebody opened to do something else. */
+  /* the inner glows are tuned for a slab half a metre tall; on a 50px bar the
+     same values fill the whole thing and it stops being black */
+  :root[data-skin="ffcup"] .cupmark.mini{
+    margin-bottom:18px;animation:none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.34),
+      inset 0 -1px 0 rgba(255,255,255,.1),
+      inset 0 0 50px -34px rgba(61,255,110,.5),
+      0 30px 60px -34px rgba(0,0,0,1),
+      0 0 34px -22px rgba(61,255,110,.2);
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-void::after{opacity:.4}
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-body{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:13px clamp(14px,2.4vw,20px);
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-name{
+    font-size:clamp(13px,2.6vw,17px);letter-spacing:2.6px;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 0 12px rgba(61,255,110,.22));
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cup-clock{
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;
+    font-variant-numeric:tabular-nums;letter-spacing:1.4px;color:var(--neon-hot);
+    text-shadow:0 0 8px var(--neon), 0 0 24px rgba(61,255,110,.5);
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cup-clock i{
+    font-style:normal;color:var(--dim);text-shadow:none;margin:0 2px;
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cup-cta{
+    margin-left:auto;padding:8px 15px;font-size:9px;letter-spacing:2px;
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-void::before{opacity:.24}
+
+  /* ---- the cup, carried into the navigation ----------------------
+     A lit pip on every route that leads to the event: the Events tab on
+     desktop, the More button on a phone. It is the smallest possible
+     amount of chrome that still says "something is on". */
+  :root[data-skin="ffcup"] .tb-tab[data-view="events"],
+  :root[data-skin="ffcup"] .bb-tab.bb-more{position:relative}
+  :root[data-skin="ffcup"] .cup-flag{
+    display:block;position:absolute;top:6px;right:6px;
+    width:6px;height:6px;border-radius:50%;background:var(--neon-hot);
+    box-shadow:0 0 8px var(--neon), 0 0 20px rgba(61,255,110,.65);
+    animation:hudPulse 2.4s ease-in-out infinite;
+  }
+  :root[data-skin="ffcup"] .bb-tab.bb-more .cup-flag{top:5px;right:calc(50% - 20px)}
+
+  /* the badge in the top bar is the shortest route to the event, so it
+     behaves like one */
+  :root[data-skin="ffcup"] .ffcup-chip{cursor:pointer;transition:box-shadow .4s ease, transform .4s cubic-bezier(.16,1,.3,1)}
+  :root[data-skin="ffcup"] .ffcup-chip:hover{
+    transform:translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.7),
+      inset 0 -1px 0 rgba(204,255,221,.3),
+      0 0 30px -6px var(--accent-glow),
+      0 16px 26px -14px rgba(0,0,0,1);
+  }
+
+  /* the cup takes the top of the mobile sheet, above the utility grid */
+  :root[data-skin="ffcup"] .ms-cup{
+    display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;
+    margin:0 0 12px;padding:14px 16px;cursor:pointer;text-align:left;
+    border-radius:var(--r-md);border:1px solid transparent;
+    background:
+      linear-gradient(180deg, #141a17 0%, #080b09 40%, #000 100%) padding-box,
+      var(--chrome-rim) border-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.4),
+      inset 0 -26px 40px -34px rgba(61,255,110,.6),
+      0 0 26px -14px var(--accent-glow);
+  }
+  :root[data-skin="ffcup"] .ms-cup b{
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;
+    letter-spacing:3px;text-transform:uppercase;
+    background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9));
+  }
+  :root[data-skin="ffcup"] .ms-cup i{
+    font-style:normal;font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    letter-spacing:1.6px;text-transform:uppercase;color:var(--neon);
+    text-shadow:0 0 10px rgba(61,255,110,.6);
+  }
+
+  /* the promo card in the tournament list gets the same tube treatment,
+     so the list and the marquee read as one event */
+  :root[data-skin="ffcup"] .pend.promo{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.34),
+      inset 0 0 44px -20px rgba(61,255,110,.4),
+      0 0 34px -18px var(--accent-glow),
+      0 44px 84px -36px rgba(0,0,0,1)!important;
+  }
+
+  @media(max-width:560px){
+    :root[data-skin="ffcup"] .cup-cd{gap:6px}
+    :root[data-skin="ffcup"] .cup-cd-cell{padding:10px 3px 8px}
+    :root[data-skin="ffcup"] .cup-cd-cell i{letter-spacing:1.4px;font-size:7px}
+    :root[data-skin="ffcup"] .cup-step{font-size:7px;letter-spacing:.8px}
+    :root[data-skin="ffcup"] .cupmark-foot{gap:12px}
+    :root[data-skin="ffcup"] .cup-cta{width:100%;justify-content:center}
+    :root[data-skin="ffcup"] .cupmark.mini .cup-cta{width:auto}
+  }
+
+  /* -- 9. motion & mobile budget ----------------------------------- */
   @media(max-width:860px){
     /* the ring is the one expensive layer; shrink and calm it on phones */
     :root[data-skin="ffcup"] #hudGrid::before{
@@ -4165,11 +4595,22 @@
     }
     :root[data-skin="ffcup"] #hudGrid::after{animation:none;opacity:.3}
     :root[data-skin="ffcup"] section{animation-duration:14s}
+    /* the marquee's floor is a full-width transformed layer — the one thing
+       on it worth paying for on a phone is the sweep, so the grid holds still */
+    :root[data-skin="ffcup"] .cupmark-void::before{animation:none;opacity:.3}
+    :root[data-skin="ffcup"] .cupmark{animation-duration:16s}
   }
   @media(prefers-reduced-motion:reduce){
     :root[data-skin="ffcup"] section,
     :root[data-skin="ffcup"] .tb-ball,
     :root[data-skin="ffcup"] .ffcup-chip,
+    :root[data-skin="ffcup"] .cupmark,
+    :root[data-skin="ffcup"] .cupmark::after,
+    :root[data-skin="ffcup"] .cupmark-void::before,
+    :root[data-skin="ffcup"] .cupmark-status i,
+    :root[data-skin="ffcup"] .cup-cd-cell[data-unit="s"] b,
+    :root[data-skin="ffcup"] .cup-step.now::after,
+    :root[data-skin="ffcup"] .cup-flag,
     :root[data-skin="ffcup"] #hudGrid::before,
     :root[data-skin="ffcup"] #hudGrid::after{animation:none!important}
     :root[data-skin="ffcup"] .reveal-in{animation:none}
@@ -4203,7 +4644,8 @@
       <span class="tb-title">FGTA</span>
       <span class="tb-live" id="tagline">loading…</span>
     </div>
-    <span class="ffcup-chip" id="ffcupChip" title="FF Cup tournament"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 1</i></span>
+    <span class="ffcup-chip" id="ffcupChip" title="Open the FF Cup" role="button" tabindex="0"
+      onclick="openCupEvent()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCupEvent()}"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 1</i></span>
   </div>
 
   <nav class="tb-tabs" id="topTabs">
@@ -4213,7 +4655,7 @@
     <button class="tb-tab" data-view="predict" onclick="showView('predict')">Predict</button>
     <button class="tb-tab" data-view="analytics" onclick="showView('analytics')">Analytics</button>
     <button class="tb-tab" data-view="court" onclick="showView('court')">Court</button>
-    <button class="tb-tab" data-view="events" onclick="showView('events')">Events</button>
+    <button class="tb-tab" data-view="events" onclick="showView('events')">Events<span class="cup-flag" aria-hidden="true"></span></button>
     <button class="tb-tab" data-view="doubles" onclick="showView('doubles')">Doubles</button>
     <button class="tb-tab" data-view="training" onclick="showView('training')">Training</button>
     <button class="tb-tab" data-view="dms" onclick="showView('dms')">Messages <span class="tab-count" id="dmBadge"></span></button>
@@ -4246,9 +4688,15 @@
 <script>
 /* ===== FF CUP WINDOW =====
    The tournament's two dates live here and nowhere else — the badge in the
-   top bar and the lockup on the load screen both read from them, so they
-   cannot drift apart. Runs standalone (not inside the app script) so the
-   branding is correct even if the app itself fails to boot.
+   top bar, the lockup on the load screen and the marquee on the landing
+   page all read from them, so they cannot drift apart. Runs standalone
+   (not inside the app script) so the branding is correct even if the app
+   itself fails to boot.
+
+   It publishes window.FFCUP for the app: the marquee prefers the real
+   tournament row when one exists, and falls back to this when the league
+   has not created it yet — so the event is promoted from the day the
+   dates are set, not the day the draw is made.
 
    When the cup is over this drops data-skin and the app is back to its
    normal self on the next paint; deleting the CSS block is then the only
@@ -4268,6 +4716,13 @@
   var range = short(START)+' – '+short(END);
   [document.getElementById('ffcupDates'), document.querySelector('.ls-cup i')]
     .forEach(function(el){ if(el) el.textContent = range; });
+  window.FFCUP = {
+    name:  'FF Cup',
+    start: start,          // Date — first day, 00:00 local
+    end:   end,            // Date — last day, 23:59 local
+    range: range,          // "Aug 17 – Sep 1"
+    state: root.dataset.cup
+  };
 })();
 </script>
 
@@ -4284,7 +4739,7 @@
   <button class="bb-tab" data-view="analytics" onclick="showView('analytics')">
     <span class="bb-ico">📊</span><span class="bb-lbl">Stats</span></button>
   <button class="bb-tab bb-more" onclick="toggleMoreSheet()">
-    <span class="bb-ico">⋯</span><span class="bb-lbl">More</span></button>
+    <span class="bb-ico">⋯</span><span class="bb-lbl">More</span><span class="cup-flag" aria-hidden="true"></span></button>
 </nav>
 
 <!-- mobile "more" sheet for Events / Messages / utilities (also outside .wrap) -->
@@ -4292,6 +4747,8 @@
   <div class="ms-backdrop" onclick="toggleMoreSheet()"></div>
   <div class="ms-panel">
     <div class="ms-handle"></div>
+    <!-- the cup takes the top row of the sheet on its own for the length of the event -->
+    <button class="ms-cup" onclick="openCupEvent();toggleMoreSheet()"><b>FF Cup</b><i id="msCupLine">the event is on</i></button>
     <div class="ms-grid">
       <button onclick="showView('doubles');toggleMoreSheet()"><span>👥</span>Doubles</button>
       <button onclick="showView('training');toggleMoreSheet()"><span>🏋</span>Training</button>
@@ -4330,6 +4787,8 @@
   <!-- ===== LADDER VIEW ===== -->
   <!-- ===== FEED VIEW ===== -->
   <div id="view-feed" style="display:none">
+    <!-- the cup outranks the timeline: nothing renders above this while the event is on -->
+    <div class="cup-mount" data-cup-mount="full"></div>
     <div id="otdBox" style="display:none"></div>
     <div id="tickerWrap" class="ticker-wrap" style="display:none">
       <span class="ticker-live">● LIVE</span>
@@ -4428,6 +4887,10 @@
   </div><!-- /view-feed -->
 
   <div id="view-ladder" style="display:none">
+
+  <!-- ===== FF CUP MARQUEE — sits above the broadcast hero, i.e. above
+       everything else on the landing page, for the length of the event ===== -->
+  <div class="cup-mount" data-cup-mount="full"></div>
 
   <!-- ===== UPCOMING MATCH BROADCAST (compact, above the hero) ===== -->
   <div id="upcomingBcast"></div>
@@ -4710,6 +5173,7 @@
 
   <!-- ===== MATCHES VIEW ===== -->
   <div id="view-matches" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <section>
       <div class="sec-label">All matches <span class="count-pill" id="allCount">0</span></div>
       <div class="match-filter">
@@ -4745,6 +5209,7 @@
 
   <!-- ===== POINT TRACKER ===== -->
   <div id="view-tracker" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <section>
       <div class="sec-label">Point tracker <span class="pred-tag">Ref mode</span></div>
       <div class="panel">
@@ -4764,6 +5229,7 @@
 
   <!-- ===== PREDICT: FORECAST SUB-VIEW ===== -->
   <div id="view-predict-forecast" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
 
     <section>
       <div class="sec-label">Hypothetical ladder <span class="pred-tag">What-if</span></div>
@@ -5161,6 +5627,7 @@
 
   <!-- ===== PRO VIEW ===== -->
   <div id="view-pro" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <div id="proBody"></div>
   </div><!-- /view-pro -->
 
@@ -5203,6 +5670,7 @@
 
   <!-- ===== EVENTS VIEW ===== -->
   <div id="view-events" style="display:none">
+    <div class="cup-mount" data-cup-mount="full"></div>
     <section id="newTournSec" style="display:none">
       <div class="sec-label">New tournament</div>
       <div class="panel">
@@ -5241,6 +5709,7 @@
 
   <!-- ===== DOUBLES VIEW ===== -->
   <div id="view-doubles" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <section>
       <div class="sec-label">Report a doubles match</div>
       <div class="panel">
@@ -5272,6 +5741,7 @@
 
   <!-- ===== TRAINING VIEW ===== -->
   <div id="view-training" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <section>
       <div class="sec-label">Log a casual session</div>
       <div class="panel">
@@ -5325,6 +5795,7 @@
 
   <!-- ===== COURT VIEW ===== -->
   <div id="view-court" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
     <section style="margin-top:24px">
       <div class="sec-label">Court status <span class="count-pill" id="ctFresh">—</span></div>
       <div id="ctHero"></div>
@@ -7104,7 +7575,14 @@ function renderTickerBar(){
     document.body.appendChild(bar);
   }
   tickerQueue = tickerQueue.slice(-12);
-  const text = tickerQueue.join("     •     ") || "🎾 FGTA live ticker — new results and comments scroll here";
+  /* while the cup is on it owns the empty ticker too — the one strip that is
+     visible on every screen shouldn't be advertising the app to itself */
+  const idle = (document.documentElement.getAttribute("data-skin") === "ffcup" && window.FFCUP)
+    ? (document.documentElement.getAttribute("data-cup") === "pre"
+        ? `🏆 ${window.FFCUP.name} · ${window.FFCUP.range} — the field is filling up`
+        : `🏆 ${window.FFCUP.name} is live · ${window.FFCUP.range} — results scroll here`)
+    : "🎾 FGTA live ticker — new results and comments scroll here";
+  const text = tickerQueue.join("     •     ") || idle;
   bar.innerHTML = `<div style="display:inline-block;white-space:nowrap;padding-left:100%;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);animation:tickerScroll 22s linear infinite">${esc(text)}</div>`;
 }
 window.renderTickerBar=renderTickerBar;
@@ -9710,6 +10188,7 @@ function render(){
 
   refreshOdds();
   renderHealth();
+  renderCupMarquee();
   if(activeView==="feed") renderFeed();
   drawChart(standings);
   const approvedCount = matches.filter(m=>m.status==="approved").length;
@@ -9830,6 +10309,9 @@ function _showViewCore(v){
   // events/dms live in the "more" sheet — highlight the More button for them
   const more=document.querySelector(".bb-more");
   if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court");
+  /* the marquee mounts sit inside the views, so a view that has just been
+     shown needs it filled in — this is what keeps the cup on every screen */
+  renderCupMarquee();
   moveTabIndicator();
   window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -12509,7 +12991,275 @@ async function goLiveNow(tid){
 }
 window.goLiveNow = goLiveNow;
 
+/* ============================================================
+   FF CUP — THE MARQUEE
+
+   The event's promotion layer: one component, mounted into every
+   .cup-mount on the page (landing, home, events, archive, ref
+   mode), so for the length of the cup it is the first thing on
+   whichever screen you open.
+
+   It is dressing, not a feature. It renders only while the skin is
+   on, so the day after the final — when the FF CUP WINDOW script
+   drops data-skin — every marquee empties itself on the next paint
+   and the app is back to its ordinary shape with nothing to undo.
+
+   Nothing here is a second copy of the tournament. The marquee
+   reads the real row (field, stage, next fixture, champion) and
+   only falls back to window.FFCUP's dates while that row does not
+   exist yet, so the cup is promoted from the day the dates are set
+   rather than the day the draw is made.
+   ============================================================ */
+
+/* the cup by name, so a renamed or re-created row is still found */
+const CUP_NAME_RX = /fat[\s._-]?fitter|ff\s*cup/i;
+
+function cupSkinOn(){ return document.documentElement.getAttribute("data-skin") === "ffcup"; }
+
+/* the event being promoted: the cup itself, or — if it hasn't been named
+   that — whatever unfinished tournament the league most recently made */
+function cupTournament(){
+  const all = Array.isArray(tournaments) ? tournaments : [];
+  const newest = list => list.slice()
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0] || null;
+  return newest(all.filter(t=>CUP_NAME_RX.test(t.name||"")))
+      || newest(all.filter(t=>t.status!=="completed"))
+      || null;
+}
+
+/* pre → live → done. Derived from the row when there is one, from the
+   branding window when there isn't. */
+function cupPhase(t){
+  if(t && t.status === "completed") return "done";
+  if(t && tournIsUpcoming(t)) return "pre";
+  if(t) return "live";
+  const w = window.FFCUP;
+  return (w && Date.now() < w.start.getTime()) ? "pre" : "live";
+}
+
+/* what the clock runs to: first ball while it's upcoming, the last day of
+   the window once it's on, nothing at all once it's over */
+function cupTarget(t, phase){
+  const w = window.FFCUP;
+  if(phase === "pre"){
+    if(t && t.start_date) return new Date(t.start_date+"T00:00:00").getTime();
+    return w ? w.start.getTime() : null;
+  }
+  if(phase === "live" && w) return w.end.getTime();
+  return null;
+}
+
+function cupParts(ms){
+  const v = Math.max(0, ms);
+  return {d:Math.floor(v/86400000), h:Math.floor(v/3600000)%24,
+          m:Math.floor(v/60000)%60, s:Math.floor(v/1000)%60};
+}
+const cupPad = n => String(n).padStart(2,"0");
+
+/* the six things the event can be, in order — the same spine as the
+   Robin+ stepper, so the marquee and the bracket page never disagree */
+const CUP_STAGES = [["setup","Roster"],["group","Group"],["playoff","Cut"],
+                    ["semis","Semis"],["final","Final"],["done","Champion"]];
+
+function cupStage(t, phase){
+  if(phase === "done") return "done";
+  if(!t || t.format !== "robin2") return phase === "pre" ? "setup" : null;
+  try{ return rpSnapshot(t).stage; }catch(e){ return null; }
+}
+
+/* the field, as far as it is known */
+function cupField(t){
+  if(!t) return 0;
+  try{ const s = rpRead(t); if(s && s.roster) return s.roster.length; }catch(e){}
+  const names = new Set();
+  tournGames(t.id).forEach(m=>{ names.add(m.p1); names.add(m.p2); });
+  return names.size;
+}
+
+/* the single most useful sentence about the event right now */
+function cupLine(t, phase){
+  if(phase === "done"){
+    return t && t.champion
+      ? `<b>${esc(t.champion)}</b> took it.`
+      : "The cup is done.";
+  }
+  if(!t) return "Not drawn yet — the field opens in Events.";
+  if(t.format !== "robin2"){
+    const n = tournGames(t.id).length;
+    return n ? `${n} game${n!==1?"s":""} on record.` : "Bracket opens when the event goes live.";
+  }
+  let snap = null;
+  try{ snap = rpSnapshot(t); }catch(e){}
+  const state = snap && snap.state;
+  if(!state || !state.cycle || !state.cycle.length){
+    const n = cupField(t);
+    return n ? `<b>${n}</b> in the field — the draw is next.` : "Field open — nobody is in yet.";
+  }
+  const nextGroup = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
+  if(nextGroup) return `Next in the ring: <b>${esc(nextGroup.p1)}</b> vs <b>${esc(nextGroup.p2)}</b>`;
+  if(snap.resolved && snap.resolved.pending && snap.resolved.pending.length){
+    const g = snap.resolved.pending[0];
+    return `Decider for the last spot: <b>${esc(g.p1)}</b> vs <b>${esc(g.p2)}</b>`;
+  }
+  if(snap.br){
+    const g = snap.br.semis.concat([snap.br.final])
+      .find(x=>x && x.p1 && x.p2 && !x.winner);
+    if(g) return `Next: <b>${esc(g.p1)}</b> vs <b>${esc(g.p2)}</b>`;
+  }
+  return "Every game is in — the cup is settled.";
+}
+
+const CUP_PHASE_LABEL = {pre:"Upcoming", live:"Live now", done:"Complete"};
+
+/* A bare set of digits is ambiguous — the same clock counts to first serve
+   before the cup and to the last day once it's running, so it says which. */
+function cupCountdownHtml(target, phase){
+  if(!target) return "";
+  const p = cupParts(target - Date.now());
+  const cell = (unit, val, label) =>
+    `<div class="cup-cd-cell" data-unit="${unit}"><b data-cup-cd="${unit}">${val}</b><i>${label}</i></div>`;
+  return `<div class="cup-clockbox">
+    <div class="cup-cd-cap">${phase === "pre" ? "First serve in" : "Cup closes in"}</div>
+    <div class="cup-cd">
+      ${cell("d", p.d, "days")}${cell("h", cupPad(p.h), "hrs")}
+      ${cell("m", cupPad(p.m), "min")}${cell("s", cupPad(p.s), "sec")}
+    </div>
+  </div>`;
+}
+
+function cupRailHtml(stage){
+  if(!stage) return "";
+  const at = CUP_STAGES.findIndex(s=>s[0]===stage);
+  if(at < 0) return "";
+  return `<div class="cup-rail">${CUP_STAGES.map(([key,label],i)=>
+    `<div class="cup-step ${i===at?"now":i<at?"done":""}">${label}</div>`).join("")}</div>`;
+}
+
+function cupMarqueeHtml(t, variant){
+  const phase  = cupPhase(t);
+  const target = cupTarget(t, phase);
+  const name   = t ? t.name : (window.FFCUP ? window.FFCUP.name : "FF Cup");
+  const window_ = window.FFCUP ? window.FFCUP.range : "";
+  const attrs  = `data-phase="${phase}"${target?` data-cup-target="${target}"`:""}`;
+  const statusLabel = phase === "pre" && t && t.start_date
+    ? `Starts ${tournStartLabel(t)}` : CUP_PHASE_LABEL[phase];
+
+  if(variant === "mini"){
+    const p = target ? cupParts(target - Date.now()) : null;
+    const clock = p
+      ? `<span class="cup-clock"><span data-cup-cd="d">${p.d}</span>d<i>·</i><span data-cup-cd="h">${cupPad(p.h)}</span><i>:</i><span data-cup-cd="m">${cupPad(p.m)}</span><i>:</i><span data-cup-cd="s">${cupPad(p.s)}</span></span>`
+      : "";
+    return `<div class="cupmark mini" ${attrs}>
+      <div class="cupmark-void" aria-hidden="true"></div>
+      <div class="cupmark-body">
+        <span class="cupmark-status"><i></i>${esc(CUP_PHASE_LABEL[phase])}</span>
+        <span class="cupmark-name">${esc(name)}</span>
+        ${clock}
+        <button class="cup-cta" onclick="openCupEvent()">Enter<span>&rsaquo;</span></button>
+      </div>
+    </div>`;
+  }
+
+  const facts = [];
+  const field = cupField(t);
+  if(field) facts.push(`<span class="cup-fact"><b>${field}</b> in the field</span>`);
+  if(t){
+    const played = tournGames(t.id).length;
+    if(played) facts.push(`<span class="cup-fact"><b>${played}</b> played</span>`);
+    facts.push(`<span class="cup-fact">${esc(t.counts_elo===false?"Exhibition":"Counts for Elo")}</span>`);
+  }
+
+  return `<div class="cupmark" ${attrs}>
+    <div class="cupmark-void" aria-hidden="true"></div>
+    <div class="cupmark-body">
+      <div class="cupmark-head">
+        <span class="cupmark-status"><i></i>${esc(statusLabel)}</span>
+        ${window_?`<span class="cupmark-window">${esc(window_)}</span>`:""}
+      </div>
+      <h2 class="cupmark-name">${esc(name)}</h2>
+      <div class="cupmark-sub">${esc(t ? tournFormatLabel(t) : "Robin+ — 2 games each, top 4, brackets")}</div>
+      ${facts.length?`<div class="cup-facts">${facts.join("")}</div>`:""}
+      ${cupCountdownHtml(target, phase)}
+      ${cupRailHtml(cupStage(t, phase))}
+      <div class="cupmark-foot">
+        <span class="cupmark-line">${cupLine(t, phase)}</span>
+        <button class="cup-cta" onclick="openCupEvent()">Enter the event<span>&rsaquo;</span></button>
+      </div>
+    </div>
+  </div>`;
+}
+
+let cupClock = null, cupLastPhase = null;
+
+function renderCupMarquee(){
+  const mounts = document.querySelectorAll(".cup-mount");
+  if(!mounts.length) return;
+  /* off-skin the whole thing evaporates — no cup, no promotion, no markup */
+  if(!cupSkinOn()){
+    mounts.forEach(m=>{ m.innerHTML = ""; });
+    const sheetLine = $("msCupLine"); if(sheetLine) sheetLine.textContent = "";
+    return;
+  }
+  const t = cupTournament();
+  cupLastPhase = cupPhase(t);
+  mounts.forEach(m=>{
+    m.innerHTML = cupMarqueeHtml(t, m.getAttribute("data-cup-mount") === "mini" ? "mini" : "full");
+  });
+  const sheetLine = $("msCupLine");
+  if(sheetLine){
+    sheetLine.textContent = cupLastPhase === "pre"
+      ? (t && t.start_date ? "starts "+tournStartLabel(t) : (window.FFCUP ? window.FFCUP.range : "upcoming"))
+      : cupLastPhase === "done" ? "complete" : "the event is on";
+  }
+  cupStartClock();
+}
+window.renderCupMarquee = renderCupMarquee;
+
+/* One interval for every marquee on the page. It only writes the digits —
+   rebuilding the markup once a second would restart the sweep and drop
+   any focus inside the card. */
+function cupStartClock(){
+  if(cupClock) return;
+  cupClock = setInterval(cupTick, 1000);
+}
+function cupTick(){
+  const marks = document.querySelectorAll(".cupmark[data-cup-target]");
+  if(!marks.length){ clearInterval(cupClock); cupClock = null; return; }
+  let hitZero = false;
+  marks.forEach(mk=>{
+    const left = Number(mk.getAttribute("data-cup-target")) - Date.now();
+    if(left <= 0) hitZero = true;
+    const p = cupParts(left);
+    const put = (unit, val)=>{
+      const el = mk.querySelector('[data-cup-cd="'+unit+'"]');
+      if(el && el.textContent !== val) el.textContent = val;
+    };
+    put("d", String(p.d)); put("h", cupPad(p.h)); put("m", cupPad(p.m)); put("s", cupPad(p.s));
+  });
+  /* the clock reaching zero IS the event starting — re-render once so the
+     marquee flips itself from "starts in" to "live now" with nobody watching.
+     Guarded on the phase actually changing, so a target that stays in the
+     past can't turn this into a re-render every second. */
+  if(hitZero && cupPhase(cupTournament()) !== cupLastPhase) renderCupMarquee();
+}
+
+/* every route into the cup lands here */
+function openCupEvent(){
+  const t = cupTournament();
+  showView("events");
+  if(!t) return;
+  /* showView runs a 300ms wipe before it swaps the view in, so the detail
+     panel is opened on the other side of it */
+  setTimeout(()=>{
+    openTournament(t.id);
+    const d = $("tournDetail");
+    if(d) d.scrollIntoView({behavior:"smooth", block:"start"});
+  }, 360);
+}
+window.openCupEvent = openCupEvent;
+
 function renderTournaments(){
+  renderCupMarquee();
   $("newTournSec").style.display = isAdmin ? "block" : "none";
   const list = $("tournList");
   $("tournCount").textContent = tournaments.length;
