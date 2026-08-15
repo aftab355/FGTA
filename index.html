@@ -3335,6 +3335,130 @@
   }
   .view-enter{animation:viewEnter .38s cubic-bezier(.16,1,.3,1) both}
 
+  /* ============================================================
+     ROBIN+ — the 2-games-each group stage feeding a 4-player
+     knockout. Everything here is namespaced .rp-* so it can be
+     lifted out whole into the target codebase.
+     ============================================================ */
+  .rp-steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .rp-step{flex:1 1 90px;min-width:82px;position:relative;padding:9px 10px 8px;border-radius:var(--r-sm);
+    background:var(--panel-2);border:1px solid var(--line-soft);text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.1px;text-transform:uppercase;
+    color:var(--dim);transition:.28s cubic-bezier(.16,1,.3,1)}
+  .rp-step .rp-step-n{display:block;font-size:14px;letter-spacing:0;margin-bottom:3px;color:var(--dim)}
+  .rp-step.done{color:var(--court);border-color:rgba(30,201,221,.35)}
+  .rp-step.done .rp-step-n{color:var(--court)}
+  .rp-step.now{color:var(--ink);border-color:var(--accent);background:var(--accent-dim);
+    box-shadow:0 0 0 1px var(--accent-glow),0 6px 20px -10px var(--accent-glow)}
+  .rp-step.now .rp-step-n{color:var(--accent)}
+
+  .rp-chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .rp-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 8px 6px 6px;border-radius:var(--r-pill);
+    background:var(--panel-2);border:1px solid var(--line-soft);font-size:13px;font-weight:600;color:var(--ink)}
+  .rp-chip .rp-chip-seed{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.6px}
+  .rp-chip-x{border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;border-radius:50%}
+  .rp-chip-x:hover{color:var(--danger);background:rgba(255,59,59,.12)}
+  .rp-chip.empty{color:var(--dim);font-weight:400;border-style:dashed}
+
+  .rp-circle{display:block;width:100%;max-width:420px;margin:6px auto 2px;overflow:visible}
+  .rp-circle .rp-edge{stroke:var(--line);stroke-width:2;transition:.3s cubic-bezier(.16,1,.3,1)}
+  .rp-circle .rp-edge.played{stroke:var(--court);stroke-width:2.5}
+  .rp-circle .rp-edge.next{stroke:var(--accent);stroke-width:3;stroke-dasharray:5 4;animation:rpDash 1.1s linear infinite}
+  @keyframes rpDash{to{stroke-dashoffset:-18}}
+  .rp-circle .rp-node{fill:var(--panel-2);stroke:var(--line);stroke-width:1.5}
+  .rp-circle .rp-node.qual{stroke:var(--ball);stroke-width:2.5}
+  .rp-circle .rp-nlabel{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--ink);text-anchor:middle;font-weight:600}
+  .rp-circle .rp-nsub{font-family:'JetBrains Mono',monospace;font-size:8px;fill:var(--dim);text-anchor:middle}
+
+  .rp-fix{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:8px;
+    transition:.24s cubic-bezier(.16,1,.3,1)}
+  .rp-fix.clickable{cursor:pointer}
+  .rp-fix.clickable:hover{border-color:var(--muted);transform:translateX(2px)}
+  .rp-fix.up{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow)}
+  .rp-fix.done{opacity:.72}
+  .rp-fix-n{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);min-width:26px}
+  .rp-fix-main{flex:1;min-width:0}
+  .rp-fix-line{font-size:13.5px;color:var(--ink);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .rp-fix-line .vs{color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px}
+  .rp-fix-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim);margin-top:4px;letter-spacing:.4px}
+  .rp-qual{height:3px;border-radius:2px;background:var(--line-soft);width:64px;overflow:hidden;flex:none}
+  .rp-qual span{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--court),var(--ball))}
+
+  .rp-report{margin-top:10px;padding:12px;border-radius:var(--r-sm);background:var(--panel);border:1px solid var(--line)}
+  .rp-winbtns{display:flex;gap:8px;flex-wrap:wrap}
+  .rp-winbtn{flex:1 1 130px;padding:12px;border-radius:var(--r-sm);border:1px solid var(--line);
+    background:var(--panel-2);color:var(--ink);font-weight:700;font-size:13.5px;cursor:pointer;
+    transition:.2s cubic-bezier(.4,0,.2,1)}
+  .rp-winbtn:hover{border-color:var(--ball);color:var(--ball);transform:translateY(-1px)}
+
+  .rp-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+  .rp-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .rp-table td{padding:9px 8px;border-bottom:1px solid var(--line-soft)}
+  .rp-table tr.cut td{border-bottom:2px dashed var(--ball)}
+  .rp-table .rp-pos{font-family:'JetBrains Mono',monospace;color:var(--dim);width:26px}
+  .rp-table .rp-nm{font-weight:600;color:var(--ink)}
+  .rp-table .rp-num{font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:right}
+  .rp-table tr.in .rp-pos{color:var(--ball)}
+  .rp-table tr.bubble{background:rgba(255,177,0,.07)}
+  .rp-table tr.bubble .rp-pos{color:var(--pending)}
+  .rp-table tr.out{opacity:.55}
+  .rp-state{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.8px;text-transform:uppercase;
+    padding:2px 7px;border-radius:6px;margin-left:6px;white-space:nowrap}
+  .rp-state.in{background:rgba(212,255,43,.14);color:var(--ball)}
+  .rp-state.bubble{background:rgba(255,177,0,.15);color:var(--pending)}
+  .rp-state.out{background:var(--line-soft);color:var(--dim)}
+
+  .rp-bracket{display:flex;gap:14px;align-items:stretch;margin-top:6px;overflow-x:auto;padding-bottom:6px}
+  .rp-round{flex:1 1 0;min-width:150px;display:flex;flex-direction:column}
+  .rp-round-body{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
+  .rp-round-h{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--dim);text-align:center;margin-bottom:8px;flex:none}
+  .rp-tie{border:1px solid var(--line-soft);border-radius:var(--r-sm);background:var(--panel-2);overflow:hidden;
+    transition:.24s cubic-bezier(.16,1,.3,1)}
+  .rp-tie.clickable{cursor:pointer}
+  .rp-tie.clickable:hover{border-color:var(--muted)}
+  .rp-tie.live{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow)}
+  .rp-slot{display:flex;align-items:center;gap:8px;padding:9px 10px;font-size:13px;color:var(--muted)}
+  .rp-slot+.rp-slot{border-top:1px solid var(--line-soft)}
+  .rp-slot .rp-sd{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);min-width:14px}
+  .rp-slot.win{color:var(--ink);font-weight:700;background:rgba(30,201,221,.08)}
+  .rp-slot.lose{opacity:.5;text-decoration:line-through}
+  .rp-slot.tbd{color:var(--dim);font-style:italic}
+
+  .rp-champ{margin-top:14px;padding:26px 20px;text-align:center;border-radius:var(--r-lg);
+    background:linear-gradient(160deg,rgba(255,204,0,.14),var(--panel-2));border:1px solid rgba(255,204,0,.35)}
+  .rp-champ-t{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+  .rp-champ-n{font-size:28px;font-weight:800;color:var(--ink);margin-top:6px;letter-spacing:-.5px}
+  .rp-champ-s{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+  .rp-why{margin-top:10px;padding:12px 14px;border-radius:var(--r-sm);background:var(--panel-2);border:1px dashed var(--line)}
+  .rp-why summary{cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--dim);list-style:none}
+  .rp-why summary::-webkit-details-marker{display:none}
+  .rp-why summary:hover{color:var(--court)}
+  .rp-why-body{font-size:12.5px;color:var(--muted);line-height:1.75;margin-top:10px}
+  .rp-why-body b{color:var(--ink)}
+  .rp-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .rp-metric{flex:1 1 96px;padding:9px 10px;border-radius:var(--r-sm);background:var(--panel);border:1px solid var(--line-soft)}
+  .rp-metric-v{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--ink)}
+  .rp-metric-l{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-top:3px}
+
+  .rp-warn{margin-top:10px;padding:10px 12px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.6;
+    background:rgba(255,177,0,.09);border:1px solid rgba(255,177,0,.3);color:var(--muted)}
+  .rp-warn b{color:var(--pending)}
+
+  @media(max-width:760px){
+    .rp-step{flex:1 1 60px;min-width:60px;padding:8px 4px;font-size:8px;letter-spacing:.6px}
+    .rp-bracket{flex-direction:column}
+    .rp-round{min-width:0}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .rp-circle .rp-edge.next{animation:none}
+    .rp-fix.clickable:hover{transform:none}
+  }
+
 </style>
 <body>
 <div id="hudGrid" aria-hidden="true"></div>
@@ -4339,7 +4463,8 @@
         <div class="grid2">
           <div><label>Name</label><input id="tnName" placeholder="FGTA Open" autocomplete="off"></div>
           <div><label>Format</label>
-            <select id="tnFormat">
+            <select id="tnFormat" onchange="tnFormatHint()">
+              <option value="robin2">Robin+ — 2 games each, top 4, then brackets</option>
               <option value="knockout">Knockout</option>
               <option value="roundrobin">Round-robin</option>
               <option value="hybrid">Hybrid — top 3 auto-qualify + play-in + knockout</option>
@@ -4354,6 +4479,7 @@
           <div><label>Start date <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional)</span></label>
             <input id="tnStartDate" type="date"></div>
         </div>
+        <div class="pred-hint" id="tnFormatHint" style="margin-top:8px">Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder.</div>
         <div class="pred-hint" style="margin-top:8px">Leave the start date blank to open it right away. Set a future date and it shows as an upcoming promo card until then.</div>
         <button class="btn" onclick="createTournament()">Create tournament</button>
       </div>
@@ -10283,11 +10409,30 @@ function tournStartLabel(t){
   return new Date(t.start_date+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 }
 function tournFormatLabel(t){
-  return t.format==="hybrid" ? "Hybrid" : t.format==="knockout" ? "Knockout" : "Round-robin";
+  return t.format==="robin2" ? "Robin+ — 2 games each, top 4, brackets"
+       : t.format==="hybrid" ? "Hybrid" : t.format==="knockout" ? "Knockout" : "Round-robin";
 }
 function tournFormatTag(t){
-  return t.format==="hybrid" ? "HYB" : t.format==="knockout" ? "KO" : "RR";
+  return t.format==="robin2" ? "R+" : t.format==="hybrid" ? "HYB" : t.format==="knockout" ? "KO" : "RR";
 }
+/* the New-tournament panel explains whichever format is selected */
+function tnFormatHint(){
+  const sel = $("tnFormat"), box = $("tnFormatHint"), elo = $("tnElo");
+  if(!sel || !box) return;
+  const f = sel.value;
+  if(f === "robin2"){
+    box.textContent = "Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder.";
+  } else if(f === "hybrid"){
+    box.textContent = "Hybrid seeds off the live ladder: the top 3 auto-qualify, seeds 4 and 5 play in for the last spot, then semis into a final.";
+  } else if(f === "knockout"){
+    box.textContent = "Straight knockout — you add each game as it's played and crown the winner at the end.";
+  } else {
+    box.textContent = "Round-robin — add games freely; standings are tallied from whatever gets played.";
+  }
+  // Robin+ is an exhibition unless the admin deliberately says otherwise
+  if(elo) elo.value = (f === "robin2") ? "false" : "true";
+}
+window.tnFormatHint = tnFormatHint;
 
 /* hybrid bracket: top 3 on the ladder auto-qualify, seeds #4 and #5 play in for the last spot */
 function hybridSeeds(){
@@ -10320,6 +10465,1138 @@ function renderHybridBracket(t, games){
       <div class="bracket-note">Seeds are read live from current ladder position${tournIsUpcoming(t)?" — final at kickoff":""}. Set each game's bracket round when you add it below.</div>
     </div>`;
 }
+/* ============================================================
+   ROBIN+ — a round-robin/knockout hybrid built for a small field.
+
+   The shape of it: every player plays exactly **two** group games,
+   the top 4 qualify, and those 4 go straight into semis → final.
+   Anyone still level on the qualification line settles it in a 1v1
+   decider rather than on a tiebreak column.
+
+   Two games each means the group stage is a 2-regular graph, i.e.
+   a ring: sit everyone in a circle and each plays their two
+   neighbours. N players, N games, no byes, no one sits out. The
+   interesting question is *which* circle — the ordering decides
+   who draws whom, and with only two games a bad draw is the whole
+   tournament. rpSolve() searches that space (see below).
+
+   Robin+ events are exhibition by default: they never touch Elo.
+   ============================================================ */
+
+const RP_ROUND_GROUP  = "grp";     // grp1..grpN   — group stage
+const RP_ROUND_QUAL   = "qual";    // qual1..qualN — qualification deciders
+const RP_LS_PREFIX    = "fgta_robinplus_";
+const RP_MAX_FIELD    = 12;
+const RP_MIN_FIELD    = 5;         // 4 would qualify everyone; the group has to actually cut someone
+
+/* ---------- persistence ----------------------------------------
+   The roster and the generated ring live in tournaments.bracket
+   (see docs/robin-plus.sql). If that column hasn't been added yet
+   the app keeps working — it mirrors to localStorage and says so
+   in the UI — it just won't sync to other devices.
+   ---------------------------------------------------------------- */
+let rpColumnMissing = false;
+
+function rpRead(t){
+  if(!t) return null;
+  let raw = t.bracket || null;
+  if(!raw){ try{ raw = localStorage.getItem(RP_LS_PREFIX + t.id); }catch(e){} }
+  if(!raw) return null;
+  try{
+    const s = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return (s && s.v) ? s : null;
+  }catch(e){ return null; }
+}
+async function rpWrite(t, state){
+  const raw = JSON.stringify(state);
+  try{ localStorage.setItem(RP_LS_PREFIX + t.id, raw); }catch(e){}
+  t.bracket = raw;                      // keep the in-memory row in step so re-renders see it at once
+  if(rpColumnMissing) return {local:true};
+  const {error} = await sb.from("tournaments").update({bracket: raw}).eq("id", t.id);
+  if(error){
+    // PostgREST reports an unknown column as PGRST204 / 42703 — fall back rather than fail
+    if(error.code === "PGRST204" || error.code === "42703" || /bracket/i.test(error.message||"")){
+      rpColumnMissing = true;
+      return {local:true};
+    }
+    return {error};
+  }
+  return {};
+}
+
+/* ---------- seeded RNG (mulberry32) ----------------------------
+   Re-rolling has to be reproducible: the same seed always gives
+   the same draw, so the schedule can be stored as a seed + result
+   and anyone can verify it wasn't quietly re-rolled after a game.
+   ---------------------------------------------------------------- */
+function rpRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- scoring context ------------------------------------
+   Everything the matchmaker needs about the field, computed once
+   per generation: ladder rating, expected win probability, how
+   recently a pair has already met.
+   ---------------------------------------------------------------- */
+function rpContext(players){
+  const rating = {}, spreadVals = [];
+  players.forEach(n=>{ const r = ratingOf(n, currentStandings); rating[n] = r; spreadVals.push(r); });
+  const lo = Math.min(...spreadVals), hi = Math.max(...spreadVals);
+
+  // recency-weighted rematch count for every pair in the field
+  const rematch = {};
+  const key = (a,b) => a < b ? a+" "+b : b+" "+a;
+  const inField = {}; players.forEach(n=>inField[n.toLowerCase()] = n);
+  const now = Date.now();
+  for(const m of matches){
+    if(m.status !== "approved") continue;
+    const A = inField[(m.p1||"").toLowerCase()], B = inField[(m.p2||"").toLowerCase()];
+    if(!A || !B || A === B) continue;
+    const days = Math.max(0, (now - new Date(m.created_at).getTime()) / 864e5);
+    const k = key(A,B);
+    rematch[k] = (rematch[k]||0) + Math.exp(-days/45);   // last week still counts, last year barely does
+  }
+
+  const winProb = (a,b) => 1 / (1 + Math.pow(10, (rating[b] - rating[a]) / DIVISOR));
+  return {
+    players,
+    rating: n => (rating[n] !== undefined ? rating[n] : START),
+    spread: Math.max(1, hi - lo),
+    winProb,
+    // 1 = coin flip, 0 = foregone conclusion
+    quality: (a,b) => Math.max(0, 1 - Math.abs(winProb(a,b) - 0.5) * 2),
+    rematch: (a,b) => rematch[key(a,b)] || 0,
+    metCount: (a,b) => (rematch[key(a,b)] || 0) > 0
+  };
+}
+
+/* ---------- what makes one ring better than another ------------
+   Three things, and they genuinely pull against each other:
+
+   balance   every game should be worth watching. A ring sorted
+             strictly by rating is *almost* right, but it forces
+             the #1 vs #last game at the wrap-around.
+   freshness two people who played each other yesterday shouldn't
+             draw each other again here.
+   fairness  the one that actually decides the tournament. With
+             only two games, a player who draws the two strongest
+             opponents is knocked out by the draw, not by playing
+             badly — so the spread of "average opponent rating"
+             across the field is penalised directly.
+   ---------------------------------------------------------------- */
+const RP_W = { balance: 1.00, freshness: 0.55, fairness: 0.95 };
+
+function rpCycleCost(cycle, ctx){
+  const n = cycle.length;
+  let bal = 0, rep = 0;
+  const oppSum = new Array(n).fill(0);
+  for(let i=0;i<n;i++){
+    const a = cycle[i], b = cycle[(i+1)%n];
+    bal += Math.pow(1 - ctx.quality(a,b), 1.5);   // superlinear: one blowout hurts more than two mild mismatches
+    rep += ctx.rematch(a,b);
+    oppSum[i]         += ctx.rating(b);
+    oppSum[(i+1)%n]   += ctx.rating(a);
+  }
+  const sos  = oppSum.map(s => s/2);
+  const mean = sos.reduce((x,y)=>x+y, 0) / n;
+  const sd   = Math.sqrt(sos.reduce((s,v)=>s+(v-mean)*(v-mean), 0) / n);
+  const fair = sd / ctx.spread;
+  return {
+    total: RP_W.balance*(bal/n) + RP_W.freshness*(rep/n) + RP_W.fairness*fair,
+    balance: bal/n, freshness: rep/n, fairness: fair
+  };
+}
+
+/* 2-opt: reverse a segment of the ring, keep it if the ring got
+   cheaper. The classic TSP move — and a tournament draw is a TSP
+   where "distance" is how bad the matchup would be. */
+function rp2opt(start, ctx){
+  let best = start.slice(), bestC = rpCycleCost(best, ctx).total;
+  let improved = true, guard = 0;
+  while(improved && guard++ < 80){
+    improved = false;
+    for(let i=1;i<best.length-1;i++){
+      for(let j=i+1;j<best.length;j++){
+        const cand = best.slice(0,i).concat(best.slice(i,j+1).reverse(), best.slice(j+1));
+        const c = rpCycleCost(cand, ctx).total;
+        if(c < bestC - 1e-9){ best = cand; bestC = c; improved = true; }
+      }
+    }
+  }
+  return {cycle: best, cost: bestC};
+}
+
+/* Seeds for the search. The snake is the good guess: sort by
+   rating, then walk down the evens and back up the odds, so every
+   player's neighbours sit ~2 ranks away and nobody is handed the
+   top two seeds. 2-opt refines from there; the random restarts
+   stop it settling in a local dip. */
+function rpStartOrders(players, seed, ctx){
+  const byRating = players.slice().sort((a,b)=>ctx.rating(b)-ctx.rating(a));
+  const evens = byRating.filter((_,i)=>i%2===0);
+  const odds  = byRating.filter((_,i)=>i%2===1).reverse();
+  const starts = [byRating.slice(), evens.concat(odds)];
+  const rnd = rpRng(seed);
+  for(let k=0;k<28;k++){
+    const s = players.slice();
+    for(let i=s.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [s[i],s[j]] = [s[j],s[i]]; }
+    starts.push(s);
+  }
+  return starts;
+}
+
+/* ---------- play order -----------------------------------------
+   The ring says who plays whom; this says in what order. Two goals:
+   give everyone a rest between their two games (nobody plays back
+   to back if the ring allows it), and hold the tightest matchup
+   back so the group stage builds rather than fizzles.
+   ---------------------------------------------------------------- */
+function rpOrderGames(cycle, ctx){
+  const pool = [];
+  for(let i=0;i<cycle.length;i++) pool.push({p1: cycle[i], p2: cycle[(i+1)%cycle.length]});
+  const out = [], lastSeen = {};
+  while(pool.length){
+    let bestIdx = 0, bestScore = -Infinity;
+    pool.forEach((g,idx)=>{
+      const restA = lastSeen[g.p1] === undefined ? 99 : out.length - lastSeen[g.p1];
+      const restB = lastSeen[g.p2] === undefined ? 99 : out.length - lastSeen[g.p2];
+      const rest  = Math.min(restA, restB, 4);            // beyond 4 games of rest the difference stops mattering
+      const score = rest*10 - ctx.quality(g.p1,g.p2)*3;   // rest first; save the coin-flips for last
+      if(score > bestScore){ bestScore = score; bestIdx = idx; }
+    });
+    const g = pool.splice(bestIdx,1)[0];
+    lastSeen[g.p1] = out.length; lastSeen[g.p2] = out.length;
+    out.push(g);
+  }
+  return out.map((g,i)=>({p1:g.p1, p2:g.p2, round: RP_ROUND_GROUP + (i+1)}));
+}
+
+/* ---------- the matchmaker, end to end -------------------------- */
+function rpSolve(players, seed){
+  const ctx = rpContext(players);
+  let best = null;
+  for(const s of rpStartOrders(players, seed, ctx)){
+    const r = rp2opt(s, ctx);
+    if(!best || r.cost < best.cost) best = r;
+  }
+  const cycle = best.cycle;
+  const order = rpOrderGames(cycle, ctx);
+  const n = cycle.length;
+
+  // metrics, purely so the UI can show its working
+  const qualities = order.map(g=>ctx.quality(g.p1,g.p2));
+  const avgQ  = qualities.reduce((a,b)=>a+b,0)/n;
+  const minQ  = Math.min(...qualities), maxQ = Math.max(...qualities);
+  const tight = order[qualities.indexOf(maxQ)], loose = order[qualities.indexOf(minQ)];
+  const fresh = order.filter(g=>!ctx.metCount(g.p1,g.p2)).length;
+
+  const seen = {}; let minRest = 99;
+  order.forEach((g,i)=>{
+    [g.p1,g.p2].forEach(p=>{
+      if(seen[p] !== undefined) minRest = Math.min(minRest, i - seen[p] - 1);
+      seen[p] = i;
+    });
+  });
+
+  const oppAvg = {};
+  cycle.forEach((p,i)=>{
+    const l = cycle[(i-1+n)%n], r = cycle[(i+1)%n];
+    oppAvg[p] = (ctx.rating(l) + ctx.rating(r)) / 2;
+  });
+  const oppVals = Object.values(oppAvg);
+  const sosSpread = Math.max(...oppVals) - Math.min(...oppVals);
+
+  return {
+    cycle, order, seed,
+    metrics: {
+      avgQuality: avgQ, tightest: tight, tightestQ: maxQ, loosest: loose, loosestQ: minQ,
+      freshPairs: fresh, minRest: minRest === 99 ? 0 : minRest,
+      sosSpread, cost: best.cost, cand: rpCycleCost(cycle, ctx)
+    }
+  };
+}
+
+/* ============================================================
+   RESULTS, STANDINGS, QUALIFICATION
+   ============================================================ */
+function rpGame(tid, round){
+  return matches.find(m => m.tournament_id === tid && m.round === round && m.status === "approved") || null;
+}
+function rpWinner(m){
+  if(!m) return null;
+  const o = Number(m.outcome);
+  return o === 1 ? m.p1 : o === 0 ? m.p2 : null;   // a draw resolves nothing in a knockout
+}
+function rpParseScore(sets){
+  // "11-8" or "6-4, 3-6, 7-5" — games for p1, games for p2
+  let a = 0, b = 0;
+  String(sets||"").split(",").forEach(s=>{
+    const [x,y] = s.trim().split("-").map(v=>parseInt(v,10));
+    if(!isNaN(x) && !isNaN(y)){ a += x; b += y; }
+  });
+  return {a, b};
+}
+
+/* group table — wins first, then the games you actually won */
+function rpGroupTable(t, state){
+  const rows = {};
+  state.roster.forEach(n => rows[n] = {name:n, w:0, l:0, d:0, gw:0, gl:0, played:0, opponents:[]});
+  (state.order||[]).forEach(fx=>{
+    const m = rpGame(t.id, fx.round);
+    const A = rows[fx.p1], B = rows[fx.p2];
+    if(!A || !B) return;
+    A.opponents.push(fx.p2); B.opponents.push(fx.p1);
+    if(!m) return;
+    A.played++; B.played++;
+    const o = Number(m.outcome);
+    if(o === 1){ A.w++; B.l++; } else if(o === 0){ B.w++; A.l++; } else { A.d++; B.d++; }
+    if(m.sets){
+      const s = rpParseScore(m.sets);
+      // the row's own orientation: the fixture is stored p1-first, the match row may not be
+      const flipped = (m.p1 || "").toLowerCase() !== fx.p1.toLowerCase();
+      A.gw += flipped ? s.b : s.a; A.gl += flipped ? s.a : s.b;
+      B.gw += flipped ? s.a : s.b; B.gl += flipped ? s.b : s.a;
+    }
+  });
+  const list = Object.values(rows);
+  // strength of schedule: how many games your two opponents won
+  const byName = {}; list.forEach(r => byName[r.name] = r);
+  list.forEach(r => r.sos = r.opponents.reduce((s,o)=> s + (byName[o] ? byName[o].w : 0), 0));
+  return list;
+}
+
+/* head-to-head between two group players: -1 a ahead, 1 b ahead, 0 nothing to separate them */
+function rpH2H(t, state, a, b){
+  const fx = (state.order||[]).find(f =>
+    (f.p1===a && f.p2===b) || (f.p1===b && f.p2===a));
+  if(!fx) return 0;
+  const w = rpWinner(rpGame(t.id, fx.round));
+  if(!w) return 0;
+  return w === a ? -1 : 1;
+}
+
+/* full ordering — hard criteria first, then the soft ones that only
+   set the seeding (they never decide who qualifies; a decider does) */
+function rpRankRows(t, state, rows, ctx){
+  return rows.slice().sort((x,y)=>
+    (y.w - x.w) ||
+    rpH2H(t, state, x.name, y.name) ||
+    ((y.gw - y.gl) - (x.gw - x.gl)) ||
+    (y.gw - x.gw) ||
+    (y.sos - x.sos) ||
+    (ctx.rating(y.name) - ctx.rating(x.name)) ||
+    x.name.localeCompare(y.name)
+  );
+}
+
+function rpGroupComplete(t, state){
+  return (state.order||[]).every(fx => !!rpGame(t.id, fx.round));
+}
+
+/* ---------- the cut ---------------------------------------------
+   Anything that can be separated on results (wins → head-to-head →
+   game difference) is separated on results. What's left level
+   across the 4th/5th line plays for it — that's the whole point of
+   the format, so it is never silently broken on a tiebreak column.
+   ---------------------------------------------------------------- */
+function rpQualification(t, state){
+  const ctx    = rpContext(state.roster);
+  const rows   = rpRankRows(t, state, rpGroupTable(t, state), ctx);
+  const spots  = Math.min(4, rows.length);
+  const done   = rpGroupComplete(t, state);
+  const base   = {rows, spots, complete: done, qualified: [], bubble: null, note: ""};
+
+  if(!done) return base;
+  if(rows.length <= spots){
+    base.qualified = rows.map(r=>r.name);
+    base.note = "Everyone in the field qualifies — the group only sets the seeding.";
+    return base;
+  }
+
+  // blocks of rows that results alone cannot separate
+  const hardKey = r => r.w + "|" + (r.gw - r.gl);
+  const blocks = [];
+  rows.forEach(r=>{
+    const last = blocks[blocks.length-1];
+    if(last && hardKey(last[0]) === hardKey(r)) last.push(r);
+    else blocks.push([r]);
+  });
+
+  let filled = 0;
+  for(const block of blocks){
+    if(filled >= spots) break;
+    if(filled + block.length <= spots){          // whole block is safely inside the cut
+      block.forEach(r => base.qualified.push(r.name));
+      filled += block.length;
+      continue;
+    }
+    // this block straddles the line
+    const left = spots - filled;
+    const split = rpSplitOnH2H(t, state, block, left);
+    if(split){
+      split.slice(0, left).forEach(n => base.qualified.push(n));
+      filled += left;
+      base.note = "Level on record — separated on head-to-head.";
+      break;
+    }
+    base.bubble = {tied: block.map(r=>r.name), spots: left};
+    break;
+  }
+  return base;
+}
+
+/* can the mini-table among the tied players separate them at the cut? */
+function rpSplitOnH2H(t, state, block, left){
+  if(block.length < 2) return null;
+  const mini = {};
+  block.forEach(r => mini[r.name] = {name:r.name, w:0, gd:0});
+  let played = 0;
+  (state.order||[]).forEach(fx=>{
+    if(!mini[fx.p1] || !mini[fx.p2]) return;
+    const m = rpGame(t.id, fx.round);
+    if(!m) return;
+    played++;
+    const o = Number(m.outcome);
+    if(o === 1) mini[fx.p1].w++; else if(o === 0) mini[fx.p2].w++;
+    if(m.sets){
+      const s = rpParseScore(m.sets);
+      const flipped = (m.p1||"").toLowerCase() !== fx.p1.toLowerCase();
+      const a = flipped ? s.b : s.a, b = flipped ? s.a : s.b;
+      mini[fx.p1].gd += a - b; mini[fx.p2].gd += b - a;
+    }
+  });
+  if(!played) return null;
+  const order = block.map(r=>mini[r.name]).sort((x,y)=> (y.w - x.w) || (y.gd - x.gd));
+  const above = order[left-1], below = order[left];
+  if(!above || !below) return null;
+  if(above.w === below.w && above.gd === below.gd) return null;   // still level at the line
+  return order.map(o=>o.name);
+}
+
+/* ---------- deciders --------------------------------------------
+   k players level, s spots. Three shapes, picked by the arithmetic:
+
+   s*2 >= k   one round of straight 1v1s. The best-seeded players
+              take the free spots, the rest pair off top-vs-bottom
+              and the winners are in. (2 for 1 → a single game;
+              3 for 2 → one game; 4 for 2 → two games.)
+   s === 1    a knockout among the tied, byes to the better seeds.
+   otherwise  vanishingly rare (needs 5+ level on the line for 2
+              spots) — run the same ring format among them and take
+              the top s.
+   ---------------------------------------------------------------- */
+function rpPlayoffPlan(bubble, seedOrder, seed){
+  if(!bubble) return null;
+  const tied = seedOrder.filter(n => bubble.tied.includes(n));
+  const k = tied.length, s = bubble.spots;
+  if(k < 2 || s < 1 || s >= k) return null;
+
+  if(s*2 >= k){
+    const auto = tied.slice(0, 2*s - k);
+    const play = tied.slice(2*s - k);
+    const games = [];
+    for(let i=0;i<play.length/2;i++){
+      games.push({p1: play[i], p2: play[play.length-1-i], round: RP_ROUND_QUAL + (i+1)});
+    }
+    return {
+      kind: "deciders", tied, spots: s, auto, rounds: [games],
+      note: auto.length
+        ? `${auto.join(", ")} go${auto.length===1?"es":""} through on tiebreak seeding; the rest play a 1v1 for what's left.`
+        : `Straight 1v1${games.length>1?"s":""} — win and you're in.`
+    };
+  }
+  if(s === 1) return rpMiniKnockout(tied);
+  return rpMiniRing(tied, s, seed);
+}
+
+/* single elimination among the tied, byes handed to the better seeds */
+function rpMiniKnockout(tied){
+  const rounds = [];
+  let entrants = tied.slice();        // entries are a name, or {winnerOf:<round>}
+  let idx = 1, guard = 0;
+  while(entrants.length > 1 && guard++ < 5){
+    const pairs = Math.floor(entrants.length / 2);
+    const byes  = entrants.length - pairs*2;      // 0 or 1 — it goes to the best seed left
+    const next  = entrants.slice(0, byes);
+    const play  = entrants.slice(byes);
+    const games = [];
+    for(let i=0;i<pairs;i++){
+      const g = {p1: play[i], p2: play[play.length-1-i], round: RP_ROUND_QUAL + (idx++)};
+      games.push(g);
+      next.push({winnerOf: g.round});
+    }
+    rounds.push(games);
+    entrants = next;
+  }
+  return {kind:"knockout", tied, spots:1, auto:[], rounds,
+    note:"One spot left, so the tied players knock each other out for it. The better tiebreak seed gets the bye."};
+}
+
+/* the format eating itself: a ring among the tied, top s advance */
+function rpMiniRing(tied, s, seed){
+  const solved = rpSolve(tied, (seed|0) + 7919);
+  const games = solved.order.map((g,i)=>({p1:g.p1, p2:g.p2, round: RP_ROUND_QUAL + (i+1)}));
+  return {kind:"ring", tied, spots:s, auto:[], rounds:[games],
+    note:`${tied.length} level for ${s} spots — they play the same two-games-each ring among themselves, top ${s} go through.`};
+}
+
+/* resolve a plan against played results; returns who's through, or null while it's unfinished */
+function rpPlayoffResolve(t, plan){
+  if(!plan) return {through: [], pending: null, done: false};
+  const winnerFor = ref => typeof ref === "string" ? ref : rpWinner(rpGame(t.id, ref.winnerOf));
+
+  if(plan.kind === "ring"){
+    const played = plan.rounds[0].map(g=>({g, m: rpGame(t.id, g.round)}));
+    if(played.some(p=>!p.m)) return {through: [], pending: plan.rounds[0].filter(g=>!rpGame(t.id,g.round)), done:false};
+    const tally = {}; plan.tied.forEach(n=>tally[n]={name:n,w:0,gd:0});
+    played.forEach(({g,m})=>{
+      const o = Number(m.outcome);
+      const w = o===1 ? m.p1 : o===0 ? m.p2 : null;
+      if(w && tally[w]) tally[w].w++;
+      if(m.sets){ const s = rpParseScore(m.sets);
+        if(tally[m.p1]) tally[m.p1].gd += s.a - s.b;
+        if(tally[m.p2]) tally[m.p2].gd += s.b - s.a; }
+    });
+    const order = Object.values(tally).sort((a,b)=>(b.w-a.w)||(b.gd-a.gd));
+    return {through: order.slice(0, plan.spots).map(o=>o.name), pending:null, done:true};
+  }
+
+  const through = plan.auto.slice();
+  for(let r=0;r<plan.rounds.length;r++){
+    const games = plan.rounds[r].map(g=>({
+      round: g.round,
+      p1: winnerFor(g.p1), p2: winnerFor(g.p2),
+      m: rpGame(t.id, g.round)
+    }));
+    const unplayed = games.filter(g => !rpWinner(g.m) && g.p1 && g.p2);
+    if(unplayed.length) return {through, pending: unplayed, done:false};
+    if(games.some(g => !g.p1 || !g.p2)) return {through, pending: null, done:false};
+    if(r === plan.rounds.length-1) games.forEach(g => through.push(rpWinner(g.m)));
+  }
+  return {through, pending:null, done:true};
+}
+
+/* ---------- bracket ---------------------------------------------
+   Standard 4-player seeding: 1v4 and 2v3, so the two best seeds
+   can only meet in the final.
+   ---------------------------------------------------------------- */
+function rpBracket(t, state, seeds){
+  const sf1 = rpGame(t.id, "semi1"), sf2 = rpGame(t.id, "semi2");
+  const w1 = rpWinner(sf1), w2 = rpWinner(sf2);
+  const l1 = w1 ? (w1 === sf1.p1 ? sf1.p2 : sf1.p1) : null;
+  const l2 = w2 ? (w2 === sf2.p1 ? sf2.p2 : sf2.p1) : null;
+  const fin = rpGame(t.id, "final"), brz = rpGame(t.id, "bronze");
+  return {
+    seeds,
+    semis: [
+      {round:"semi1", p1: seeds[0]||null, p2: seeds[3]||null, m: sf1, winner: w1, loser: l1},
+      {round:"semi2", p1: seeds[1]||null, p2: seeds[2]||null, m: sf2, winner: w2, loser: l2}
+    ],
+    final:  {round:"final",  p1: w1, p2: w2, m: fin, winner: rpWinner(fin)},
+    bronze: {round:"bronze", p1: l1, p2: l2, m: brz, winner: rpWinner(brz)}
+  };
+}
+
+/* ---------- stage machine ---------------------------------------
+   Derived, never stored — edit a group result months later and the
+   whole event re-resolves itself from the games on record.
+   ---------------------------------------------------------------- */
+function rpSnapshot(t){
+  const state = rpRead(t);
+  if(!state || !state.cycle || !state.cycle.length){
+    return {state, stage:"setup"};
+  }
+  const qual = rpQualification(t, state);
+  if(!qual.complete) return {state, stage:"group", qual};
+
+  const seedOrder = qual.rows.map(r=>r.name);
+  let plan = null, resolved = {through:[], pending:null, done:true};
+  if(qual.bubble){
+    plan = rpPlayoffPlan(qual.bubble, seedOrder, state.seed || 1);
+    resolved = rpPlayoffResolve(t, plan);
+    if(!resolved.done) return {state, stage:"playoff", qual, plan, resolved};
+  }
+
+  // final four, in group order (deciders slot in where the tie was)
+  const seeds = qual.qualified.concat(resolved.through)
+    .filter((n,i,a)=>n && a.indexOf(n)===i)
+    .sort((a,b)=> seedOrder.indexOf(a) - seedOrder.indexOf(b))
+    .slice(0,4);
+
+  const br = rpBracket(t, state, seeds);
+  if(br.final.winner) return {state, stage:"done", qual, plan, resolved, seeds, br};
+  if(br.semis.every(s=>s.winner)) return {state, stage:"final", qual, plan, resolved, seeds, br};
+  return {state, stage:"semis", qual, plan, resolved, seeds, br};
+}
+
+/* the pair a round is between, wherever in the event that round lives */
+function rpPairForRound(t, round){
+  const snap = rpSnapshot(t);
+  if(!snap.state) return null;
+  const fx = (snap.state.order||[]).find(f=>f.round===round);
+  if(fx) return {p1:fx.p1, p2:fx.p2, stage:"group"};
+  if(snap.resolved && snap.resolved.pending){
+    const p = snap.resolved.pending.find(g=>g.round===round);
+    if(p) return {p1:p.p1, p2:p.p2, stage:"playoff"};
+  }
+  if(snap.plan && snap.plan.kind === "ring"){
+    const g = snap.plan.rounds[0].find(x=>x.round===round);
+    if(g) return {p1:g.p1, p2:g.p2, stage:"playoff"};
+  }
+  if(snap.br){
+    const all = snap.br.semis.concat([snap.br.final, snap.br.bronze]);
+    const g = all.find(x=>x.round===round);
+    if(g && g.p1 && g.p2) return {p1:g.p1, p2:g.p2, stage:"bracket"};
+  }
+  return null;
+}
+
+/* ============================================================
+   ROBIN+ — UI
+   ============================================================ */
+let rpOpenFixture = null;     // round key of the fixture whose report panel is open
+let rpDraftRoster = {};       // tid -> roster being edited before the first save
+
+const rpJs = s => String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");   // safe inside an inline onclick
+
+function rpPct(x){ return Math.round(x*100) + "%"; }
+
+/* ---------- progress stepper ---------- */
+function rpStepper(stage, hasBubble){
+  const steps = [
+    ["1","Roster",   ["setup"]],
+    ["2","Group",    ["group"]],
+    ["3", hasBubble ? "Decider" : "Cut", ["playoff"]],
+    ["4","Semis",    ["semis"]],
+    ["5","Final",    ["final"]],
+    ["🏆","Champion",["done"]]
+  ];
+  const order = ["setup","group","playoff","semis","final","done"];
+  const at = order.indexOf(stage);
+  return `<div class="rp-steps">${steps.map(([n,label,owns])=>{
+    const idx = order.indexOf(owns[0]);
+    const cls = idx === at ? "now" : idx < at ? "done" : "";
+    return `<div class="rp-step ${cls}"><span class="rp-step-n">${n}</span>${label}</div>`;
+  }).join("")}</div>`;
+}
+
+/* ---------- the ring, drawn ----------
+   The one picture that explains the format: everyone sits in a
+   circle and plays their two neighbours. */
+function rpRingSvg(t, state, snap){
+  const cycle = state.cycle, n = cycle.length;
+  const cx = 165, cy = 158, R = 92, LR = 128;
+  const pos = i => {
+    const a = -Math.PI/2 + i*2*Math.PI/n;
+    return {x: cx + R*Math.cos(a), y: cy + R*Math.sin(a), lx: cx + LR*Math.cos(a), ly: cy + LR*Math.sin(a)};
+  };
+  const table = {}; (snap.qual ? snap.qual.rows : []).forEach(r=>table[r.name]=r);
+  const qualified = new Set((snap.seeds || (snap.qual ? snap.qual.qualified : []) || []));
+  const nextRound = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
+
+  const edges = cycle.map((p,i)=>{
+    const q = cycle[(i+1)%n];
+    const fx = (state.order||[]).find(f=>(f.p1===p&&f.p2===q)||(f.p1===q&&f.p2===p));
+    const played = fx && rpGame(t.id, fx.round);
+    const isNext = fx && nextRound && fx.round === nextRound.round;
+    const A = pos(i), B = pos((i+1)%n);
+    return `<line class="rp-edge${played?" played":isNext?" next":""}" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}"><title>${esc(p)} vs ${esc(q)}</title></line>`;
+  }).join("");
+
+  const nodes = cycle.map((p,i)=>{
+    const P = pos(i), r = table[p];
+    const rec = r ? `${r.w}-${r.l}${r.d?"-"+r.d:""}` : "0-0";
+    const below = P.ly > cy;
+    return `<g>
+      <circle class="rp-node${qualified.has(p)?" qual":""}" cx="${P.x.toFixed(1)}" cy="${P.y.toFixed(1)}" r="15"></circle>
+      <text class="rp-nsub" x="${P.x.toFixed(1)}" y="${(P.y+3.5).toFixed(1)}">${esc(rec)}</text>
+      <text class="rp-nlabel" x="${P.lx.toFixed(1)}" y="${(P.ly + (below?12:-4)).toFixed(1)}">${esc(p.length>9?p.slice(0,8)+"…":p)}</text>
+    </g>`;
+  }).join("");
+
+  return `<svg class="rp-circle" viewBox="0 0 330 316" role="img" aria-label="Group ring: each player plays their two neighbours">
+    ${edges}${nodes}
+    <text class="rp-nsub" x="165" y="155" style="font-size:9px">${n} players</text>
+    <text class="rp-nsub" x="165" y="166" style="font-size:9px">${n} games</text>
+  </svg>`;
+}
+
+/* ---------- roster builder ---------- */
+function rpRosterPanel(t, state){
+  const roster = (rpDraftRoster[t.id] || (state && state.roster) || []).slice();
+  const ctx = roster.length ? rpContext(roster) : null;
+  const seeded = ctx ? roster.slice().sort((a,b)=>ctx.rating(b)-ctx.rating(a)) : roster;
+  const chips = roster.length ? seeded.map(nm=>{
+    const seedNo = seeded.indexOf(nm)+1;
+    return `<span class="rp-chip"><span class="rp-chip-seed">#${seedNo}</span>${esc(nm)}
+      <span class="rp-chip-seed">${ctx ? Math.round(ctx.rating(nm)) : ""}</span>
+      ${isAdmin?`<button class="rp-chip-x" onclick="rpRemovePlayer(${t.id},'${rpJs(nm)}')" title="remove">✕</button>`:""}</span>`;
+  }).join("") : '<span class="rp-chip empty">nobody in yet</span>';
+
+  const n = roster.length;
+  const ok = n >= RP_MIN_FIELD && n <= RP_MAX_FIELD;
+  const why = n < RP_MIN_FIELD
+    ? `Needs at least ${RP_MIN_FIELD} — with 4 or fewer everyone qualifies and the group stage decides nothing.`
+    : n > RP_MAX_FIELD ? `Cap is ${RP_MAX_FIELD} for a two-games-each ring.`
+    : `${n} players · ${n} group games · everyone plays exactly 2.`;
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Field <span class="count-pill">${n}</span></div>
+      <div class="pred-hint">Every player gets exactly two group games. Top 4 go through to the bracket — anyone still level on the line plays a 1v1 for the spot.</div>
+      <div class="rp-chips">${chips}</div>
+      ${isAdmin?`
+      <div class="grid2">
+        <div><label>Add player</label><input id="rpNewPlayer" data-ac="players" autocomplete="off" placeholder="name"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();rpAddPlayer(${t.id})}"></div>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <button class="btn ghost" style="margin:0;flex:1" onclick="rpAddPlayer(${t.id})">Add</button>
+          <button class="btn ghost" style="margin:0;flex:1" onclick="rpFillFromLadder(${t.id})" title="pull the top of the ladder in">Top 5 ↓</button>
+        </div>
+      </div>
+      <div class="bracket-note">${esc(why)}</div>
+      <button class="btn" ${ok?"":"disabled style=\"opacity:.45;cursor:not-allowed\""} onclick="rpGenerateSchedule(${t.id})">
+        ${state && state.cycle ? "Re-draw the schedule" : "Draw the schedule"}
+      </button>`
+      :`<div class="bracket-note">${esc(why)} An admin sets the field and draws the schedule.</div>`}
+    </div>`;
+}
+
+/* ---------- how the draw was made ---------- */
+function rpWhyPanel(state){
+  const m = state.metrics; if(!m) return "";
+  const g = x => `${esc(x.p1)} vs ${esc(x.p2)}`;
+  return `
+    <div class="rp-metrics">
+      <div class="rp-metric"><div class="rp-metric-v">${rpPct(m.avgQuality)}</div><div class="rp-metric-l">avg closeness</div></div>
+      <div class="rp-metric"><div class="rp-metric-v">${m.minRest}</div><div class="rp-metric-l">min rest (games)</div></div>
+      <div class="rp-metric"><div class="rp-metric-v">${m.freshPairs}/${state.order.length}</div><div class="rp-metric-l">first meetings</div></div>
+      <div class="rp-metric"><div class="rp-metric-v">±${Math.round(m.sosSpread)}</div><div class="rp-metric-l">draw spread</div></div>
+    </div>
+    <details class="rp-why">
+      <summary>Why this draw?</summary>
+      <div class="rp-why-body">
+        Two games each means the group is a ring — sit everyone in a circle, each plays their two neighbours.
+        There are (n−1)!/2 possible rings, so the draw is searched rather than picked: a rating-snaked seed plus 28
+        random restarts, each refined by 2-opt, scored on three things pulling against each other.
+        <br><br>
+        <b>Closeness</b> — every game should be live. This draw averages <b>${rpPct(m.avgQuality)}</b> (100% is a coin flip).
+        Tightest: <b>${g(m.tightest)}</b> at ${rpPct(m.tightestQ)}. Most lopsided: <b>${g(m.loosest)}</b> at ${rpPct(m.loosestQ)}.
+        <br><br>
+        <b>Fair draw</b> — the part that actually decides it. With only two games, drawing the two strongest players
+        knocks you out by luck rather than form, so the spread of average-opponent-rating across the field is
+        penalised directly. Here it's <b>±${Math.round(m.sosSpread)} rating points</b>.
+        <br><br>
+        <b>Freshness</b> — recent rematches are discouraged (a game from last week weighs ~15× one from six months ago).
+        <b>${m.freshPairs}</b> of these ${state.order.length} pairings are first-time meetings.
+        <br><br>
+        <b>Order of play</b> — sequenced so nobody plays back to back where the ring allows it
+        (minimum rest here: <b>${m.minRest} game${m.minRest===1?"":"s"}</b>), with the closest matchup held back for last.
+      </div>
+    </details>`;
+}
+
+/* ---------- one fixture row, with its inline report panel ---------- */
+function rpFixtureRow(t, fx, i, opts){
+  opts = opts || {};
+  const m = rpGame(t.id, fx.round);
+  const isOpen = rpOpenFixture === fx.round;
+  const ctx = opts.ctx;
+  const q = ctx && fx.p1 && fx.p2 ? ctx.quality(fx.p1, fx.p2) : null;
+  const live = !m && opts.upNext;
+
+  let line;
+  if(m){
+    const o = Number(m.outcome);
+    line = o === 0.5
+      ? `<b>${esc(m.p1)}</b> <span class="vs">drew</span> <b>${esc(m.p2)}</b>`
+      : `<b>${esc(o===1?m.p1:m.p2)}</b> <span class="vs">beat</span> ${esc(o===1?m.p2:m.p1)}`;
+  } else if(!fx.p1 || !fx.p2){
+    line = `<span class="pw-dim">awaiting the round before</span>`;
+  } else {
+    line = `${esc(fx.p1)} <span class="vs">vs</span> ${esc(fx.p2)}`;
+  }
+
+  const meta = m
+    ? `${m.sets ? esc(m.sets) + " · " : ""}${when(m.created_at)}`
+    : q !== null ? `${rpPct(q)} close${live ? " · up next" : ""}` : "";
+
+  const clickable = isAdmin && fx.p1 && fx.p2;
+  return `
+    <div class="rp-fix ${m?"done":""} ${live?"up":""} ${clickable?"clickable":""}"
+         ${clickable?`onclick="rpToggleReport('${esc(fx.round)}',${t.id})"`:""}>
+      <span class="rp-fix-n">${opts.label || ("G"+(i+1))}</span>
+      <div class="rp-fix-main">
+        <div class="rp-fix-line">${line}${m && isAdmin?'<span class="pred-tag">tap to edit</span>':""}</div>
+        ${meta?`<div class="rp-fix-meta">${meta}</div>`:""}
+      </div>
+      ${q!==null && !m ? `<span class="rp-qual" title="how close this should be"><span style="width:${Math.round(q*100)}%"></span></span>` : ""}
+    </div>
+    ${isOpen ? rpReportPanel(t, fx, m) : ""}`;
+}
+
+function rpReportPanel(t, fx, m){
+  const stage = (fx.round||"").indexOf(RP_ROUND_GROUP) === 0 ? "group" : "knockout";
+  return `
+    <div class="rp-report" onclick="event.stopPropagation()">
+      <label>Score <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional — ${esc(fx.p1)} first)</span></label>
+      <input id="rpScore" placeholder="11-8   or   6-4, 3-6, 7-5" autocomplete="off" value="${m && m.sets ? esc(m.sets) : ""}">
+      <div class="rp-winbtns" style="margin-top:10px">
+        <button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',1)">${esc(fx.p1)} won</button>
+        <button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',0)">${esc(fx.p2)} won</button>
+        ${stage==="group"?`<button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',0.5)" style="flex:0 1 90px">Draw</button>`:""}
+      </div>
+      ${stage!=="group"?'<div class="bracket-note">A knockout game needs a winner — no draws past the group.</div>':""}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn ghost" style="margin:0;flex:1" onclick="rpToggleReport(null,${t.id})">Cancel</button>
+        ${m?`<button class="btn ghost" style="margin:0;flex:1;color:var(--danger)" onclick="rpUndoResult(${t.id},'${esc(fx.round)}')">Undo result</button>`:""}
+      </div>
+    </div>`;
+}
+
+/* ---------- live group table ---------- */
+function rpStandingsPanel(t, state, snap){
+  const qual = snap.qual;
+  if(!qual) return "";
+  const rows = qual.rows;
+  const spots = qual.spots;
+  const bubbleNames = new Set(qual.bubble ? qual.bubble.tied : []);
+  const through = new Set(qual.qualified.concat(snap.resolved ? snap.resolved.through : []));
+  // once the decider has been played the bubble is history — show who's in and who's out
+  const settled = !qual.bubble || !!(snap.resolved && snap.resolved.done);
+
+  const body = rows.map((r,i)=>{
+    let cls = "", badge = "";
+    if(!qual.complete){
+      // mid-group: show the provisional line, nothing is decided yet
+      cls = i < spots ? "in" : "out";
+    } else if(!settled && bubbleNames.has(r.name) && !through.has(r.name)){
+      cls = "bubble"; badge = '<span class="rp-state bubble">playoff</span>';
+    } else if(through.has(r.name)){
+      cls = "in"; badge = '<span class="rp-state in">through</span>';
+    } else {
+      cls = "out"; badge = '<span class="rp-state out">out</span>';
+    }
+    const gd = r.gw - r.gl;
+    return `<tr class="${cls}${i===spots-1?" cut":""}">
+      <td class="rp-pos">${i+1}</td>
+      <td class="rp-nm">${esc(r.name)}${badge}</td>
+      <td class="rp-num">${r.w}-${r.l}${r.d?"-"+r.d:""}</td>
+      <td class="rp-num">${r.played}/2</td>
+      <td class="rp-num">${gd>0?"+":""}${gd}</td>
+      <td class="rp-num">${r.sos}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Group standings</div>
+      <table class="rp-table">
+        <tr><th></th><th>Player</th><th style="text-align:right">W-L</th><th style="text-align:right">Played</th>
+            <th style="text-align:right">Diff</th><th style="text-align:right">Opp W</th></tr>
+        ${body}
+      </table>
+      <div class="bracket-note">Dashed line is the cut — top ${spots} qualify. Order: wins → head-to-head → game difference → games won → strength of opposition → ladder rating.${qual.note?" "+esc(qual.note):""}</div>
+    </div>`;
+}
+
+/* ---------- the decider ---------- */
+function rpPlayoffPanel(t, snap){
+  const plan = snap.plan;
+  if(!plan) return "";
+  const res = snap.resolved || {through:[], pending:[]};
+  const rows = [];
+  const pendingByRound = {}; (res.pending||[]).forEach(p=>pendingByRound[p.round]=p);
+
+  plan.rounds.forEach((games, ri)=>{
+    games.forEach(g=>{
+      const pend = pendingByRound[g.round];
+      const m = rpGame(t.id, g.round);
+      const p1 = pend ? pend.p1 : (typeof g.p1 === "string" ? g.p1 : (m ? m.p1 : null));
+      const p2 = pend ? pend.p2 : (typeof g.p2 === "string" ? g.p2 : (m ? m.p2 : null));
+      rows.push(rpFixtureRow(t, {p1, p2, round:g.round}, 0,
+        {label: plan.rounds.length>1 ? "R"+(ri+1) : "D", upNext: !m && !!(p1&&p2)}));
+    });
+  });
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Qualification decider <span class="tag p">${plan.tied.length} level for ${plan.spots} spot${plan.spots===1?"":"s"}</span></div>
+      <div class="rp-warn"><b>${plan.tied.map(esc).join(", ")}</b> finished the group level on everything results can settle — wins, head-to-head and game difference. ${esc(plan.note)}</div>
+      ${plan.auto.length?`<div class="bracket-note" style="margin-bottom:8px">Straight through: <b>${plan.auto.map(esc).join(", ")}</b></div>`:""}
+      <div style="margin-top:12px">${rows.join("")}</div>
+    </div>`;
+}
+
+/* ---------- bracket ---------- */
+function rpBracketPanel(t, snap){
+  const br = snap.br;
+  if(!br) return "";
+  const state = snap.state;
+  const seedNo = n => { const i = br.seeds.indexOf(n); return i < 0 ? "" : i+1; };
+
+  const tie = (g, label) => {
+    const m = g.m, w = g.winner;
+    const slot = (nm, side) => {
+      if(!nm) return `<div class="rp-slot tbd"><span class="rp-sd"></span>TBD</div>`;
+      const cls = w ? (w === nm ? "win" : "lose") : "";
+      return `<div class="rp-slot ${cls}"><span class="rp-sd">${seedNo(nm)?"#"+seedNo(nm):""}</span>${esc(nm)}</div>`;
+    };
+    const clickable = isAdmin && g.p1 && g.p2;
+    const open = rpOpenFixture === g.round;
+    return `<div>
+      <div class="rp-tie ${clickable?"clickable":""} ${(!m && g.p1 && g.p2)?"live":""}"
+           ${clickable?`onclick="rpToggleReport('${esc(g.round)}',${t.id})"`:""}>
+        ${slot(g.p1)}${slot(g.p2)}
+      </div>
+      ${m && m.sets?`<div class="bracket-note" style="text-align:center;margin-top:4px">${esc(m.sets)}</div>`:""}
+      ${open?rpReportPanel(t,{p1:g.p1,p2:g.p2,round:g.round},m):""}
+    </div>`;
+  };
+
+  const champ = br.final.winner;
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Bracket</div>
+      <div class="pred-hint">Top 4 out of the group, seeded #1 v #4 and #2 v #3 — so the two best can only meet in the final.</div>
+      <div class="rp-bracket">
+        <div class="rp-round"><div class="rp-round-h">Semifinals</div>
+          <div class="rp-round-body">${tie(br.semis[0])}${tie(br.semis[1])}</div></div>
+        <div class="rp-round"><div class="rp-round-h">Final</div>
+          <div class="rp-round-body">${tie(br.final)}</div></div>
+      </div>
+      ${state.bronze ? `<div style="margin-top:14px;max-width:320px"><div class="rp-round-h" style="text-align:left">3rd place</div>${tie(br.bronze)}</div>` : ""}
+      ${isAdmin && !champ ? `<div style="margin-top:12px"><button class="btn ghost" style="margin:0" onclick="rpToggleBronze(${t.id})">${state.bronze?"Drop the 3rd-place game":"Add a 3rd-place game"}</button></div>` : ""}
+      ${champ ? `
+        <div class="rp-champ">
+          <div class="rp-champ-t">Champion</div>
+          <div class="rp-champ-n">🏆 ${esc(champ)}</div>
+          <div class="rp-champ-s">Seed #${seedNo(champ)} out of the group${br.bronze.winner?` · 3rd: ${esc(br.bronze.winner)}`:""}</div>
+          ${isAdmin && t.status !== "completed" ? `<button class="btn" style="margin-top:14px" onclick="rpCrown(${t.id},'${rpJs(champ)}')">Crown ${esc(champ)} &amp; close the event</button>` : ""}
+        </div>` : ""}
+    </div>`;
+}
+
+/* ---------- the whole view ---------- */
+function renderRobinPlus(t){
+  const snap = rpSnapshot(t);
+  const state = snap.state;
+  const stage = snap.stage;
+  const hasBubble = !!(snap.qual && snap.qual.bubble);
+
+  const localOnly = rpColumnMissing
+    ? `<div class="rp-warn">Saved on this device only — the <code>tournaments.bracket</code> column is missing, so the draw won't reach anyone else's phone. See <b>docs/robin-plus.sql</b> for the one-line migration.</div>`
+    : "";
+
+  if(stage === "setup"){
+    return `
+      ${rpStepper(stage, false)}
+      <div class="panel">
+        <div class="pred-hint"><b>Robin+</b> — everyone plays two group games, the top 4 qualify, then it's semis and a final.
+        Level on the qualification line? That's settled in a 1v1, not on a tiebreak column. Exhibition by default: nothing here moves the ladder.</div>
+      </div>
+      ${rpRosterPanel(t, state)}
+      ${localOnly}`;
+  }
+
+  const ctx = rpContext(state.roster);
+  const played = (state.order||[]).filter(fx=>rpGame(t.id, fx.round)).length;
+  const nextFx = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
+
+  const fixtures = (state.order||[]).map((fx,i)=>
+    rpFixtureRow(t, fx, i, {ctx, upNext: nextFx && nextFx.round === fx.round})).join("");
+
+  return `
+    ${rpStepper(stage, hasBubble)}
+    <div class="panel">
+      <div class="sec-label" style="margin-top:0">The ring</div>
+      <div class="pred-hint">Each player plays the two people either side of them — ${state.cycle.length} players, ${state.order.length} games, two each.</div>
+      ${rpRingSvg(t, state, snap)}
+      ${rpWhyPanel(state)}
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Group games <span class="count-pill">${played}/${state.order.length}</span></div>
+      ${isAdmin?'<div class="pred-hint">Tap a game to record it.</div>':'<div class="pred-hint">An admin records results as they finish.</div>'}
+      ${fixtures}
+    </div>
+
+    ${rpStandingsPanel(t, state, snap)}
+    ${rpPlayoffPanel(t, snap)}
+    ${(stage==="semis"||stage==="final"||stage==="done") ? rpBracketPanel(t, snap) : ""}
+    ${localOnly}
+    ${isAdmin && played === 0 ? `
+      <div class="edit-sec">
+        <div class="sec-label">Admin</div>
+        ${rpRosterPanel(t, state)}
+      </div>` : isAdmin ? `
+      <div class="edit-sec">
+        <div class="sec-label">Admin</div>
+        <div class="bracket-note">${played} game${played===1?" is":"s are"} on record, so the field is locked. Undo the results first if the draw has to change.</div>
+      </div>` : ""}`;
+}
+
+/* ============================================================
+   ROBIN+ — actions
+   ============================================================ */
+function rpRosterOf(t){
+  const state = rpRead(t);
+  return (rpDraftRoster[t.id] || (state && state.roster) || []).slice();
+}
+function rpSetDraft(t, roster){
+  rpDraftRoster[t.id] = roster;
+  renderTournamentDetail(t.id);
+}
+
+function rpAddPlayer(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const el = $("rpNewPlayer");
+  const name = (el ? el.value : "").trim();
+  if(!name) return toast("Type a name first", true);
+  const roster = rpRosterOf(t);
+  if(roster.some(n=>n.toLowerCase()===name.toLowerCase())) return toast(`${name} is already in`, true);
+  if(roster.length >= RP_MAX_FIELD) return toast(`${RP_MAX_FIELD} players max`, true);
+  roster.push(name);
+  rpSetDraft(t, roster);
+  const el2 = $("rpNewPlayer"); if(el2){ el2.value=""; el2.focus(); }
+}
+window.rpAddPlayer = rpAddPlayer;
+
+function rpRemovePlayer(tid, name){
+  if(!isAdmin) return;
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  rpSetDraft(t, rpRosterOf(t).filter(n=>n!==name));
+}
+window.rpRemovePlayer = rpRemovePlayer;
+
+function rpFillFromLadder(tid){
+  if(!isAdmin) return;
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const roster = rpRosterOf(t);
+  for(const p of currentStandings){
+    if(roster.length >= 5) break;
+    if(!roster.some(n=>n.toLowerCase()===p.name.toLowerCase())) roster.push(p.name);
+  }
+  if(!roster.length) return toast("No rated players on the ladder yet", true);
+  rpSetDraft(t, roster);
+}
+window.rpFillFromLadder = rpFillFromLadder;
+
+async function rpGenerateSchedule(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const roster = rpRosterOf(t);
+  if(roster.length < RP_MIN_FIELD) return toast(`Need at least ${RP_MIN_FIELD} players`, true);
+  if(roster.length > RP_MAX_FIELD) return toast(`${RP_MAX_FIELD} players max`, true);
+
+  const prev = rpRead(t);
+  const playedAny = prev && (prev.order||[]).some(fx=>rpGame(tid, fx.round));
+  if(playedAny) return toast("Games are already on record — undo them first", true);
+  if(prev && prev.cycle && !confirm("Re-draw the schedule? The current pairings are replaced.")) return;
+
+  const seed = (Math.random()*4294967296) >>> 0;
+  const solved = rpSolve(roster, seed);
+  const state = {
+    v: 1,
+    roster,
+    cycle: solved.cycle,
+    order: solved.order,
+    metrics: solved.metrics,
+    seed,
+    bronze: prev ? !!prev.bronze : false,
+    createdAt: new Date().toISOString()
+  };
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  delete rpDraftRoster[tid];
+  rpOpenFixture = null;
+  toast(res.local ? "Schedule drawn ✓ (this device only)" : "Schedule drawn ✓");
+  renderTournaments(); renderTournamentDetail(tid);
+}
+window.rpGenerateSchedule = rpGenerateSchedule;
+
+function rpToggleReport(round, tid){
+  if(!isAdmin) return;
+  rpOpenFixture = (rpOpenFixture === round) ? null : round;
+  renderTournamentDetail(tid);
+}
+window.rpToggleReport = rpToggleReport;
+
+async function rpSaveResult(tid, round, outcome){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const pair = rpPairForRound(t, round);
+  if(!pair || !pair.p1 || !pair.p2) return toast("That game isn't ready yet", true);
+  if(pair.stage !== "group" && Number(outcome) === 0.5) return toast("A knockout game needs a winner", true);
+
+  const el = $("rpScore");
+  const sets = el ? el.value.trim() : "";
+  const existing = rpGame(tid, round);
+  const payload = {p1: pair.p1, p2: pair.p2, outcome: Number(outcome), sets: sets || null,
+                   status: "approved", tournament_id: tid, round};
+
+  const {error} = existing
+    ? await sb.from("matches").update(payload).eq("id", existing.id)
+    : await sb.from("matches").insert({...payload, created_at: new Date().toISOString()});
+  if(error) return toast(error.message, true);
+
+  rpOpenFixture = null;
+  await load();
+  const snap = rpSnapshot(t);
+  if(snap.stage === "done" && snap.br && snap.br.final.winner){
+    toast(`🏆 ${snap.br.final.winner} wins ${t.name}!`);
+    try{ confetti(); }catch(e){}
+  } else {
+    toast("Result recorded ✓");
+  }
+  renderTournaments(); renderTournamentDetail(tid);
+}
+window.rpSaveResult = rpSaveResult;
+
+async function rpUndoResult(tid, round){
+  if(!isAdmin) return;
+  const m = rpGame(tid, round);
+  if(!m) return;
+  if(!confirm(`Undo ${m.p1} vs ${m.p2}? Anything that followed from it re-opens.`)) return;
+  const {error} = await sb.from("matches").delete().eq("id", m.id);
+  if(error) return toast(error.message, true);
+  rpOpenFixture = null;
+  toast("Result undone");
+  await load();
+  renderTournaments(); renderTournamentDetail(tid);
+}
+window.rpUndoResult = rpUndoResult;
+
+async function rpToggleBronze(tid){
+  if(!isAdmin) return;
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const state = rpRead(t); if(!state) return;
+  state.bronze = !state.bronze;
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  renderTournamentDetail(tid);
+}
+window.rpToggleBronze = rpToggleBronze;
+
+async function rpCrown(tid, champ){
+  if(!isAdmin) return;
+  if(!confirm(`Crown ${champ} and close this event?`)) return;
+  const {error} = await sb.from("tournaments").update({status:"completed", champion:champ}).eq("id", tid);
+  if(error) return toast(error.message, true);
+  toast(`🏆 ${champ} crowned!`);
+  try{ confetti(); }catch(e){}
+  await load();
+  renderTournaments(); renderTournamentDetail(tid);
+}
+window.rpCrown = rpCrown;
+
 function tournEditControls(t){
   return `
     <div class="edit-sec">
@@ -10327,6 +11604,7 @@ function tournEditControls(t){
       <div class="grid2">
         <div><label>Format</label>
           <select id="tnEditFormat">
+            <option value="robin2" ${t.format==="robin2"?"selected":""}>Robin+ (2 games each → top 4 → brackets)</option>
             <option value="knockout" ${t.format==="knockout"?"selected":""}>Knockout</option>
             <option value="roundrobin" ${t.format==="roundrobin"?"selected":""}>Round-robin</option>
             <option value="hybrid" ${t.format==="hybrid"?"selected":""}>Hybrid</option>
@@ -10424,13 +11702,28 @@ function renderTournamentDetail(id){
       <div class="panel promo-panel">
         <div class="pred-hint">${tournFormatLabel(t)} · ${t.counts_elo===false?'exhibition (no Elo effect)':'games count toward the ladder'}</div>
         <div class="promo-countdown">Starts ${tournStartLabel(t)}</div>
-        <div class="pred-hint">${t.format==='hybrid'
+        <div class="pred-hint">${t.format==='robin2'
+          ? 'Everyone plays two group games, the top 4 qualify, then semis into a final. A tied qualification line is settled in a 1v1. Build the field now \u2014 the draw is made when you\u2019re ready.'
+          : t.format==='hybrid'
           ? 'Top 3 on the ladder auto-qualify. Seeds 4 and 5 play a play-in match for the last spot. Then it\u2019s a straight 4-player knockout: semis into a final.'
           : 'Bracket opens once the tournament goes live.'}</div>
       </div>
-      ${t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
+      ${t.format==='robin2' ? renderRobinPlus(t) : t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
       ${isAdmin ? tournEditControls(t) : ''}
     `;
+    return;
+  }
+
+  if(t.format === 'robin2'){
+    box.innerHTML = `
+      <div class="sec-label" style="margin-top:26px">${esc(t.name)}
+        ${t.status==='completed'?`<span class="pred-tag">\ud83c\udfc6 ${esc(t.champion||'')}</span>`:''}
+      </div>
+      <div class="panel" style="margin-bottom:14px">
+        <div class="pred-hint">${tournFormatLabel(t)} \u00b7 ${t.counts_elo===false?'exhibition (no Elo effect)':'games count toward the ladder'} \u00b7 ${t.status}</div>
+      </div>
+      ${renderRobinPlus(t)}
+      ${isAdmin && t.status!=='completed' && games.length===0 ? tournEditControls(t) : ''}`;
     return;
   }
 
@@ -15637,6 +16930,7 @@ try{ initTicker(); renderTickerBar(); }catch(e){}
 try{ ptDirInit(); }catch(e){}
 renderComposerIdentity();
 ssRefreshLabels();
+try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo default with the selected format
 (function(){
   let menu=null, activeInput=null, hiIndex=-1;
   function getPlayers(){

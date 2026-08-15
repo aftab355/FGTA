@@ -65,7 +65,19 @@ Overview / Rating models / Validation / Story & records subtabs — 18 advanced 
 Live local weather (Open-Meteo, Toronto) driving ambient theming: background tint + a subtle canvas particle overlay (rain streaks, snow, fog, twinkling stars) behind the app, gated off on mobile for performance.
 
 ### 7. Events
-Tournament creation (admin) and bracket/format display; round-robin supported. Upcoming tournaments show a countdown; admins can go live, edit schedule, or delete a tournament.
+Tournament creation (admin) and bracket/format display; round-robin, knockout, hybrid and **Robin+** supported. Upcoming tournaments show a countdown; admins can go live, edit schedule, or delete a tournament.
+
+#### Robin+ — the group-into-bracket format
+The default format, and the only one with a full interactive flow rather than a bare "add a game" form. Everyone plays **exactly two** group games, the top 4 qualify, and those 4 go straight into semis → final. It is an **exhibition by default — Robin+ games never touch Elo**.
+
+- **The ring.** Two games each means the group is a 2-regular graph, i.e. a ring: sit the field in a circle and each player plays their two neighbours. N players, N games, no byes, nobody sits out. It's drawn as an SVG circle in the event panel — edges light up as games are played, and the next game pulses.
+- **The draw is searched, not shuffled.** `rpSolve()` scores candidate rings on three competing objectives and refines them with 2-opt (a tournament draw is a travelling-salesman problem where "distance" is how bad a matchup would be): **closeness** (Elo-expectation, superlinear so one blowout costs more than two mild mismatches), **fair draw** (the spread of average-opponent-rating across the field — with only two games, drawing the two strongest players eliminates you by luck rather than form, so this is penalised directly), and **freshness** (recency-weighted rematch penalty, ~45-day half-life). Seeded from a rating "snake" plus 28 random restarts. A "Why this draw?" panel shows the numbers.
+- **Order of play** is sequenced separately so nobody plays back-to-back where the ring allows it, with the closest matchup held back for last.
+- **The cut.** Ranked on wins → head-to-head → game difference → games won → strength of opposition → ladder rating. Anything results can settle *is* settled on results; **anything still level across the 4th/5th line plays a 1v1 decider for the spot** rather than being broken on a tiebreak column. `rpPlayoffPlan()` picks the decider shape from the arithmetic: 2 level for 1 spot → one game; 5 level for 4 → the bottom two play; 3 level for 1 → a mini knockout with a bye to the better seed; and (vanishingly rare) 5+ level for 2 → the same ring format run among the tied.
+- **Bracket** seeds #1 v #4 and #2 v #3, with an optional 3rd-place game, then crowns the champion.
+- Admins record results by tapping a fixture; every stage is derived from the `matches` rows, so undoing or editing a result months later re-resolves the whole event.
+
+Requires one column — `tournaments.bracket` — see **`docs/robin-plus.sql`**. Without it the app still works but the draw is stored in the admin's localStorage and won't sync to other devices; the UI says so.
 
 ### 8. Doubles
 Report a doubles match (same Elo engine, scoped to the pairing) and view doubles team standings.
@@ -141,6 +153,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match.
+- docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
 - manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
 
