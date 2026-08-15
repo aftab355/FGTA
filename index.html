@@ -3992,6 +3992,43 @@
     box-shadow:0 0 0 2px var(--neon), 0 0 30px -6px var(--accent-glow)!important;
   }
   :root[data-skin="ffcup"] .avi{box-shadow:0 0 0 1px rgba(61,255,110,.22)}
+  /* ---- everything that was still off the ramp -------------------
+     "LIVE" is a state, not an error, so it moves onto the green with
+     everything else; --danger stays behind for losses and destructive
+     actions only, which is the one place a second colour earns its keep. */
+  :root[data-skin="ffcup"] .bcast-live,
+  :root[data-skin="ffcup"] .ticker-live,
+  :root[data-skin="ffcup"] .pt-live-badge{
+    color:var(--neon)!important;text-shadow:0 0 12px rgba(61,255,110,.55);
+  }
+  :root[data-skin="ffcup"] .bcast-dot,
+  :root[data-skin="ffcup"] .pt-live-dot{
+    background:var(--neon)!important;
+    animation-name:ffLivePulse!important;
+  }
+  @keyframes ffLivePulse{
+    0%{box-shadow:0 0 0 0 rgba(61,255,110,.55)}
+    70%{box-shadow:0 0 0 8px rgba(61,255,110,0)}
+    100%{box-shadow:0 0 0 0 rgba(61,255,110,0)}
+  }
+  :root[data-skin="ffcup"] .bcast-mini .bcast-meta{
+    background:linear-gradient(180deg, var(--neon), #0f8f3c)!important;
+    border-color:rgba(61,255,110,.7)!important;color:#001b0b!important;
+    text-shadow:none!important;
+  }
+  /* emoji that sit in their own element get pulled onto the ramp; the ones
+     loose inside prose are left alone rather than tinting the text with them */
+  :root[data-skin="ffcup"] .bb-ico,
+  :root[data-skin="ffcup"] .ms-grid button span,
+  :root[data-skin="ffcup"] #sfxToggleBtn,
+  :root[data-skin="ffcup"] .crown-ico,
+  :root[data-skin="ffcup"] .streak-badge{
+    filter:grayscale(1) brightness(1.45) sepia(1) hue-rotate(74deg) saturate(4.5);
+  }
+  :root[data-skin="ffcup"] .bb-tab.on .bb-ico{
+    filter:grayscale(1) brightness(1.8) sepia(1) hue-rotate(74deg) saturate(5.5);
+  }
+  :root[data-skin="ffcup"] .streak-badge{color:var(--neon)}
   /* the nav count badges were the last red left in the chrome */
   :root[data-skin="ffcup"] .tab-count{
     background:var(--neon)!important;color:#001b0b!important;
@@ -9441,9 +9478,9 @@ function render(){
         if(rs.current>0.005){
           // currently on top — lead with the live, unbroken streak; only mention the record if it's a longer past reign
           const beat = rs.best > rs.current + 0.5;
-          return ` · 👑${fmtDays(rs.current)}${beat?` <span class="crown-best">(best ${fmtDays(rs.best)})</span>`:''}`;
+          return ` · <span class="crown-ico">👑</span>${fmtDays(rs.current)}${beat?` <span class="crown-best">(best ${fmtDays(rs.best)})</span>`:''}`;
         }
-        if(rs.best>=1) return ` · 👑best ${fmtDays(rs.best)}`; // held it before, not currently on top
+        if(rs.best>=1) return ` · <span class="crown-ico">👑</span>best ${fmtDays(rs.best)}`; // held it before, not currently on top
         return '';
       })();
       return `<div class="brow ${g}" onclick="openProfile('${esc(p.name).replace(/'/g,"\\'")}')">
@@ -9974,7 +10011,7 @@ function renderProfile(p){
       <div class="stat"><div class="stat-v gold">${Math.round(p.peak)}</div><div class="stat-l">Peak</div></div>
       <div class="stat"><div class="stat-v">${p.winRate}%</div><div class="stat-l">Win rate</div></div>
       <div class="stat"><div class="stat-v">${p.games}</div><div class="stat-l">Games</div></div>
-      <div class="stat"><div class="stat-v">${p.reignCurrent>0.005?fmtDays(p.reignCurrent):(p.reignBest>=1?fmtDays(p.reignBest):'—')}</div><div class="stat-l">${p.reignCurrent>0.005?'👑 at #1':'👑 best streak'}</div></div>
+      <div class="stat"><div class="stat-v">${p.reignCurrent>0.005?fmtDays(p.reignCurrent):(p.reignBest>=1?fmtDays(p.reignBest):'—')}</div><div class="stat-l">${p.reignCurrent>0.005?'<span class="crown-ico">👑</span> at #1':'<span class="crown-ico">👑</span> best streak'}</div></div>
       <div class="stat"><div class="stat-v">${p.longestW||'—'}</div><div class="stat-l">Best streak</div></div>
     </div>
 
@@ -10455,7 +10492,13 @@ function pinnedComment(matchId){
 }
 
 /* ---------- rating history chart ---------- */
-const CHART_COLORS = ["#4ade80","#f5c451","#6ab7ff","#f0665a","#c58bf5","#5ce0c0","#ff9d5c","#e86ab0"];
+/* Avatars, @mentions and every chart series draw from this one list, which is
+   why a rainbow here put a purple initials bubble in the middle of the podium.
+   The cup ramp is a single hue in eight steps, ordered bright/dark/bright so
+   neighbouring chart series stay tellable apart without leaving the green. */
+const CHART_COLORS = document.documentElement.dataset.skin === "ffcup"
+  ? ["#3dff6e","#0f8f3c","#a6ffc4","#2bbf63","#dcffe8","#17e05c","#6fd996","#0a6b2c"]
+  : ["#4ade80","#f5c451","#6ab7ff","#f0665a","#c58bf5","#5ce0c0","#ff9d5c","#e86ab0"];
 let isolated = null; // name of isolated player, or null for all
 
 function drawChart(standings){
@@ -14986,9 +15029,22 @@ function currentSurface(){ try{ return localStorage.getItem("fgta_surface")||"ha
 function applySurface(key){
   const s=SURFACES[key]||SURFACES.hard;
   const r=document.body;
-  r.style.setProperty("--accent",s.accent);
-  r.style.setProperty("--accent-dim",s.dim);
-  r.style.setProperty("--bg",s.tint);
+  /* During the FF Cup the skin owns the palette. This function writes
+     --accent/--accent-dim/--bg as INLINE styles on <body>, and an inline
+     custom property outranks every stylesheet rule — which is exactly how
+     the default "hard court" pink got back into the LIVE badge, the
+     "copy for chat" link and the Elo pool line while everything painted
+     from the skin's own literals stayed green. The preference is still
+     stored and the button still reads correctly; it just doesn't paint. */
+  if(document.documentElement.dataset.skin==="ffcup"){
+    r.style.removeProperty("--accent");
+    r.style.removeProperty("--accent-dim");
+    r.style.removeProperty("--bg");
+  }else{
+    r.style.setProperty("--accent",s.accent);
+    r.style.setProperty("--accent-dim",s.dim);
+    r.style.setProperty("--bg",s.tint);
+  }
   try{ localStorage.setItem("fgta_surface",key); }catch(e){}
   const b=$("surfBtn"); if(b) b.textContent="◉ "+s.name;
 }
