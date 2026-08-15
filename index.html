@@ -58,7 +58,7 @@
     --shadow:0 24px 60px -28px rgba(0,0,0,.6);
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
+  html{scroll-behavior:smooth;background:var(--bg)}
   body{
     background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",'Outfit',sans-serif;
@@ -2582,12 +2582,19 @@
     opacity:1!important;
   }
 
-  /* the whole page: true near-black, with a barely-there ambient wash top and bottom */
+  /* the whole page: true near-black, with a barely-there ambient wash top and bottom.
+     The solid colour now lives on <html> (see the rule up top, added as a guard
+     against an unpainted-canvas flash on app open), so body keeps only the two
+     translucent washes and lays no opaque base under them. That matters because
+     negative-z-index layers paint before the backgrounds of in-flow blocks: while
+     html was transparent, body's background propagated to the canvas and never
+     painted as a box, but the moment html carries one, an opaque body draws over
+     anything sitting behind it. */
   body{
     background:
       radial-gradient(ellipse 120% 70% at 50% -10%, color-mix(in srgb,var(--accent) 4%, transparent), transparent 55%),
       radial-gradient(ellipse 100% 60% at 50% 108%, color-mix(in srgb,var(--accent) 3%, transparent), transparent 55%),
-      var(--bg)!important;
+      transparent!important;
     background-attachment:fixed;
   }
 
@@ -3545,7 +3552,7 @@
        weightless, and never darkens the edge the object sits on */
     --shadow:0 48px 90px -38px rgba(0,0,0,1);
   }
-  :root[data-skin="ffcup"]{background:#000}
+  :root[data-skin="ffcup"]{background:#000!important}
   :root[data-skin="ffcup"] ::selection{background:var(--neon);color:#001b0b}
 
   /* -- 2. the black hole ------------------------------------------
@@ -3612,10 +3619,15 @@
   }
   /* the void stays clean — the live weather canvas is off for the cup */
   :root[data-skin="ffcup"] #wxfx{display:none!important}
-  /* page itself is pure black; the only wash is what the void throws up */
+  /* The black is painted on <html>, and <body> must stay transparent.
+     Painting order puts negative-z-index children (the void, #hudGrid at
+     -3) BEFORE the backgrounds of in-flow block descendants, so an opaque
+     background on body draws straight over the black hole. This used to be
+     safe only by accident: with no background on html, body's propagated to
+     the canvas and never painted as a box. Now that html carries one of its
+     own, body has to give its up. */
   :root[data-skin="ffcup"] body{
-    background:#000!important;
-    background-attachment:fixed;
+    background:transparent!important;
   }
 
   /* -- 3. jet black glass -----------------------------------------
@@ -17773,18 +17785,6 @@ const runningInstalled = window.matchMedia("(display-mode: standalone)").matches
   || window.navigator.standalone;
 if(runningInstalled){
   const b=$("installBtn"); if(b) b.style.display="none";
-}
-
-/* Installed apps get the manifest's "fullscreen" display mode (hides the
-   status bar) where Chrome supports it, but collapsing the Samsung-style
-   bottom nav bar also needs the Fullscreen API, which browsers only allow
-   from a real tap. So on an installed app's first tap, ask for fullscreen;
-   if the OS/browser declines (e.g. iOS has no such API) this just no-ops. */
-if(runningInstalled && document.documentElement.requestFullscreen && !document.fullscreenElement){
-  document.addEventListener("pointerdown", function goFullscreen(){
-    document.removeEventListener("pointerdown", goFullscreen);
-    document.documentElement.requestFullscreen().catch(()=>{});
-  }, {once:true});
 }
 
 </script>
