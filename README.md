@@ -148,17 +148,22 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 
 For the duration of the FF Cup the app wears a tournament skin — **jet black · anti-gravity**. Everything above still describes the permanent design; the skin is a layer on top of it, not a replacement.
 
-**How it is switched on:** `data-skin="ffcup"` on the `<html>` element. The skin's CSS is one block at the end of the `<style>` in `index.html`, headed `FF CUP EVENT SKIN`, and every rule in it is scoped to `:root[data-skin="ffcup"]`.
+**Runs Aug 17 – Sep 1.** Those two dates live in one place: the `FF CUP WINDOW` script just after `</header>` in `index.html`. The badge in the top bar and the lockup on the load screen both read from them, so they can't drift. To move the cup, change `START` / `END` there and nothing else.
 
-**To take it off after the cup:**
-1. Delete `data-skin="ffcup"` from the `<html>` tag — the app returns to the palette documented above immediately, nothing else required.
-2. Then delete the `FF CUP EVENT SKIN` block from the `<style>`, remove the `<span class="ffcup-chip">` from the top bar, and restore `theme_color` / `background_color` in `manifest.webmanifest` (they were `#f8f0e0` and `#0a0814`) and the `theme-color` meta in `index.html`.
+**How it is switched on:** `data-skin="ffcup"` on the `<html>` element. The skin's CSS is one block at the end of the `<style>` in `index.html`, headed `FF CUP EVENT SKIN`, and every rule in it is scoped to `:root[data-skin="ffcup"]`. The window script also sets `data-cup="pre"` / `"live"` on the same element (the badge's date line pulses only while the cup is actually on).
+
+**It retires itself.** After Sep 1 the window script removes `data-skin` on load and the app is back to normal with no intervention. That leaves only the dead CSS to delete:
+
+1. Delete the `FF CUP EVENT SKIN` block from the `<style>`.
+2. Delete the `FF CUP WINDOW` script after `</header>`, the `<span class="ffcup-chip">` in the top bar, and the `<div class="ls-cup">` on the load screen.
+3. Restore `theme_color` / `background_color` in `manifest.webmanifest` (they were `#f8f0e0` and `#0a0814`) and the `theme-color` meta in `index.html`.
 
 **What the skin does:**
 - **Deeper blacks.** `--bg` is `#000000`; panels are `#070707` falling to pure black. The live weather themes (`body[data-heat]` / `body[data-wx]`) and the weather FX canvas are overridden off so the black stays black.
 - **One hue.** Every accent — pink, cyan, chartreuse, and the gold/silver/bronze medals — collapses to neon green `#3dff6e` (`--neon`), with `#ccffdd` as the white-hot tube core and two dimmer greens standing in for silver and bronze. Only `--danger` survives as a second colour, desaturated to `#e8596f`, because a loss has to read as a loss.
-- **Jet black surfaces.** Panels, the board, pending rows, menus and sheets are polished piano black: a wet vertical fall to black, a hard specular line along the top edge, a soft neon rim bleeding in from inside, and one lit filament across the top in place of the old 4px broadcast strip.
+- **Jet black surfaces, chrome-rimmed.** Panels, the board, pending rows, menus and sheets are polished piano black lit like metal: the rim is a chrome gradient rather than a hairline, the body is dark in the middle and lifted at *both* ends (the ground bounce coming back up the lower edge is what makes it read as a curved polished face instead of a flat slab), and an elliptical specular sits on top and rolls across on hover. One lit neon filament replaces the old 4px broadcast strip. Two chrome ramps back this: `--chrome` / `--chrome-rim` for surfaces, and `--chrome-text` for the two wordmarks — floored at a mid grey, because the dark half of a metal ramp reads as depth on a surface but as a hole inside a letter on a black page.
 - **Anti-gravity.** Nothing rests on anything. Shadows are thrown far below with no contact point, `<section>`s drift on long out-of-phase cycles (`ffFloat`), content rises in from below, and the load screen's ball floats instead of bouncing. The float is deliberately on `<section>` and never on `.panel` / `.pod`, because the cursor-tilt script writes inline transforms onto those.
+- **Branding.** Two placements, no banners: a chrome-plated badge in the top bar (`FF CUP` struck in metal over the dates in neon) and the same lockup on the load screen. The brand ball becomes a mirrored chrome sphere with the neon coming back around its lower rim — the only colour on it, since there is nothing else in the scene to reflect.
 - **The void.** The retired `#hudGrid` layer is reused as a black hole behind the app: light bending toward a horizon, a masked accretion ring turning once every 96s, and infalling dust. No new markup, and it disappears with the skin.
 - Everything animated is off under `prefers-reduced-motion`, and the accretion ring is enlarged, blurred further and slowed on phones (it is the one expensive layer).
 

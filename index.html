@@ -3505,6 +3505,26 @@
     --neon:#3dff6e;
     --neon-hot:#ccffdd;
     --accent:#3dff6e;
+
+    /* CHROME — the surfer's skin. A metal ramp is not a light-to-dark
+       fade: it is the horizon reflected in a curved mirror, so it runs
+       highlight → sky → horizon line → ground → bounce → highlight. The
+       hard stop in the middle is what makes it read as polished metal
+       rather than plastic, and the faint green in the bounce is the only
+       light source in the scene coming back off the surface. */
+    --chrome:linear-gradient(160deg,
+      #ffffff 0%, #dfeae4 6%, #93a49b 17%, #39423d 30%,
+      #050706 47%, #0b0f0d 53%,
+      #454f49 66%, #9fb3a8 79%, #e6f2ec 90%, #ffffff 100%);
+    --chrome-rim:linear-gradient(160deg,
+      rgba(255,255,255,.85) 0%, rgba(190,215,200,.35) 16%, rgba(255,255,255,.04) 42%,
+      rgba(255,255,255,.02) 58%, rgba(120,140,130,.28) 82%, rgba(255,255,255,.6) 100%);
+    /* the same metal, but floored at a mid grey: on a surface the dark half
+       of the ramp is the ground and reads as depth, whereas inside a letter
+       on a black page it is just a hole, and the word vanishes */
+    --chrome-text:linear-gradient(180deg,
+      #ffffff 0%, #eaf2ee 14%, #a9b8b0 34%, #67746d 48%,
+      #d4e1da 60%, #ffffff 74%, #aebbb4 92%, #e9f1ed 100%);
     --accent-dim:#04170c;
     --accent-glow:rgba(61,255,110,.42);
 
@@ -3610,20 +3630,39 @@
   :root[data-skin="ffcup"] .util-menu,
   :root[data-skin="ffcup"] .ac-menu{
     background:
-      linear-gradient(163deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,.014) 22%, transparent 46%),
-      linear-gradient(180deg, #0d0e0d 0%, #060706 42%, #000 100%)!important;
-    border:1px solid rgba(255,255,255,.06)!important;
+      /* the sky, reflected in the top of the slab */
+      linear-gradient(178deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.042) 6%,
+        rgba(255,255,255,.011) 17%, transparent 34%) padding-box,
+      /* one raking specular off the upper-left corner */
+      linear-gradient(148deg, rgba(255,255,255,.085) 0%, rgba(255,255,255,.018) 13%,
+        transparent 31%) padding-box,
+      /* the body. Dark in the middle and lifted at BOTH ends — a matte slab
+         is dark-to-darker, a curved polished one carries the ground bounce
+         back up along its lower edge, and that is the whole 3D read. */
+      linear-gradient(180deg, #101312 0%, #080a09 30%, #000 62%, #050706 88%, #0e1211 100%) padding-box,
+      /* the rim itself is chrome, not a hairline */
+      var(--chrome-rim) border-box!important;
+    border:1px solid transparent!important;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.11),
+      inset 0 1px 0 rgba(255,255,255,.34),
+      inset 0 -1px 0 rgba(255,255,255,.11),
+      inset 0 14px 22px -20px rgba(255,255,255,.55),
+      inset 0 -30px 46px -38px rgba(204,255,221,.4),
       inset 0 0 44px -24px rgba(61,255,110,.26),
       0 44px 84px -36px rgba(0,0,0,1),
       0 0 30px -20px rgba(61,255,110,.1)!important;
   }
-  /* the polished reflection rolling across the top of the slab */
+  /* the highlight sitting ON the surface — an ellipse thrown from one light
+     off frame, which is what separates a glossy curved face from a flat one.
+     Oversized background box so hover can roll it across the slab. */
   :root[data-skin="ffcup"] .panel::after{
-    height:58%;
-    background:linear-gradient(165deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.018) 34%, transparent 72%);
+    height:70%;
+    background:radial-gradient(120% 88% at 16% -34%,
+      rgba(255,255,255,.115) 0%, rgba(255,255,255,.035) 36%, transparent 64%);
+    background-size:210% 210%;background-position:0% 0%;
+    transition:background-position .8s cubic-bezier(.16,1,.3,1);
   }
+  :root[data-skin="ffcup"] .panel:hover::after{background-position:58% 0%}
   /* the broadcast strip becomes one lit filament, fading out at both ends */
   :root[data-skin="ffcup"] .panel::before{
     height:1px;opacity:1;
@@ -3635,7 +3674,10 @@
   }
   :root[data-skin="ffcup"] .panel:hover{
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.16),
+      inset 0 1px 0 rgba(255,255,255,.45),
+      inset 0 -1px 0 rgba(255,255,255,.16),
+      inset 0 14px 22px -20px rgba(255,255,255,.7),
+      inset 0 -30px 46px -36px rgba(204,255,221,.5),
       inset 0 0 44px -22px rgba(61,255,110,.4),
       0 60px 100px -34px rgba(0,0,0,1),
       0 0 40px -18px rgba(61,255,110,.2)!important;
@@ -3701,33 +3743,67 @@
     background:linear-gradient(90deg, #000, #050705 50%, #000)!important;
     border-top:1px solid rgba(61,255,110,.18)!important;
   }
-  /* brand mark: a neon sphere with no ground, not a tennis ball */
+  /* the brand mark goes liquid chrome: a mirrored sphere with nothing to
+     reflect but the void — so the only colour on it is the neon coming
+     back around its lower rim */
   :root[data-skin="ffcup"] .tb-ball{
-    background:radial-gradient(circle at 36% 30%, var(--neon-hot) 0%, var(--neon) 42%, #0a6b32 100%)!important;
+    background:radial-gradient(circle at 33% 24%,
+      #ffffff 0%, #e6f1ea 7%, #9dafa5 22%, #4a5450 38%, #10130f 60%, #000 100%)!important;
     box-shadow:
-      inset -2px -2px 5px rgba(0,0,0,.55),
-      inset 2px 2px 3px rgba(255,255,255,.45),
-      0 0 18px -1px var(--ball-glow),
-      0 0 40px -6px var(--ball-glow)!important;
+      inset 2px 2px 3px rgba(255,255,255,.7),
+      inset -3px -4px 7px rgba(61,255,110,.55),
+      0 0 16px -3px var(--ball-glow),
+      0 0 34px -8px var(--ball-glow)!important;
     animation:ffHover 6s ease-in-out infinite;
+  }
+  :root[data-skin="ffcup"] .tb-ball::after{
+    border-top-color:rgba(255,255,255,.75);
   }
   :root[data-skin="ffcup"] .tb-title{color:var(--ink)}
   :root[data-skin="ffcup"] .tb-live{color:var(--neon);text-shadow:0 0 14px rgba(61,255,110,.6)}
 
-  /* the event chip — markup carries it, the skin is what reveals it */
+  /* ---- the event badge -------------------------------------------
+     One element carries the whole branding job: a chrome-plated plate
+     with the cup's name struck into it and its dates underneath. The
+     markup holds it, the skin is what reveals it, and cupDates() below
+     fills the second line with where the tournament actually is. */
   .ffcup-chip{display:none}
   :root[data-skin="ffcup"] .ffcup-chip{
-    display:inline-flex;align-items:center;gap:5px;flex-shrink:0;
-    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
-    letter-spacing:1.6px;text-transform:uppercase;color:var(--neon);
-    padding:4px 10px;border-radius:var(--r-pill);
-    border:1px solid rgba(61,255,110,.4);
-    background:rgba(61,255,110,.06);
-    box-shadow:0 0 18px -6px var(--accent-glow), inset 0 0 14px -8px var(--neon);
-    text-shadow:0 0 10px rgba(61,255,110,.7);
+    display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:1px;flex-shrink:0;line-height:1;
+    padding:5px 13px 6px;border-radius:11px;
+    border:1px solid transparent;
+    background:
+      linear-gradient(180deg, #232926 0%, #0d100e 34%, #000 66%, #0b0f0d 84%, #1c2320 100%) padding-box,
+      var(--chrome-rim) border-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.55),
+      inset 0 -1px 0 rgba(204,255,221,.2),
+      0 0 20px -8px var(--accent-glow),
+      0 12px 22px -14px rgba(0,0,0,1);
     animation:ffHover 7s ease-in-out infinite;
   }
-  @media(max-width:420px){ :root[data-skin="ffcup"] .ffcup-chip{display:none} }
+  /* the name is struck in polished metal — the one chrome wordmark in the
+     app, which is what makes it read as a badge and not another label */
+  :root[data-skin="ffcup"] .ffcup-chip b{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;
+    letter-spacing:2.6px;text-transform:uppercase;
+    background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 0 8px rgba(61,255,110,.2));
+  }
+  :root[data-skin="ffcup"] .ffcup-chip i{
+    font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;font-style:normal;
+    letter-spacing:1.1px;text-transform:uppercase;color:var(--neon);
+    text-shadow:0 0 10px rgba(61,255,110,.7);
+  }
+  /* while it is actually on, the badge's underline breathes */
+  :root[data-skin="ffcup"][data-cup="live"] .ffcup-chip i{animation:hudPulse 2.2s ease-in-out infinite}
+  @media(max-width:560px){
+    :root[data-skin="ffcup"] .ffcup-chip{padding:4px 9px 5px}
+    :root[data-skin="ffcup"] .ffcup-chip b{font-size:9.5px;letter-spacing:2px}
+    :root[data-skin="ffcup"] .ffcup-chip i{font-size:7px;letter-spacing:.8px}
+  }
 
   /* navigation: active state is lit, never a white block */
   :root[data-skin="ffcup"] .tb-tab.on{
@@ -3790,11 +3866,15 @@
 
   /* buttons hang on their own neon light instead of resting on a shadow */
   :root[data-skin="ffcup"] .btn{
-    background:var(--neon);color:#001b0b;
+    /* a lit dome, not a filled rectangle: bright crown, saturated waist,
+       and a dark foot so the button has a top and a bottom to it */
+    background:linear-gradient(180deg,#b6ffcd 0%,#5fff86 26%,#3dff6e 52%,#17d64f 82%,#0fb443 100%);
+    color:#001b0b;
     box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.85),
+      inset 0 -2px 6px rgba(0,60,20,.45),
       0 22px 44px -22px rgba(61,255,110,.6),
-      0 0 26px -16px rgba(61,255,110,.45),
-      inset 0 1px 0 rgba(255,255,255,.5)!important;
+      0 0 26px -16px rgba(61,255,110,.45)!important;
   }
   :root[data-skin="ffcup"] .btn:hover{
     transform:translateY(-2px);
@@ -3878,18 +3958,21 @@
   :root[data-skin="ffcup"] .pod-1 .pod-base,
   :root[data-skin="ffcup"] .pod-2 .pod-base,
   :root[data-skin="ffcup"] .pod-3 .pod-base{
-    background:linear-gradient(180deg, #0e100f, #000 70%)!important;
+    background:linear-gradient(180deg,
+      #1a1f1c 0%, #0c0f0d 18%, #000 58%, #060907 84%, #131816 100%)!important;
     color:var(--neon)!important;
-    border-top:1px solid rgba(61,255,110,.55);
+    border-top:1px solid rgba(255,255,255,.55);
     /* the light is on the top edge only — a glow on all four sides makes the
        plinth look like it is resting in a pool of it, which is the one thing
        nothing here is allowed to do */
     box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.5),
+      inset 0 -1px 0 rgba(204,255,221,.22),
       inset 0 14px 26px -22px var(--neon),
       0 44px 70px -36px rgba(0,0,0,1)!important;
   }
-  :root[data-skin="ffcup"] .pod-2 .pod-base{border-top-color:rgba(61,255,110,.32);color:#9fd9b4!important}
-  :root[data-skin="ffcup"] .pod-3 .pod-base{border-top-color:rgba(61,255,110,.2);color:#6f9c80!important}
+  :root[data-skin="ffcup"] .pod-2 .pod-base{border-top-color:rgba(255,255,255,.32);color:#9fd9b4!important}
+  :root[data-skin="ffcup"] .pod-3 .pod-base{border-top-color:rgba(255,255,255,.2);color:#6f9c80!important}
   /* the plinth sheen swept white — silver in a scene with no silver in it */
   :root[data-skin="ffcup"] .pod-base::after{
     background:linear-gradient(105deg, transparent, rgba(61,255,110,.16), transparent)!important;
@@ -3986,6 +4069,29 @@
   :root[data-skin="ffcup"] .ls-word span{
     color:var(--neon);text-shadow:0 0 18px rgba(61,255,110,.7), 0 0 44px rgba(61,255,110,.35);
   }
+  /* the cup lockup under the wordmark — the second and last place the
+     branding appears, and the only other chrome type in the app */
+  .ls-cup{display:none}
+  :root[data-skin="ffcup"] .ls-cup{
+    display:flex;flex-direction:column;align-items:center;gap:9px;
+    position:absolute;bottom:14%;left:0;right:0;text-align:center;
+    opacity:0;animation:ls-word-in .7s ease 1.65s forwards;
+  }
+  :root[data-skin="ffcup"] .ls-cup b{
+    font-family:'JetBrains Mono',monospace;font-weight:800;
+    font-size:clamp(13px,3.2vw,18px);letter-spacing:clamp(5px,1.6vw,9px);
+    text-transform:uppercase;text-indent:clamp(5px,1.6vw,9px);
+    background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 0 14px rgba(61,255,110,.22));
+  }
+  :root[data-skin="ffcup"] .ls-cup i{
+    font-family:'JetBrains Mono',monospace;font-style:normal;font-weight:700;
+    font-size:clamp(8.5px,2vw,10px);letter-spacing:2.4px;text-transform:uppercase;
+    color:var(--neon);text-shadow:0 0 14px rgba(61,255,110,.6);
+    padding-top:9px;border-top:1px solid rgba(255,255,255,.14);
+    min-width:clamp(150px,34vw,230px);
+  }
 
   /* -- 8. motion & mobile budget ----------------------------------- */
   @media(max-width:860px){
@@ -4023,6 +4129,7 @@
     <circle class="ls-ball" cx="150" cy="200" r="9" fill="var(--ball)"/>
   </svg>
   <div class="ls-word">FGTA<span>LADDER</span></div>
+  <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 1</i></div>
 </div>
 
 <!-- ===== APP SHELL: TOP BAR (lives outside .wrap so transforms on .wrap never break its fixed positioning) ===== -->
@@ -4033,7 +4140,7 @@
       <span class="tb-title">FGTA</span>
       <span class="tb-live" id="tagline">loading…</span>
     </div>
-    <span class="ffcup-chip" title="FF Cup">FF Cup</span>
+    <span class="ffcup-chip" id="ffcupChip" title="FF Cup tournament"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 1</i></span>
   </div>
 
   <nav class="tb-tabs" id="topTabs">
@@ -4072,6 +4179,34 @@
     <button onclick="document.getElementById('adminBtn').click();toggleUtilMenu()" id="adminBtn">◆ Admin</button>
   </div>
 </header>
+
+<script>
+/* ===== FF CUP WINDOW =====
+   The tournament's two dates live here and nowhere else — the badge in the
+   top bar and the lockup on the load screen both read from them, so they
+   cannot drift apart. Runs standalone (not inside the app script) so the
+   branding is correct even if the app itself fails to boot.
+
+   When the cup is over this drops data-skin and the app is back to its
+   normal self on the next paint; deleting the CSS block is then the only
+   cleanup left. */
+(function(){
+  var START='2026-08-17', END='2026-09-01';           // inclusive, local time
+  function at(s,endOfDay){
+    var p=s.split('-');
+    return new Date(+p[0], p[1]-1, +p[2], endOfDay?23:0, endOfDay?59:0, endOfDay?59:0);
+  }
+  function short(s){
+    return at(s).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  }
+  var root=document.documentElement, now=new Date(), start=at(START), end=at(END,true);
+  if(now>end){ root.removeAttribute('data-skin'); return; }
+  root.dataset.cup = now<start ? 'pre' : 'live';
+  var range = short(START)+' – '+short(END);
+  [document.getElementById('ffcupDates'), document.querySelector('.ls-cup i')]
+    .forEach(function(el){ if(el) el.textContent = range; });
+})();
+</script>
 
 <!-- ===== APP SHELL: MOBILE BOTTOM BAR (also outside .wrap) ===== -->
 <nav class="botbar" id="botbar">
