@@ -144,6 +144,24 @@ In the target codebase, model these as: a data layer (whatever the app already u
 ### Spacing
 No formal scale — panels use 14–20px internal padding, sections stack with margin-top: 34px (26px on mobile), grids use 8–14px gaps. Recreate with whatever spacing scale the target design system already has, snapping to the nearest step.
 
+## FF Cup event skin (temporary)
+
+For the duration of the FF Cup the app wears a tournament skin — **jet black · anti-gravity**. Everything above still describes the permanent design; the skin is a layer on top of it, not a replacement.
+
+**How it is switched on:** `data-skin="ffcup"` on the `<html>` element. The skin's CSS is one block at the end of the `<style>` in `index.html`, headed `FF CUP EVENT SKIN`, and every rule in it is scoped to `:root[data-skin="ffcup"]`.
+
+**To take it off after the cup:**
+1. Delete `data-skin="ffcup"` from the `<html>` tag — the app returns to the palette documented above immediately, nothing else required.
+2. Then delete the `FF CUP EVENT SKIN` block from the `<style>`, remove the `<span class="ffcup-chip">` from the top bar, and restore `theme_color` / `background_color` in `manifest.webmanifest` (they were `#f8f0e0` and `#0a0814`) and the `theme-color` meta in `index.html`.
+
+**What the skin does:**
+- **Deeper blacks.** `--bg` is `#000000`; panels are `#070707` falling to pure black. The live weather themes (`body[data-heat]` / `body[data-wx]`) and the weather FX canvas are overridden off so the black stays black.
+- **One hue.** Every accent — pink, cyan, chartreuse, and the gold/silver/bronze medals — collapses to neon green `#3dff6e` (`--neon`), with `#ccffdd` as the white-hot tube core and two dimmer greens standing in for silver and bronze. Only `--danger` survives as a second colour, desaturated to `#e8596f`, because a loss has to read as a loss.
+- **Jet black surfaces.** Panels, the board, pending rows, menus and sheets are polished piano black: a wet vertical fall to black, a hard specular line along the top edge, a soft neon rim bleeding in from inside, and one lit filament across the top in place of the old 4px broadcast strip.
+- **Anti-gravity.** Nothing rests on anything. Shadows are thrown far below with no contact point, `<section>`s drift on long out-of-phase cycles (`ffFloat`), content rises in from below, and the load screen's ball floats instead of bouncing. The float is deliberately on `<section>` and never on `.panel` / `.pod`, because the cursor-tilt script writes inline transforms onto those.
+- **The void.** The retired `#hudGrid` layer is reused as a black hole behind the app: light bending toward a horizon, a masked accretion ring turning once every 96s, and infalling dust. No new markup, and it disappears with the skin.
+- Everything animated is off under `prefers-reduced-motion`, and the accretion ring is enlarged, blurred further and slowed on phones (it is the one expensive layer).
+
 ## Assets
 No custom illustrations or photography — avatars are generated from initials (a small avatar(name, size) helper drawing colored circles + initials). Fonts are loaded from Google Fonts (Outfit, JetBrains Mono). Weather icons/emoji are used inline (no icon font/library). No other external image assets.
 
