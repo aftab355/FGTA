@@ -11,7 +11,9 @@
 </template>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<!-- matches the cup skin's --bg, so the phone's own chrome joins the grade
+     instead of framing it in black. Goes back to #000000 with the skin. -->
+<meta name="theme-color" content="#16000e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -3705,113 +3707,154 @@
 
 
   /* ================================================================
-     FF CUP EVENT SKIN — "JET BLACK · ANTI-GRAVITY"
+     FF CUP EVENT SKIN — "HIGH SUMMER · BLOWN OUT"
 
      Temporary tournament dressing for the FF Cup. Every rule below is
      scoped to :root[data-skin="ffcup"], so the entire look comes off
      by deleting data-skin="ffcup" from <html> — nothing underneath was
      changed. After the cup: drop the attribute, then delete this block.
 
-     The idea: the page is a slab of jet-black glass floating inside a
-     black hole. Surfaces are polished piano black (iPhone 7 Jet Black —
-     deep, wet, mirror-finish, a hard specular line along the top edge).
-     Every accent collapses to ONE hue, neon green, used like a lit tube
-     rather than a fill. Nothing rests on anything: cards drift, shadows
-     are cast far below with no contact point, and the only light in the
-     scene is the accretion glow bending around the horizon behind it.
+     The idea: the cup is played at the hottest hour of the year and the
+     page is graded like a frame of it — not lit, GRADED. The compositing
+     rules, and they are the whole look:
+
+       · nothing is neutral. There is no black and no grey anywhere in
+         the skin; the darks are a deep saturated plum, so even the
+         shadow side of a surface still carries the hue.
+       · two hues, hard against each other: hot magenta is the sky and
+         burning amber-gold is the ground bounce. Every ramp in the file
+         runs between those two, and the collision is the point.
+       · the light blows out. Highlights don't stop at the surface —
+         they bloom past it into the field, the way a hot key light
+         clips on film. Cores go white-gold, not white.
+       · shadows are cast IN COLOUR (deep plum, never black), so
+         nothing on the page looks cut out and pasted on.
+
+     Which is the opposite of the jet-black pass this replaces: that one
+     removed colour to make one green tube glow in a void. This one
+     floods the frame and lets the type survive it.
      ================================================================ */
 
-  /* -- 1. palette · one hue, and the absence of everything else ----
+  /* -- 1. palette · two hues, blown out ----------------------------
      Written at :root AND at body so it outranks the live weather
      themes (body[data-heat] / body[data-wx]), which retint the app at
-     runtime. During the cup the void wins. */
+     runtime. During the cup the heat wins. */
   :root[data-skin="ffcup"],
   :root[data-skin="ffcup"] body,
   :root[data-skin="ffcup"] body[data-heat],
   :root[data-skin="ffcup"] body[data-wx]{
     color-scheme:dark;
 
-    /* the void: not "dark grey", actual black */
-    --bg:#000000;
-    --panel:#070707;
-    --panel-2:#101110;
+    /* the field: the darkest thing on the page is still magenta. Pure
+       black is banned here — the second a #000 lands in a graded frame
+       it reads as a hole punched in it. */
+    --bg:#16000e;
+    --panel:#24051a;
+    --panel-2:#380a29;
 
-    /* hairlines are light leaking along a polished edge, not borders */
-    --line:rgba(255,255,255,.07);
-    --line-soft:rgba(255,255,255,.035);
+    /* hairlines are hot light leaking along an edge, so they carry the
+       sky's colour rather than being white at low opacity */
+    --line:rgba(255,170,215,.16);
+    --line-soft:rgba(255,170,215,.08);
 
-    --ink:#e8fff0;
-    --muted:#79877f;
-    --dim:#454e48;
+    --ink:#fff2f8;
+    --muted:#d79bbc;
+    --dim:#96566f;
 
-    /* the single accent — neon green, plus its white-hot tube core */
-    --neon:#3dff6e;
-    --neon-hot:#ccffdd;
-    --accent:#3dff6e;
+    /* the two hues and the white-gold core they blow out to:
+         --hot   the sky — the event's colour, used as a lit tube
+         --sun   the ground bounce — the second half of every ramp
+         --flare the clipped core of any light bright enough to blow */
+    --hot:#ff2d8f;
+    --sun:#ff8a2b;
+    --flare:#ffe6a8;
+    --accent:#ff2d8f;
 
-    /* CHROME — the surfer's skin. A metal ramp is not a light-to-dark
-       fade: it is the horizon reflected in a curved mirror, so it runs
-       highlight → sky → horizon line → ground → bounce → highlight. The
-       hard stop in the middle is what makes it read as polished metal
-       rather than plastic, and the faint green in the bounce is the only
-       light source in the scene coming back off the surface. */
+    /* CHROME — a metal ramp is not a light-to-dark fade: it is the
+       horizon reflected in a curved mirror, so it runs highlight → sky →
+       horizon line → ground → bounce → highlight. The hard stop in the
+       middle is what makes it read as polished metal rather than
+       plastic. Here the sky it reflects is magenta and the ground it
+       picks back up is amber, which is what makes the wordmark read as
+       summer rather than as chrome-plated anything. */
     --chrome:linear-gradient(160deg,
-      #ffffff 0%, #dfeae4 6%, #93a49b 17%, #39423d 30%,
-      #050706 47%, #0b0f0d 53%,
-      #454f49 66%, #9fb3a8 79%, #e6f2ec 90%, #ffffff 100%);
+      #ffffff 0%, #ffe4f2 6%, #ff8dc4 17%, #a11f60 30%,
+      #2a0219 47%, #3d0a20 53%,
+      #c2521f 66%, #ff9d3d 79%, #ffe3b0 90%, #ffffff 100%);
     --chrome-rim:linear-gradient(160deg,
-      rgba(255,255,255,.85) 0%, rgba(190,215,200,.35) 16%, rgba(255,255,255,.04) 42%,
-      rgba(255,255,255,.02) 58%, rgba(120,140,130,.28) 82%, rgba(255,255,255,.6) 100%);
-    /* the same metal, but floored at a mid grey: on a surface the dark half
-       of the ramp is the ground and reads as depth, whereas inside a letter
-       on a black page it is just a hole, and the word vanishes */
+      rgba(255,255,255,.9) 0%, rgba(255,140,200,.5) 16%, rgba(255,190,220,.06) 42%,
+      rgba(255,200,140,.06) 58%, rgba(255,150,60,.42) 82%, rgba(255,236,200,.7) 100%);
+    /* the same metal, but floored at a mid tone: on a surface the dark
+       half of the ramp is the ground and reads as depth, whereas inside
+       a letter it is just a hole, and the word vanishes */
     --chrome-text:linear-gradient(180deg,
-      #ffffff 0%, #eaf2ee 14%, #a9b8b0 34%, #67746d 48%,
-      #d4e1da 60%, #ffffff 74%, #aebbb4 92%, #e9f1ed 100%);
-    --accent-dim:#04170c;
-    --accent-glow:rgba(61,255,110,.42);
+      #ffffff 0%, #ffe9f5 12%, #ff8dc4 30%, #e0407f 44%,
+      #ff8a3d 58%, #ffd79a 70%, #ffffff 82%, #ff9ecb 100%);
+    --accent-dim:#42062a;
+    --accent-glow:rgba(255,45,143,.6);
 
-    --ball:#3dff6e; --ball-glow:rgba(61,255,110,.5);
-    --court:#3dff6e; --court-dim:#04170c;
+    --ball:#ff2d8f; --ball-glow:rgba(255,45,143,.66);
+    --court:#ff2d8f; --court-dim:#42062a;
 
-    /* medals collapse into three intensities of the same light */
-    --gold:#3dff6e; --silver:#8fa89a; --bronze:#4d6b5b;
+    /* medals get their metals back — in a frame this saturated, three
+       flat tints of one hue is the thing that would look washed out */
+    --gold:#ffc247; --silver:#ff9ec9; --bronze:#e0662a;
 
-    /* the one colour that survives besides the green, because a loss has to
-       read as a loss — desaturated so it never competes with the neon */
-    --win:#3dff6e; --pending:#8fa89a; --danger:#e8596f;
+    /* the one cool colour on the page, which is exactly why it works for
+       a loss: everything else here is on the hot side of the wheel */
+    --win:#ff2d8f; --pending:#d59bbb; --danger:#8b5cff;
 
     /* tighter, iPhone-ish continuous curvature */
     --r-sm:11px; --r-md:16px; --r-lg:22px; --r-pill:999px;
 
-    /* nothing touches the ground: the shadow falls far below, wide and
-       weightless, and never darkens the edge the object sits on */
-    --shadow:0 48px 90px -38px rgba(0,0,0,1);
+    /* the shadow is plum and never black, and it still falls far below
+       the object with no contact point */
+    --shadow:0 48px 90px -38px rgba(38,0,22,.92);
   }
-  :root[data-skin="ffcup"]{background:#000!important}
-  :root[data-skin="ffcup"] ::selection{background:var(--neon);color:#001b0b}
+  :root[data-skin="ffcup"]{background:#16000e!important}
+  :root[data-skin="ffcup"] ::selection{background:var(--hot);color:#2b0016}
 
-  /* -- 2. the black hole ------------------------------------------
+  /* -- 2. the field ------------------------------------------------
      #hudGrid is an empty fixed full-bleed div already in the DOM (a
-     retired HUD backdrop, display:none). The cup reuses it as the void
-     layer — no new markup, and it disappears with the skin.
-       base    : light bending in toward the horizon
-       ::before: accretion ring, masked to an annulus, turning very slowly
-       ::after : infalling dust drifting toward centre */
+     retired HUD backdrop, display:none). The cup reuses it as the graded
+     sky behind everything — no new markup, and it disappears with the
+     skin.
+       base    : the grade itself — magenta sky, amber ground, plum corners
+       ::before: the flare corona, masked to an annulus, turning very slowly
+       ::after : heat motes drifting up out of the court
+
+     The old pass kept this layer at 4-6% alpha because it was standing in
+     for empty space. It is now a lit sky and runs an order of magnitude
+     hotter; what keeps the app readable at those levels is that every
+     surface on top of it is a dark plum slab, so the type never sits on
+     the bloom directly — same relationship as a subject shot against a
+     blown-out sky. */
   :root[data-skin="ffcup"] #hudGrid{
     display:block;opacity:1;z-index:-3;overflow:hidden;
-    /* long, heavily-stepped stops: at these light levels a two-stop gradient
-       posterises into visible rings on an 8-bit panel, and rings are the one
-       thing that would give away that the void is a gradient */
+    /* long, heavily-stepped stops: a two-stop gradient this wide posterises
+       into visible rings on an 8-bit panel, and rings are the one thing that
+       would give away that the sky is a gradient */
     background:
-      radial-gradient(62vmax 62vmax at 50% 32%,
-        rgba(61,255,110,.055) 0%, rgba(61,255,110,.04) 22%,
-        rgba(61,255,110,.022) 42%, rgba(61,255,110,.008) 62%, transparent 78%),
-      radial-gradient(22vmax 22vmax at 50% 32%,
-        rgba(0,0,0,1) 0%, rgba(0,0,0,.9) 45%, rgba(0,0,0,.55) 72%, transparent 100%),
-      radial-gradient(120vmax 84vmax at 50% 126%,
-        rgba(61,255,110,.035) 0%, rgba(61,255,110,.018) 38%, rgba(61,255,110,.006) 62%, transparent 80%),
-      #000;
+      /* the clipped core of the light, just off the top of frame */
+      radial-gradient(44vmax 30vmax at 50% -6%,
+        rgba(255,236,190,.42) 0%, rgba(255,190,120,.22) 26%,
+        rgba(255,120,60,.09) 52%, transparent 76%),
+      /* the sky: the magenta the whole page is graded into */
+      radial-gradient(92vmax 78vmax at 50% 14%,
+        rgba(255,45,143,.66) 0%, rgba(255,45,143,.46) 18%,
+        rgba(232,30,140,.26) 38%, rgba(190,20,120,.12) 60%, rgba(150,12,95,.04) 76%, transparent 88%),
+      /* the ground bounce coming back up off the court */
+      radial-gradient(140vmax 78vmax at 50% 116%,
+        rgba(255,138,43,.42) 0%, rgba(255,90,60,.24) 28%,
+        rgba(215,30,115,.1) 56%, transparent 80%),
+      /* one warm band across the middle so the two hues meet somewhere
+         instead of stopping at each other */
+      linear-gradient(180deg, transparent 34%, rgba(226,60,110,.10) 52%, transparent 70%),
+      /* corners fall away so the frame has edges and the middle stays hot —
+         but they fall to plum, and never further */
+      radial-gradient(125% 115% at 50% 40%,
+        transparent 38%, rgba(40,0,24,.28) 66%, rgba(28,0,17,.6) 88%, rgba(22,0,14,.78) 100%),
+      #16000e;
   }
   :root[data-skin="ffcup"] #hudGrid::before{
     content:'';position:absolute;left:50%;top:30%;
@@ -3832,50 +3875,54 @@
        once and the rotation is a pure compositor transform. Halved the size
        too; only the inner lip was ever on screen. */
     width:78vmax;height:78vmax;margin:-39vmax 0 0 -39vmax;border-radius:50%;
+    /* the corona sweeps magenta → amber → magenta, so as it turns the field
+       behind the app slowly changes which of the two hues is on top */
     background:conic-gradient(from 0deg,
       transparent 0deg,
-      rgba(61,255,110,.012) 16deg,
-      rgba(61,255,110,.032) 34deg,
-      rgba(140,255,180,.055) 62deg,
-      rgba(61,255,110,.032) 92deg,
-      rgba(61,255,110,.012) 130deg,
+      rgba(255,45,143,.05) 16deg,
+      rgba(255,45,143,.12) 34deg,
+      rgba(255,150,60,.17) 62deg,
+      rgba(255,214,140,.13) 92deg,
+      rgba(255,45,143,.06) 130deg,
       transparent 190deg,
-      rgba(61,255,110,.01) 250deg,
-      rgba(61,255,110,.022) 288deg,
-      rgba(61,255,110,.008) 322deg,
+      rgba(255,80,120,.05) 250deg,
+      rgba(255,45,143,.11) 288deg,
+      rgba(255,138,43,.06) 322deg,
       transparent 360deg);
     /* feathered across a much wider band than the old hard 44%-56% annulus,
        which is what the 60px blur was there to soften in the first place */
-    -webkit-mask:radial-gradient(circle, transparent 18%, rgba(0,0,0,.25) 30%,
-      rgba(0,0,0,.7) 40%, #000 50%, rgba(0,0,0,.7) 60%, rgba(0,0,0,.25) 72%, transparent 84%);
-    mask:radial-gradient(circle, transparent 18%, rgba(0,0,0,.25) 30%,
-      rgba(0,0,0,.7) 40%, #000 50%, rgba(0,0,0,.7) 60%, rgba(0,0,0,.25) 72%, transparent 84%);
+    -webkit-mask:radial-gradient(circle, transparent 18%, rgba(26,0,14,.25) 30%,
+      rgba(26,0,14,.7) 40%, #16000e 50%, rgba(26,0,14,.7) 60%, rgba(26,0,14,.25) 72%, transparent 84%);
+    mask:radial-gradient(circle, transparent 18%, rgba(26,0,14,.25) 30%,
+      rgba(26,0,14,.7) 40%, #16000e 50%, rgba(26,0,14,.7) 60%, rgba(26,0,14,.25) 72%, transparent 84%);
     animation:ffAccretion 96s linear infinite;
   }
   @keyframes ffAccretion{to{transform:rotate(360deg)}}
+  /* embers: the dust that used to fall into the hole now rises off a hot
+     court, so the drift runs UP and the motes are gold rather than white */
   :root[data-skin="ffcup"] #hudGrid::after{
-    content:'';position:absolute;inset:-12%;opacity:.55;
+    content:'';position:absolute;inset:-12%;opacity:.6;
     background-image:
-      radial-gradient(1.4px 1.4px at 11% 18%, rgba(232,255,240,.55), transparent 100%),
-      radial-gradient(1px 1px at 27% 71%, rgba(61,255,110,.5), transparent 100%),
-      radial-gradient(1.6px 1.6px at 46% 12%, rgba(232,255,240,.4), transparent 100%),
-      radial-gradient(1px 1px at 63% 84%, rgba(232,255,240,.45), transparent 100%),
-      radial-gradient(1.3px 1.3px at 79% 31%, rgba(61,255,110,.45), transparent 100%),
-      radial-gradient(1px 1px at 91% 62%, rgba(232,255,240,.35), transparent 100%),
-      radial-gradient(1.2px 1.2px at 35% 44%, rgba(232,255,240,.3), transparent 100%),
-      radial-gradient(1px 1px at 8% 88%, rgba(61,255,110,.4), transparent 100%);
+      radial-gradient(1.4px 1.4px at 11% 18%, rgba(255,230,170,.7), transparent 100%),
+      radial-gradient(1px 1px at 27% 71%, rgba(255,138,43,.75), transparent 100%),
+      radial-gradient(1.6px 1.6px at 46% 12%, rgba(255,240,247,.5), transparent 100%),
+      radial-gradient(1px 1px at 63% 84%, rgba(255,214,140,.6), transparent 100%),
+      radial-gradient(1.3px 1.3px at 79% 31%, rgba(255,45,143,.65), transparent 100%),
+      radial-gradient(1px 1px at 91% 62%, rgba(255,230,170,.45), transparent 100%),
+      radial-gradient(1.2px 1.2px at 35% 44%, rgba(255,138,43,.4), transparent 100%),
+      radial-gradient(1px 1px at 8% 88%, rgba(255,45,143,.6), transparent 100%);
     animation:ffInfall 34s ease-in-out infinite alternate;
   }
   @keyframes ffInfall{
-    from{transform:scale(1) translate3d(0,0,0);opacity:.55}
-    to{transform:scale(.9) translate3d(0,-14px,0);opacity:.28}
+    from{transform:scale(1) translate3d(0,0,0);opacity:.6}
+    to{transform:scale(1.06) translate3d(0,-18px,0);opacity:.3}
   }
-  /* the void stays clean — the live weather canvas is off for the cup */
+  /* the grade stays clean — the live weather canvas is off for the cup */
   :root[data-skin="ffcup"] #wxfx{display:none!important}
-  /* The black is painted on <html>, and <body> must stay transparent.
-     Painting order puts negative-z-index children (the void, #hudGrid at
+  /* The base plum is painted on <html>, and <body> must stay transparent.
+     Painting order puts negative-z-index children (the field, #hudGrid at
      -3) BEFORE the backgrounds of in-flow block descendants, so an opaque
-     background on body draws straight over the black hole. This used to be
+     background on body draws straight over the sky. This used to be
      safe only by accident: with no background on html, body's propagated to
      the canvas and never painted as a box. Now that html carries one of its
      own, body has to give its up. */
@@ -3883,10 +3930,13 @@
     background:transparent!important;
   }
 
-  /* -- 3. jet black glass -----------------------------------------
-     Polished piano black: a wet vertical fall from near-black to black,
-     one hard specular line across the top edge, a soft neon rim bleeding
-     in from inside, and the whole slab hanging over its own shadow. */
+  /* -- 3. plum glass ----------------------------------------------
+     The surface a subject gets when it is shot against a blown-out sky:
+     deep saturated plum rather than black, one hard specular line across
+     the top edge where the magenta catches it, an amber bounce along the
+     bottom lip, and the whole slab hanging over its own coloured shadow.
+     (Section 10.2 re-cuts this same set of surfaces glossier; this rule
+     is what everything that is not a panel still inherits.) */
   :root[data-skin="ffcup"] .panel,
   :root[data-skin="ffcup"] .board,
   :root[data-skin="ffcup"] .pend,
@@ -3904,7 +3954,7 @@
       /* the body. Dark in the middle and lifted at BOTH ends — a matte slab
          is dark-to-darker, a curved polished one carries the ground bounce
          back up along its lower edge, and that is the whole 3D read. */
-      linear-gradient(180deg, #101312 0%, #080a09 30%, #000 62%, #050706 88%, #0e1211 100%) padding-box,
+      linear-gradient(180deg, #310921 0%, #220417 30%, #16000e 62%, #1e0314 88%, #300820 100%) padding-box,
       /* the rim itself is chrome, not a hairline */
       var(--chrome-rim) border-box!important;
     border:1px solid transparent!important;
@@ -3912,10 +3962,10 @@
       inset 0 1px 0 rgba(255,255,255,.34),
       inset 0 -1px 0 rgba(255,255,255,.11),
       inset 0 14px 22px -20px rgba(255,255,255,.55),
-      inset 0 -30px 46px -38px rgba(204,255,221,.4),
-      inset 0 0 44px -24px rgba(61,255,110,.26),
-      0 44px 84px -36px rgba(0,0,0,1),
-      0 0 30px -20px rgba(61,255,110,.1)!important;
+      inset 0 -30px 46px -38px rgba(255,226,168,.4),
+      inset 0 0 44px -24px rgba(255,45,143,.325),
+      0 44px 84px -36px rgba(26,0,14,1),
+      0 0 30px -20px rgba(255,45,143,.125)!important;
   }
   /* the highlight sitting ON the surface — an ellipse thrown from one light
      off frame, which is what separates a glossy curved face from a flat one.
@@ -3932,20 +3982,20 @@
   :root[data-skin="ffcup"] .panel::before{
     height:1px;opacity:1;
     background:linear-gradient(90deg,
-      transparent 0%, rgba(61,255,110,.35) 14%,
-      var(--neon) 38%, var(--neon-hot) 50%, var(--neon) 62%,
-      rgba(61,255,110,.35) 86%, transparent 100%)!important;
-    box-shadow:0 0 9px rgba(61,255,110,.45), 0 0 22px rgba(61,255,110,.14);
+      transparent 0%, rgba(255,45,143,.4375) 14%,
+      var(--hot) 38%, var(--flare) 50%, var(--hot) 62%,
+      rgba(255,45,143,.4375) 86%, transparent 100%)!important;
+    box-shadow:0 0 9px rgba(255,45,143,.5625), 0 0 22px rgba(255,45,143,.175);
   }
   :root[data-skin="ffcup"] .panel:hover{
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.45),
       inset 0 -1px 0 rgba(255,255,255,.16),
       inset 0 14px 22px -20px rgba(255,255,255,.7),
-      inset 0 -30px 46px -36px rgba(204,255,221,.5),
-      inset 0 0 44px -22px rgba(61,255,110,.4),
-      0 60px 100px -34px rgba(0,0,0,1),
-      0 0 40px -18px rgba(61,255,110,.2)!important;
+      inset 0 -30px 46px -36px rgba(255,226,168,.5),
+      inset 0 0 44px -22px rgba(255,45,143,.5),
+      0 60px 100px -34px rgba(26,0,14,1),
+      0 0 40px -18px rgba(255,45,143,.25)!important;
   }
   :root[data-skin="ffcup"] .pend::after{
     background:linear-gradient(165deg, rgba(255,255,255,.05), transparent 70%);
@@ -3955,17 +4005,17 @@
   :root[data-skin="ffcup"] .rp-tie,
   :root[data-skin="ffcup"] .ms-grid button,
   :root[data-skin="ffcup"] .count-pill{
-    background:linear-gradient(180deg, #0b0c0b, #000)!important;
+    background:linear-gradient(180deg, #27051a, #16000e)!important;
     border:1px solid rgba(255,255,255,.055)!important;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.07)!important;
   }
   :root[data-skin="ffcup"] .stat:hover,
   :root[data-skin="ffcup"] .ms-grid button:hover{
-    border-color:rgba(61,255,110,.4)!important;
+    border-color:rgba(255,45,143,.5)!important;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 0 26px -10px var(--accent-glow)!important;
   }
-  /* every progress track was a lighter-than-black grey — in the void it
-     read as a seam. Sunk channels instead. */
+  /* every progress track was a lighter-than-black grey — in a graded frame
+     it read as a seam. Sunk channels instead. */
   :root[data-skin="ffcup"] .odds-bar,
   :root[data-skin="ffcup"] .pred-bar,
   :root[data-skin="ffcup"] .st-bar,
@@ -3985,38 +4035,39 @@
   :root[data-skin="ffcup"] .climb-track,
   :root[data-skin="ffcup"] .cf-track{
     background:rgba(255,255,255,.045)!important;
-    box-shadow:inset 0 1px 2px rgba(0,0,0,.9);
+    box-shadow:inset 0 1px 2px rgba(26,0,14,.9);
   }
 
   /* -- 4. app chrome ----------------------------------------------
-     Bars are black glass sheets with a single lit hairline where they
-     meet the page — the only thing separating them from the void. */
+     Bars are plum glass sheets with a single lit hairline where they
+     meet the page — the only thing separating them from the field. */
   :root[data-skin="ffcup"] .topbar{
-    background:linear-gradient(180deg, rgba(10,11,10,.92), rgba(0,0,0,.94))!important;
-    border-bottom:1px solid rgba(61,255,110,.16)!important;
+    background:linear-gradient(180deg, rgba(30,3,20,.92), rgba(26,0,14,.94))!important;
+    border-bottom:1px solid rgba(255,45,143,.2)!important;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.07),
-      0 1px 26px -6px rgba(61,255,110,.22),
-      0 18px 40px -28px rgba(0,0,0,1)!important;
+      0 1px 26px -6px rgba(255,45,143,.275),
+      0 18px 40px -28px rgba(26,0,14,1)!important;
   }
   :root[data-skin="ffcup"] .botbar{
-    background:linear-gradient(0deg, rgba(0,0,0,.96), rgba(10,11,10,.9))!important;
-    border-top:1px solid rgba(61,255,110,.16)!important;
-    box-shadow:0 -1px 26px -6px rgba(61,255,110,.2)!important;
+    background:linear-gradient(0deg, rgba(26,0,14,.96), rgba(30,3,20,.9))!important;
+    border-top:1px solid rgba(255,45,143,.2)!important;
+    box-shadow:0 -1px 26px -6px rgba(255,45,143,.25)!important;
   }
   :root[data-skin="ffcup"] .live-ticker-bar{
-    background:linear-gradient(90deg, #000, #050705 50%, #000)!important;
-    border-top:1px solid rgba(61,255,110,.18)!important;
+    background:linear-gradient(90deg, #200516, #3a0c26 50%, #200516)!important;
+    border-top:1px solid rgba(255,45,143,.34)!important;
   }
   /* the brand mark goes liquid chrome: a mirrored sphere with nothing to
-     reflect but the void — so the only colour on it is the neon coming
-     back around its lower rim */
+     reflect but the sky — so it takes the magenta across the top of it and
+     the court's amber back around its lower rim */
   :root[data-skin="ffcup"] .tb-ball{
     background:radial-gradient(circle at 33% 24%,
-      #ffffff 0%, #e6f1ea 7%, #9dafa5 22%, #4a5450 38%, #10130f 60%, #000 100%)!important;
+      #ffffff 0%, #ffeaf4 7%, #ffb0d4 22%, #6e3b56 38%, #310921 60%, #16000e 100%)!important;
     box-shadow:
       inset 2px 2px 3px rgba(255,255,255,.7),
-      inset -3px -4px 7px rgba(61,255,110,.55),
+      inset -3px -4px 7px rgba(255,45,143,.75),
+      inset -5px 3px 8px -4px rgba(255,138,43,.55),
       0 0 16px -3px var(--ball-glow),
       0 0 34px -8px var(--ball-glow)!important;
     animation:ffHover 6s ease-in-out infinite;
@@ -4025,7 +4076,7 @@
     border-top-color:rgba(255,255,255,.75);
   }
   :root[data-skin="ffcup"] .tb-title{color:var(--ink)}
-  :root[data-skin="ffcup"] .tb-live{color:var(--neon);text-shadow:0 0 14px rgba(61,255,110,.6)}
+  :root[data-skin="ffcup"] .tb-live{color:var(--hot);text-shadow:0 0 14px rgba(255,45,143,.75)}
 
   /* ---- the event badge -------------------------------------------
      One element carries the whole branding job: a chrome-plated plate
@@ -4039,13 +4090,13 @@
     padding:5px 13px 6px;border-radius:11px;
     border:1px solid transparent;
     background:
-      linear-gradient(180deg, #232926 0%, #0d100e 34%, #000 66%, #0b0f0d 84%, #1c2320 100%) padding-box,
+      linear-gradient(180deg, #4d1539 0%, #2e071f 34%, #16000e 66%, #2a061d 84%, #461233 100%) padding-box,
       var(--chrome-rim) border-box;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.55),
-      inset 0 -1px 0 rgba(204,255,221,.2),
+      inset 0 -1px 0 rgba(255,226,168,.2),
       0 0 20px -8px var(--accent-glow),
-      0 12px 22px -14px rgba(0,0,0,1);
+      0 12px 22px -14px rgba(26,0,14,1);
     animation:ffHover 7s ease-in-out infinite;
   }
   /* the name is struck in polished metal — the one chrome wordmark in the
@@ -4055,12 +4106,12 @@
     letter-spacing:2.6px;text-transform:uppercase;
     background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
-    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 0 8px rgba(61,255,110,.2));
+    filter:drop-shadow(0 1px 0 rgba(26,0,14,.9)) drop-shadow(0 0 8px rgba(255,45,143,.25));
   }
   :root[data-skin="ffcup"] .ffcup-chip i{
     font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;font-style:normal;
-    letter-spacing:1.1px;text-transform:uppercase;color:var(--neon);
-    text-shadow:0 0 10px rgba(61,255,110,.7);
+    letter-spacing:1.1px;text-transform:uppercase;color:var(--hot);
+    text-shadow:0 0 10px rgba(255,45,143,.875);
   }
   /* while it is actually on, the badge's underline breathes */
   :root[data-skin="ffcup"][data-cup="live"] .ffcup-chip i{animation:hudPulse 2.2s ease-in-out infinite}
@@ -4072,33 +4123,33 @@
 
   /* navigation: active state is lit, never a white block */
   :root[data-skin="ffcup"] .tb-tab.on{
-    color:var(--neon)!important;
-    background:rgba(61,255,110,.08)!important;
-    box-shadow:inset 0 0 0 1px rgba(61,255,110,.28), inset 0 14px 22px -18px var(--neon)!important;
-    text-shadow:0 0 12px rgba(61,255,110,.5);
+    color:var(--hot)!important;
+    background:rgba(255,45,143,.1)!important;
+    box-shadow:inset 0 0 0 1px rgba(255,45,143,.35), inset 0 14px 22px -18px var(--hot)!important;
+    text-shadow:0 0 12px rgba(255,45,143,.625);
   }
   :root[data-skin="ffcup"] .tb-tab.on::after,
   :root[data-skin="ffcup"] .tb-indicator{
-    background:var(--neon)!important;opacity:1!important;
-    box-shadow:0 0 12px var(--neon), 0 0 26px rgba(61,255,110,.5);
+    background:var(--hot)!important;opacity:1!important;
+    box-shadow:0 0 12px var(--hot), 0 0 26px rgba(255,45,143,.625);
   }
   :root[data-skin="ffcup"] .tb-tab:hover{background:rgba(255,255,255,.045)}
   :root[data-skin="ffcup"] .bb-tab.on{
-    color:var(--neon);border-top-color:var(--neon);
-    background:linear-gradient(180deg, rgba(61,255,110,.12), transparent 70%);
-    text-shadow:0 0 12px rgba(61,255,110,.55);
+    color:var(--hot);border-top-color:var(--hot);
+    background:linear-gradient(180deg, rgba(255,45,143,.15), transparent 70%);
+    text-shadow:0 0 12px rgba(255,45,143,.6875);
   }
   :root[data-skin="ffcup"] .tab.on,
   :root[data-skin="ffcup"] .subtab.on,
   :root[data-skin="ffcup"] .admin-btn.on{
-    background:var(--neon)!important;color:#001b0b!important;border-color:var(--neon)!important;
+    background:var(--hot)!important;color:#2b0016!important;border-color:var(--hot)!important;
     box-shadow:0 0 22px -6px var(--accent-glow)!important;
   }
   :root[data-skin="ffcup"] .tb-ico{
     background:rgba(255,255,255,.02);border-color:rgba(255,255,255,.07);border-radius:10px;
   }
   :root[data-skin="ffcup"] .tb-ico:hover{
-    color:var(--neon);border-color:rgba(61,255,110,.4);background:rgba(61,255,110,.06);
+    color:var(--hot);border-color:rgba(255,45,143,.5);background:rgba(255,45,143,.075);
   }
 
   /* -- 5. anti-gravity --------------------------------------------
@@ -4136,220 +4187,257 @@
   :root[data-skin="ffcup"] .reveal-in{animation:ffRise .72s cubic-bezier(.16,1,.3,1) both}
   @keyframes ffRise{from{opacity:0;transform:translate3d(0,26px,0) scale(.995)}}
 
-  /* buttons hang on their own neon light instead of resting on a shadow */
+  /* buttons hang on their own hot light instead of resting on a shadow */
   :root[data-skin="ffcup"] .btn{
     /* a lit dome, not a filled rectangle: bright crown, saturated waist,
-       and a dark foot so the button has a top and a bottom to it */
-    background:linear-gradient(180deg,#b6ffcd 0%,#5fff86 26%,#3dff6e 52%,#17d64f 82%,#0fb443 100%);
-    color:#001b0b;
+       and a dark foot so the button has a top and a bottom to it. The
+       crown is amber and the waist is magenta — the same collision the
+       field runs, small enough to hold in one object. */
+    background:linear-gradient(180deg,#ffdcae 0%,var(--sun) 16%,#ff5aa2 42%,var(--hot) 62%,#d4147a 100%);
+    color:#2b0016;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.85),
-      inset 0 -2px 6px rgba(0,60,20,.45),
-      0 22px 44px -22px rgba(61,255,110,.6),
-      0 0 26px -16px rgba(61,255,110,.45)!important;
+      inset 0 -2px 6px rgba(90,0,45,.45),
+      0 22px 44px -22px rgba(255,45,143,.75),
+      0 0 26px -14px rgba(255,138,43,.5)!important;
   }
   :root[data-skin="ffcup"] .btn:hover{
     transform:translateY(-2px);
     box-shadow:
-      0 32px 58px -22px rgba(61,255,110,.72),
-      0 0 38px -16px rgba(61,255,110,.55),
+      0 32px 58px -22px rgba(255,45,143,.9),
+      0 0 38px -16px rgba(255,45,143,.6875),
       inset 0 1px 0 rgba(255,255,255,.6)!important;
   }
   :root[data-skin="ffcup"] .btn:active{
     transform:translateY(0);
-    box-shadow:0 10px 24px -16px rgba(61,255,110,.6), inset 0 1px 0 rgba(255,255,255,.4)!important;
+    box-shadow:0 10px 24px -16px rgba(255,45,143,.75), inset 0 1px 0 rgba(255,255,255,.4)!important;
   }
   :root[data-skin="ffcup"] .btn.ghost{
-    background:linear-gradient(180deg,#0c0d0c,#000);color:var(--ink);
+    background:linear-gradient(180deg,#2a061c,#16000e);color:var(--ink);
     border:1px solid rgba(255,255,255,.08);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 22px 44px -26px rgba(0,0,0,1)!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 22px 44px -26px rgba(26,0,14,1)!important;
   }
-  :root[data-skin="ffcup"] .btn.ghost:hover{border-color:rgba(61,255,110,.45)!important}
-  :root[data-skin="ffcup"] .mini.yes{background:var(--neon);color:#001b0b;border-color:var(--neon)}
+  :root[data-skin="ffcup"] .btn.ghost:hover{border-color:rgba(255,45,143,.5625)!important}
+  :root[data-skin="ffcup"] .mini.yes{background:var(--hot);color:#2b0016;border-color:var(--hot)}
 
-  /* the toast doesn't slide up from an edge — it surfaces out of the void */
+  /* the toast doesn't slide up from an edge — it surfaces out of the field */
   :root[data-skin="ffcup"] .toast{
-    background:linear-gradient(180deg,#0d0e0d,#000);
-    border:1px solid rgba(61,255,110,.35);color:var(--ink);
-    box-shadow:0 0 34px -10px var(--accent-glow), 0 40px 80px -30px rgba(0,0,0,1);
+    background:linear-gradient(180deg,#2c071d,#16000e);
+    border:1px solid rgba(255,45,143,.4375);color:var(--ink);
+    box-shadow:0 0 34px -10px var(--accent-glow), 0 40px 80px -30px rgba(26,0,14,1);
   }
   :root[data-skin="ffcup"] .toast.err{
-    border-color:rgba(255,77,106,.45);background:linear-gradient(180deg,#150607,#000);color:#ffd9df;
-    box-shadow:0 0 34px -12px rgba(255,77,106,.5), 0 40px 80px -30px rgba(0,0,0,1);
+    border-color:rgba(139,92,255,.45);background:linear-gradient(180deg,#2a0630,#16000e);color:#ded1ff;
+    box-shadow:0 0 34px -12px rgba(139,92,255,.5), 0 40px 80px -30px rgba(26,0,14,1);
   }
 
   /* -- 6. minimise ------------------------------------------------
-     The old skin carried four accent hues, metallic medals and a lot of
-     decorative rule work. For the cup it is black, one green, and the
-     information — every remaining colour is a level of that one light. */
+     This is where the jet-black pass took colour OUT — four accent hues
+     and a lot of decorative rule work collapsed into one green. It now
+     does the opposite job with the same rules: every tint here is a stop
+     somewhere between the magenta and the amber, and the information still
+     has to win over both. */
   :root[data-skin="ffcup"] .sec-label{color:var(--muted);letter-spacing:2px}
   :root[data-skin="ffcup"] .sec-label::before{
-    width:5px;height:5px;background:var(--neon)!important;
-    box-shadow:0 0 10px var(--neon), 0 0 22px rgba(61,255,110,.6);
+    width:5px;height:5px;background:var(--hot)!important;
+    box-shadow:0 0 10px var(--hot), 0 0 22px rgba(255,45,143,.75);
   }
   :root[data-skin="ffcup"] .sec-label::after{
     background:linear-gradient(90deg, rgba(255,255,255,.09), transparent)!important;
   }
-  /* leaderboard header was a solid white bar — far too much mass in a void */
+  /* leaderboard header was a solid white bar — far too much mass in a frame
+     this saturated, and the one thing on the page with no hue in it */
   :root[data-skin="ffcup"] .row.head,
   :root[data-skin="ffcup"] .row.head:hover{
     background:rgba(255,255,255,.028)!important;color:var(--muted)!important;
-    border-bottom:1px solid rgba(61,255,110,.22)!important;
+    border-bottom:1px solid rgba(255,45,143,.275)!important;
   }
-  :root[data-skin="ffcup"] .row:hover{background:rgba(61,255,110,.045)}
+  :root[data-skin="ffcup"] .row:hover{background:rgba(255,45,143,.0562)}
   /* the leader's accent bar belonged on the leader — .row:first-child in the
      base sheet is the *header* row, which is why the stripe was landing on
      the column titles. Anchor it to the first row after the header instead. */
   :root[data-skin="ffcup"] .row.head{border-left:none!important}
   :root[data-skin="ffcup"] .row.head + .row{
-    background:linear-gradient(90deg, rgba(61,255,110,.075), transparent 62%)!important;
-    border-left:2px solid var(--neon)!important;
-    box-shadow:inset 22px 0 40px -34px var(--neon);
+    background:linear-gradient(90deg, rgba(255,45,143,.0938), transparent 62%)!important;
+    border-left:2px solid var(--hot)!important;
+    box-shadow:inset 22px 0 40px -34px var(--hot);
   }
   :root[data-skin="ffcup"] .row:first-child:not(.head){
-    background:linear-gradient(90deg, rgba(61,255,110,.075), transparent 62%)!important;
-    border-left:2px solid var(--neon)!important;
+    background:linear-gradient(90deg, rgba(255,45,143,.0938), transparent 62%)!important;
+    border-left:2px solid var(--hot)!important;
   }
   /* every rating carried a lit underline and every peak was the accent
-     colour — with one hue that turned the right half of the board into a
-     wall of green. Rating keeps a hairline, peak steps down to secondary. */
-  :root[data-skin="ffcup"] .r-rating{border-bottom-color:rgba(61,255,110,.28)}
-  :root[data-skin="ffcup"] .r-peak{color:#7fd9a0}
+     colour, which turned the right half of the board into a wall of
+     magenta. Rating keeps a hairline, peak steps down to secondary. */
+  :root[data-skin="ffcup"] .r-rating{border-bottom-color:rgba(255,45,143,.35)}
+  :root[data-skin="ffcup"] .r-peak{color:#ff9ec9}
   :root[data-skin="ffcup"] .row.head .r-peak{color:var(--muted)!important}
-  /* medals: same tube, three brightnesses — no gold, silver or bronze */
+  /* the three ranks: gold, hot rose, burnt amber. Three brightnesses of one
+     tint is what the previous pass did, and it is the reason first and third
+     were hard to tell apart at a glance — with the frame this saturated the
+     medals can just be their own colours again. */
   :root[data-skin="ffcup"] .rank.g1,
   :root[data-skin="ffcup"] .rank.g2,
   :root[data-skin="ffcup"] .rank.g3{
-    background:rgba(61,255,110,.08)!important;border-radius:8px;
-    box-shadow:inset 0 0 0 1px rgba(61,255,110,.3)!important;
+    background:rgba(255,45,143,.1)!important;border-radius:8px;
+    box-shadow:inset 0 0 0 1px rgba(255,45,143,.375)!important;
   }
-  :root[data-skin="ffcup"] .rank.g1{color:var(--neon)!important;text-shadow:0 0 14px rgba(61,255,110,.8)}
-  :root[data-skin="ffcup"] .rank.g2{color:#9fd9b4!important;background:rgba(61,255,110,.05)!important}
-  :root[data-skin="ffcup"] .rank.g3{color:#6f9c80!important;background:rgba(61,255,110,.035)!important}
-  /* podium plinths: black slabs lit along the top edge, hanging in space */
+  :root[data-skin="ffcup"] .rank.g1{
+    color:var(--gold)!important;text-shadow:0 0 14px rgba(255,194,71,.85);
+    background:rgba(255,194,71,.12)!important;
+    box-shadow:inset 0 0 0 1px rgba(255,194,71,.45)!important;
+  }
+  :root[data-skin="ffcup"] .rank.g2{color:var(--silver)!important;background:rgba(255,45,143,.0625)!important}
+  :root[data-skin="ffcup"] .rank.g3{
+    color:var(--bronze)!important;background:rgba(224,102,42,.08)!important;
+    box-shadow:inset 0 0 0 1px rgba(224,102,42,.3)!important;
+  }
+  /* podium plinths: plum slabs lit along the top edge, hanging in space */
   :root[data-skin="ffcup"] .pod-1 .pod-base,
   :root[data-skin="ffcup"] .pod-2 .pod-base,
   :root[data-skin="ffcup"] .pod-3 .pod-base{
     background:linear-gradient(180deg,
-      #1a1f1c 0%, #0c0f0d 18%, #000 58%, #060907 84%, #131816 100%)!important;
-    color:var(--neon)!important;
+      #431030 0%, #2c071e 18%, #16000e 58%, #200415 84%, #380b26 100%)!important;
+    color:var(--hot)!important;
     border-top:1px solid rgba(255,255,255,.55);
     /* the light is on the top edge only — a glow on all four sides makes the
        plinth look like it is resting in a pool of it, which is the one thing
        nothing here is allowed to do */
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.5),
-      inset 0 -1px 0 rgba(204,255,221,.22),
-      inset 0 14px 26px -22px var(--neon),
-      0 44px 70px -36px rgba(0,0,0,1)!important;
+      inset 0 -1px 0 rgba(255,226,168,.22),
+      inset 0 14px 26px -22px var(--hot),
+      0 44px 70px -36px rgba(26,0,14,1)!important;
   }
-  :root[data-skin="ffcup"] .pod-2 .pod-base{border-top-color:rgba(255,255,255,.32);color:#9fd9b4!important}
-  :root[data-skin="ffcup"] .pod-3 .pod-base{border-top-color:rgba(255,255,255,.2);color:#6f9c80!important}
-  /* the plinth sheen swept white — silver in a scene with no silver in it */
+  :root[data-skin="ffcup"] .pod-2 .pod-base{border-top-color:rgba(255,255,255,.32);color:#ff9ec9!important}
+  :root[data-skin="ffcup"] .pod-3 .pod-base{border-top-color:rgba(255,255,255,.2);color:#c76a99!important}
+  /* the plinth sheen swept white, which in a frame with no neutral anywhere
+     in it read as a blown highlight with no source */
   :root[data-skin="ffcup"] .pod-base::after{
-    background:linear-gradient(105deg, transparent, rgba(61,255,110,.16), transparent)!important;
+    background:linear-gradient(105deg, transparent, rgba(255,45,143,.2), transparent)!important;
     opacity:.7;
   }
-  /* medals and trophies arrive as full-colour emoji; pull them into the
-     one hue rather than letting three metals back into the palette */
+  /* medals and trophies arrive as full-colour emoji. The jet-black pass
+     crushed them to a single tint, because a gold medal in a monochrome
+     void was the one thing that broke it. Here the grade wants them: they
+     keep their own colour, pushed harder, with the field's light thrown
+     back around them so they still belong to the frame. */
   :root[data-skin="ffcup"] .pod-medal,
   :root[data-skin="ffcup"] .crown{
-    filter:grayscale(1) brightness(1.5) sepia(1) hue-rotate(74deg) saturate(4.5);
+    filter:saturate(1.5) contrast(1.06) brightness(1.06)
+           drop-shadow(0 0 10px rgba(255,45,143,.5));
   }
   :root[data-skin="ffcup"] .pod-1 .pod-medal{
-    filter:grayscale(1) brightness(1.8) sepia(1) hue-rotate(74deg) saturate(5.5);
+    filter:saturate(1.7) contrast(1.1) brightness(1.12)
+           drop-shadow(0 0 8px rgba(255,214,140,.6))
+           drop-shadow(0 0 22px rgba(255,45,143,.55));
   }
-  :root[data-skin="ffcup"] .pod-1 .pod-num{color:var(--neon);text-shadow:0 0 18px rgba(61,255,110,.6)}
+  :root[data-skin="ffcup"] .pod-1 .pod-num{color:var(--hot);text-shadow:0 0 18px rgba(255,45,143,.75)}
   :root[data-skin="ffcup"] .pod-1 .pod-av .avi{
-    box-shadow:0 0 0 2px var(--neon), 0 0 30px -6px var(--accent-glow)!important;
+    box-shadow:0 0 0 2px var(--hot), 0 0 30px -6px var(--accent-glow)!important;
   }
-  :root[data-skin="ffcup"] .avi{box-shadow:0 0 0 1px rgba(61,255,110,.22)}
+  :root[data-skin="ffcup"] .avi{box-shadow:0 0 0 1px rgba(255,45,143,.275)}
   /* ---- everything that was still off the ramp -------------------
-     "LIVE" is a state, not an error, so it moves onto the green with
+     "LIVE" is a state, not an error, so it moves onto the magenta with
      everything else; --danger stays behind for losses and destructive
-     actions only, which is the one place a second colour earns its keep. */
+     actions only, and it is the one cool colour on the page. */
   :root[data-skin="ffcup"] .bcast-live,
   :root[data-skin="ffcup"] .ticker-live,
   :root[data-skin="ffcup"] .pt-live-badge{
-    color:var(--neon)!important;text-shadow:0 0 12px rgba(61,255,110,.55);
+    color:var(--hot)!important;text-shadow:0 0 12px rgba(255,45,143,.6875);
   }
   :root[data-skin="ffcup"] .bcast-dot,
   :root[data-skin="ffcup"] .pt-live-dot{
-    background:var(--neon)!important;
+    background:var(--hot)!important;
     animation-name:ffLivePulse!important;
   }
   @keyframes ffLivePulse{
-    0%{box-shadow:0 0 0 0 rgba(61,255,110,.55)}
-    70%{box-shadow:0 0 0 8px rgba(61,255,110,0)}
-    100%{box-shadow:0 0 0 0 rgba(61,255,110,0)}
+    0%{box-shadow:0 0 0 0 rgba(255,45,143,.6875)}
+    70%{box-shadow:0 0 0 8px rgba(255,45,143,0)}
+    100%{box-shadow:0 0 0 0 rgba(255,45,143,0)}
   }
   :root[data-skin="ffcup"] .bcast-mini .bcast-meta{
-    background:linear-gradient(180deg, var(--neon), #0f8f3c)!important;
-    border-color:rgba(61,255,110,.7)!important;color:#001b0b!important;
+    background:linear-gradient(180deg, var(--hot), #a30c59)!important;
+    border-color:rgba(255,45,143,.875)!important;color:#2b0016!important;
     text-shadow:none!important;
   }
-  /* emoji that sit in their own element get pulled onto the ramp; the ones
-     loose inside prose are left alone rather than tinting the text with them */
+  /* the same for the icon emoji in the chrome: saturated rather than
+     recoloured, so a phone's bottom bar is the one bit of the app that
+     still has every hue in it */
   :root[data-skin="ffcup"] .bb-ico,
   :root[data-skin="ffcup"] .ms-grid button span,
   :root[data-skin="ffcup"] #sfxToggleBtn,
   :root[data-skin="ffcup"] .crown-ico,
   :root[data-skin="ffcup"] .streak-badge{
-    filter:grayscale(1) brightness(1.45) sepia(1) hue-rotate(74deg) saturate(4.5);
+    filter:saturate(1.45) contrast(1.04) drop-shadow(0 0 8px rgba(255,45,143,.4));
   }
   :root[data-skin="ffcup"] .bb-tab.on .bb-ico{
-    filter:grayscale(1) brightness(1.8) sepia(1) hue-rotate(74deg) saturate(5.5);
+    filter:saturate(1.7) brightness(1.1) drop-shadow(0 0 12px rgba(255,45,143,.6));
   }
-  :root[data-skin="ffcup"] .streak-badge{color:var(--neon)}
+  :root[data-skin="ffcup"] .streak-badge{color:var(--hot)}
   /* the nav count badges were the last red left in the chrome */
   :root[data-skin="ffcup"] .tab-count{
-    background:var(--neon)!important;color:#001b0b!important;
+    background:var(--hot)!important;color:#2b0016!important;
     box-shadow:0 0 14px -3px var(--accent-glow);
   }
-  /* champion card: no gold leaf, just the light */
+  /* champion card: the hottest surface in the app that isn't the CTA */
   :root[data-skin="ffcup"] .rp-champ{
-    background:linear-gradient(180deg, rgba(61,255,110,.07), #000 75%)!important;
-    border:1px solid rgba(61,255,110,.3)!important;
-    box-shadow:0 0 44px -16px var(--accent-glow), 0 50px 90px -36px rgba(0,0,0,1);
+    background:linear-gradient(180deg, rgba(255,45,143,.0875), #16000e 75%)!important;
+    border:1px solid rgba(255,45,143,.375)!important;
+    box-shadow:0 0 44px -16px var(--accent-glow), 0 50px 90px -36px rgba(26,0,14,1);
   }
-  :root[data-skin="ffcup"] .rp-champ-t{color:var(--neon);text-shadow:0 0 12px rgba(61,255,110,.6)}
-  :root[data-skin="ffcup"] .rp-slot.win{background:rgba(61,255,110,.08)}
+  :root[data-skin="ffcup"] .rp-champ-t{color:var(--hot);text-shadow:0 0 12px rgba(255,45,143,.75)}
+  :root[data-skin="ffcup"] .rp-slot.win{background:rgba(255,45,143,.1)}
   :root[data-skin="ffcup"] .promo-panel{
-    border-color:rgba(61,255,110,.35)!important;
-    background:linear-gradient(160deg, rgba(61,255,110,.06), #000)!important;
+    border-color:rgba(255,45,143,.4375)!important;
+    background:linear-gradient(160deg, rgba(255,45,143,.075), #16000e)!important;
   }
   :root[data-skin="ffcup"] .pend.promo{
-    border-left:2px solid var(--neon)!important;
+    border-left:2px solid var(--hot)!important;
   }
-  :root[data-skin="ffcup"] .promo-countdown{color:var(--neon);text-shadow:0 0 16px rgba(61,255,110,.5)}
-  :root[data-skin="ffcup"] .fd-l{background:rgba(255,77,106,.12);color:var(--danger)}
-  :root[data-skin="ffcup"] .fd-w{background:rgba(61,255,110,.14);color:var(--neon)}
+  :root[data-skin="ffcup"] .promo-countdown{color:var(--hot);text-shadow:0 0 16px rgba(255,45,143,.625)}
+  :root[data-skin="ffcup"] .fd-l{background:rgba(139,92,255,.12);color:var(--danger)}
+  :root[data-skin="ffcup"] .fd-w{background:rgba(255,45,143,.175);color:var(--hot)}
+  /* the last hard-coded greens in the base sheet. They were invisible while
+     the skin was green and are the only cold thing on the page now, so the
+     "good" band steps down to rose and the climb chip to the event's own
+     colour — same three-step read, none of it off-palette. */
+  :root[data-skin="ffcup"] .attr-overall.a-good .ao-num,
+  :root[data-skin="ffcup"] .attr-val.a-good{color:#ff9ec9}
+  :root[data-skin="ffcup"] .attr-fill.a-good{background:#ff9ec9}
+  :root[data-skin="ffcup"] .attr-fill.a-elite{
+    background:linear-gradient(90deg, var(--hot), var(--sun));
+  }
+  :root[data-skin="ffcup"] .mov-up{color:var(--hot);background:rgba(255,45,143,.16)}
+  :root[data-skin="ffcup"] .res-draw.on{
+    color:#2b0016;box-shadow:0 8px 20px -8px var(--accent-glow);
+  }
   /* the tab wipe drops the racket-string graphic for a single light pass */
   :root[data-skin="ffcup"] .tw-strings{
     background:linear-gradient(90deg,
-      transparent 0%, rgba(61,255,110,.06) 42%,
-      rgba(61,255,110,.5) 70%, var(--neon-hot) 88%, #000 100%)!important;
+      transparent 0%, rgba(255,45,143,.075) 42%,
+      rgba(255,45,143,.625) 70%, var(--flare) 88%, #16000e 100%)!important;
   }
-  :root[data-skin="ffcup"] .tw-ball{filter:drop-shadow(0 0 14px var(--neon))}
-  /* inputs are cut into the black, lit only when you're in them */
+  :root[data-skin="ffcup"] .tw-ball{filter:drop-shadow(0 0 14px var(--hot))}
+  /* inputs are cut into the plum, lit only when you're in them */
   :root[data-skin="ffcup"] input,
   :root[data-skin="ffcup"] select,
   :root[data-skin="ffcup"] textarea,
   :root[data-skin="ffcup"] .match-filter input{
     background:rgba(255,255,255,.03)!important;
     border:1px solid rgba(255,255,255,.08)!important;
-    box-shadow:inset 0 1px 3px rgba(0,0,0,.9);
+    box-shadow:inset 0 1px 3px rgba(26,0,14,.9);
   }
   :root[data-skin="ffcup"] input:focus,
   :root[data-skin="ffcup"] select:focus,
   :root[data-skin="ffcup"] textarea:focus{
-    border-color:var(--neon)!important;
-    box-shadow:0 0 0 3px rgba(61,255,110,.16), 0 0 24px -8px var(--accent-glow)!important;
+    border-color:var(--hot)!important;
+    box-shadow:0 0 0 3px rgba(255,45,143,.2), 0 0 24px -8px var(--accent-glow)!important;
   }
-  /* thin neon scrollbar so even the chrome stays inside the palette.
+  /* thin hot scrollbar so even the chrome stays inside the palette.
      scrollbar-color inherits, so setting it once at the root covers every
      scroller without a universal selector running over the whole app. */
-  :root[data-skin="ffcup"]{scrollbar-width:thin;scrollbar-color:rgba(61,255,110,.3) transparent}
+  :root[data-skin="ffcup"]{scrollbar-width:thin;scrollbar-color:rgba(255,45,143,.375) transparent}
   :root[data-skin="ffcup"] body,
   :root[data-skin="ffcup"] .tb-tabs,
   :root[data-skin="ffcup"] .subtabs,
@@ -4359,24 +4447,29 @@
   :root[data-skin="ffcup"] ::-webkit-scrollbar{width:9px;height:9px}
   :root[data-skin="ffcup"] ::-webkit-scrollbar-track{background:transparent}
   :root[data-skin="ffcup"] ::-webkit-scrollbar-thumb{
-    background:rgba(61,255,110,.22);border-radius:99px;border:2px solid transparent;background-clip:content-box;
+    background:rgba(255,45,143,.275);border-radius:99px;border:2px solid transparent;background-clip:content-box;
   }
-  :root[data-skin="ffcup"] ::-webkit-scrollbar-thumb:hover{background:rgba(61,255,110,.45);background-clip:content-box}
+  :root[data-skin="ffcup"] ::-webkit-scrollbar-thumb:hover{background:rgba(255,45,143,.5625);background-clip:content-box}
 
-  /* -- 7. the load: a horizon collapsing, then the ball floating free */
+  /* -- 7. the load: the grade coming up, then the ball floating free.
+     The load screen is the first frame anybody sees, so it states the
+     two hues before a single panel has been drawn. */
   :root[data-skin="ffcup"] .loadscreen{
     background:
-      radial-gradient(42vmax 42vmax at 50% 46%, rgba(61,255,110,.09), transparent 62%),
-      radial-gradient(18vmax 18vmax at 50% 46%, #000 55%, transparent 100%),
-      #000;
+      radial-gradient(52vmax 40vmax at 50% 8%,
+        rgba(255,45,143,.5) 0%, rgba(255,45,143,.24) 32%, transparent 74%),
+      radial-gradient(70vmax 40vmax at 50% 108%,
+        rgba(255,138,43,.34) 0%, rgba(255,90,60,.14) 38%, transparent 78%),
+      radial-gradient(20vmax 20vmax at 50% 46%, rgba(30,2,20,.85) 45%, transparent 100%),
+      #16000e;
   }
   :root[data-skin="ffcup"] .ls-ball{
-    filter:drop-shadow(0 0 16px var(--neon)) drop-shadow(0 0 34px rgba(61,255,110,.5));
+    filter:drop-shadow(0 0 16px var(--hot)) drop-shadow(0 0 34px rgba(255,45,143,.625));
     animation:ls-fade .3s ease .9s forwards, ffLift 2.6s cubic-bezier(.4,0,.2,1) 1s infinite alternate!important;
   }
   @keyframes ffLift{from{transform:translateY(12px)}to{transform:translateY(-30px)}}
   :root[data-skin="ffcup"] .ls-word span{
-    color:var(--neon);text-shadow:0 0 18px rgba(61,255,110,.7), 0 0 44px rgba(61,255,110,.35);
+    color:var(--hot);text-shadow:0 0 18px rgba(255,45,143,.875), 0 0 44px rgba(255,45,143,.4375);
   }
   /* the cup lockup under the wordmark — the second and last place the
      branding appears, and the only other chrome type in the app */
@@ -4392,12 +4485,12 @@
     text-transform:uppercase;text-indent:clamp(5px,1.6vw,9px);
     background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
-    filter:drop-shadow(0 0 14px rgba(61,255,110,.22));
+    filter:drop-shadow(0 0 14px rgba(255,45,143,.275));
   }
   :root[data-skin="ffcup"] .ls-cup i{
     font-family:'JetBrains Mono',monospace;font-style:normal;font-weight:700;
     font-size:clamp(8.5px,2vw,10px);letter-spacing:2.4px;text-transform:uppercase;
-    color:var(--neon);text-shadow:0 0 14px rgba(61,255,110,.6);
+    color:var(--hot);text-shadow:0 0 14px rgba(255,45,143,.75);
     padding-top:9px;border-top:1px solid rgba(255,255,255,.14);
     min-width:clamp(150px,34vw,230px);
   }
@@ -4407,12 +4500,12 @@
      until the skin turns it on, so the cup can outrank the ladder on
      the landing page for two weeks and leave no trace afterwards.
 
-     The slab is the same jet black glass as a panel, but this one is
-     lit from inside: a neon filament welded along its top edge, a
-     court grid receding into the floor behind the type, one specular
-     sweeping across the face every few seconds, and the countdown
-     burning through it all as exposed tube. Everything else in the
-     app is a surface. This is the only light source. */
+     The slab is the same plum glass as a panel, but this one is openly
+     lit: a magenta filament welded along its top edge, a court grid
+     running back to a horizon behind the type, one specular sweeping
+     across the face every few seconds, and the countdown burning through
+     it all as exposed tube. Everything else in the app is a surface
+     standing in the light. This is the light. */
 
   /* the mounts are inert markup off-skin, and collapse when empty so
      they never leave a gap in a view they aren't promoting */
@@ -4428,23 +4521,33 @@
     border:1px solid transparent;
     background:
       /* sky in the top of the glass */
-      linear-gradient(178deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.045) 6%,
-        rgba(255,255,255,.012) 18%, transparent 36%) padding-box,
+      linear-gradient(178deg, rgba(255,200,230,.16) 0%, rgba(255,150,205,.06) 6%,
+        rgba(255,120,190,.018) 18%, transparent 36%) padding-box,
       /* raking specular off the upper-left corner */
-      linear-gradient(148deg, rgba(255,255,255,.09) 0%, rgba(255,255,255,.02) 14%,
+      linear-gradient(148deg, rgba(255,255,255,.10) 0%, rgba(255,190,225,.03) 14%,
         transparent 33%) padding-box,
-      /* the body — lifted at both ends, so the slab reads as curved glass
-         rather than a flat rectangle of dark grey */
-      linear-gradient(180deg, #121514 0%, #080a09 26%, #000 60%, #040605 86%, #0f1413 100%) padding-box,
+      /* the two hues thrown into the slab from off-frame: magenta down the
+         right side where the clock lives, amber up out of the floor. The
+         marquee is the one surface allowed to be openly lit — everything
+         else on the page is a slab standing in the light, this IS the light */
+      radial-gradient(88% 120% at 96% 6%,
+        rgba(255,45,143,.42) 0%, rgba(255,45,143,.2) 26%,
+        rgba(220,25,120,.07) 52%, transparent 74%) padding-box,
+      radial-gradient(70% 96% at 22% 104%,
+        rgba(255,138,43,.34) 0%, rgba(255,100,50,.15) 34%,
+        rgba(230,50,110,.05) 62%, transparent 82%) padding-box,
+      /* the body — lifted at both ends, so the slab reads as curved glass */
+      linear-gradient(180deg, #43102e 0%, #280720 26%, #1a0111 60%, #240a18 86%, #401628 100%) padding-box,
       var(--chrome-rim) border-box;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.4),
-      inset 0 -1px 0 rgba(255,255,255,.13),
+      inset 0 1px 0 rgba(255,220,240,.5),
+      inset 0 -1px 0 rgba(255,190,120,.24),
       inset 0 16px 26px -22px rgba(255,255,255,.6),
-      inset 0 -44px 70px -50px rgba(61,255,110,.5),
-      inset 0 0 70px -30px rgba(61,255,110,.3),
-      0 60px 110px -40px rgba(0,0,0,1),
-      0 0 60px -26px rgba(61,255,110,.22);
+      inset 0 -44px 70px -46px rgba(255,138,43,.7),
+      inset 0 0 70px -26px rgba(255,45,143,.5),
+      0 60px 110px -40px rgba(40,0,24,.95),
+      /* the slab burns a halo into the field around it */
+      0 0 80px -22px rgba(255,45,143,.5);
     animation:ffHover 9s ease-in-out infinite;
   }
   /* the filament along the top edge — one lit tube, fading out at both
@@ -4452,10 +4555,10 @@
   :root[data-skin="ffcup"] .cupmark::before{
     content:'';position:absolute;top:0;left:0;right:0;height:1px;z-index:3;
     background:linear-gradient(90deg,
-      transparent 0%, rgba(61,255,110,.4) 12%,
-      var(--neon) 34%, var(--neon-hot) 50%, var(--neon) 66%,
-      rgba(61,255,110,.4) 88%, transparent 100%);
-    box-shadow:0 0 12px rgba(61,255,110,.65), 0 0 34px rgba(61,255,110,.24);
+      transparent 0%, rgba(255,45,143,.5) 12%,
+      var(--hot) 34%, var(--flare) 50%, var(--hot) 66%,
+      rgba(255,45,143,.5) 88%, transparent 100%);
+    box-shadow:0 0 12px rgba(255,45,143,.8125), 0 0 34px rgba(255,45,143,.3);
   }
   /* one hard light crossing the face. It travels, then rests off-frame —
      a constant shimmer would read as a loading state, a single pass every
@@ -4472,7 +4575,7 @@
     z-index:2;pointer-events:none;
     background:linear-gradient(104deg,
       transparent 0%, rgba(255,255,255,.05) 28%,
-      rgba(204,255,221,.14) 50%, rgba(255,255,255,.05) 72%, transparent 100%);
+      rgba(255,226,168,.14) 50%, rgba(255,255,255,.05) 72%, transparent 100%);
     animation:cupSweep 9s cubic-bezier(.45,0,.55,1) infinite;
   }
   @keyframes cupSweep{
@@ -4480,21 +4583,23 @@
     58%,100%{transform:translate3d(0,0,0)}
   }
 
-  /* ---- what's behind the type: a court floor falling away into the void ---- */
+  /* ---- what's behind the type: a hot court floor running back to a horizon ---- */
   :root[data-skin="ffcup"] .cupmark-void{
     position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit;
   }
   /* the grid is drawn flat and then laid down in perspective, so the lines
      converge on their own — a hand-faked trapezoid never gets the spacing
      right. Masked at both ends: it has no beginning and no horizon, it just
-     comes out of the dark and goes back into it. */
+     comes out of the haze and goes back into it.
+     The two axes take one hue each — amber running away from you, magenta
+     across — which is what stops it reading as graph paper. */
   :root[data-skin="ffcup"] .cupmark-void::before{
     content:'';position:absolute;left:-55%;right:-55%;bottom:0;height:78%;
     background:
-      repeating-linear-gradient(90deg, rgba(61,255,110,.42) 0 1px, transparent 1px 78px),
-      repeating-linear-gradient(0deg,  rgba(61,255,110,.34) 0 1px, transparent 1px 58px);
+      repeating-linear-gradient(90deg, rgba(255,138,43,.6) 0 1px, transparent 1px 78px),
+      repeating-linear-gradient(0deg,  rgba(255,45,143,.55) 0 1px, transparent 1px 58px);
     transform:perspective(420px) rotateX(71deg) translate3d(0,0,0);transform-origin:50% 100%;
-    opacity:.55;
+    opacity:.7;
     animation:cupFloor 5.5s linear infinite;
   }
   /* Only the horizontal lines move, and they move toward the viewer — a grid
@@ -4520,11 +4625,16 @@
   :root[data-skin="ffcup"] .cupmark-void::after{
     content:'';position:absolute;left:50%;bottom:0;width:130%;height:100%;transform:translateX(-50%);
     background:
-      /* the grid comes out of the dark at the top and goes back into it */
-      linear-gradient(180deg, #000 0%, rgba(0,0,0,.9) 10%, rgba(0,0,0,.5) 22%, rgba(0,0,0,.12) 34%, transparent 44%),
-      linear-gradient(180deg, transparent 54%, rgba(0,0,0,.42) 84%, rgba(0,0,0,.72) 100%),
-      radial-gradient(56% 80% at 50% 100%,
-        rgba(61,255,110,.14) 0%, rgba(61,255,110,.055) 34%, rgba(61,255,110,.015) 60%, transparent 78%);
+      /* the grid comes out of the haze at the top and goes back into it —
+         plum, never black, so the fade cannot punch a hole in the grade */
+      linear-gradient(180deg, #1c0114 0%, rgba(30,2,20,.9) 10%, rgba(30,2,20,.5) 22%, rgba(30,2,20,.12) 34%, transparent 44%),
+      linear-gradient(180deg, transparent 54%, rgba(28,1,18,.46) 84%, rgba(24,0,15,.76) 100%),
+      /* the floor is standing in its own light: amber at the baseline
+         burning up into magenta, which is the collision the whole skin
+         is built on, at the one place the eye is already going */
+      radial-gradient(60% 82% at 50% 104%,
+        rgba(255,150,50,.34) 0%, rgba(255,90,70,.16) 30%,
+        rgba(255,45,143,.07) 58%, transparent 78%);
   }
 
   :root[data-skin="ffcup"] .cupmark-body{
@@ -4556,8 +4666,8 @@
   :root[data-skin="ffcup"] .cup-clockbox{margin-top:22px}
   :root[data-skin="ffcup"] .cup-cd-cap{
     font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;
-    letter-spacing:2.8px;text-transform:uppercase;color:var(--neon);
-    text-shadow:0 0 12px rgba(61,255,110,.55);margin-bottom:9px;
+    letter-spacing:2.8px;text-transform:uppercase;color:var(--hot);
+    text-shadow:0 0 12px rgba(255,45,143,.6875);margin-bottom:9px;
   }
 
   /* ---- status line ---- */
@@ -4568,15 +4678,15 @@
     display:inline-flex;align-items:center;gap:7px;
     padding:5px 13px 6px;border-radius:var(--r-pill);
     font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:800;
-    letter-spacing:2.6px;text-transform:uppercase;color:var(--neon);
-    border:1px solid rgba(61,255,110,.4);
-    background:linear-gradient(180deg, rgba(61,255,110,.14), rgba(61,255,110,.025));
-    box-shadow:0 0 20px -6px var(--accent-glow), inset 0 0 16px -9px var(--neon);
-    text-shadow:0 0 12px rgba(61,255,110,.75);
+    letter-spacing:2.6px;text-transform:uppercase;color:var(--hot);
+    border:1px solid rgba(255,45,143,.5);
+    background:linear-gradient(180deg, rgba(255,45,143,.175), rgba(255,45,143,.0312));
+    box-shadow:0 0 20px -6px var(--accent-glow), inset 0 0 16px -9px var(--hot);
+    text-shadow:0 0 12px rgba(255,45,143,.9375);
   }
   :root[data-skin="ffcup"] .cupmark-status i{
-    width:6px;height:6px;border-radius:50%;background:var(--neon-hot);
-    box-shadow:0 0 8px var(--neon), 0 0 18px rgba(61,255,110,.7);
+    width:6px;height:6px;border-radius:50%;background:var(--flare);
+    box-shadow:0 0 8px var(--hot), 0 0 18px rgba(255,45,143,.875);
   }
   /* only a running event gets a heartbeat; an upcoming one sits still */
   :root[data-skin="ffcup"] .cupmark[data-phase="live"] .cupmark-status i{
@@ -4596,10 +4706,10 @@
     letter-spacing:clamp(1px,.75vw,6px);text-transform:uppercase;
     background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
-    /* two shadows doing different jobs: a hard black one so the metal has an
-       edge to sit against, and a wide green one so the letters look like they
-       are being lit by the floor rather than pasted onto it */
-    filter:drop-shadow(0 2px 0 rgba(0,0,0,.92)) drop-shadow(0 0 30px rgba(61,255,110,.28));
+    /* two shadows doing different jobs: a hard plum one so the metal has an
+       edge to sit against, and a wide magenta one so the letters look like
+       they are being lit by the frame rather than pasted onto it */
+    filter:drop-shadow(0 2px 0 rgba(26,0,14,.92)) drop-shadow(0 0 30px rgba(255,45,143,.35));
   }
   :root[data-skin="ffcup"] .cupmark-sub{
     margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
@@ -4615,25 +4725,25 @@
     position:relative;overflow:hidden;text-align:center;
     padding:13px 5px 10px;border-radius:var(--r-sm);
     border:1px solid transparent;
-    background:linear-gradient(180deg,#0b0d0c 0%,#000 58%,#070908 100%) padding-box,
+    background:linear-gradient(180deg,#28061b 0%,#16000e 58%,#210416 100%) padding-box,
                var(--chrome-rim) border-box;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.3),
-      inset 0 -22px 30px -26px rgba(61,255,110,.55),
-      0 22px 36px -26px rgba(0,0,0,1);
+      inset 0 -22px 30px -26px rgba(255,45,143,.6875),
+      0 22px 36px -26px rgba(26,0,14,1);
   }
   /* a very fine scanline over the wells — the digits should look like they
      are being read off a screen, not set in a font */
   :root[data-skin="ffcup"] .cup-cd-cell::after{
     content:'';position:absolute;inset:0;pointer-events:none;
-    background:repeating-linear-gradient(0deg, rgba(0,0,0,.42) 0 1px, transparent 1px 3px);
+    background:repeating-linear-gradient(0deg, rgba(26,0,14,.42) 0 1px, transparent 1px 3px);
     opacity:.5;
   }
   :root[data-skin="ffcup"] .cup-cd-cell b{
     display:block;font-family:'JetBrains Mono',monospace;font-weight:800;
     font-size:clamp(21px,4.8vw,32px);line-height:1;letter-spacing:.5px;
-    font-variant-numeric:tabular-nums;color:var(--neon-hot);
-    text-shadow:0 0 6px var(--neon), 0 0 20px rgba(61,255,110,.75), 0 0 46px rgba(61,255,110,.35);
+    font-variant-numeric:tabular-nums;color:var(--flare);
+    text-shadow:0 0 6px var(--hot), 0 0 20px rgba(255,45,143,.9375), 0 0 46px rgba(255,45,143,.4375);
   }
   :root[data-skin="ffcup"] .cup-cd-cell i{
     display:block;margin-top:7px;font-style:normal;
@@ -4682,30 +4792,30 @@
   :root[data-skin="ffcup"] .cup-step::after{
     content:'';position:absolute;top:1px;left:50%;margin-left:-3.5px;
     width:7px;height:7px;border-radius:50%;
-    background:#0a0c0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);
+    background:#26051a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);
   }
   /* burnt through: everything the event has already been */
   :root[data-skin="ffcup"] .cup-step.done{color:var(--muted)}
-  :root[data-skin="ffcup"] .cup-step.done::before{background:rgba(61,255,110,.45)}
+  :root[data-skin="ffcup"] .cup-step.done::before{background:rgba(255,45,143,.5625)}
   :root[data-skin="ffcup"] .cup-step.done::after{
-    background:var(--neon);box-shadow:0 0 10px var(--neon), 0 0 22px rgba(61,255,110,.4);
+    background:var(--hot);box-shadow:0 0 10px var(--hot), 0 0 22px rgba(255,45,143,.5);
   }
   /* where it is right now — the only element on the rail that moves */
   :root[data-skin="ffcup"] .cup-step.now{
-    color:var(--neon-hot);text-shadow:0 0 14px rgba(61,255,110,.6);
+    color:var(--flare);text-shadow:0 0 14px rgba(255,45,143,.75);
   }
   :root[data-skin="ffcup"] .cup-step.now::before{
-    background:linear-gradient(90deg, rgba(61,255,110,.45), rgba(61,255,110,.08));
+    background:linear-gradient(90deg, rgba(255,45,143,.5625), rgba(255,45,143,.1));
   }
   /* the live dot is a white-hot core, which on its own reads DIMMER than the
-     saturated green ones behind it — the halo is what makes it the brightest
-     thing on the wire */
+     saturated magenta ones behind it — the halo is what makes it the
+     brightest thing on the wire */
   :root[data-skin="ffcup"] .cup-step.now::after{
-    background:radial-gradient(circle, var(--neon-hot) 0 40%, var(--neon) 100%);
+    background:radial-gradient(circle, var(--flare) 0 40%, var(--hot) 100%);
     box-shadow:
-      0 0 0 4px rgba(61,255,110,.22),
-      0 0 0 7px rgba(61,255,110,.08),
-      0 0 16px var(--neon), 0 0 40px rgba(61,255,110,.8);
+      0 0 0 4px rgba(255,45,143,.275),
+      0 0 0 7px rgba(255,45,143,.1),
+      0 0 16px var(--hot), 0 0 40px rgba(255,45,143,.95);
     animation:hudPulse 2.1s ease-in-out infinite;
   }
 
@@ -4718,20 +4828,22 @@
     font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;
     color:var(--ink);min-width:0;
   }
-  :root[data-skin="ffcup"] .cupmark-line b{color:var(--neon);text-shadow:0 0 12px rgba(61,255,110,.55)}
+  :root[data-skin="ffcup"] .cupmark-line b{color:var(--hot);text-shadow:0 0 12px rgba(255,45,143,.6875)}
   :root[data-skin="ffcup"] .cup-cta{
     display:inline-flex;align-items:center;gap:10px;cursor:pointer;
     padding:11px 20px;border-radius:var(--r-pill);
     font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;
-    letter-spacing:2.4px;text-transform:uppercase;color:#00180a;
-    border:1px solid rgba(204,255,221,.65);
-    /* the only filled element in the skin: the tube pointed straight at you */
-    background:linear-gradient(180deg, var(--neon-hot) 0%, var(--neon) 42%, #14bf46 100%);
+    letter-spacing:2.4px;text-transform:uppercase;color:#2b0016;
+    border:1px solid rgba(255,226,168,.65);
+    /* the brightest filled element in the skin: the light pointed straight
+       at you, running gold at the crown into magenta at the foot */
+    background:linear-gradient(180deg, var(--flare) 0%, var(--sun) 26%, var(--hot) 62%, #cc0f70 100%);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.8),
-      inset 0 -8px 12px -10px rgba(0,0,0,.5),
+      inset 0 -8px 12px -10px rgba(26,0,14,.5),
       0 0 28px -4px var(--accent-glow),
-      0 20px 38px -20px rgba(0,0,0,1);
+      0 0 44px -10px rgba(255,138,43,.55),
+      0 20px 38px -20px rgba(40,0,24,.95);
     transition:transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease, filter .35s ease;
   }
   :root[data-skin="ffcup"] .cup-cta span{font-size:14px;line-height:1;transition:transform .35s cubic-bezier(.16,1,.3,1)}
@@ -4739,9 +4851,9 @@
     transform:translateY(-2px);filter:brightness(1.08);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.9),
-      inset 0 -8px 12px -10px rgba(0,0,0,.45),
+      inset 0 -8px 12px -10px rgba(26,0,14,.45),
       0 0 44px -2px var(--accent-glow),
-      0 28px 50px -20px rgba(0,0,0,1);
+      0 28px 50px -20px rgba(26,0,14,1);
   }
   :root[data-skin="ffcup"] .cup-cta:hover span{transform:translateX(4px)}
   :root[data-skin="ffcup"] .cup-cta:active{transform:translateY(0)}
@@ -4751,15 +4863,15 @@
      enough to keep the cup present on every screen without shouting over
      a view somebody opened to do something else. */
   /* the inner glows are tuned for a slab half a metre tall; on a 50px bar the
-     same values fill the whole thing and it stops being black */
+     same values fill the whole thing and it stops being a surface at all */
   :root[data-skin="ffcup"] .cupmark.mini{
     margin-bottom:18px;animation:none;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.34),
       inset 0 -1px 0 rgba(255,255,255,.1),
-      inset 0 0 50px -34px rgba(61,255,110,.5),
-      0 30px 60px -34px rgba(0,0,0,1),
-      0 0 34px -22px rgba(61,255,110,.2);
+      inset 0 0 50px -34px rgba(255,45,143,.625),
+      0 30px 60px -34px rgba(26,0,14,1),
+      0 0 34px -22px rgba(255,45,143,.25);
   }
   :root[data-skin="ffcup"] .cupmark.mini .cupmark-void::after{opacity:.4}
   :root[data-skin="ffcup"] .cupmark.mini .cupmark-body{
@@ -4768,12 +4880,12 @@
   }
   :root[data-skin="ffcup"] .cupmark.mini .cupmark-name{
     font-size:clamp(13px,2.6vw,17px);letter-spacing:2.6px;
-    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 0 12px rgba(61,255,110,.22));
+    filter:drop-shadow(0 1px 0 rgba(26,0,14,.9)) drop-shadow(0 0 12px rgba(255,45,143,.275));
   }
   :root[data-skin="ffcup"] .cupmark.mini .cup-clock{
     font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;
-    font-variant-numeric:tabular-nums;letter-spacing:1.4px;color:var(--neon-hot);
-    text-shadow:0 0 8px var(--neon), 0 0 24px rgba(61,255,110,.5);
+    font-variant-numeric:tabular-nums;letter-spacing:1.4px;color:var(--flare);
+    text-shadow:0 0 8px var(--hot), 0 0 24px rgba(255,45,143,.625);
   }
   :root[data-skin="ffcup"] .cupmark.mini .cup-clock i{
     font-style:normal;color:var(--dim);text-shadow:none;margin:0 2px;
@@ -4791,8 +4903,8 @@
   :root[data-skin="ffcup"] .bb-tab.bb-more{position:relative}
   :root[data-skin="ffcup"] .cup-flag{
     display:block;position:absolute;top:6px;right:6px;
-    width:6px;height:6px;border-radius:50%;background:var(--neon-hot);
-    box-shadow:0 0 8px var(--neon), 0 0 20px rgba(61,255,110,.65);
+    width:6px;height:6px;border-radius:50%;background:var(--flare);
+    box-shadow:0 0 8px var(--hot), 0 0 20px rgba(255,45,143,.8125);
     animation:hudPulse 2.4s ease-in-out infinite;
   }
   :root[data-skin="ffcup"] .bb-tab.bb-more .cup-flag{top:5px;right:calc(50% - 20px)}
@@ -4804,9 +4916,9 @@
     transform:translateY(-1px);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.7),
-      inset 0 -1px 0 rgba(204,255,221,.3),
+      inset 0 -1px 0 rgba(255,226,168,.3),
       0 0 30px -6px var(--accent-glow),
-      0 16px 26px -14px rgba(0,0,0,1);
+      0 16px 26px -14px rgba(26,0,14,1);
   }
 
   /* the cup takes the top of the mobile sheet, above the utility grid */
@@ -4815,11 +4927,11 @@
     margin:0 0 12px;padding:14px 16px;cursor:pointer;text-align:left;
     border-radius:var(--r-md);border:1px solid transparent;
     background:
-      linear-gradient(180deg, #141a17 0%, #080b09 40%, #000 100%) padding-box,
+      linear-gradient(180deg, #3a0c28 0%, #220417 40%, #16000e 100%) padding-box,
       var(--chrome-rim) border-box;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.4),
-      inset 0 -26px 40px -34px rgba(61,255,110,.6),
+      inset 0 -26px 40px -34px rgba(255,45,143,.75),
       0 0 26px -14px var(--accent-glow);
   }
   :root[data-skin="ffcup"] .ms-cup b{
@@ -4827,12 +4939,12 @@
     letter-spacing:3px;text-transform:uppercase;
     background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;
-    filter:drop-shadow(0 1px 0 rgba(0,0,0,.9));
+    filter:drop-shadow(0 1px 0 rgba(26,0,14,.9));
   }
   :root[data-skin="ffcup"] .ms-cup i{
     font-style:normal;font-family:'JetBrains Mono',monospace;font-size:8.5px;
-    letter-spacing:1.6px;text-transform:uppercase;color:var(--neon);
-    text-shadow:0 0 10px rgba(61,255,110,.6);
+    letter-spacing:1.6px;text-transform:uppercase;color:var(--hot);
+    text-shadow:0 0 10px rgba(255,45,143,.75);
   }
 
   /* the promo card in the tournament list gets the same tube treatment,
@@ -4840,9 +4952,9 @@
   :root[data-skin="ffcup"] .pend.promo{
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.34),
-      inset 0 0 44px -20px rgba(61,255,110,.4),
+      inset 0 0 44px -20px rgba(255,45,143,.5),
       0 0 34px -18px var(--accent-glow),
-      0 44px 84px -36px rgba(0,0,0,1)!important;
+      0 44px 84px -36px rgba(26,0,14,1)!important;
   }
 
   @media(max-width:560px){
@@ -4889,10 +5001,10 @@
 
 
   /* ================================================================
-     10. WET BLACK — the gloss pass
+     10. WET PLUM — the gloss pass
 
-     The skin above establishes the void. This pass is about the
-     SURFACE: making the black read as polished rather than merely
+     The skin above establishes the grade. This pass is about the
+     SURFACE: making the plum read as polished rather than merely
      dark, and making every interaction feel like tennis.
 
      One rule governs everything below, and it is a performance rule
@@ -4917,43 +5029,56 @@
      everything painted behind the bar and re-blur it on every frame the
      page scrolls, across the full width of the viewport, twice over.
 
-     It was also invisible. The skin paints these bars at 92-96% opaque
-     black; there is nothing legible left behind them to blur. So the
-     effect goes, the last few percent of transparency goes with it, and
-     the bars become what the rest of the skin already is: solid slabs of
-     jet black with one lit edge. Scrolling gets its frames back. */
+     It was also invisible. The skin paints these bars at 92-96% opaque;
+     there is nothing legible left behind them to blur. So the effect
+     goes, the last few percent of transparency goes with it, and the
+     bars become what the rest of the skin already is: solid slabs of
+     deep plum with one lit edge. Scrolling gets its frames back. */
   :root[data-skin="ffcup"] .topbar,
   :root[data-skin="ffcup"] .botbar,
   :root[data-skin="ffcup"] .live-ticker-bar{
     backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
   }
+  /* the bar sits across the hottest part of the sky, so it carries the
+     grade rather than cutting a dark band through the top of the frame */
   :root[data-skin="ffcup"] .topbar{
-    background:linear-gradient(180deg, #0a0b0a 0%, #030403 62%, #000 100%)!important;
+    background:
+      linear-gradient(180deg, rgba(255,45,143,.22) 0%, rgba(255,45,143,.07) 55%, transparent 100%),
+      linear-gradient(180deg, #3a0b28 0%, #260619 62%, #1a0111 100%)!important;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.10),
-      inset 0 -14px 20px -22px rgba(61,255,110,.5),
-      0 1px 22px -6px rgba(61,255,110,.22),
-      0 18px 40px -28px rgba(0,0,0,1)!important;
+      inset 0 1px 0 rgba(255,210,235,.16),
+      inset 0 -14px 20px -20px rgba(255,45,143,.8),
+      0 1px 26px -4px rgba(255,45,143,.4),
+      0 18px 40px -28px rgba(38,0,22,.95)!important;
   }
+  /* and the bottom bar takes the other end of the grade — the amber
+     coming up off the court, so a phone is lit from both edges */
   :root[data-skin="ffcup"] .botbar{
-    background:linear-gradient(0deg, #000 0%, #030403 46%, #0a0b0a 100%)!important;
+    background:
+      linear-gradient(0deg, rgba(255,138,43,.16) 0%, rgba(255,90,60,.05) 55%, transparent 100%),
+      linear-gradient(0deg, #1e0413 0%, #240719 46%, #350c24 100%)!important;
     box-shadow:
-      inset 0 -1px 0 rgba(255,255,255,.08),
-      inset 0 14px 20px -22px rgba(61,255,110,.45),
-      0 -1px 22px -6px rgba(61,255,110,.2)!important;
+      inset 0 -1px 0 rgba(255,200,150,.14),
+      inset 0 14px 20px -20px rgba(255,138,43,.6),
+      0 -1px 26px -6px rgba(255,45,143,.32)!important;
   }
 
-  /* -- 10.2 wet black ---------------------------------------------
-     The panel body goes darker in the middle and brighter at the two
+  /* -- 10.2 wet plum -----------------------------------------------
+     The panel body goes deeper through the middle and brighter at the two
      lips than the pass above had it. That contrast IS the gloss: a matte
      surface fades evenly, a polished one holds a hard bright line where
      it turns away from you and picks the floor back up underneath. The
      top highlight is tightened from a soft 17% falloff to a hard 11%
      one, which is the difference between "lit" and "wet".
 
+     What the two lips are catching is not white — the top one takes the
+     magenta sky and the bottom one takes the amber coming off the court,
+     which is the whole reason the slab reads as sitting IN the frame
+     rather than on top of it.
+
      The leaderboard rows join the panels here. They were the last
-     surfaces still painting flat --panel, which in a void full of
-     polished slabs read as holes cut in the page. */
+     surfaces still painting flat --panel, which among polished slabs
+     read as holes cut in the page. */
   :root[data-skin="ffcup"] .panel,
   :root[data-skin="ffcup"] .board,
   :root[data-skin="ffcup"] .pend,
@@ -4963,36 +5088,41 @@
   :root[data-skin="ffcup"] .ac-menu,
   :root[data-skin="ffcup"] .brow{
     background:
-      /* the sky, held in the top millimetre of the glass */
-      linear-gradient(179deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.055) 3%,
-        rgba(255,255,255,.014) 11%, transparent 26%) padding-box,
+      /* the magenta sky, held in the top millimetre of the glass */
+      linear-gradient(179deg, rgba(255,190,225,.20) 0%, rgba(255,140,200,.075) 3%,
+        rgba(255,120,190,.02) 11%, transparent 26%) padding-box,
       /* one raking specular off the upper-left corner */
-      linear-gradient(146deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.02) 10%,
+      linear-gradient(146deg, rgba(255,255,255,.11) 0%, rgba(255,190,225,.03) 10%,
         transparent 27%) padding-box,
-      /* the body: deeper through the middle, lifted at both lips */
-      linear-gradient(180deg, #0b0d0c 0%, #040505 24%, #000 56%, #020303 82%, #0b0f0e 100%) padding-box,
+      /* the body: deeper through the middle, lifted at both lips — magenta
+         at the top, amber at the bottom, so the slab is graded like the
+         frame it is standing in */
+      linear-gradient(180deg, #45112f 0%, #2a071e 22%, #1e0316 54%, #290b1e 80%, #40182a 100%) padding-box,
       var(--chrome-rim) border-box!important;
     border:1px solid transparent!important;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.42),
-      inset 0 -1px 0 rgba(204,255,221,.15),
+      inset 0 1px 0 rgba(255,214,235,.5),
+      inset 0 -1px 0 rgba(255,190,120,.22),
       inset 0 10px 16px -16px rgba(255,255,255,.62),
-      inset 0 -34px 52px -44px rgba(61,255,110,.45),
-      inset 0 0 40px -26px rgba(61,255,110,.22),
-      0 46px 88px -38px rgba(0,0,0,1),
-      0 0 28px -22px rgba(61,255,110,.12)!important;
+      /* the ground bounce: amber, and it is allowed to be obvious */
+      inset 0 -38px 56px -40px rgba(255,138,43,.6),
+      inset 0 0 40px -22px rgba(255,45,143,.4),
+      0 46px 88px -38px rgba(40,0,24,.95),
+      /* the slab's own bloom into the field — this is the bit that stops
+         it looking cut out and pasted on */
+      0 0 34px -20px rgba(255,45,143,.4)!important;
   }
   /* A leaderboard row is a tenth the height of a panel, and the inner glows
      above are sized for a panel: at 72px tall they stop being a bloom along
      the bottom lip and become a wash across the whole surface, which is the
-     one thing that stops black reading as black. Same light, scaled to the
+     one thing that stops a slab reading as a slab. Same light, scaled to the
      object — the same correction the skin already makes for .cupmark.mini. */
   :root[data-skin="ffcup"] .brow{
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.3),
-      inset 0 -1px 0 rgba(204,255,221,.1),
-      inset 0 -14px 26px -30px rgba(61,255,110,.4),
-      0 20px 40px -28px rgba(0,0,0,1)!important;
+      inset 0 -1px 0 rgba(255,226,168,.1),
+      inset 0 -14px 26px -30px rgba(255,45,143,.5),
+      0 20px 40px -28px rgba(26,0,14,1)!important;
   }
 
   /* the highlight thrown ONTO the face by a lamp off frame. This was a
@@ -5035,8 +5165,8 @@
     width:10px!important;height:10px!important;
     background:
       radial-gradient(circle at 30% 24%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 34%),
-      radial-gradient(circle at 50% 50%, var(--neon-hot) 0%, var(--neon) 46%, #12a63f 88%, #0a7a2c 100%)!important;
-    box-shadow:0 0 9px var(--neon), 0 0 20px rgba(61,255,110,.5)!important;
+      radial-gradient(circle at 50% 50%, var(--flare) 0%, var(--hot) 46%, #bb0f66 88%, #85084a 100%)!important;
+    box-shadow:0 0 9px var(--hot), 0 0 20px rgba(255,45,143,.625)!important;
     transform-origin:50% 100%;
   }
   /* hover the section and the ball takes one bounce — squash on the
@@ -5061,7 +5191,7 @@
   :root[data-skin="ffcup"] .pres-dot{
     background:
       radial-gradient(circle at 30% 24%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 36%),
-      radial-gradient(circle at 50% 50%, var(--neon-hot) 0%, var(--neon) 48%, #10a03c 100%)!important;
+      radial-gradient(circle at 50% 50%, var(--flare) 0%, var(--hot) 48%, #b30e62 100%)!important;
   }
 
   /* -- 10.5 the rally ---------------------------------------------
@@ -5088,14 +5218,14 @@
     content:'';position:absolute;left:0;bottom:4px;width:100%;height:12px;
     pointer-events:none;z-index:2;opacity:0;
     background:radial-gradient(circle 6px at 6px 6px,
-      #ffffff 0%, var(--neon-hot) 22%, var(--neon) 58%, #0d9138 92%, transparent 100%);
+      #ffffff 0%, var(--flare) 22%, var(--hot) 58%, #a30c59 92%, transparent 100%);
     background-repeat:no-repeat;
-    filter:drop-shadow(0 0 6px rgba(61,255,110,.85));
+    filter:drop-shadow(0 0 6px rgba(255,45,143,.95));
   }
   :root[data-skin="ffcup"] .brow:hover::after{animation:ffRally 1.05s cubic-bezier(.42,0,.5,1) 1}
   /* the row's own lift: a sideline lights up rather than the whole slab
-     shifting sideways, and the surface catches a little more of the void's
-     green as it comes toward you */
+     shifting sideways, and the surface catches a little more of the field's
+     magenta as it comes toward you */
   :root[data-skin="ffcup"] .brow{
     transition:transform .28s cubic-bezier(.16,1,.3,1), box-shadow .28s ease;
   }
@@ -5105,15 +5235,15 @@
   }
   /* the ranked three keep their own light — the sideline that appears on
      hover is for everybody else, so it must not repaint over theirs */
-  :root[data-skin="ffcup"] .brow:not(.g1):not(.g2):not(.g3)::before{background:var(--neon)}
+  :root[data-skin="ffcup"] .brow:not(.g1):not(.g2):not(.g3)::before{background:var(--hot)}
   :root[data-skin="ffcup"] .brow:hover{
     transform:translate3d(0,-2px,0)!important;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.55),
-      inset 0 -1px 0 rgba(204,255,221,.22),
-      inset 0 0 44px -22px rgba(61,255,110,.55),
-      0 30px 56px -30px rgba(0,0,0,1),
-      0 0 30px -18px rgba(61,255,110,.35)!important;
+      inset 0 -1px 0 rgba(255,226,168,.22),
+      inset 0 0 44px -22px rgba(255,45,143,.6875),
+      0 30px 56px -30px rgba(26,0,14,1),
+      0 0 30px -18px rgba(255,45,143,.4375)!important;
   }
   :root[data-skin="ffcup"] .brow:hover::before{transform:scaleY(1)}
   /* the top three keep their sideline lit at all times — that is the rank */
@@ -5121,7 +5251,7 @@
   :root[data-skin="ffcup"] .brow.g2::before,
   :root[data-skin="ffcup"] .brow.g3::before{transform:scaleY(1)}
   :root[data-skin="ffcup"] .brow.g1::before{
-    background:var(--neon);box-shadow:0 0 14px var(--neon), 0 0 30px rgba(61,255,110,.45);
+    background:var(--hot);box-shadow:0 0 14px var(--hot), 0 0 30px rgba(255,45,143,.5625);
   }
 
   /* -- 10.6 the string bed ----------------------------------------
@@ -5148,12 +5278,12 @@
   :root[data-skin="ffcup"] .cup-cta:hover::after{
     animation:ffStrings .72s cubic-bezier(.3,0,.4,1) 1;
   }
-  /* the ghost button's strings are neon instead of white — on a black face
+  /* the ghost button's strings are magenta instead of white — on a dark face
      white strings read as a glare, on a lit face they read as the racket */
   :root[data-skin="ffcup"] .btn.ghost::after{
     background:
-      repeating-linear-gradient(90deg, rgba(61,255,110,.5) 0 1px, transparent 1px 7px),
-      repeating-linear-gradient(0deg,  rgba(204,255,221,.35) 0 1px, transparent 1px 7px);
+      repeating-linear-gradient(90deg, rgba(255,45,143,.625) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(0deg,  rgba(255,226,168,.35) 0 1px, transparent 1px 7px);
   }
   :root[data-skin="ffcup"] .cup-cta{position:relative;overflow:hidden}
 
@@ -5164,8 +5294,8 @@
      to re-render, and it still reads as "forward" to a screen reader that
      ignores the styling), the skin just draws over it.
 
-     Dark, not neon: the CTA face is the brightest thing in the app, and a
-     green ball on a green button is a hole. A near-black ball with one
+     Dark, not hot: the CTA face is the brightest thing in the app, and a
+     magenta ball on a magenta button is a hole. A deep plum ball with one
      specular and a white seam reads as an object sitting ON the light.
 
      Hovering tosses it up and forward — the ball toss, the one gesture in
@@ -5176,8 +5306,8 @@
     font-size:0;line-height:0;overflow:hidden;
     background:
       radial-gradient(circle at 32% 26%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 40%),
-      radial-gradient(circle at 50% 55%, #0d5526 0%, #00190a 72%, #000 100%);
-    box-shadow:inset -2px -2px 3px rgba(0,0,0,.55), inset 1px 1px 2px rgba(255,255,255,.4);
+      radial-gradient(circle at 50% 55%, #4a0128 0%, #180009 72%, #16000e 100%);
+    box-shadow:inset -2px -2px 3px rgba(26,0,14,.55), inset 1px 1px 2px rgba(255,255,255,.4);
   }
   :root[data-skin="ffcup"] .cup-cta span::after{
     content:'';position:absolute;inset:0;border-radius:50%;
@@ -5220,8 +5350,8 @@
   :root[data-skin="ffcup"] .stat::after,
   :root[data-skin="ffcup"] .ms-grid button::after{
     content:'';position:absolute;left:0;right:0;bottom:0;height:1.5px;
-    background:linear-gradient(90deg, transparent, var(--neon) 22%, var(--neon-hot) 50%, var(--neon) 78%, transparent);
-    box-shadow:0 0 10px rgba(61,255,110,.75);
+    background:linear-gradient(90deg, transparent, var(--hot) 22%, var(--flare) 50%, var(--hot) 78%, transparent);
+    box-shadow:0 0 10px rgba(255,45,143,.9375);
     transform:scaleX(0);transform-origin:50% 50%;
     transition:transform .4s cubic-bezier(.16,1,.3,1);
     pointer-events:none;
@@ -5235,9 +5365,9 @@
      Give it its strings back, in the one hue, over black. */
   :root[data-skin="ffcup"] .tw-strings{
     background:
-      repeating-linear-gradient(90deg, rgba(61,255,110,.5) 0 2px, transparent 2px 26px),
-      repeating-linear-gradient(0deg,  rgba(204,255,221,.3) 0 2px, transparent 2px 30px),
-      linear-gradient(100deg, rgba(0,0,0,.9) 0%, rgba(3,20,10,.96) 55%, #000 100%)!important;
+      repeating-linear-gradient(90deg, rgba(255,45,143,.625) 0 2px, transparent 2px 26px),
+      repeating-linear-gradient(0deg,  rgba(255,226,168,.3) 0 2px, transparent 2px 30px),
+      linear-gradient(100deg, rgba(26,0,14,.9) 0%, rgba(40,2,24,.96) 55%, #16000e 100%)!important;
   }
 
   /* -- 10.11 the podium -------------------------------------------
@@ -5255,7 +5385,7 @@
   /* and the avatar picks up a ball's rim light as you come to it */
   :root[data-skin="ffcup"] .pod-av .avi{transition:box-shadow .3s ease}
   :root[data-skin="ffcup"] .pod:hover .pod-av .avi{
-    box-shadow:0 0 0 2px var(--neon), 0 0 34px -6px var(--accent-glow)!important;
+    box-shadow:0 0 0 2px var(--hot), 0 0 34px -6px var(--accent-glow)!important;
   }
 
   /* -- 10.12 budget ------------------------------------------------
@@ -13363,10 +13493,11 @@ function pinnedComment(matchId){
 /* ---------- rating history chart ---------- */
 /* Avatars, @mentions and every chart series draw from this one list, which is
    why a rainbow here put a purple initials bubble in the middle of the podium.
-   The cup ramp is a single hue in eight steps, ordered bright/dark/bright so
-   neighbouring chart series stay tellable apart without leaving the green. */
+   The cup ramp walks the skin's own magenta→amber collision in eight steps,
+   ordered bright/dark/bright so neighbouring chart series stay tellable apart
+   without any of them landing on the cool side of the wheel. */
 const CHART_COLORS = document.documentElement.dataset.skin === "ffcup"
-  ? ["#3dff6e","#0f8f3c","#a6ffc4","#2bbf63","#dcffe8","#17e05c","#6fd996","#0a6b2c"]
+  ? ["#ff2d8f","#ff8a2b","#ffc247","#e0166f","#ff9ec9","#ff5a1f","#ffe6a8","#b30e62"]
   : ["#4ade80","#f5c451","#6ab7ff","#f0665a","#c58bf5","#5ce0c0","#ff9d5c","#e86ab0"];
 let isolated = null; // name of isolated player, or null for all
 
