@@ -3483,6 +3483,107 @@
 
 
   /* ================================================================
+     RALLY REEL — the cut, inside the match modal.
+
+     Sits below the game-by-game breakdown and takes over the width of
+     the modal when open. The list is the one thing that scrolls: it can
+     run to 200 rows on a long match, and the page underneath must not
+     grow by a screen and a half because somebody tapped a button.
+     ================================================================ */
+  .rr-cta{margin-top:12px}
+  .rr-cta-btn{margin:0;padding:11px 14px;width:100%;text-align:left;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .rr-cta-btn i{font-style:normal;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.8px;
+    text-transform:uppercase;color:var(--dim)}
+
+  .rr-wrap{margin-top:12px;padding:14px;border-radius:var(--r-md);background:var(--panel);border:1px solid var(--line)}
+  .rr-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .rr-title{font-weight:700;font-size:15px;color:var(--ink)}
+  .rr-stat{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+  .rr-stat b{color:var(--ball);font-size:13px;letter-spacing:0}
+  .rr-stat-cut{color:var(--muted)}
+  .rr-close{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--dim);
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;padding:4px}
+  .rr-close:hover{color:var(--accent)}
+
+  .rr-stage{position:relative;border-radius:var(--r-sm);overflow:hidden;background:#000;border:1px solid var(--line-soft)}
+  .rr-mount, .rr-mount iframe, #rrPlayerEl{display:block;width:100%;aspect-ratio:16/9;border:0}
+  .rr-warn{padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--muted);background:rgba(255,177,0,.09)}
+  .rr-warn a{color:var(--court)}
+
+  .rr-transport{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .rr-play{min-width:104px}
+  .rr-rate{display:flex;gap:4px;margin-left:auto}
+  .rr-rate-b{background:none;border:1px solid var(--line-soft);border-radius:var(--r-pill);cursor:pointer;
+    padding:4px 9px;color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:10px}
+  .rr-rate-b.on{color:var(--ink);border-color:var(--court);background:var(--court-dim)}
+  .rr-now{margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .rr-now b{color:var(--ink)}
+
+  .rr-sync{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)}
+  .rr-sync-l,.rr-sync-v{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .rr-sync-v{color:var(--ball);letter-spacing:0;font-size:12px;min-width:44px;text-align:center}
+  .rr-sync-hint{flex:1 1 100%;font-size:11.5px;color:var(--dim);line-height:1.6}
+
+  .rr-attach{padding:14px;border-radius:var(--r-sm);background:var(--panel-2);border:1px solid var(--line-soft)}
+  .rr-attach-h{font-weight:700;font-size:13.5px;color:var(--ink)}
+  .rr-attach-b{font-size:12.5px;color:var(--muted);line-height:1.65;margin-top:5px}
+  .rr-attach-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .rr-attach-row input{flex:1 1 220px;min-width:0;padding:9px 11px;border-radius:var(--r-sm);
+    background:var(--bg);border:1px solid var(--line);color:var(--ink);font-size:13px}
+
+  .rr-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .rr-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:var(--r-pill);cursor:pointer;
+    background:var(--panel-2);border:1px solid var(--line-soft);color:var(--muted);font-size:12px}
+  .rr-chip:hover:not(:disabled){color:var(--ink);border-color:var(--line)}
+  .rr-chip.on{color:var(--ink);border-color:var(--accent);background:var(--accent-dim)}
+  .rr-chip:disabled{opacity:.35;cursor:default}
+  .rr-chip-n{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
+  .rr-chip.on .rr-chip-n{color:var(--accent)}
+
+  .rr-list{margin-top:10px;max-height:280px;overflow-y:auto;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);background:var(--bg)}
+  .rr-row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;cursor:pointer;text-align:left;
+    background:none;border:none;border-bottom:1px solid var(--line-soft);color:var(--muted);font-size:12.5px}
+  .rr-row:last-child{border-bottom:none}
+  .rr-row:hover{background:var(--panel)}
+  .rr-row.on{background:var(--accent-dim);color:var(--ink)}
+  .rr-row-n{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);min-width:34px}
+  .rr-row.on .rr-row-n{color:var(--accent)}
+  .rr-row-sc{font-family:'JetBrains Mono',monospace;font-size:11.5px;min-width:42px}
+  .rr-row-w{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .rr-row-tags{display:flex;gap:4px;flex-wrap:nowrap}
+  .rr-row-tags i{font-style:normal;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.5px;
+    text-transform:uppercase;padding:2px 6px;border-radius:var(--r-pill);background:var(--panel-2);color:var(--ball)}
+  .rr-row-d{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);min-width:42px;text-align:right}
+  .rr-empty{padding:16px;text-align:center;font-size:12.5px;color:var(--dim)}
+
+  .rr-fold{margin-top:12px;border-top:1px solid var(--line-soft);padding-top:10px}
+  .rr-fold summary{cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--dim);list-style:none}
+  .rr-fold summary::-webkit-details-marker{display:none}
+  .rr-fold summary:hover{color:var(--court)}
+  .rr-fold-b p{font-size:12.5px;color:var(--muted);line-height:1.7;margin:10px 0 14px}
+  .rr-tune{display:flex;align-items:center;gap:12px;margin-bottom:9px}
+  .rr-tune-l{flex:0 0 130px;display:flex;flex-direction:column;gap:1px;
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+  .rr-tune-l i{font-style:normal;font-size:9px;letter-spacing:.3px;text-transform:none;color:var(--dim)}
+  .rr-tune input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--accent)}
+  .rr-tune-v{flex:0 0 46px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ball)}
+
+  .rr-exports{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft)}
+
+  @media(max-width:640px){
+    .rr-wrap{padding:11px}
+    .rr-head{gap:9px}
+    .rr-rate{margin-left:0}
+    .rr-list{max-height:220px}
+    .rr-row-tags{display:none}
+    .rr-tune-l{flex-basis:96px}
+    .rr-tune-l i{display:none}
+  }
+
+
+  /* ================================================================
      FF CUP EVENT SKIN — "JET BLACK · ANTI-GRAVITY"
 
      Temporary tournament dressing for the FF Cup. Every rule below is
@@ -6748,7 +6849,13 @@ function ptDefaultState(a,b){
      the Set Break stats box, without a second parallel per-set log to keep
      in sync. Reset after every set close — see ptCloseSet. */
   return {a,b,setsA:0,setsB:0,sets:[],gamesA:0,gamesB:0,ptsA:0,ptsB:0,tiebreak:false,tbA:0,tbB:0,log:[],winner:null,draw:false,gameLog:[],startedAt:now,endedAt:null,streakSide:null,streakCount:0,
-    acesA:0,acesB:0,_setStartLogIdx:0,_setStartAcesA:0,_setStartAcesB:0,_setStartAt:now};
+    acesA:0,acesB:0,_setStartLogIdx:0,_setStartAcesA:0,_setStartAcesB:0,_setStartAt:now,
+    /* rallies/video feed the rally reel — see the RALLY REEL section below.
+       rallies is one row per point, stamped with the clock; video is the
+       anchor that turns those stamps into positions in the broadcast. Both
+       are plain fields on PT so undo/redo, the localStorage draft and the
+       submit payload all carry them for free. */
+    rallies:[], video:null};
 }
 function ptPersist(){
   try{
@@ -6763,6 +6870,10 @@ function ptStart(){
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
   ptLogExpanded=false;
+  /* covers "link the stream, then start the match" — the other order is
+     handled from ptLinkStream. Either way the match ends up knowing which
+     video it is on and where that video's clock starts. */
+  if(typeof PTStream!=='undefined' && PTStream && PTStream.role==='host' && PTStream.videoId) ptAnchorMatchToVideo(PTStream.videoId);
   ptPersist();
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
   renderTracker();
@@ -6999,6 +7110,43 @@ function ptFire88(){
 }
 function ptCheck88(pa,pb){ if(pa===8 && pb===8) ptFire88(); }
 
+/* One row per point, stamped with the clock. Written AFTER the point has been
+   applied, so it can record both what was riding on the rally (read off `pre`,
+   the state as the ball was served — that is what makes a point worth watching,
+   not the score it produced) and what the rally did (closed a game, a set, the
+   match).
+
+   Deliberately appended after ptHistory took its clone at the top of ptPoint,
+   so an undo drops the row along with the point and a redo brings it back.
+   No second stack to keep in step with the first.
+
+   `t` is ms since PT.startedAt, not an epoch: the reel only ever asks how far
+   into the match a point landed, and a relative number survives being read on
+   a device in another timezone.
+
+   Note that ptFixGame (flipping a recorded game's winner months later) does
+   NOT rewrite the `w`/`gw` fields here. The timings — the only thing the cut
+   is derived from — are unaffected either way, and rewriting attribution from
+   a corrected aggregate would be guessing which points changed hands. */
+function ptLogRally(pre, side, isAce){
+  if(!PT.rallies) PT.rallies=[];
+  const r={
+    t: Date.now()-PT.startedAt,
+    w: side,
+    s: pre.setsA+pre.setsB+1,          // set number, 1-based
+    g: pre.gameLog.length+1,           // game number across the whole match
+    b: pre.tiebreak?`${pre.tbA}-${pre.tbB}`:`${pre.ptsA}-${pre.ptsB}`
+  };
+  if(pre.tiebreak) r.tb=1;
+  if(isAce) r.ace=1;
+  if(ptWouldWinGame('a',pre)||ptWouldWinGame('b',pre)) r.gp=1;
+  if(ptIsMatchPoint('a',pre)||ptIsMatchPoint('b',pre)) r.mp=1;
+  if(PT.gameLog.length>pre.gameLog.length) r.gw=side;
+  if(PT.sets.length>pre.sets.length) r.sw=side;
+  if(PT.winner && !pre.winner) r.mw=side;
+  PT.rallies.push(r);
+}
+
 function ptPoint(side, isAce){
   if(!PT || PT.winner || PT.draw) return;
   sfx('point');
@@ -7036,6 +7184,7 @@ function ptPoint(side, isAce){
       ptCheck88(PT.ptsA,PT.ptsB);
     }
   }
+  ptLogRally(pre, side, isAce);
   ptAfterMutate();
 }
 window.ptPoint=ptPoint;
@@ -7099,16 +7248,39 @@ function ptGamesPayload(){
   if(cur.length) out.push({set:setNum, games:cur});
   return out;
 }
+/* the point-by-point timing the rally reel cuts from — see docs/rally-reel.sql.
+   Null when nothing was tracked (an abandoned-then-resumed draft from before
+   this existed), which the reel reads as "no reel for this match". */
+function ptRalliesPayload(){
+  if(!PT.rallies || !PT.rallies.length) return null;
+  return JSON.stringify({v:1, a:PT.a, b:PT.b,
+    startedAt:PT.startedAt, endedAt:PT.endedAt||null,
+    video:PT.video||null, points:PT.rallies});
+}
 async function ptSubmit(){
   if(!PT || (!PT.winner && !PT.draw)) return;
   const outcome = PT.winner==='a'?1:(PT.winner==='b'?0:0.5);
   const umpireRating = ($("ptUmpireRating")?.value||"");
   const row={p1:PT.a,p2:PT.b,outcome,status:"pending",sets:ptSetsString()||null,games:JSON.stringify(ptGamesPayload())};
   if(umpireRating) row.umpire_rating=Number(umpireRating);
+  const rallies=ptRalliesPayload();
+  if(rallies) row.rallies=rallies;
   const btn=$("ptSubmitBtn"); if(btn) btn.disabled=true;
-  let {error}=await sb.from("matches").insert(row);
-  if(error && /umpire_rating/.test(error.message)){ delete row.umpire_rating; ({error}=await sb.from("matches").insert(row)); }
-  if(error && /games/.test(error.message)){ delete row.games; ({error}=await sb.from("matches").insert(row)); }
+  /* umpire_rating / games / rallies are all "only if the schema has them"
+     extras, and a project that skipped a migration must still be able to
+     report a match. PostgREST names the missing column in the error, so drop
+     whichever one it named and try again — the old fixed if-chain only worked
+     when the columns went missing in the order it happened to test them, and
+     silently gave up on the second one. */
+  const OPTIONAL=["umpire_rating","rallies","games"];
+  let error;
+  for(let attempt=0; attempt<=OPTIONAL.length; attempt++){
+    ({error}=await sb.from("matches").insert(row));
+    if(!error) break;
+    const missing=OPTIONAL.find(c=>row[c]!==undefined && new RegExp(c).test(error.message));
+    if(!missing) break;
+    delete row[missing];
+  }
   if(error){ if(btn) btn.disabled=false; return toast(error.message,true); }
   broadcastTicker(`🎾 ${PT.a} vs ${PT.b} — ${PT.draw?'drawn':'tracked live'}`);
   toast("Submitted — waiting for approval ✓");
@@ -7297,6 +7469,659 @@ function renderReplay(){
     </div>`;
 }
 window.renderReplay=renderReplay;
+
+/* ============================================================
+   RALLY REEL — the match with the standing around taken out.
+
+   THE IDEA. Cutting a tennis recording down to just the rallies is
+   normally posed as a computer-vision problem: find the ball, find the
+   serve, decide when the point ended. It doesn't have to be. Somebody
+   already sat through this match tapping a button every time a point
+   finished — the ref running the point tracker — and those taps are an
+   exact record of where every rally ended. The rally before tap i began
+   once the players had collected the ball and served again after tap
+   i-1. That is the entire edit, derived from data the app was already
+   collecting, with no model to run, no footage to upload, and nothing to
+   be wrong about when the ball goes behind a tree.
+
+   WHAT IS MEASURED AND WHAT IS ASSUMED. The taps are real, to about a
+   second — a ref watches the point land, then taps. The serve inside the
+   dead time between two taps is the one thing nobody recorded, so it is a
+   parameter (`dead` below) rather than something dressed up as a
+   measurement. Set it once for how your group actually plays and every
+   match after that cuts correctly; the sliders show the resulting
+   runtime as you move them.
+
+   ONE MODEL, TWO OUTPUTS. The same segment list either plays here — the
+   player is simply sent past the dead time, so the edit costs no
+   processing, no storage and no upload — or downloads as an ffmpeg
+   script that performs the real cut on the original file. Nothing is
+   transcoded in the browser: a phone should not be re-encoding an hour of
+   tennis, and it doesn't have the camera original anyway.
+   ============================================================ */
+
+/* Every number is seconds, and every one is a real property of how a group
+   plays rather than a constant tuned in private — which is why they are all
+   exposed:
+     lag   how long after the ball is dead the ref actually taps
+     dead  ball dead → next serve: fetch the ball, walk back, bounce it
+     lead  pre-roll kept before that serve, so a clip opens on the toss
+     tail  kept after the point lands, for the reaction
+     max   longest one clip may run — the cap that stops a changeover or a
+           re-tied shoelace being served up as a 90-second rally
+     min   shortest, so a double fault is still watchable
+   Saved per device: dial them in once against your own footage. */
+const RR_TUNE_KEY="fgta_reel_tune";
+const RR_TUNE_DEF={lag:1.2, dead:12, lead:2, tail:2, max:30, min:4};
+const RR_TUNE_RANGE={lag:[0,5,.1], dead:[3,40,.5], lead:[0,8,.5], tail:[0,8,.5], max:[8,90,1], min:[1,15,.5]};
+const RR_TUNE_LABEL={lag:'Tap lag', dead:'Dead time', lead:'Lead-in', tail:'Tail', max:'Max clip', min:'Min clip'};
+const RR_TUNE_HELP={
+  lag:'how long after the ball is dead the ref taps',
+  dead:'ball dead → next serve',
+  lead:'kept before the serve',
+  tail:'kept after the point',
+  max:'longest a single clip may run',
+  min:'shortest a single clip may run'
+};
+function rrTune(){
+  const t={...RR_TUNE_DEF};
+  try{
+    const raw=JSON.parse(localStorage.getItem(RR_TUNE_KEY)||'{}');
+    Object.keys(RR_TUNE_DEF).forEach(k=>{ if(isFinite(raw[k])) t[k]=Number(raw[k]); });
+  }catch(e){}
+  return t;
+}
+function rrSaveTune(t){ try{ localStorage.setItem(RR_TUNE_KEY, JSON.stringify(t)); }catch(e){} }
+
+/* matches.rallies as ptRalliesPayload wrote it. Null for every match played
+   before this existed, and for any project that hasn't run the migration —
+   in both cases the reel simply doesn't offer itself. */
+function rrParse(m){
+  let d=m && m.rallies;
+  if(!d) return null;
+  if(typeof d==='string'){ try{ d=JSON.parse(d); }catch(e){ return null; } }
+  if(!d || !Array.isArray(d.points) || !d.points.length) return null;
+  return d;
+}
+function rrHasReel(m){ return !!rrParse(m); }
+function rrCanPlay(data){ return !!(data && data.video && data.video.id); }
+
+/* Match clock → the clock the cut is expressed in.
+
+   With a YouTube anchor that is the video's own timeline, and the conversion
+   is one subtraction: a VOD's timeline starts when the stream started, which
+   is exactly what ptAnchorMatchToVideo recorded.
+
+   Without one it falls back to time-since-the-first-ball, which is what you
+   want when the cut is going to be applied to a file on your own disk — tell
+   ffmpeg where the match starts in that file by dragging the offset, and the
+   same segment list applies unchanged. */
+function rrVideoSec(data, tMs){
+  const v=data.video||{};
+  const base = isFinite(v.start) ? (data.startedAt - v.start)/1000 : 0;
+  return base + tMs/1000 + (v.drift||0);
+}
+function rrSourceSeconds(data){
+  const last=data.points[data.points.length-1];
+  return ((data.endedAt ? data.endedAt-data.startedAt : last.t))/1000;
+}
+
+/* The cut itself. Ten lines, because once the taps exist there is nothing
+   clever left to do. */
+function rrSegments(data, tune){
+  const pts=data.points, out=[];
+  for(let i=0;i<pts.length;i++){
+    const tap=rrVideoSec(data, pts[i].t);
+    const prev=rrVideoSec(data, i ? pts[i-1].t : 0);
+    const end=tap - tune.lag + tune.tail;
+    const serve=prev - tune.lag + tune.dead;
+    let start=Math.max(serve - tune.lead, end - tune.max);
+    if(end-start < tune.min) start=end - tune.min;
+    if(start<0) start=0;
+    if(end<=start) continue;          // the anchor is off by more than the match is long
+    out.push({n:out.length+1, p:pts[i], start, end, dur:end-start});
+  }
+  /* the tracker numbers games across the whole match, because gameLog is one
+     flat list and every stat downstream of it wants a running index. People
+     count games within a set — "set 2, game 3", never "set 2, game 9" — so
+     the display number is derived here rather than stored twice. */
+  const firstOfSet={};
+  out.forEach(s=>{
+    if(firstOfSet[s.p.s]===undefined) firstOfSet[s.p.s]=s.p.g;
+    s.gn = s.p.g - firstOfSet[s.p.s] + 1;
+  });
+  return out;
+}
+
+const RR_FILTERS=[
+  {k:'all',  label:'All rallies',   fn:()=>true},
+  {k:'long', label:'Long rallies',  fn:(s,R)=>s.dur>=R.longCut},
+  {k:'gp',   label:'Pressure',      fn:s=>!!(s.p.gp||s.p.mp)},
+  {k:'gw',   label:'Game winners',  fn:s=>!!s.p.gw},
+  {k:'ace',  label:'Aces',          fn:s=>!!s.p.ace},
+  {k:'a',    label:'',              fn:s=>s.p.w==='a'},
+  {k:'b',    label:'',              fn:s=>s.p.w==='b'}
+];
+
+function rrName(R, side){ return side==='a' ? (R.data.a||R.m.p1) : (R.data.b||R.m.p2); }
+function rrClock(sec){
+  sec=Math.max(0,Math.round(sec));
+  const h=Math.floor(sec/3600), mn=Math.floor(sec%3600/60), s=sec%60;
+  return h ? `${h}:${String(mn).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+           : `${mn}:${String(s).padStart(2,'0')}`;
+}
+function rrSecs(n){ return (Math.round(n*10)/10)+'s'; }
+function rrTags(s){
+  const t=[];
+  if(s.p.ace) t.push('ace');
+  if(s.p.mw) t.push('match');
+  else if(s.p.sw) t.push('set');
+  else if(s.p.gw) t.push('game');
+  else if(s.p.mp) t.push('match pt');
+  else if(s.p.gp) t.push('game pt');
+  if(s.p.tb) t.push('TB');
+  return t;
+}
+
+let REEL=null;   // {m, data, tune, all, segs, longCut, idx, playing, player, timer, …}
+
+function openReel(matchId){
+  const m=matches.find(x=>x.id===matchId); if(!m) return;
+  const data=rrParse(m);
+  if(!data) return toast("No point timings were recorded for this match",true);
+  closeReel();
+  REEL={m, data, tune:rrTune(), filter:'all', idx:0, playing:false, timer:null,
+        player:null, playerReady:false, booting:false, playerError:null,
+        rate:1, tuneOpen:false, all:[], segs:[], longCut:0};
+  rrCompute();
+  renderReel();
+  if(rrCanPlay(data)) rrMountPlayer();
+}
+window.openReel=openReel;
+
+function closeReel(){
+  const R=REEL;
+  if(!R) return;
+  if(R.timer) clearInterval(R.timer);
+  /* destroy, not just pause: an orphaned iframe behind a closed modal keeps
+     playing audio, which is the one bug in here a user would never forgive */
+  try{ R.player && R.player.destroy && R.player.destroy(); }catch(e){}
+  REEL=null;
+  const b=$("reelBox"); if(b) b.innerHTML='';
+}
+window.closeReel=closeReel;
+
+function rrCompute(){
+  const R=REEL; if(!R) return;
+  R.all=rrSegments(R.data, R.tune);
+  const durs=R.all.map(s=>s.dur).sort((x,y)=>x-y);
+  /* "long" is relative to this match — a 12-second rally is a war between two
+     servers and a warm-up between two retrievers */
+  R.longCut = durs.length ? durs[Math.floor(durs.length*0.75)] : 0;
+  const f=RR_FILTERS.find(x=>x.k===R.filter)||RR_FILTERS[0];
+  R.segs=R.all.filter(s=>f.fn(s,R));
+  if(R.idx>=R.segs.length) R.idx=Math.max(0,R.segs.length-1);
+}
+
+/* ---- the player -------------------------------------------------------- */
+async function rrMountPlayer(){
+  const R=REEL;
+  if(!R || R.booting || R.player) return;
+  R.booting=true;
+  let YT;
+  try{ YT=await ptYTLoadApi(); }
+  catch(e){
+    R.booting=false;
+    if(REEL===R){ R.playerError='the YouTube player could not load — an ad blocker or a blocked network will do this'; renderReel(); }
+    return;
+  }
+  if(REEL!==R){ R.booting=false; return; }        // the modal closed while the API loaded
+  const mount=document.getElementById('rrMount');
+  if(!mount){ R.booting=false; return; }
+  mount.innerHTML='<div id="rrPlayerEl"></div>';
+  const seg=R.segs[R.idx];
+  try{
+    R.player=new YT.Player('rrPlayerEl',{
+      videoId:R.data.video.id,
+      host:'https://www.youtube-nocookie.com',
+      playerVars:{playsinline:1, rel:0, modestbranding:1, origin:location.origin,
+        start:Math.max(0, Math.floor(seg?seg.start:0))},
+      events:{
+        onReady:()=>{ if(REEL!==R) return; R.playerReady=true; rrSeek(R.idx); renderReel(); },
+        onError:e=>{ if(REEL!==R) return; R.playerError=PT_YT_ERRORS[e.data]||('the player reported error '+e.data); renderReel(); }
+      }
+    });
+  }catch(e){ R.playerError='the player could not start: '+(e.message||e); }
+  R.booting=false;
+}
+
+/* The edit, performed by seeking. When the clip playing reaches its out
+   point the player is sent to the next clip's in point — the same thing an
+   editor's timeline does, resolved live instead of rendered. */
+function rrLocate(t){
+  const R=REEL; if(!R) return -1;
+  let at=R.segs.findIndex(s=>t>=s.start-0.5 && t<=s.end+0.5);
+  if(at<0) at=R.segs.findIndex(s=>s.start>t);     // landed in dead ground: the next clip
+  return at;
+}
+function rrTick(){
+  const R=REEL;
+  if(!R || !R.player || !R.playerReady || !R.playing) return;
+  let t; try{ t=R.player.getCurrentTime(); }catch(e){ return; }
+  const seg=R.segs[R.idx];
+  if(!seg) return;
+  /* a big jump means somebody dragged YouTube's own scrubber — follow them to
+     whichever clip they landed in rather than yanking them back to this one */
+  if(t>seg.end+3 || t<seg.start-3){
+    const at=rrLocate(t);
+    if(at>=0 && at!==R.idx){ R.idx=at; renderReel(); }
+    return;
+  }
+  if(t < seg.end-0.08) return;
+  if(R.idx>=R.segs.length-1){ rrPause(); return; }
+  rrGo(R.idx+1);
+}
+function rrSeek(i){
+  const R=REEL, seg=R&&R.segs[i];
+  if(!R||!seg||!R.player||!R.playerReady) return;
+  try{ R.player.seekTo(seg.start, true); }catch(e){}
+}
+function rrGo(i){
+  const R=REEL; if(!R || i<0 || i>=R.segs.length) return;
+  R.idx=i;
+  rrSeek(i);
+  if(R.playing){ try{ R.player.playVideo(); }catch(e){} }
+  renderReel();
+}
+window.rrGo=rrGo;
+function rrStep(d){ const R=REEL; if(R) rrGo(R.idx+d); }
+window.rrStep=rrStep;
+function rrPlay(){
+  const R=REEL; if(!R||!R.player||!R.playerReady) return;
+  R.playing=true;
+  const seg=R.segs[R.idx];
+  let t=null; try{ t=R.player.getCurrentTime(); }catch(e){}
+  /* resuming mid-clip should resume, not restart — only re-seek if the
+     playhead has wandered outside the clip we think we are on */
+  if(seg && (t==null || t<seg.start-0.5 || t>=seg.end)) rrSeek(R.idx);
+  try{ R.player.playVideo(); }catch(e){}
+  if(!R.timer) R.timer=setInterval(rrTick, 200);
+  renderReel();
+}
+function rrPause(){
+  const R=REEL; if(!R) return;
+  R.playing=false;
+  try{ R.player && R.player.pauseVideo && R.player.pauseVideo(); }catch(e){}
+  renderReel();
+}
+function rrToggle(){ const R=REEL; if(!R) return; R.playing?rrPause():rrPlay(); }
+window.rrToggle=rrToggle;
+function rrSetRate(v){
+  const R=REEL; if(!R) return;
+  R.rate=Number(v)||1;
+  try{ R.player && R.player.setPlaybackRate && R.player.setPlaybackRate(R.rate); }catch(e){}
+  renderReel();
+}
+window.rrSetRate=rrSetRate;
+
+/* ---- controls ---------------------------------------------------------- */
+function rrSetFilter(k){
+  const R=REEL; if(!R) return;
+  R.filter=k; R.idx=0;
+  rrCompute();
+  renderReel();
+  if(R.segs.length) rrSeek(0);
+}
+window.rrSetFilter=rrSetFilter;
+/* oninput only touches two spans. A full re-render on every pixel of a drag
+   would replace the slider under the finger holding it (and, worse, rebuild
+   the shell around the player); the commit happens on change, at the end of
+   the gesture. Same split ptSetBugDelay uses. */
+function rrTuneReadout(k,v){
+  const R=REEL; if(!R) return;
+  R.tune[k]=Number(v)||0;
+  const out=document.getElementById('rrTuneVal-'+k);
+  if(out) out.textContent=rrSecs(R.tune[k]);
+  const segs=rrSegments(R.data,R.tune);
+  const run=document.getElementById('rrRuntime');
+  if(run) run.textContent=rrClock(segs.reduce((a,s)=>a+s.dur,0));
+}
+window.rrTuneReadout=rrTuneReadout;
+function rrSetTune(k,v){
+  const R=REEL; if(!R) return;
+  const n=Number(v); if(!isFinite(n)) return;
+  R.tune[k]=n; rrSaveTune(R.tune); rrCompute(); renderReel();
+}
+window.rrSetTune=rrSetTune;
+function rrResetTune(){
+  const R=REEL; if(!R) return;
+  R.tune={...RR_TUNE_DEF}; rrSaveTune(R.tune); rrCompute(); renderReel();
+}
+window.rrResetTune=rrResetTune;
+function rrRemember(k,v){ if(REEL) REEL[k]=v; }
+window.rrRemember=rrRemember;
+
+/* ---- the sync anchor, after the fact -----------------------------------
+   For a match that was tracked without a stream linked, or a stream whose
+   start the API couldn't tell us. Attaching writes back to the same
+   matches.rallies row so it is right for everyone, not just this browser. */
+function rrNudge(delta){
+  const R=REEL; if(!R) return;
+  const v=R.data.video || (R.data.video={id:null, start:R.data.startedAt, drift:0});
+  v.drift=Math.round(((v.drift||0)+delta)*10)/10;
+  rrCompute();
+  renderReel();
+  rrSeek(R.idx);
+}
+window.rrNudge=rrNudge;
+async function rrAttachVideo(){
+  const R=REEL; if(!R) return;
+  const raw=((document.getElementById('rrAttachInput')||{}).value||'').trim();
+  const id=ytParse(raw);
+  if(!id) return toast("That doesn't look like a YouTube link or video id",true);
+  let start=R.data.startedAt;      // fallback: video t=0 is the first ball, fix with the nudge
+  try{
+    const d=await ptLiveApi({action:'video', id});
+    const s=d && d.video && d.video.startedAt;
+    if(s && isFinite(Date.parse(s))) start=Date.parse(s);
+  }catch(e){ /* an ordinary upload has no stream start; the nudge covers it */ }
+  if(REEL!==R) return;
+  R.data.video={id, start, drift:(R.data.video&&R.data.video.drift)||0};
+  rrCompute();
+  renderReel();
+  rrMountPlayer();
+  rrSaveSync(true);
+}
+window.rrAttachVideo=rrAttachVideo;
+async function rrSaveSync(quiet){
+  const R=REEL; if(!R) return;
+  if(!isAdmin){ if(!quiet) toast("Only an admin can save the sync for everyone",true); return; }
+  const {error}=await sb.from("matches").update({rallies:JSON.stringify(R.data)}).eq("id",R.m.id);
+  if(error){ toast(error.message,true); return; }
+  R.m.rallies=JSON.stringify(R.data);     // keep the in-memory row in step; no reload needed
+  toast("Sync saved for this match ✓");
+}
+window.rrSaveSync=rrSaveSync;
+
+/* ---- exports -----------------------------------------------------------
+   Nothing is transcoded here. The browser worked out the edit; the machine
+   holding the original file performs it. Three shapes because there are
+   three things people actually do with a cut list: run it, feed it to
+   something else, or paste it into a YouTube description. */
+function rrDownload(name, text, type){
+  const blob=new Blob([text],{type:(type||'text/plain')+';charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+function rrSlug(m){ return `fgta-${m.p1}-vs-${m.p2}`.replace(/[^\w.-]+/g,'-').toLowerCase(); }
+/* player names reach the shell script only inside # comments, but a name is
+   user input and a newline in one would end the comment and start executing
+   whatever followed. Flatten to one line and drop the characters that could
+   only be there to try something. */
+function rrShellSafe(s){ return String(s==null?'':s).replace(/[\r\n]+/g,' ').replace(/[^\x20-\x7e]/g,'').slice(0,60); }
+function rrHeaderLines(R){
+  const reel=R.segs.reduce((a,s)=>a+s.dur,0), src=rrSourceSeconds(R.data);
+  return [
+    `${rrShellSafe(rrName(R,'a'))} vs ${rrShellSafe(rrName(R,'b'))} — ${new Date(R.m.created_at).toLocaleDateString()}`,
+    `${R.segs.length} rallies · ${rrClock(reel)} of tennis cut from ${rrClock(src)} of match`,
+    `Cut from the umpire's point taps by the FGTA rally reel. Tuning: ` +
+      Object.keys(RR_TUNE_DEF).map(k=>`${k}=${R.tune[k]}s`).join(' ')
+  ];
+}
+function rrExportFfmpeg(){
+  const R=REEL; if(!R || !R.segs.length) return;
+  const head=rrHeaderLines(R);
+  const anchored=isFinite((R.data.video||{}).start) && R.data.video.id;
+  const lines=[
+    '#!/usr/bin/env bash',
+    '#',
+    ...head.map(l=>'# '+l),
+    '#',
+    anchored
+      ? '# Times are positions in the YouTube video this match was streamed to.'
+      : '# Times are seconds from the first ball of the match. If the match does not',
+    anchored
+      ? '# If you are cutting the camera original instead, the offset between the two'
+      : '# start at 00:00 in your file, drag "offset" in the reel until it matches, or',
+    anchored
+      ? '# is whatever the reel\'s offset control says.'
+      : '# add the difference to OFFSET below.',
+    '#',
+    '# Usage:  bash '+rrSlug(R.m)+'-cut.sh  <source-file>  [output-file]',
+    '# Needs:  ffmpeg and awk on PATH. On Windows, run it from Git Bash or WSL.',
+    '',
+    'set -euo pipefail',
+    '',
+    'SRC="${1:-match.mp4}"',
+    'OUT="${2:-'+rrSlug(R.m)+'-rallies.mp4}"',
+    'OFFSET="${OFFSET:-0}"        # seconds to add to every timecode',
+    '',
+    '# start duration   (one line per rally, in order)',
+    'SEG=(',
+    ...R.segs.map(s=>`  "${s.start.toFixed(2)} ${s.dur.toFixed(2)}"   # ${s.n}. set ${s.p.s} game ${s.gn}, ${rrShellSafe(s.p.b)}, ${rrShellSafe(rrName(R,s.p.w))}`),
+    ')',
+    '',
+    'WORK="$(mktemp -d)"',
+    'trap \'rm -rf "$WORK"\' EXIT',
+    '',
+    '# Each rally is extracted on its own. -ss before -i seeks fast; the re-encode',
+    '# is what makes the cut land on the frame asked for rather than on the nearest',
+    '# keyframe, which with -c copy can be several seconds of walking about.',
+    'i=0',
+    'for s in "${SEG[@]}"; do',
+    '  set -- $s',
+    '  i=$((i+1))',
+    '  printf "rally %d/%d\\n" "$i" "${#SEG[@]}"',
+    '  START="$(awk -v a="$1" -v b="$OFFSET" \'BEGIN{printf "%.2f", a+b}\')"',
+    '  ffmpeg -nostdin -loglevel error -y \\',
+    '    -ss "$START" -i "$SRC" -t "$2" \\',
+    '    -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p \\',
+    '    -c:a aac -b:a 160k -ac 2 -ar 48000 \\',
+    '    "$WORK/$(printf "%04d" $i).mp4"',
+    '  printf "file \'%s\'\\n" "$WORK/$(printf "%04d" $i).mp4" >> "$WORK/list.txt"',
+    'done',
+    '',
+    '# Same codec and sample rate throughout, so joining them is a copy.',
+    'ffmpeg -nostdin -loglevel error -y -f concat -safe 0 -i "$WORK/list.txt" -c copy "$OUT"',
+    'printf "\\n%s\\n" "wrote $OUT"'
+  ];
+  rrDownload(rrSlug(R.m)+'-cut.sh', lines.join('\n')+'\n', 'text/x-shellscript');
+}
+window.rrExportFfmpeg=rrExportFfmpeg;
+function rrExportJson(){
+  const R=REEL; if(!R || !R.segs.length) return;
+  const v=R.data.video||{};
+  const doc={
+    generator:'FGTA rally reel', version:1,
+    match:{id:R.m.id, p1:rrName(R,'a'), p2:rrName(R,'b'), playedAt:R.m.created_at, sets:R.m.sets||null},
+    timebase: (v.id && isFinite(v.start))
+      ? 'seconds into the YouTube video' : 'seconds since the first ball of the match',
+    video: v.id ? {youtubeId:v.id, streamStartedAt:new Date(v.start).toISOString(), offsetSeconds:v.drift||0} : null,
+    tuning:{...R.tune},
+    totals:{
+      rallies:R.segs.length,
+      reelSeconds:Math.round(R.segs.reduce((a,s)=>a+s.dur,0)*10)/10,
+      matchSeconds:Math.round(rrSourceSeconds(R.data))
+    },
+    segments:R.segs.map(s=>({
+      n:s.n, start:Math.round(s.start*100)/100, end:Math.round(s.end*100)/100,
+      duration:Math.round(s.dur*100)/100,
+      set:s.p.s, game:s.gn, gameOfMatch:s.p.g, scoreBefore:s.p.b, wonBy:rrName(R,s.p.w),
+      tags:rrTags(s)
+    }))
+  };
+  rrDownload(rrSlug(R.m)+'-cutlist.json', JSON.stringify(doc,null,2), 'application/json');
+}
+window.rrExportJson=rrExportJson;
+/* One chapter per game, not per point: YouTube requires chapters to be at
+   least ten seconds apart and the first to sit at 0:00, and points inside a
+   game are routinely closer than that. Games are minutes apart and are the
+   thing anyone actually wants to jump to. */
+function rrExportChapters(){
+  const R=REEL; if(!R || !R.all.length) return;
+  const seen=new Set(), rows=[];
+  R.all.forEach(s=>{
+    const key=s.p.s+'-'+s.p.g;
+    if(seen.has(key)) return;
+    seen.add(key);
+    rows.push({at:s.start, label:`Set ${s.p.s} · game ${s.gn}`});
+  });
+  const out=['0:00 Warm-up'];
+  let last=0;
+  rows.forEach(r=>{
+    const at=Math.max(0, Math.round(r.at));
+    if(at < last+10) return;              // YouTube drops the whole list if any gap is under 10s
+    last=at;
+    out.push(`${rrClock(at)} ${r.label}`);
+  });
+  const head=rrHeaderLines(R).map(l=>'# '+l);
+  const note = out.length<3
+    ? ['# NOTE: YouTube needs at least three chapters — this match is too short.','']
+    : [];
+  rrDownload(rrSlug(R.m)+'-chapters.txt',
+    head.concat('#','# Paste the lines below the rule into the video description.','',...note, out).join('\n')+'\n');
+}
+window.rrExportChapters=rrExportChapters;
+
+/* ---- render ------------------------------------------------------------ */
+function renderReel(){
+  const box=$("reelBox"), R=REEL;
+  if(!box) return;
+  if(!R){ box.innerHTML=''; return; }
+
+  const canPlay=rrCanPlay(R.data);
+  const shape=canPlay?'play':'attach';
+
+  /* The player must never MOVE, not merely never be rebuilt: detaching and
+     re-attaching an <iframe> reloads it, and this reel changes clip every
+     fifteen seconds or so — which would mean re-buffering YouTube every
+     fifteen seconds. So the shell is written once per shape with #rrMount
+     inside it, and after that only the regions AROUND it are patched. Same
+     rule ptRenderStreamShell follows for #ptVidWrap, for the same reason. */
+  if(R.shape!==shape){
+    box.innerHTML=`
+      <div class="rr-wrap">
+        <div class="rr-head" id="rrHead"></div>
+        ${canPlay
+          ? `<div class="rr-stage"><div class="rr-mount" id="rrMount"></div></div><div id="rrStageWarn"></div>`
+          : `<div id="rrAttachBox"></div>`}
+        <div id="rrBelow"></div>
+      </div>`;
+    R.shape=shape;
+  }
+
+  const reel=R.segs.reduce((a,s)=>a+s.dur,0);
+  const src=rrSourceSeconds(R.data);
+  const seg=R.segs[R.idx];
+  const v=R.data.video||{};
+
+  const head=document.getElementById('rrHead');
+  if(head) head.innerHTML=`
+    <div class="rr-title">🎬 Rally reel</div>
+    <div class="rr-stat"><b id="rrRuntime">${rrClock(reel)}</b> of tennis</div>
+    <div class="rr-stat">${R.segs.length} rallies</div>
+    <div class="rr-stat rr-stat-cut">${src>0?Math.round(100-(reel/src*100)):0}% of the match was standing around</div>
+    <button class="rr-close" onclick="closeReel()">close ✕</button>`;
+
+  const warn=document.getElementById('rrStageWarn');
+  if(warn) warn.innerHTML = R.playerError
+    ? `<div class="rr-warn">${esc(R.playerError)} — <a href="https://www.youtube.com/watch?v=${esc(v.id||'')}" target="_blank" rel="noopener">watch it on YouTube</a> instead.</div>`
+    : '';
+
+  const attach=document.getElementById('rrAttachBox');
+  if(attach) attach.innerHTML=`
+    <div class="rr-attach">
+      <div class="rr-attach-h">No video attached to this match</div>
+      <div class="rr-attach-b">The cut list below is still exact — it is seconds from the first ball, so it applies to your own recording as it stands. Paste the YouTube link to watch the reel here as well.</div>
+      <div class="rr-attach-row">
+        <input id="rrAttachInput" placeholder="youtube.com/watch?v=… or the video id" autocomplete="off">
+        <button class="mini ok" onclick="rrAttachVideo()">attach</button>
+      </div>
+    </div>`;
+
+  const chips=RR_FILTERS.map(f=>{
+    const label = f.k==='a'?rrName(R,'a') : f.k==='b'?rrName(R,'b') : f.label;
+    const n=R.all.filter(s=>f.fn(s,R)).length;
+    return `<button class="rr-chip${R.filter===f.k?' on':''}" ${n?'':'disabled'} onclick="rrSetFilter('${f.k}')">${esc(label)}<span class="rr-chip-n">${n}</span></button>`;
+  }).join('');
+
+  const rows=R.segs.map((s,i)=>`
+    <button class="rr-row${i===R.idx?' on':''}" onclick="rrGo(${i})">
+      <span class="rr-row-n">${s.p.s}·${s.gn}</span>
+      <span class="rr-row-sc">${esc(s.p.b)}</span>
+      <span class="rr-row-w" style="color:${s.p.w==='a'?'var(--accent)':'var(--court)'}">${esc(rrName(R,s.p.w))}</span>
+      <span class="rr-row-tags">${rrTags(s).map(t=>`<i>${esc(t)}</i>`).join('')}</span>
+      <span class="rr-row-d">${rrSecs(s.dur)}</span>
+    </button>`).join('');
+
+  const tuneRows=Object.keys(RR_TUNE_DEF).map(k=>{
+    const [lo,hi,st]=RR_TUNE_RANGE[k];
+    return `<label class="rr-tune">
+      <span class="rr-tune-l">${RR_TUNE_LABEL[k]}<i>${RR_TUNE_HELP[k]}</i></span>
+      <input type="range" min="${lo}" max="${hi}" step="${st}" value="${R.tune[k]}"
+        oninput="rrTuneReadout('${k}',this.value)" onchange="rrSetTune('${k}',this.value)">
+      <span class="rr-tune-v" id="rrTuneVal-${k}">${rrSecs(R.tune[k])}</span>
+    </label>`;
+  }).join('');
+
+  const controls = canPlay ? `
+    <div class="rr-transport">
+      <button class="mini" onclick="rrStep(-1)" ${R.idx<=0?'disabled':''}>◀ prev</button>
+      <button class="mini rr-play" onclick="rrToggle()" ${R.playerReady?'':'disabled'}>${R.playing?'⏸ pause':'▶ play reel'}</button>
+      <button class="mini" onclick="rrGo(${R.idx})" ${seg?'':'disabled'}>↺ again</button>
+      <button class="mini" onclick="rrStep(1)" ${R.idx>=R.segs.length-1?'disabled':''}>next ▶</button>
+      <span class="rr-rate">${[1,1.5,2].map(x=>`<button class="rr-rate-b${R.rate===x?' on':''}" onclick="rrSetRate(${x})">${x}×</button>`).join('')}</span>
+    </div>
+    <div class="rr-now">${seg
+      ? `Rally ${R.idx+1} of ${R.segs.length} · set ${seg.p.s}, game ${seg.gn} at ${esc(seg.p.b)} · ${rrSecs(seg.dur)} · won by <b>${esc(rrName(R,seg.p.w))}</b>`
+      : 'Nothing matches that filter.'}</div>
+    <div class="rr-sync">
+      <span class="rr-sync-l">Offset</span>
+      <button class="mini" onclick="rrNudge(-1)">−1s</button>
+      <button class="mini" onclick="rrNudge(-0.2)">−0.2s</button>
+      <span class="rr-sync-v">${(v.drift||0).toFixed(1)}s</span>
+      <button class="mini" onclick="rrNudge(0.2)">+0.2s</button>
+      <button class="mini" onclick="rrNudge(1)">+1s</button>
+      ${isAdmin?`<button class="mini ok" onclick="rrSaveSync()">save for everyone</button>`:''}
+      <span class="rr-sync-hint">Play a clip. If it opens late, nudge down; if it opens on the previous point, nudge up.</span>
+    </div>` : '';
+
+  const below=document.getElementById('rrBelow');
+  if(below) below.innerHTML=`
+    ${controls}
+    <div class="rr-chips">${chips}</div>
+    <div class="rr-list" id="rrList">${rows||'<div class="rr-empty">No rallies match that filter.</div>'}</div>
+    <details class="rr-fold" ${R.tuneOpen?'open':''} ontoggle="rrRemember('tuneOpen',this.open)">
+      <summary>Cut timing</summary>
+      <div class="rr-fold-b">
+        <p>The taps are exact. Where the serve fell inside the gap between two of
+           them is the only guess in here, so <b>dead time</b> is the one that
+           matters: watch a few clips, and if any open after the ball has already
+           been struck, take a second off it — if they all open on somebody
+           wandering back to the baseline, add one. The rest is taste. Set them
+           once against your own footage and every match after this one cuts
+           correctly.</p>
+        ${tuneRows}
+        <button class="mini" onclick="rrResetTune()">reset to defaults</button>
+      </div>
+    </details>
+    <div class="rr-exports">
+      <button class="mini" onclick="rrExportFfmpeg()">⬇ ffmpeg script</button>
+      <button class="mini" onclick="rrExportJson()">⬇ cut list (JSON)</button>
+      <button class="mini" onclick="rrExportChapters()">⬇ YouTube chapters</button>
+    </div>`;
+
+  /* keep the playing clip in view without scrolling the page out from under
+     anyone — the list is rebuilt on every clip change while the reel runs */
+  const list=document.getElementById('rrList'), act=list&&list.querySelector('.rr-row.on');
+  if(list&&act){
+    const top=act.offsetTop, bot=top+act.offsetHeight;
+    if(top<list.scrollTop) list.scrollTop=top-6;
+    else if(bot>list.scrollTop+list.clientHeight) list.scrollTop=bot-list.clientHeight+6;
+  }
+}
+window.renderReel=renderReel;
 
 /* ============================================================
    SHAREABLE MATCH CARD — draws a branded scorecard to canvas
@@ -9000,6 +9825,39 @@ function ptSavedStreamCode(){
 function ptPersistStreamCode(code){
   try{ localStorage.setItem(PT_STREAM_CODE_KEY, code); }catch(e){}
 }
+/* ---- THE SYNC ANCHOR ----------------------------------------------------
+   A YouTube live broadcast becomes a VOD whose timeline starts at the moment
+   the stream went live, which the Data API reports as actualStartTime — so
+   "how far into the match" and "how far into the video" differ by a single
+   constant, and nobody has to line anything up by hand afterwards.
+   /api/youtube already returns it as `startedAt` for the live directory, so
+   this costs nothing new: one lookup when the stream is linked.
+
+   `drift` is the manual nudge that sits on top, because the constant is close
+   but not exact — YouTube's reported start can sit a second or two off the
+   first frame of the archived video, and a phone's clock is its own opinion.
+   The reel exposes it as a slider: set it once against one recording setup
+   and it stays right for every match after that.
+
+   Not getting an anchor is not worth interrupting a match over. The reel
+   asks for the offset by hand when there isn't one. */
+async function ptAnchorMatchToVideo(id){
+  if(typeof PT==='undefined' || !PT || !id) return;
+  const keepDrift = (PT.video && PT.video.id===id) ? (PT.video.drift||0) : 0;
+  try{
+    const d=await ptLiveApi({action:'video', id});
+    const startedAt=d && d.video && d.video.startedAt;
+    if(typeof PT==='undefined' || !PT || !startedAt) return;
+    const start=Date.parse(startedAt);
+    if(!isFinite(start)) return;
+    PT.video={id, start, drift:keepDrift};
+    ptPersist();
+    ptLogDiag('yt','rally reel anchored to '+id+' — stream started '+new Date(start).toLocaleTimeString());
+  }catch(e){
+    /* leave PT.video alone; the reel can still be pointed at the video by hand */
+  }
+}
+
 function ptStartBroadcast(){
   if(PTStream) return toast("Already in a stream — stop first",true);
   if(!sb || !sb.channel) return toast("Not connected",true);
@@ -9062,6 +9920,7 @@ function ptLinkStream(idArg){
   if(!id) return toast("That doesn't look like a YouTube link or video id",true);
   S.videoId=id;
   S.linkedAt=Date.now();
+  ptAnchorMatchToVideo(id);      // give the match being scored a place in this video's timeline
   S.ytLive=true;                 // assume live until the API says otherwise, with a grace period
   S.playerError=null;
   const hit=(PTLive.live||[]).find(v=>v.id===id);
@@ -10797,6 +11656,9 @@ window.jumpMissingSets = jumpMissingSets;
 function openMatch(id){
   const m = matches.find(x => x.id === id);
   if (!m) return;
+  /* opening a second match rewrites modalBody out from under whatever the
+     first one left running — tear those down before their DOM disappears */
+  closeReel(); closeReplay();
   const body = $("modalBody");
   let setsHtml = '<div class="no-sets">No set scores recorded for this match.</div>';
 
@@ -10864,6 +11726,17 @@ function openMatch(id){
         </div>
       </div>`;
     })()}
+    ${(()=>{
+      /* the reel offers itself only when this match was actually tracked
+         point-by-point with timings — see the RALLY REEL section */
+      const d=rrParse(m);
+      if(!d) return '';
+      return `<div class="rr-cta">
+        <button class="btn ghost rr-cta-btn" onclick="openReel(${m.id})">🎬 Rally reel
+          <i>${d.points.length} points, timed${rrCanPlay(d)?' · on video':''}</i></button>
+      </div>`;
+    })()}
+    <div id="reelBox"></div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn ghost" style="margin:0;padding:9px" onclick="downloadMatchCard(${m.id})">📤 Share card</button>
       <button class="btn ghost" style="margin:0;padding:9px" onclick="generateCommentary(${m.id},'commentary')">🎙️ AI commentary</button>
@@ -10925,7 +11798,13 @@ function openMatch(id){
   $("modal").classList.add("open");
 }
 window.openMatch = openMatch;
-function closeMatch(){ $("modal").classList.remove("open"); openMatchId=null; openScheduledMatchId=null; }
+/* The reel owns a YouTube iframe and a polling timer, and the replay owns an
+   interval — closing the modal only hides it, so both have to be told, or a
+   closed modal keeps playing tennis at you from behind the page. */
+function closeMatch(){
+  closeReel(); closeReplay();
+  $("modal").classList.remove("open"); openMatchId=null; openScheduledMatchId=null;
+}
 window.closeMatch = closeMatch;
 
 /* ---------- comments ---------- */
