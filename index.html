@@ -2663,8 +2663,14 @@
       0 -22px 44px -34px rgba(0,0,0,.65) inset,
       0 26px 54px -22px rgba(0,0,0,.55),
       0 2px 0 rgba(0,0,0,.35)!important;
-    will-change:transform;
+    /* NO permanent will-change here. A ladder page carries 8-14 panels; a
+       standing `will-change:transform` promoted every one of them to its own
+       compositor layer for the whole session — tens of MB of GPU texture that
+       has to be re-uploaded on every resize and re-composited on every scroll,
+       for a hint that only matters during a 350ms hover lift. It is raised on
+       :hover instead, which is the only moment the transform actually runs. */
   }
+  .panel:hover{will-change:transform}
   .panel::after{
     content:'';position:absolute;top:0;left:0;right:0;height:46%;
     background:linear-gradient(180deg, rgba(255,255,255,.05), transparent);
@@ -2679,7 +2685,9 @@
   }
 
   /* podium: raised chrome plinths, glossy avatar spheres */
-  .pod{ transform-style:preserve-3d; will-change:transform; }
+  /* same reasoning as .panel — the tilt script raises will-change itself while
+     a pointer is actually over the card, and drops it on leave */
+  .pod{ transform-style:preserve-3d; }
   .pod-av .avi{
     box-shadow:
       0 1px 0 rgba(255,255,255,.35) inset,
@@ -2830,10 +2838,18 @@
   }
   .pod-2 .pod-base::after,.pod-3 .pod-base::after{animation-delay:.5s}
   .pod-3 .pod-base::after{animation-delay:1s}
+  /* PERF — this animated `left`, which is a LAYOUT property: every frame the
+     browser had to re-lay-out and repaint the plinth, three plinths at once,
+     on a 3.2s loop that never ended. The sheen now travels on a transform,
+     which the compositor owns. 422% is the same journey measured in the
+     sheen's own width (45% of the plinth) rather than the plinth's: -60% to
+     130% is 190 points of plinth, and 190/45 ≈ 4.22. The skew is carried
+     through both keyframes so the streak keeps its rake — and because skewX
+     displaces x by y alone, composing a horizontal translate after it lands
+     exactly where the old `left` did. */
   @keyframes pod-sheen{
-    0%{left:-60%}
-    35%{left:130%}
-    100%{left:130%}
+    0%{transform:skewX(-20deg) translate3d(0,0,0)}
+    35%,100%{transform:skewX(-20deg) translate3d(422%,0,0)}
   }
   .pod-place{font-size:15px;font-weight:600}
 
@@ -3764,22 +3780,39 @@
     content:'';position:absolute;left:50%;top:30%;
     /* wider than the viewport on purpose: only the inner lip of the ring
        ever reaches the screen, so it reads as light bending past the edge
-       of frame rather than a shape sitting behind the content */
-    width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;border-radius:50%;
+       of frame rather than a shape sitting behind the content.
+
+       PERF — this was the single most expensive thing on the page. It used
+       to be 150vmax square (on a 1440p display, a ~3100x3100px layer) with
+       `filter:blur(60px)` on top: the browser has to allocate a backing
+       texture for the element AND a second render surface for the blur, then
+       keep both alive for the life of the session. That is ~80MB of GPU
+       memory before a single card is drawn, and any repaint of the layer
+       (resize, DPI change, tab restore) re-runs a 60px gaussian over the
+       whole thing. The blur is gone: the softness is baked into the gradient
+       stops instead — very long, heavily-feathered conic ramps and a wide
+       feathered mask, which cost nothing because a gradient is rasterised
+       once and the rotation is a pure compositor transform. Halved the size
+       too; only the inner lip was ever on screen. */
+    width:78vmax;height:78vmax;margin:-39vmax 0 0 -39vmax;border-radius:50%;
     background:conic-gradient(from 0deg,
       transparent 0deg,
-      rgba(61,255,110,.05) 34deg,
-      rgba(140,255,180,.075) 62deg,
-      rgba(61,255,110,.045) 108deg,
-      transparent 186deg,
-      rgba(61,255,110,.028) 288deg,
+      rgba(61,255,110,.012) 16deg,
+      rgba(61,255,110,.032) 34deg,
+      rgba(140,255,180,.055) 62deg,
+      rgba(61,255,110,.032) 92deg,
+      rgba(61,255,110,.012) 130deg,
+      transparent 190deg,
+      rgba(61,255,110,.01) 250deg,
+      rgba(61,255,110,.022) 288deg,
+      rgba(61,255,110,.008) 322deg,
       transparent 360deg);
-    -webkit-mask:radial-gradient(circle, transparent 30%, #000 44%, #000 56%, transparent 70%);
-    mask:radial-gradient(circle, transparent 30%, #000 44%, #000 56%, transparent 70%);
-    filter:blur(60px);
-    /* promoted to its own layer so the blur rasterises once and the
-       rotation is a cheap compositor transform, not a per-frame reblur */
-    will-change:transform;
+    /* feathered across a much wider band than the old hard 44%-56% annulus,
+       which is what the 60px blur was there to soften in the first place */
+    -webkit-mask:radial-gradient(circle, transparent 18%, rgba(0,0,0,.25) 30%,
+      rgba(0,0,0,.7) 40%, #000 50%, rgba(0,0,0,.7) 60%, rgba(0,0,0,.25) 72%, transparent 84%);
+    mask:radial-gradient(circle, transparent 18%, rgba(0,0,0,.25) 30%,
+      rgba(0,0,0,.7) 40%, #000 50%, rgba(0,0,0,.7) 60%, rgba(0,0,0,.25) 72%, transparent 84%);
     animation:ffAccretion 96s linear infinite;
   }
   @keyframes ffAccretion{to{transform:rotate(360deg)}}
@@ -4032,10 +4065,27 @@
   }
 
   /* -- 5. anti-gravity --------------------------------------------
-     Nothing is fastened. Sections drift on long, out-of-phase cycles —
-     the float lives on <section>, never on .panel or .pod, because the
-     cursor-tilt script writes inline transforms onto those and a CSS
-     animation on the same property would win and freeze the tilt. */
+     Nothing is fastened — but "nothing is fastened" is a read, not a
+     frame budget.
+
+     This used to be `section{animation:ffFloat infinite}`, i.e. every
+     section in every view drifting at once. A running transform animation
+     forces its element onto its own compositor layer and keeps it there for
+     as long as it runs; with 10-14 sections live that is 10-14 full-width
+     layers the compositor has to walk and re-composite on every single
+     frame, on screen or not, forever. It was the reason scrolling felt
+     sticky even on a page where nothing had moved.
+
+     The idle drift is now spent where it is actually read — the event
+     marquee and the brand mark, both of which are single small elements
+     that are already promoted. Every other surface gets its weightlessness
+     from the entrance (ffRise) and from the hover lift, both of which are
+     finite: the layer is created when the interaction starts and released
+     when it ends. Same look, two permanent layers instead of fourteen.
+
+     The float never goes on .panel or .pod, because the cursor-tilt script
+     writes inline transforms onto those and a CSS animation on the same
+     property would win and freeze the tilt. */
   @keyframes ffFloat{
     0%,100%{transform:translate3d(0,0,0)}
     50%{transform:translate3d(0,-7px,0)}
@@ -4044,16 +4094,6 @@
     0%,100%{transform:translate3d(0,0,0)}
     50%{transform:translate3d(0,-3px,0)}
   }
-  :root[data-skin="ffcup"] section{
-    animation:ffFloat 12s ease-in-out infinite;
-  }
-  :root[data-skin="ffcup"] section:nth-of-type(2n){animation-duration:15s;animation-delay:-4s}
-  :root[data-skin="ffcup"] section:nth-of-type(3n){animation-duration:10.5s;animation-delay:-7s}
-  :root[data-skin="ffcup"] section:nth-of-type(5n){animation-duration:17s;animation-delay:-2s}
-  /* anything that has to stay put while you interact with it stays put */
-  :root[data-skin="ffcup"] .modal section,
-  :root[data-skin="ffcup"] .lm-wrap section,
-  :root[data-skin="ffcup"] #view-court section{animation:none}
 
   /* content arrives from below, weightless, and settles without a bounce */
   :root[data-skin="ffcup"] .reveal-in{animation:ffRise .72s cubic-bezier(.16,1,.3,1) both}
@@ -4382,16 +4422,26 @@
   }
   /* one hard light crossing the face. It travels, then rests off-frame —
      a constant shimmer would read as a loading state, a single pass every
-     nine seconds reads as something turning under a studio lamp. */
+     nine seconds reads as something turning under a studio lamp.
+
+     PERF — this was a `background-position` animation across the full face
+     of the slab. Background-position is a paint property: every frame the
+     browser re-rasterises the whole gradient over the element's box on the
+     main thread. Now the streak is a narrow strip that slides across on a
+     transform, which the compositor runs on its own thread and which costs
+     nothing per frame — same light, same nine-second cadence. */
   :root[data-skin="ffcup"] .cupmark::after{
-    content:'';position:absolute;inset:0;z-index:2;pointer-events:none;border-radius:inherit;
+    content:'';position:absolute;top:-20%;bottom:-20%;left:-40%;width:36%;
+    z-index:2;pointer-events:none;
     background:linear-gradient(104deg,
-      transparent 38%, rgba(255,255,255,.05) 46%,
-      rgba(204,255,221,.14) 50%, rgba(255,255,255,.05) 54%, transparent 62%);
-    background-size:260% 100%;background-position:150% 0;
+      transparent 0%, rgba(255,255,255,.05) 28%,
+      rgba(204,255,221,.14) 50%, rgba(255,255,255,.05) 72%, transparent 100%);
     animation:cupSweep 9s cubic-bezier(.45,0,.55,1) infinite;
   }
-  @keyframes cupSweep{0%{background-position:150% 0}58%,100%{background-position:-70% 0}}
+  @keyframes cupSweep{
+    0%{transform:translate3d(400%,0,0)}
+    58%,100%{transform:translate3d(0,0,0)}
+  }
 
   /* ---- what's behind the type: a court floor falling away into the void ---- */
   :root[data-skin="ffcup"] .cupmark-void{
@@ -4406,24 +4456,37 @@
     background:
       repeating-linear-gradient(90deg, rgba(61,255,110,.42) 0 1px, transparent 1px 78px),
       repeating-linear-gradient(0deg,  rgba(61,255,110,.34) 0 1px, transparent 1px 58px);
-    transform:perspective(420px) rotateX(71deg);transform-origin:50% 100%;
-    -webkit-mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 28%, #000 62%, rgba(0,0,0,.3) 88%, transparent 100%);
-    mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 28%, #000 62%, rgba(0,0,0,.3) 88%, transparent 100%);
+    transform:perspective(420px) rotateX(71deg) translate3d(0,0,0);transform-origin:50% 100%;
     opacity:.55;
     animation:cupFloor 5.5s linear infinite;
   }
-  /* only the horizontal lines move, and they move toward the viewer — a grid
-     scrolling in both axes reads as a texture, in one it reads as ground */
-  @keyframes cupFloor{from{background-position:0 0, 0 0}to{background-position:0 0, 0 58px}}
-  /* the light the floor is standing in, and — painted over it — the scrim
-     that keeps the footer readable. The grid has to be visible in the middle
-     of its run and gone by the time it reaches the last line of type; without
-     the scrim the glow climbs into the text and everything reads foggy. */
+  /* Only the horizontal lines move, and they move toward the viewer — a grid
+     scrolling in both axes reads as a texture, in one it reads as ground.
+
+     PERF — the scroll used to be a `background-position` animation, which
+     repaints two repeating gradients across a layer 210% of the marquee's
+     width, on the main thread, every frame. It is now a transform of exactly
+     one tile (58px) along the plane's own Y axis, which lands in the same
+     place visually and runs on the compositor. That also means the plane can
+     no longer carry its own fade mask — a mask lives in element space and
+     would slide with the transform — so the fade moved up to ::after, which
+     sits over the grid in screen space and never moves. */
+  @keyframes cupFloor{
+    from{transform:perspective(420px) rotateX(71deg) translate3d(0,0,0)}
+    to{transform:perspective(420px) rotateX(71deg) translate3d(0,58px,0)}
+  }
+  /* the light the floor is standing in, the fade that gives the grid no
+     beginning and no horizon, and — painted over both — the scrim that keeps
+     the footer readable. The grid has to be visible in the middle of its run
+     and gone by the time it reaches the last line of type; without the scrim
+     the glow climbs into the text and everything reads foggy. */
   :root[data-skin="ffcup"] .cupmark-void::after{
-    content:'';position:absolute;left:50%;bottom:0;width:130%;height:80%;transform:translateX(-50%);
+    content:'';position:absolute;left:50%;bottom:0;width:130%;height:100%;transform:translateX(-50%);
     background:
-      linear-gradient(180deg, transparent 42%, rgba(0,0,0,.42) 80%, rgba(0,0,0,.72) 100%),
-      radial-gradient(56% 100% at 50% 100%,
+      /* the grid comes out of the dark at the top and goes back into it */
+      linear-gradient(180deg, #000 0%, rgba(0,0,0,.9) 10%, rgba(0,0,0,.5) 22%, rgba(0,0,0,.12) 34%, transparent 44%),
+      linear-gradient(180deg, transparent 54%, rgba(0,0,0,.42) 84%, rgba(0,0,0,.72) 100%),
+      radial-gradient(56% 80% at 50% 100%,
         rgba(61,255,110,.14) 0%, rgba(61,255,110,.055) 34%, rgba(61,255,110,.015) 60%, transparent 78%);
   }
 
@@ -4757,20 +4820,22 @@
 
   /* -- 9. motion & mobile budget ----------------------------------- */
   @media(max-width:860px){
-    /* the ring is the one expensive layer; shrink and calm it on phones */
+    /* the ring is the one expensive layer; shrink and calm it on phones.
+       This rule used to read 220vmax against a 150vmax desktop base — it was
+       written as "shrink it on mobile" and was in fact growing the layer to
+       more than twice the area on exactly the devices that could least afford
+       it. Now it is genuinely smaller than the desktop ring, and slower. */
     :root[data-skin="ffcup"] #hudGrid::before{
-      width:220vmax;height:220vmax;margin:-110vmax 0 0 -110vmax;
-      filter:blur(40px);animation-duration:180s;
+      width:64vmax;height:64vmax;margin:-32vmax 0 0 -32vmax;
+      animation-duration:180s;
     }
     :root[data-skin="ffcup"] #hudGrid::after{animation:none;opacity:.3}
-    :root[data-skin="ffcup"] section{animation-duration:14s}
     /* the marquee's floor is a full-width transformed layer — the one thing
        on it worth paying for on a phone is the sweep, so the grid holds still */
     :root[data-skin="ffcup"] .cupmark-void::before{animation:none;opacity:.3}
     :root[data-skin="ffcup"] .cupmark{animation-duration:16s}
   }
   @media(prefers-reduced-motion:reduce){
-    :root[data-skin="ffcup"] section,
     :root[data-skin="ffcup"] .tb-ball,
     :root[data-skin="ffcup"] .ffcup-chip,
     :root[data-skin="ffcup"] .cupmark,
@@ -4783,6 +4848,404 @@
     :root[data-skin="ffcup"] #hudGrid::before,
     :root[data-skin="ffcup"] #hudGrid::after{animation:none!important}
     :root[data-skin="ffcup"] .reveal-in{animation:none}
+  }
+
+
+  /* ================================================================
+     10. WET BLACK — the gloss pass
+
+     The skin above establishes the void. This pass is about the
+     SURFACE: making the black read as polished rather than merely
+     dark, and making every interaction feel like tennis.
+
+     One rule governs everything below, and it is a performance rule
+     as much as an aesthetic one: motion is either FINITE or it is on
+     a single small element. A CSS animation pins its element to its
+     own compositor layer for as long as it runs, so anything that
+     loops forever is a permanent tax on every frame the browser
+     draws. Everything here is triggered by a pointer, runs once, and
+     releases. That is also, conveniently, what makes it feel like a
+     response rather than a decoration.
+
+     Only transform and opacity are animated — never background-
+     position, width, box-shadow or filter. Those are paint or layout
+     properties: they force the main thread to re-rasterise the
+     element every frame, which is precisely how a page like this
+     ends up dropping frames while "nothing is happening".
+     ================================================================ */
+
+  /* -- 10.1 the bars stop being frosted glass --------------------
+     .topbar and .botbar carried backdrop-filter:blur(18px) — the most
+     expensive filter there is, because it forces the browser to snapshot
+     everything painted behind the bar and re-blur it on every frame the
+     page scrolls, across the full width of the viewport, twice over.
+
+     It was also invisible. The skin paints these bars at 92-96% opaque
+     black; there is nothing legible left behind them to blur. So the
+     effect goes, the last few percent of transparency goes with it, and
+     the bars become what the rest of the skin already is: solid slabs of
+     jet black with one lit edge. Scrolling gets its frames back. */
+  :root[data-skin="ffcup"] .topbar,
+  :root[data-skin="ffcup"] .botbar,
+  :root[data-skin="ffcup"] .live-ticker-bar{
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  }
+  :root[data-skin="ffcup"] .topbar{
+    background:linear-gradient(180deg, #0a0b0a 0%, #030403 62%, #000 100%)!important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.10),
+      inset 0 -14px 20px -22px rgba(61,255,110,.5),
+      0 1px 22px -6px rgba(61,255,110,.22),
+      0 18px 40px -28px rgba(0,0,0,1)!important;
+  }
+  :root[data-skin="ffcup"] .botbar{
+    background:linear-gradient(0deg, #000 0%, #030403 46%, #0a0b0a 100%)!important;
+    box-shadow:
+      inset 0 -1px 0 rgba(255,255,255,.08),
+      inset 0 14px 20px -22px rgba(61,255,110,.45),
+      0 -1px 22px -6px rgba(61,255,110,.2)!important;
+  }
+
+  /* -- 10.2 wet black ---------------------------------------------
+     The panel body goes darker in the middle and brighter at the two
+     lips than the pass above had it. That contrast IS the gloss: a matte
+     surface fades evenly, a polished one holds a hard bright line where
+     it turns away from you and picks the floor back up underneath. The
+     top highlight is tightened from a soft 17% falloff to a hard 11%
+     one, which is the difference between "lit" and "wet".
+
+     The leaderboard rows join the panels here. They were the last
+     surfaces still painting flat --panel, which in a void full of
+     polished slabs read as holes cut in the page. */
+  :root[data-skin="ffcup"] .panel,
+  :root[data-skin="ffcup"] .board,
+  :root[data-skin="ffcup"] .pend,
+  :root[data-skin="ffcup"] .modal-card,
+  :root[data-skin="ffcup"] .ms-panel,
+  :root[data-skin="ffcup"] .util-menu,
+  :root[data-skin="ffcup"] .ac-menu,
+  :root[data-skin="ffcup"] .brow{
+    background:
+      /* the sky, held in the top millimetre of the glass */
+      linear-gradient(179deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.055) 3%,
+        rgba(255,255,255,.014) 11%, transparent 26%) padding-box,
+      /* one raking specular off the upper-left corner */
+      linear-gradient(146deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.02) 10%,
+        transparent 27%) padding-box,
+      /* the body: deeper through the middle, lifted at both lips */
+      linear-gradient(180deg, #0b0d0c 0%, #040505 24%, #000 56%, #020303 82%, #0b0f0e 100%) padding-box,
+      var(--chrome-rim) border-box!important;
+    border:1px solid transparent!important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.42),
+      inset 0 -1px 0 rgba(204,255,221,.15),
+      inset 0 10px 16px -16px rgba(255,255,255,.62),
+      inset 0 -34px 52px -44px rgba(61,255,110,.45),
+      inset 0 0 40px -26px rgba(61,255,110,.22),
+      0 46px 88px -38px rgba(0,0,0,1),
+      0 0 28px -22px rgba(61,255,110,.12)!important;
+  }
+  /* A leaderboard row is a tenth the height of a panel, and the inner glows
+     above are sized for a panel: at 72px tall they stop being a bloom along
+     the bottom lip and become a wash across the whole surface, which is the
+     one thing that stops black reading as black. Same light, scaled to the
+     object — the same correction the skin already makes for .cupmark.mini. */
+  :root[data-skin="ffcup"] .brow{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.3),
+      inset 0 -1px 0 rgba(204,255,221,.1),
+      inset 0 -14px 26px -30px rgba(61,255,110,.4),
+      0 20px 40px -28px rgba(0,0,0,1)!important;
+  }
+
+  /* the highlight thrown ONTO the face by a lamp off frame. This was a
+     radial gradient whose background-position was transitioned on hover —
+     i.e. a full repaint of the panel's top 70% every frame for 800ms, on
+     the main thread, per panel, on every mouse-over. It is now a fixed
+     ellipse on its own strip that simply slides, which the compositor
+     handles without waking the main thread at all. */
+  :root[data-skin="ffcup"] .panel::after{
+    top:0;left:-34%;right:auto;width:78%;height:76%;
+    background:radial-gradient(120% 92% at 34% -32%,
+      rgba(255,255,255,.15) 0%, rgba(255,255,255,.045) 34%, transparent 64%);
+    transform:translate3d(0,0,0);
+    transition:transform .85s cubic-bezier(.16,1,.3,1);
+    pointer-events:none;
+  }
+  :root[data-skin="ffcup"] .panel:hover::after{transform:translate3d(62%,0,0)}
+
+  /* -- 10.3 the net cord -------------------------------------------
+     The lit filament along the top of every panel is the closest thing
+     the app has to a net cord, so it behaves like one: touch the panel
+     and the light runs along it. Opacity and transform only — the glow
+     itself is a static box-shadow that never re-renders. */
+  :root[data-skin="ffcup"] .panel{position:relative;overflow:hidden}
+  :root[data-skin="ffcup"] .panel::before{
+    /* grows DOWN from the top edge — with a centred origin half the growth
+       would be clipped by the panel's own overflow and the cord would barely
+       appear to move */
+    transform-origin:50% 0;
+    transition:transform .5s cubic-bezier(.16,1,.3,1);
+  }
+  :root[data-skin="ffcup"] .panel:hover::before{transform:scaleY(3)}
+
+  /* -- 10.4 the ball ----------------------------------------------
+     Every accent dot in the app is the same object: a tennis ball lit
+     from the upper left, with the seam painted in as a pair of offset
+     arcs. Drawn entirely in gradients, so it costs one rasterisation and
+     then nothing, and it scales to whatever size it is dropped into. */
+  :root[data-skin="ffcup"] .sec-label::before{
+    width:10px!important;height:10px!important;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 34%),
+      radial-gradient(circle at 50% 50%, var(--neon-hot) 0%, var(--neon) 46%, #12a63f 88%, #0a7a2c 100%)!important;
+    box-shadow:0 0 9px var(--neon), 0 0 20px rgba(61,255,110,.5)!important;
+    transform-origin:50% 100%;
+  }
+  /* hover the section and the ball takes one bounce — squash on the
+     floor, stretch off it, exactly the way a ball loses shape on impact */
+  @keyframes ffBallBounce{
+    0%  {transform:translate3d(0,0,0) scale(1,1)}
+    12% {transform:translate3d(0,0,0) scale(1.25,.72)}
+    38% {transform:translate3d(0,-13px,0) scale(.86,1.18)}
+    62% {transform:translate3d(0,0,0) scale(1.2,.78)}
+    82% {transform:translate3d(0,-5px,0) scale(.94,1.07)}
+    100%{transform:translate3d(0,0,0) scale(1,1)}
+  }
+  :root[data-skin="ffcup"] section:hover > .sec-label::before,
+  :root[data-skin="ffcup"] .sec-label:hover::before{
+    animation:ffBallBounce .8s cubic-bezier(.4,0,.5,1) 1;
+  }
+
+  /* the live indicators are balls too — same object, already pulsing */
+  :root[data-skin="ffcup"] .bcast-dot,
+  :root[data-skin="ffcup"] .pt-live-dot,
+  :root[data-skin="ffcup"] .ct-dot.live,
+  :root[data-skin="ffcup"] .pres-dot{
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 36%),
+      radial-gradient(circle at 50% 50%, var(--neon-hot) 0%, var(--neon) 48%, #10a03c 100%)!important;
+  }
+
+  /* -- 10.5 the rally ---------------------------------------------
+     Hover a leaderboard row and a ball plays out one rally along its
+     baseline: three bounces, left to right, and gone. It is a single
+     pseudo-element the width of the row with a small ball painted at its
+     left end — translating the strip by a percentage moves the ball by
+     that fraction of the ROW, which is what makes it work at any width
+     without measuring anything.
+
+     The whole thing is one finite transform animation on one element.
+     It exists only while the pointer is on the row. */
+  @keyframes ffRally{
+    0%  {opacity:0;   transform:translate3d(-6%,0,0)}
+    7%  {opacity:1;   transform:translate3d(2%,-4px,0)}
+    24% {              transform:translate3d(20%,-17px,0)}
+    40% {              transform:translate3d(39%,0,0)}
+    56% {              transform:translate3d(59%,-12px,0)}
+    72% {              transform:translate3d(77%,0,0)}
+    86% {opacity:1;   transform:translate3d(91%,-6px,0)}
+    100%{opacity:0;   transform:translate3d(106%,-1px,0)}
+  }
+  :root[data-skin="ffcup"] .brow::after{
+    content:'';position:absolute;left:0;bottom:4px;width:100%;height:12px;
+    pointer-events:none;z-index:2;opacity:0;
+    background:radial-gradient(circle 6px at 6px 6px,
+      #ffffff 0%, var(--neon-hot) 22%, var(--neon) 58%, #0d9138 92%, transparent 100%);
+    background-repeat:no-repeat;
+    filter:drop-shadow(0 0 6px rgba(61,255,110,.85));
+  }
+  :root[data-skin="ffcup"] .brow:hover::after{animation:ffRally 1.05s cubic-bezier(.42,0,.5,1) 1}
+  /* the row's own lift: a sideline lights up rather than the whole slab
+     shifting sideways, and the surface catches a little more of the void's
+     green as it comes toward you */
+  :root[data-skin="ffcup"] .brow{
+    transition:transform .28s cubic-bezier(.16,1,.3,1), box-shadow .28s ease;
+  }
+  :root[data-skin="ffcup"] .brow::before{
+    transform:scaleY(0);transform-origin:50% 50%;
+    transition:transform .34s cubic-bezier(.16,1,.3,1);
+  }
+  /* the ranked three keep their own light — the sideline that appears on
+     hover is for everybody else, so it must not repaint over theirs */
+  :root[data-skin="ffcup"] .brow:not(.g1):not(.g2):not(.g3)::before{background:var(--neon)}
+  :root[data-skin="ffcup"] .brow:hover{
+    transform:translate3d(0,-2px,0)!important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.55),
+      inset 0 -1px 0 rgba(204,255,221,.22),
+      inset 0 0 44px -22px rgba(61,255,110,.55),
+      0 30px 56px -30px rgba(0,0,0,1),
+      0 0 30px -18px rgba(61,255,110,.35)!important;
+  }
+  :root[data-skin="ffcup"] .brow:hover::before{transform:scaleY(1)}
+  /* the top three keep their sideline lit at all times — that is the rank */
+  :root[data-skin="ffcup"] .brow.g1::before,
+  :root[data-skin="ffcup"] .brow.g2::before,
+  :root[data-skin="ffcup"] .brow.g3::before{transform:scaleY(1)}
+  :root[data-skin="ffcup"] .brow.g1::before{
+    background:var(--neon);box-shadow:0 0 14px var(--neon), 0 0 30px rgba(61,255,110,.45);
+  }
+
+  /* -- 10.6 the string bed ----------------------------------------
+     Press-ready buttons get swept by a racket face on hover: a narrow
+     strip of cross-hatched strings passing over the dome. The .btn::after
+     it uses was already in the sheet as a deliberate no-op, so nothing
+     new is added to the DOM — it is just given something to do. */
+  @keyframes ffStrings{
+    0%  {opacity:0;   transform:translate3d(0,0,0)}
+    18% {opacity:.85}
+    82% {opacity:.5}
+    100%{opacity:0;   transform:translate3d(520%,0,0)}
+  }
+  :root[data-skin="ffcup"] .btn::after,
+  :root[data-skin="ffcup"] .cup-cta::after{
+    content:'';position:absolute;top:-20%;bottom:-20%;left:-38%;right:auto;width:34%;
+    pointer-events:none;opacity:0;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.6) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(0deg,  rgba(255,255,255,.45) 0 1px, transparent 1px 7px);
+    transform:skewX(-14deg);
+  }
+  :root[data-skin="ffcup"] .btn:hover::after,
+  :root[data-skin="ffcup"] .cup-cta:hover::after{
+    animation:ffStrings .72s cubic-bezier(.3,0,.4,1) 1;
+  }
+  /* the ghost button's strings are neon instead of white — on a black face
+     white strings read as a glare, on a lit face they read as the racket */
+  :root[data-skin="ffcup"] .btn.ghost::after{
+    background:
+      repeating-linear-gradient(90deg, rgba(61,255,110,.5) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(0deg,  rgba(204,255,221,.35) 0 1px, transparent 1px 7px);
+  }
+  :root[data-skin="ffcup"] .cup-cta{position:relative;overflow:hidden}
+
+  /* -- 10.7 the serve ---------------------------------------------
+     The marquee's call to action ended in a chevron. On a button whose
+     whole job is "come to the tennis", a chevron is the most generic mark
+     available, so it becomes a ball — the markup keeps its &rsaquo; (nothing
+     to re-render, and it still reads as "forward" to a screen reader that
+     ignores the styling), the skin just draws over it.
+
+     Dark, not neon: the CTA face is the brightest thing in the app, and a
+     green ball on a green button is a hole. A near-black ball with one
+     specular and a white seam reads as an object sitting ON the light.
+
+     Hovering tosses it up and forward — the ball toss, the one gesture in
+     tennis everybody recognises from across a court. */
+  :root[data-skin="ffcup"] .cup-cta span{
+    position:relative;display:inline-block;
+    width:13px;height:13px;flex-shrink:0;border-radius:50%;
+    font-size:0;line-height:0;overflow:hidden;
+    background:
+      radial-gradient(circle at 32% 26%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 50% 55%, #0d5526 0%, #00190a 72%, #000 100%);
+    box-shadow:inset -2px -2px 3px rgba(0,0,0,.55), inset 1px 1px 2px rgba(255,255,255,.4);
+  }
+  :root[data-skin="ffcup"] .cup-cta span::after{
+    content:'';position:absolute;inset:0;border-radius:50%;
+    border-top:1.4px solid rgba(255,255,255,.6);
+    transform:rotate(36deg) scaleX(.62);
+  }
+  @keyframes ffToss{
+    0%  {transform:translate3d(0,0,0)}
+    40% {transform:translate3d(2px,-9px,0)}
+    70% {transform:translate3d(6px,-3px,0)}
+    100%{transform:translate3d(5px,0,0)}
+  }
+  :root[data-skin="ffcup"] .cup-cta:hover span{
+    transform:none;
+    animation:ffToss .62s cubic-bezier(.3,0,.4,1) forwards;
+  }
+
+  /* -- 10.8 the brand ball ----------------------------------------
+     Two seams instead of one, curved the way a real ball's are, and the
+     whole thing takes a single topspin revolution when you touch the
+     wordmark. The idle drift (ffHover) is kept in the same shorthand so
+     the spin does not cancel it. */
+  :root[data-skin="ffcup"] .tb-ball::after{
+    border-top:1.6px solid rgba(255,255,255,.8);
+    border-bottom:1.6px solid rgba(255,255,255,.45);
+    transform:rotate(34deg) scaleX(.62);
+  }
+  @keyframes ffSpin{to{transform:rotate(360deg)}}
+  :root[data-skin="ffcup"] .tb-brand{cursor:pointer}
+  :root[data-skin="ffcup"] .tb-brand:hover .tb-ball::after{
+    animation:ffSpin .9s cubic-bezier(.25,0,.3,1) 1;
+  }
+
+  /* -- 10.9 baselines ---------------------------------------------
+     Stat tiles and utility buttons get a court baseline that paints
+     itself in from the centre out. scaleX only — a width transition
+     would relayout the tile on every frame of the hover. */
+  :root[data-skin="ffcup"] .stat,
+  :root[data-skin="ffcup"] .ms-grid button{position:relative;overflow:hidden}
+  :root[data-skin="ffcup"] .stat::after,
+  :root[data-skin="ffcup"] .ms-grid button::after{
+    content:'';position:absolute;left:0;right:0;bottom:0;height:1.5px;
+    background:linear-gradient(90deg, transparent, var(--neon) 22%, var(--neon-hot) 50%, var(--neon) 78%, transparent);
+    box-shadow:0 0 10px rgba(61,255,110,.75);
+    transform:scaleX(0);transform-origin:50% 50%;
+    transition:transform .4s cubic-bezier(.16,1,.3,1);
+    pointer-events:none;
+  }
+  :root[data-skin="ffcup"] .stat:hover::after,
+  :root[data-skin="ffcup"] .ms-grid button:hover::after{transform:scaleX(1)}
+
+  /* -- 10.10 the racket, on every tab change ----------------------
+     The base sheet's tab transition is a racket-string wipe with a ball
+     leading it; the skin had flattened it into an anonymous light pass.
+     Give it its strings back, in the one hue, over black. */
+  :root[data-skin="ffcup"] .tw-strings{
+    background:
+      repeating-linear-gradient(90deg, rgba(61,255,110,.5) 0 2px, transparent 2px 26px),
+      repeating-linear-gradient(0deg,  rgba(204,255,221,.3) 0 2px, transparent 2px 30px),
+      linear-gradient(100deg, rgba(0,0,0,.9) 0%, rgba(3,20,10,.96) 55%, #000 100%)!important;
+  }
+
+  /* -- 10.11 the podium -------------------------------------------
+     The champion's medal used to turn on a 4.5s loop, forever, on every
+     view that draws a podium: a permanently promoted layer spinning in 3D
+     for a 28px emoji nobody was looking at. It now turns when you look at
+     it, which is both cheaper and more like a trophy. */
+  :root[data-skin="ffcup"] .pod-1 .pod-medal{animation:none}
+  :root[data-skin="ffcup"] .pod-1:hover .pod-medal{
+    animation:trophySpin 2.2s cubic-bezier(.3,0,.3,1) 1;
+  }
+  /* the plinth's sheen swept on a 3.2s loop for the same reason — same fix */
+  :root[data-skin="ffcup"] .pod-base::after{animation:none}
+  :root[data-skin="ffcup"] .pod:hover .pod-base::after{animation:pod-sheen 1.6s ease-out 1}
+  /* and the avatar picks up a ball's rim light as you come to it */
+  :root[data-skin="ffcup"] .pod-av .avi{transition:box-shadow .3s ease}
+  :root[data-skin="ffcup"] .pod:hover .pod-av .avi{
+    box-shadow:0 0 0 2px var(--neon), 0 0 34px -6px var(--accent-glow)!important;
+  }
+
+  /* -- 10.12 budget ------------------------------------------------
+     A phone has no pointer, so every hover effect above is dead weight
+     there — but the ones that cost something even at rest (the extra
+     pseudo-elements) are worth taking off the page entirely. */
+  @media(hover:none){
+    :root[data-skin="ffcup"] .brow::after,
+    :root[data-skin="ffcup"] .btn::after,
+    :root[data-skin="ffcup"] .cup-cta::after,
+    :root[data-skin="ffcup"] .stat::after,
+    :root[data-skin="ffcup"] .ms-grid button::after{display:none!important}
+  }
+  @media(prefers-reduced-motion:reduce){
+    :root[data-skin="ffcup"] .sec-label::before,
+    :root[data-skin="ffcup"] .brow::after,
+    :root[data-skin="ffcup"] .btn::after,
+    :root[data-skin="ffcup"] .cup-cta::after,
+    :root[data-skin="ffcup"] .cup-cta span,
+    :root[data-skin="ffcup"] .tb-ball::after,
+    :root[data-skin="ffcup"] .pod-medal,
+    :root[data-skin="ffcup"] .pod-base::after{animation:none!important}
+    :root[data-skin="ffcup"] .panel::after,
+    :root[data-skin="ffcup"] .panel::before,
+    :root[data-skin="ffcup"] .brow,
+    :root[data-skin="ffcup"] .brow::before,
+    :root[data-skin="ffcup"] .stat::after{transition:none!important}
   }
 
 </style>
@@ -6876,29 +7339,54 @@ window.endLiveMatch=endLiveMatch;
    cards, part of the chrome depth pass. Pure event delegation,
    no markup changes needed; resets cleanly on mouse leave.
    ============================================================ */
+/* PERF — this used to call getBoundingClientRect() and then write an inline
+   transform on every single pointermove event. A layout read immediately
+   after a style write forces a synchronous reflow, and pointermove fires far
+   faster than the screen refreshes, so a slow drag across a podium card could
+   force several full-document reflows per frame. Two changes fix it without
+   touching the effect: the card's rect is measured ONCE when the pointer
+   enters it and reused for the whole hover (a card cannot move while you are
+   pointing at it), and the transform is written from a rAF callback so at
+   most one write lands per frame no matter how many events arrive. */
 (function(){
   const SEL = '.pod';
-  let active = null;
-  function apply(el, e){
-    el.style.transition = 'transform 60ms linear';
-    const r = el.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width - 0.5;
-    const py = (e.clientY - r.top) / r.height - 0.5;
-    const max = el.classList.contains('pod') ? 10 : 5;
-    el.style.transform = `perspective(900px) rotateX(${(-py*max).toFixed(2)}deg) rotateY(${(px*max).toFixed(2)}deg) translateY(-4px) scale(1.012)`;
+  let active = null, rect = null, lastE = null, raf = null;
+  function write(){
+    raf = null;
+    if(!active || !rect || !lastE) return;
+    const px = (lastE.clientX - rect.left) / rect.width - 0.5;
+    const py = (lastE.clientY - rect.top) / rect.height - 0.5;
+    const max = 10;
+    active.style.transform = `perspective(900px) rotateX(${(-py*max).toFixed(2)}deg) rotateY(${(px*max).toFixed(2)}deg) translateY(-4px) scale(1.012)`;
   }
-  function reset(el){ if(!el) return; el.style.transition='transform .35s cubic-bezier(.16,1,.3,1)'; el.style.transform=''; }
+  function reset(el){
+    if(!el) return;
+    el.style.transition='transform .35s cubic-bezier(.16,1,.3,1)';
+    el.style.transform='';
+    /* the hint is only worth carrying while the card is actually being
+       tilted; left on, it pins a compositor layer per podium card forever */
+    el.style.willChange='';
+  }
   document.addEventListener('pointermove', e=>{
     const el = e.target.closest(SEL);
-    if(!el){ if(active){ reset(active); active=null; } return; }
-    if(active && active!==el) reset(active);
-    active = el;
-    apply(el, e);
+    if(!el){ if(active){ reset(active); active=null; rect=null; } return; }
+    if(el!==active){
+      if(active) reset(active);
+      active = el;
+      rect = el.getBoundingClientRect();   // measured once per hover, not per move
+      el.style.willChange='transform';
+      el.style.transition='transform 60ms linear';
+    }
+    lastE = e;
+    if(raf==null) raf = requestAnimationFrame(write);
   }, {passive:true});
   document.addEventListener('pointerleave', e=>{
     const el = e.target.closest && e.target.closest(SEL);
-    if(el){ reset(el); if(active===el) active=null; }
+    if(el){ reset(el); if(active===el){ active=null; rect=null; } }
   }, true);
+  /* a scroll moves the card out from under the cached rect — drop the hover
+     rather than tilt against a stale measurement */
+  window.addEventListener('scroll', ()=>{ if(active){ reset(active); active=null; rect=null; } }, {passive:true});
 })();
 
 /* ============================================================
@@ -9142,10 +9630,24 @@ function initGhostCursors(){
     if(changed) renderGhostCursors();
   },1500);
 }
+/* Every peer broadcasts its cursor ~11x/s, and each arriving message used to
+   run this straight away: a scrollHeight read (a forced synchronous layout of
+   the whole document) plus a full innerHTML rebuild of the layer. With four
+   people on the page that is ~44 forced reflows a second on top of whatever
+   else is happening. The work is now coalesced to one pass per frame, and the
+   document height — which cannot change between two cursor packets in any way
+   that matters — is cached for a quarter of a second. */
+let _ghostRaf=null, _ghostDocH=0, _ghostDocHAt=0;
 function renderGhostCursors(){
+  if(_ghostRaf!=null) return;
+  _ghostRaf=requestAnimationFrame(()=>{ _ghostRaf=null; drawGhostCursors(); });
+}
+function drawGhostCursors(){
   let layer=$("ghostLayer");
   if(!layer){ layer=document.createElement("div"); layer.id="ghostLayer"; layer.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:8500;overflow:hidden"; document.body.appendChild(layer); }
-  const docH=Math.max(document.documentElement.scrollHeight,1);
+  const now=Date.now();
+  if(now-_ghostDocHAt>250){ _ghostDocH=Math.max(document.documentElement.scrollHeight,1); _ghostDocHAt=now; }
+  const docH=_ghostDocH;
   layer.innerHTML=Object.entries(ghostCursors).map(([name,g])=>{
     const x=g.x*window.innerWidth, y=g.y*docH-window.scrollY;
     if(y<-40||y>window.innerHeight+40) return '';
@@ -9161,49 +9663,73 @@ function renderGhostCursors(){
    PHYSICS BALL — a draggable, throwable tennis ball toy with
    real gravity/bounce/friction. Pure delight, no purpose.
    ============================================================ */
+/* The loop below used to be unconditionally self-perpetuating: tick() ended
+   with requestAnimationFrame(tick) whether or not a ball existed, and
+   spawnBall() started ANOTHER one every time it was called. Two taps on the
+   toy meant two loops, five taps meant five, and every one of them kept
+   running for the rest of the session writing `left`/`top` — layout-triggering
+   properties — on an element that had long since come to rest. It is now a
+   single loop that owns its own handle, parks itself when the ball settles,
+   and moves the ball on a transform so a bounce costs a composite and not a
+   full layout pass. */
 (function(){
   let ball=null, vx=0, vy=0, x=60, y=60, dragging=false, lastT=null, lastX=0, lastY=0;
-  const G=2200, BOUNCE=0.62, FRICTION=0.985;
+  let raf=null, restFrames=0;
+  const G=2200, BOUNCE=0.62, FRICTION=0.985, SIZE=34;
+  function place(){ ball.style.transform="translate3d("+x+"px,"+y+"px,0)"; }
   function ensureBall(){
     if(ball) return ball;
     ball=document.createElement("div");
     ball.id="physicsBall";
-    ball.style.cssText="position:fixed;width:34px;height:34px;border-radius:50%;z-index:9500;cursor:grab;"+
+    ball.style.cssText="position:fixed;left:0;top:0;width:34px;height:34px;border-radius:50%;z-index:9500;cursor:grab;"+
+      "will-change:transform;touch-action:none;"+
       "background:radial-gradient(circle at 34% 30%, #f5ff8f 0%, #d4ff2b 45%, #9db81a 100%);"+
       "box-shadow:inset -3px -3px 5px rgba(0,0,0,.35),inset 3px 3px 4px rgba(255,255,255,.5),0 6px 16px -4px rgba(0,0,0,.5);";
-    ball.style.left=x+"px"; ball.style.top=y+"px";
+    place();
     document.body.appendChild(ball);
     ball.addEventListener("pointerdown", e=>{
       dragging=true; vx=0; vy=0; ball.style.cursor="grabbing";
       lastX=e.clientX; lastY=e.clientY; ball.setPointerCapture(e.pointerId);
+      start();
     });
     ball.addEventListener("pointermove", e=>{
       if(!dragging) return;
       const dx=e.clientX-lastX, dy=e.clientY-lastY;
       x+=dx; y+=dy; vx=dx*16; vy=dy*16; lastX=e.clientX; lastY=e.clientY;
-      ball.style.left=x+"px"; ball.style.top=y+"px";
+      place();
     });
-    ball.addEventListener("pointerup", ()=>{ dragging=false; ball.style.cursor="grab"; });
+    ball.addEventListener("pointerup", ()=>{ dragging=false; ball.style.cursor="grab"; start(); });
     return ball;
   }
+  function stop(){ if(raf!=null){ cancelAnimationFrame(raf); raf=null; } lastT=null; }
+  function start(){ restFrames=0; if(raf==null) raf=requestAnimationFrame(tick); }
   function tick(t){
+    raf=null;
+    if(!ball) return;                       // nothing to simulate — let the loop die
     if(lastT==null) lastT=t;
     const dt=Math.min((t-lastT)/1000,0.033); lastT=t;
-    if(ball && !dragging){
+    if(!dragging){
       vy += G*dt;
       x += vx*dt; y += vy*dt;
-      const maxX=window.innerWidth-34, maxY=window.innerHeight-34;
+      const maxX=window.innerWidth-SIZE, maxY=window.innerHeight-SIZE;
       if(x<0){x=0;vx=-vx*BOUNCE;} if(x>maxX){x=maxX;vx=-vx*BOUNCE;}
       if(y>maxY){ y=maxY; vy=-vy*BOUNCE; vx*=FRICTION; if(Math.abs(vy)<40) vy=0; }
       if(y<0){y=0;vy=-vy*BOUNCE;}
-      ball.style.left=x+"px"; ball.style.top=y+"px";
+      place();
+      /* asleep: resting on the floor with nothing left to give. A few frames
+         of grace so a slow final roll isn't cut short, then the loop stops
+         entirely until something touches the ball again. */
+      const settled = Math.abs(vy)<1 && Math.abs(vx)<3 && y>=maxY-0.5;
+      restFrames = settled ? restFrames+1 : 0;
+      if(restFrames>18){ vx=0; vy=0; stop(); return; }
     }
-    requestAnimationFrame(tick);
+    raf=requestAnimationFrame(tick);
   }
   function spawnBall(){
     ensureBall();
     x=window.innerWidth*0.5; y=80; vx=(Math.random()-0.5)*400; vy=0;
-    requestAnimationFrame(tick);
+    place();
+    start();
   }
   window.spawnPhysicsBall=spawnBall;
 })();
@@ -9285,10 +9811,25 @@ function initGalaxy(){
     x:W/2+Math.cos(i*2.4)*(80+Math.random()*60), y:H/2+Math.sin(i*2.4)*(60+Math.random()*50),
     vx:0, vy:0, r:10+(p.rating/maxR)*16
   }));
-  GALAXY={nodes,links,W,H,ctx,canvas};
-  cancelAnimationFrame(GALAXY._raf);
+  /* Cancel the OUTGOING loop, then install the new state. This read
+     `cancelAnimationFrame(GALAXY._raf)` immediately after reassigning GALAXY,
+     so it was cancelling a handle on the brand-new object — always undefined,
+     always a no-op — while the previous loop carried on. Every revisit to the
+     view stacked another permanent O(n²) physics + canvas loop on top of the
+     last, and none of them ever stopped. */
+  if(GALAXY && GALAXY._raf!=null) cancelAnimationFrame(GALAXY._raf);
+  const gen = (GALAXY && GALAXY._gen || 0) + 1;
+  GALAXY={nodes,links,W,H,ctx,canvas,_gen:gen,_raf:null};
   function step(){
-    if(!GALAXY) return;
+    /* a stale loop (one whose generation has been superseded) exits here
+       rather than fighting the live one for the same canvas */
+    if(!GALAXY || GALAXY._gen!==gen) return;
+    /* Nothing to draw while the view is off screen — .offsetParent goes null
+       the moment an ancestor is display:none, which is how views are switched.
+       Checked on a half-second timer rather than per frame, because reading
+       offsetParent is itself a forced layout and doing that 60x a second to
+       find out you have nothing to do is its own kind of waste. */
+    if(!canvas.offsetParent){ GALAXY._raf=null; setTimeout(()=>{ if(GALAXY && GALAXY._gen===gen && GALAXY._raf==null) GALAXY._raf=requestAnimationFrame(step); }, 500); return; }
     const {nodes,links,W,H,ctx}=GALAXY;
     nodes.forEach(n=>{
       n.vx += (W/2-n.x)*0.0006; n.vy += (H/2-n.y)*0.0006; // gentle center pull
@@ -20356,14 +20897,26 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   if(reduce) return; // fully skip — matches the app's existing reduced-motion convention
 
+  /* The event skin hides this canvas outright (`#wxfx{display:none}` — the
+     void stays clean during the cup). The stylesheet stopped it being SEEN;
+     nothing stopped it being DRAWN, so a full-viewport canvas was clearing
+     and repainting up to 85 particles every frame, all session, straight
+     into a layer nobody could look at. Weather still gets fetched below
+     (the court-busyness adjustment and the data-wx/data-heat attributes all
+     depend on it) — only the drawing is skipped. */
+  const WXFX_HIDDEN = getComputedStyle(cv).display === "none";
+
   const ctx = cv.getContext("2d");
   let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
   function size(){
+    /* a viewport-sized backing store at DPR 2 is tens of MB of GPU memory —
+       don't allocate one for a canvas the skin has hidden */
+    if(WXFX_HIDDEN) return;
     W=cv.width=Math.round(innerWidth*DPR); H=cv.height=Math.round(innerHeight*DPR);
     cv.style.width=innerWidth+"px"; cv.style.height=innerHeight+"px";
   }
   size();
-  window.addEventListener("resize", size);
+  if(!WXFX_HIDDEN) window.addEventListener("resize", size);
 
   const WX_TTL = 20*60*1000; // 20 min cache — Toronto weather doesn't need to be checked more often
   const WX_KEY = "fgta_wx";
@@ -20495,7 +21048,9 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
     document.body.setAttribute("data-wx", mode);
     const heat = wx.temp>=25 ? "hot" : wx.temp<18 ? "cold" : "mild";
     document.body.setAttribute("data-heat", heat);
-    if(!WXFX_IS_MOBILE){ makeParticles(mode); requestAnimationFrame(draw); } // decorative canvas skipped on mobile to save battery/GPU
+    // decorative canvas skipped on mobile (battery/GPU) and whenever the
+    // active skin has hidden it — the attributes above are the part that matters
+    if(!WXFX_IS_MOBILE && !WXFX_HIDDEN){ makeParticles(mode); requestAnimationFrame(draw); }
   });
 })();
 try{ if(localStorage.getItem("fgta_stadium")==="1") toggleStadium(); }catch(e){}
