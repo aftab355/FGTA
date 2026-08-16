@@ -188,6 +188,37 @@ broadcasts* on the stream panel, and stays there.
 
 ---
 
+## Posting a video to the feed
+
+Nothing here is only for live matches. A highlight cut, a lesson clip, a
+rally somebody filmed on a phone — upload it to YouTube, paste the link into
+a post, a match comment, a reply or a DM, and the feed shows a player rather
+than a URL.
+
+There is no separate field for it and nothing to upload to this site. The
+link in the text *is* the attachment, which is also why it works on posts
+written before the feature existed.
+
+- **Unlisted is fine.** Unlisted videos embed exactly like public ones —
+  only **Private** doesn't, and it fails the same way everywhere else on
+  this site. Leave *Advanced settings → allow embedding* on.
+- **Nothing unlisted is ever auto-discovered.** The "live now" and "past
+  broadcasts" lists come from the channel's uploads via `/api/youtube`, and
+  an unlisted video isn't in it. Past broadcasts is also *finished live
+  streams only*, so an ordinary upload never appears there even when it's
+  public. Pasting the link is how anyone finds either.
+- **Three videos per post.** A fourth link stays as text.
+- The card shows a thumbnail until somebody taps it; the player itself is
+  only built on that tap.
+
+**Editing a match rather than posting a clip?** Don't cut it by hand — the
+[rally reel](rally-reel.md) plays the rallies out of the untouched
+recording, and can hand you an `ffmpeg` script if you want a real file. An
+already-edited cut attached there won't line up, because the reel's
+timecodes are the match's, not your edit's.
+
+---
+
 ## Latency
 
 YouTube is a few seconds behind: roughly 2–5s on Ultra-low, 5–15s on Low,

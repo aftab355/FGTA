@@ -1048,6 +1048,35 @@
   .fc-quote{color:var(--muted);padding-left:12px;border-left:1px solid var(--line);margin-top:4px}
   .fc-img{margin-top:11px}
   .fc-img img{max-width:100%;max-height:320px;border-radius:var(--r-sm);border:1px solid var(--line);display:block;cursor:pointer}
+
+  /* ===== YOUTUBE IN THE FEED =====
+     A still and a play button until somebody actually asks for the video;
+     the iframe is created on click (ytPlayEmbed). The card owns its 16/9
+     box either way, so nothing below it moves when the player arrives. */
+  .yt-card{position:relative;margin-top:11px;max-width:520px;aspect-ratio:16/9;
+    border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--line);background:#000}
+  .yt-face{display:block;width:100%;height:100%;padding:0;border:0;background:#0b0b0b;cursor:pointer}
+  /* hqdefault is a 4:3 frame with black bars baked into a 16/9 upload —
+     cover crops them off rather than letterboxing an already-letterboxed
+     image. It is also the one thumbnail size that exists for every video. */
+  .yt-thumb{display:block;width:100%;height:100%;object-fit:cover}
+  .yt-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:62px;height:44px;border-radius:12px;background:rgba(0,0,0,.72);
+    display:grid;place-items:center;pointer-events:none;transition:.18s}
+  .yt-play::after{content:"";border-style:solid;border-width:9px 0 9px 15px;
+    border-color:transparent transparent transparent #fff;margin-left:3px}
+  .yt-face:hover .yt-play{background:#f0003c;transform:translate(-50%,-50%) scale(1.06)}
+  .yt-frame{display:block;width:100%;height:100%;border:0}
+  /* the way out when a channel has embedding turned off. Hidden once the
+     player is up, where it would sit on top of YouTube's own controls —
+     the error state YouTube shows in that case carries its own link. */
+  .yt-out{position:absolute;right:8px;bottom:8px;z-index:2;text-decoration:none;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.4px;
+    color:#fff;background:rgba(0,0,0,.6);padding:4px 7px;border-radius:6px}
+  .yt-out:hover{background:rgba(0,0,0,.88)}
+  .yt-card.yt-playing .yt-out{display:none}
+  /* chat bubbles and reply threads are narrow; the card follows them down */
+  .dm-msg > .yt-card, .frep-body + .yt-card, .frep > .yt-card{max-width:100%;margin-top:8px}
   .fc-tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;
     color:var(--ac);margin-bottom:9px}
   .fc-versus{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
@@ -1235,6 +1264,13 @@
   /* ===== HASHTAGS + TRENDING ===== */
   .htag{color:var(--gold);cursor:pointer;font-weight:600}
   .htag:hover{text-decoration:underline}
+  /* held-back updates, while a video is playing in the list below */
+  .feed-new{
+    display:block;width:100%;margin-bottom:11px;padding:9px 13px;cursor:pointer;
+    border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel-2);
+    color:var(--muted);font-family:inherit;font-size:12.5px;transition:.18s;
+  }
+  .feed-new:hover{border-color:var(--accent);color:var(--ink)}
   .tag-banner{
     display:flex;align-items:center;justify-content:space-between;gap:10px;
     background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.28);
@@ -1358,6 +1394,7 @@
   .dm-topbar{padding:15px 18px;border-bottom:1px solid var(--line);font-weight:700;font-size:16px}
   .dm-body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:9px}
   .dm-msg{max-width:72%;padding:10px 14px;border-radius:10px;font-size:14.5px;line-height:1.45}
+  .dm-msg.dm-video{max-width:min(92%,440px)}
   .dm-mine{align-self:flex-end;background:var(--accent-dim);border:1px solid color-mix(in srgb,var(--accent) 30%, transparent);border-bottom-right-radius:2px}
   .dm-theirs{align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);border-bottom-left-radius:2px}
   .dm-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:4px}
@@ -5452,7 +5489,7 @@
             </div>
             <div class="cmp-actions">
               <label class="c-photo" title="Attach a photo">📷<input id="cmpImage" type="file" accept="image/*" hidden onchange="previewPostImage()"></label>
-              <span class="cmp-hint">tip: type @name to tag someone</span>
+              <span class="cmp-hint">tip: @name tags someone · a YouTube link plays right in the feed</span>
               <button class="btn" id="cmpPostBtn" style="width:auto;margin:0" onclick="publishPost()">Post</button>
             </div>
 
@@ -5487,6 +5524,7 @@
             <button class="see-all" onclick="toggleSavedView()" id="savedBtn">🔖 saved</button>
           </div>
           <div id="tagBanner" class="tag-banner" style="display:none"></div>
+          <button id="feedNew" class="feed-new" style="display:none" onclick="flushFeed()"></button>
           <div id="feedList"></div>
         </section>
       </div>
@@ -6762,6 +6800,85 @@ function socialText(t){
     out=out.replace(re,()=>`<span class="mention" style="--ac:${playerColor(n)}" onclick="openProfile('${n.replace(/'/g,"\\'")}')">@${esc(n)}</span>`);
   });
   return out;
+}
+
+/* ---- YouTube in ordinary posts ----------------------------------------
+   Somebody pastes a link into the composer and the feed plays it there.
+   Deliberately no new column and no new composer field: the link is
+   already in the body text, so this reads posts written long before the
+   feature existed, and a post is still just text if nothing renders it.
+
+   Unlisted videos embed exactly like public ones — only Private doesn't —
+   which is what makes this usable for match footage nobody wants listed on
+   the open channel. See docs/youtube-live.md. */
+const YT_URL_RE=/(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com|youtube-nocookie\.com|youtu\.be)\/\S+/gi;
+
+/* every distinct video a body of text links to, in the order they appear.
+   Capped, because one post pasting a playlist's worth of links should not
+   be able to hand the feed a dozen players. */
+function ytIdsIn(text){
+  const out=[];
+  String(text||"").replace(YT_URL_RE, url=>{
+    const id=ytParse(url);
+    if(id && out.indexOf(id)<0 && out.length<3) out.push(id);
+    return url;
+  });
+  return out;
+}
+/* the links that got a player taken back out of the text, because the
+   player IS the link and leaving a 40-character URL sitting above it only
+   makes the card noisy. Anything NOT in `ids` stays put — a playlist URL,
+   or the fourth link past the cap — since with no player to replace it,
+   removing it would silently delete what somebody posted. */
+function ytStripLinks(text, ids){
+  const keep=ids||[];
+  return String(text||"").replace(YT_URL_RE, url=>{
+      const id=ytParse(url);
+      return (id && keep.indexOf(id)>=0) ? "" : url;
+    })
+    .replace(/[ \t]{2,}/g," ").replace(/\n{3,}/g,"\n\n").trim();
+}
+/* A poster and a play button, not an iframe. Forty cards on screen would
+   otherwise be forty YouTube players booting at once — the real player is
+   built on the first click, and only for the card that was clicked. */
+function ytEmbedCard(id){
+  const v=ytSafeId(id);
+  if(!ytIsId(v)) return "";
+  return `<div class="yt-card" data-yt="${v}">`
+    +`<button class="yt-face" type="button" onclick="ytPlayEmbed(event,this)" aria-label="Play video">`
+    +`<img class="yt-thumb" src="https://i.ytimg.com/vi/${v}/hqdefault.jpg" loading="lazy" alt="" onerror="this.remove()">`
+    +`<span class="yt-play" aria-hidden="true"></span></button>`
+    +`<a class="yt-out" href="${ytWatchUrl(v)}" target="_blank" rel="noopener"
+        onclick="event.stopPropagation()">YouTube ↗</a></div>`;
+}
+function ytPlayEmbed(e, btn){
+  /* result and comment cards open the match on click, and "play the video"
+     is not "open the match" */
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  const card=btn&&btn.closest?btn.closest(".yt-card"):null;
+  if(!card) return;
+  const id=ytSafeId(card.getAttribute("data-yt"));
+  if(!ytIsId(id)) return;
+  const f=document.createElement("iframe");
+  f.className="yt-frame";
+  f.src=`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1&modestbranding=1`;
+  f.title="YouTube video";
+  f.allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  f.referrerPolicy="strict-origin-when-cross-origin";
+  f.setAttribute("allowfullscreen","");
+  card.classList.add("yt-playing");   // hides our ↗ chip off YouTube's own controls
+  card.replaceChild(f, btn);
+}
+window.ytPlayEmbed=ytPlayEmbed;
+/* Body text plus whatever it linked, as one block. Every surface that
+   shows text somebody typed goes through this, so a pasted link behaves
+   the same in a post, a match comment, a reply and a DM. */
+function socialBody(text, cls){
+  const raw=String(text||"");
+  const ids=ytIdsIn(raw);
+  const txt=ids.length?ytStripLinks(raw,ids):raw;
+  return (txt.trim()?`<div class="${cls}">${socialText(txt)}</div>`:"")
+    + ids.map(ytEmbedCard).join("");
 }
 const ATTRS = [["speed","Speed"],["forehand","Forehand"],["backhand","Backhand"],["power","Power"],["stamina","Stamina"],["serve","Serve"]];
 let openMatchId = null;
@@ -12291,7 +12408,7 @@ function render(){
   refreshOdds();
   renderHealth();
   renderCupMarquee();
-  if(activeView==="feed") renderFeed();
+  if(activeView==="feed") renderFeedSoon();
   drawChart(standings);
   const approvedCount = matches.filter(m=>m.status==="approved").length;
   const tc = $("tabMatchCount"); if(tc) tc.textContent = approvedCount || "";
@@ -13082,7 +13199,7 @@ function renderCommentNode(c, depth){
         <span class="c-time">${when(c.created_at)}</span>${pinnedTag}
         <span class="c-actions">${adminBtns}</span>
       </div>
-      <div class="c-text">${socialText(c.body)}</div>
+      ${socialBody(c.body,'c-text')}
       ${c.image_url?`<div class="c-image"><img src="${esc(c.image_url)}" alt="attached image" loading="lazy" onclick="window.open('${esc(c.image_url)}','_blank')"></div>`:''}
       <div class="c-foot">
         <button class="c-reply" onclick="startReply(${c.id},'${esc(c.author).replace(/'/g,"\\'")}')">reply</button>
@@ -16881,7 +16998,7 @@ async function toggleReaction(type,id,emoji){
     if(error) return toast(error.message,true);
   }
   await load();
-  if(activeView==="feed") renderFeed();
+  if(activeView==="feed") renderFeedSoon();
   if(openMatchId!==null) openMatch(openMatchId);
   if(openScheduledMatchId!==null) openScheduledMatch(openScheduledMatchId);
 }
@@ -17239,8 +17356,10 @@ function renderDMs(){
   const th=dmThread(dmPeer);
   $("dmBody").innerHTML = th.length?th.map(d=>{
     const mine=(d.sender||"").toLowerCase()===me.toLowerCase();
-    return `<div class="dm-msg ${mine?'dm-mine':'dm-theirs'}" style="--ac:${playerColor(d.sender)}">
-      <div class="dm-text">${socialText(d.body)}</div>
+    /* a bubble sized for a sentence is not a bubble you can watch a video
+       in, so one carrying a player is allowed to be wider */
+    return `<div class="dm-msg ${mine?'dm-mine':'dm-theirs'}${ytIdsIn(d.body).length?' dm-video':''}" style="--ac:${playerColor(d.sender)}">
+      ${socialBody(d.body,'dm-text')}
       <div class="dm-time">${when(d.created_at)}</div>
     </div>`;
   }).join(''):'<div class="c-empty">Say hi 👋</div>';
@@ -17727,7 +17846,30 @@ function renderImmersive(){
   renderReactionBoard();
 }
 
+/* ---- rebuilding the feed around a video that is playing ----------------
+   renderFeed() replaces #feedList wholesale, and a YouTube player is a DOM
+   node like any other: rebuild the list mid-rally and the video stops. That
+   is fine when the rebuild is something YOU did — you posted, you filtered —
+   but it is not fine when somebody three courts away taps 🔥 and Realtime
+   fires load() at everyone. So the second kind waits behind a pill, the way
+   every timeline that has ever had this problem solves it. */
+let feedPending=false;
+function feedPlaying(){ return !!document.querySelector("#feedList .yt-card.yt-playing"); }
+function renderFeedSoon(){
+  if(feedPlaying()){ feedPending=true; renderFeedPill(); return; }
+  renderFeed();
+}
+window.renderFeedSoon=renderFeedSoon;
+function renderFeedPill(){
+  const el=$("feedNew"); if(!el) return;
+  el.style.display = feedPending?"block":"none";
+  if(feedPending) el.textContent="↑ new activity — tap to refresh";
+}
+function flushFeed(){ feedPending=false; renderFeed(); window.scrollTo({top:0,behavior:"smooth"}); }
+window.flushFeed=flushFeed;
+
 function renderFeed(){
+  feedPending=false; renderFeedPill();
 
   renderOnThisDay();
   // composer identity
@@ -17834,7 +17976,7 @@ function renderFeed(){
                    <button onclick="event.stopPropagation();deletePost(${p.id})" title="Delete">✕</button>`:''}
           </div>
         </div>
-        ${p.body?`<div class="fc-body">${socialText(p.body)}</div>`:''}
+        ${socialBody(p.body,'fc-body')}
         ${p.quote_type?`<div class="qt-wrap">${quotePreview(p.quote_type,p.quote_id)}</div>`:''}
         ${p.image_url?`<div class="fc-img"><img src="${esc(p.image_url)}" loading="lazy" onclick="window.open('${esc(p.image_url)}','_blank')"></div>`:''}
         ${reactionBar("post",p.id)}
@@ -17869,7 +18011,7 @@ function renderFeed(){
         <div><div class="fc-author">${esc(c.author)}</div>
           <div class="fc-time">on ${esc(m.p1)} vs ${esc(m.p2)} · ${when(c.created_at)}</div></div>
       </div>
-      ${c.body?`<div class="fc-body fc-quote">${socialText(c.body)}</div>`:''}
+      ${socialBody(c.body,'fc-body fc-quote')}
       ${c.image_url?`<div class="fc-img"><img src="${esc(c.image_url)}" loading="lazy"></div>`:''}
     </article>`;
   }).join('');
@@ -17909,7 +18051,7 @@ function replyNode(r,type,id,depth){
        +'<button onclick="event.stopPropagation();editReply('+r.id+')">edit</button>'
        +'<button onclick="event.stopPropagation();deleteReply('+r.id+')">delete</button></span>':'')
     +'</div>'
-    +'<div class="frep-body">'+socialText(r.body)+'</div>'
+    +socialBody(r.body,'frep-body')
     +'<button class="frep-reply" onclick="event.stopPropagation();openReply(\''+type+'\','+id+','+r.id+',\''+esc(r.author).replace(/'/g,"\\'")+'\')">reply</button>'
     +r.kids.map(k=>replyNode(k,type,id,depth+1)).join('')
     +'</div>';
