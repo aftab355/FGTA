@@ -79,6 +79,12 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
       ever has timings, and the button simply never appears. The full workflow
       is in **`docs/rally-reel.md`**.
 - **Rivalries**: pick two players to see head-to-head history, rating swing, and trend; a "fiercest rivalries" leaderboard by games played.
+- **Auto-cut**: the rally reel above needs the umpire's taps, so it only exists for matches somebody scored in the app. This is the same edit for footage nobody reffed — drop in a clip or a whole recording and it finds the rallies itself.
+  - **It listens rather than watches.** A court is full of motion that isn't a rally, but a struck ball is a loud broadband click and almost nothing else on a court is — and a rally isn't one click, it's a *run* of them about a second apart with silence either side. Dead time contains no strikes at all. Difference the samples → RMS envelope → rising edge of its log (level-independent, so mic distance stops mattering) → peak-pick against a local threshold and two absolute floors → group → require one properly struck ball in the group.
+  - **Measured** on synthetic matches with known ground truth across six conditions (near mic, windy, distant mic, players talking, players bouncing the ball before serving, all at once): every rally found, 0–1 false positives per 20 minutes, 54–57% of the runtime cut, ~200ms of analysis per hour. Real footage isn't synthetic footage, which is why every threshold is on a slider and the output is a **review list** with keep/drop rather than a finished file.
+  - **The limit it can't engineer away**: an adjacent court in use sounds exactly like yours. The panel reports strikes-per-minute (a real singles match runs 15–25) so a bad result is obvious before you review it.
+  - **Nothing is uploaded** — the file is read and decoded in the browser; there is no server here that could receive a video. Past ~1.2GB a tab can't hold the decode, so it hands over a one-line ffmpeg command to extract just the audio, which shares a clock with the video and cuts identically.
+  - Exports the same ffmpeg script and JSON cut list as the reel, from the same generator. See **`docs/auto-cut.md`**.
 
 ### 4. Predict
 Forecast / Live & sims / Fixtures subtabs — win-probability model, Monte Carlo match simulation, and a "Rating Galaxy" force-directed canvas visualization (players as nodes sized by rating, rivalries as glowing links).
@@ -205,6 +211,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
+- docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.
 - docs/rally-reel.sql — the one column the rally reel needs (`matches.rallies`), the shape of what goes in it, and what happens if you skip it.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
 - manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
