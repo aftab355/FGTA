@@ -13040,7 +13040,7 @@ function rpSolveRing(players, seed){
    into two legs so a pair never meets back to back, give people rest
    between their own games, and hold the closest matchup back.
    ------------------------------------------------------------------ */
-function rpSolveDrr(players, seed){
+function rpSolveDrr(players, seed, openers){
   const ctx = rpContext(players);
   const n = players.length;
   const cycle = players.slice().sort((a,b)=>ctx.rating(b)-ctx.rating(a));  // display order only — every pair meets regardless
@@ -13056,10 +13056,29 @@ function rpSolveDrr(players, seed){
   const rnd = rpRng(seed);
   const nudged = arr => arr.map(g=>({...g, j: rnd()*4}));
 
+  // The opening games can be nominated — the ones the day is built
+  // around. Each is lifted out of the pool and placed in the order
+  // given, listed the way it was nominated; whatever is left is
+  // sequenced around them exactly as it would have been anyway. A pair
+  // that isn't in this field, or that has already been pinned, is
+  // skipped rather than allowed to displace a real fixture.
+  const lastSeen = {};
+  const opening = [];
+  const pool1 = nudged(pairs);
+  (openers || []).forEach(op=>{
+    if(!op || !op.p1 || !op.p2) return;
+    const i = pool1.findIndex(g=>rpSamePair(g, op));
+    if(i < 0) return;
+    pool1.splice(i, 1);
+    lastSeen[op.p1] = opening.length;
+    lastSeen[op.p2] = opening.length;
+    opening.push({p1: op.p1, p2: op.p2, leg:1});
+  });
+
   // leg 2 is the same six games with the sides swapped, and lastSeen
   // carries over so the join between the legs isn't a back-to-back
-  const lastSeen = {};
-  const leg1 = rpSequence(nudged(pairs), ctx, lastSeen, 0).map(g=>({...g, leg:1}));
+  const leg1 = opening.concat(
+    rpSequence(pool1, ctx, lastSeen, opening.length).map(g=>({...g, leg:1})));
   const leg2 = rpSequence(nudged(pairs.map(g=>({p1:g.p2, p2:g.p1}))), ctx, lastSeen, leg1.length)
                  .map(g=>({...g, leg:2}));
   const order = leg1.concat(leg2)
@@ -13093,9 +13112,20 @@ function rpSolveDrr(players, seed){
   };
 }
 
-function rpSolve(players, seed){
+/* two fixtures between the same two people, in either order */
+function rpSamePair(a, b){
+  if(!a || !b) return false;
+  return (a.p1 === b.p1 && a.p2 === b.p2) || (a.p1 === b.p2 && a.p2 === b.p1);
+}
+
+/* `openers` nominates the games the group leads with, in order. Only
+   the four-player group honours them: there, every pairing is played,
+   so any two names are a legal opening game. A ring only plays the
+   pairs that end up adjacent in the circle, so the choice couldn't be
+   guaranteed and isn't offered. */
+function rpSolve(players, seed, openers){
   return rpShapeFor(players.length) === "drr"
-    ? rpSolveDrr(players, seed)
+    ? rpSolveDrr(players, seed, openers)
     : rpSolveRing(players, seed);
 }
 
@@ -13569,6 +13599,20 @@ function rpDrrSvg(t, state, snap){
   </svg>`;
 }
 
+/* Every pairing in the field, as <option>s for the opening-game
+   picker — both ways round, because the fixture row and the score
+   entry ("A first") both read off which name leads. Picking
+   "M4 vs Kabir" puts it on the sheet exactly that way. */
+function rpPairOptions(names, current){
+  const out = [];
+  for(let i=0;i<names.length;i++) for(let j=0;j<names.length;j++){
+    if(i === j) continue;
+    const sel = current && current.p1 === names[i] && current.p2 === names[j];
+    out.push(`<option value="${esc(names[i] + "␟" + names[j])}"${sel?" selected":""}>${esc(names[i])} vs ${esc(names[j])}</option>`);
+  }
+  return out.join("");
+}
+
 /* ---------- roster builder ---------- */
 function rpRosterPanel(t, state){
   const roster = (rpDraftRoster[t.id] || (state && state.roster) || []).slice();
@@ -13584,6 +13628,7 @@ function rpRosterPanel(t, state){
   const n = roster.length;
   const ok = n >= RP_MIN_FIELD && n <= RP_MAX_FIELD;
   const shape = rpShapeFor(n);
+  const openers = (state && state.openers) || [];
   const why = n < RP_MIN_FIELD
     ? `Needs at least ${RP_MIN_FIELD} — three players can't fill a four-player bracket.`
     : n > RP_MAX_FIELD ? `Cap is ${RP_MAX_FIELD} for a two-games-each ring.`
@@ -13609,6 +13654,21 @@ function rpRosterPanel(t, state){
           <button class="btn ghost" style="margin:0;flex:1" onclick="rpFillFromLadder(${t.id})" title="pull the top of the ladder in">Top ${RP_FILL_TARGET} ↓</button>
         </div>
       </div>
+      ${ok && shape === "drr" ? `
+      <div style="margin-top:10px">
+        <label>Opening games <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional — pin how the day starts)</span></label>
+        <div class="grid2">
+          <select id="rpOpener1">
+            <option value="">1st game — let the draw decide</option>
+            ${rpPairOptions(seeded, openers[0])}
+          </select>
+          <select id="rpOpener2">
+            <option value="">2nd game — let the draw decide</option>
+            ${rpPairOptions(seeded, openers[1])}
+          </select>
+        </div>
+        <div class="bracket-note" style="margin-top:6px">Pin one, both, or neither. Everything after them is sequenced as normal.</div>
+      </div>` : ""}
       <div class="bracket-note">${esc(why)}</div>
       <button class="btn" ${ok?"":"disabled style=\"opacity:.45;cursor:not-allowed\""} onclick="rpGenerateSchedule(${t.id})">
         ${state && state.cycle ? "Re-draw the schedule" : "Draw the schedule"}
@@ -13643,6 +13703,9 @@ function rpWhyPanel(state){
         <br><br>
         <b>Freshness</b> — <b>${m.freshPairs}</b> of the ${m.freshOf} pairings are first-time meetings on the ladder.
         It can't change the fixtures, but it's worth knowing which ones are new.
+        ${(state.openers||[]).length ? `<br><br>
+        <b>Opening games</b> — ${state.openers.map(o=>`<b>${esc(o.p1)} vs ${esc(o.p2)}</b>`).join(" then ")}
+        ${state.openers.length>1?"were":"was"} pinned by hand. Everything after ${state.openers.length>1?"them":"it"} is sequenced as above.` : ""}
         <br><br>
         Re-drawing shuffles the order of play. It cannot change who plays whom, because everyone already plays everyone.
   ` : `
@@ -14007,12 +14070,28 @@ async function rpGenerateSchedule(tid){
       ? "Re-draw the schedule? Everyone still plays everyone twice — only the order of play changes."
       : "Re-draw the schedule? The current pairings are replaced.")) return;
 
+  // the admin's pinned opening games, if the pickers are on screen
+  const openEls = [$("rpOpener1"), $("rpOpener2")];
+  let openers = [];
+  if(openEls.some(Boolean)){
+    openEls.forEach(el=>{
+      if(!el || !el.value) return;
+      const [a,b] = el.value.split("␟");
+      if(a && b && roster.includes(a) && roster.includes(b)) openers.push({p1:a, p2:b});
+    });
+    // picking the same game twice pins it once
+    openers = openers.filter((op,i,all)=> all.findIndex(x=>rpSamePair(x,op)) === i);
+  } else if(prev && prev.openers){
+    openers = prev.openers;            // pickers not rendered (ring) — keep whatever was there
+  }
+
   const seed = (Math.random()*4294967296) >>> 0;
-  const solved = rpSolve(roster, seed);
+  const solved = rpSolve(roster, seed, openers);
   const state = {
     v: 2,                              // v1 had no shape — it was always a ring
     roster,
     shape: solved.shape,
+    openers,
     cycle: solved.cycle,
     order: solved.order,
     metrics: solved.metrics,
