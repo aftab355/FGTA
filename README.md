@@ -25,7 +25,7 @@ The app is a single page with a top nav (desktop) / bottom nav + "More" sheet (m
 Social feed: post composer, "moments" horizontal scroller, presence bar ("N on court" + stacked avatars when others are active), live activity ticker, "on this day" callback box, comments.
 
 ### 3. Matches (Point Tracker / Archive / Rivalries) — subtabs
-- **Point Tracker**: Enter player 1 / player 2 names → "Start tracking" begins a live point-by-point 1v1. Best-of-3, games to 6 win-by-2, tiebreak to 7 at 6-6. Plain incrementing point counts (0,1,2,3…), not tennis scoring. Every tap is undo/redo-able; nothing writes to the ladder until final Submit.
+- **Point Tracker**: Enter player 1 / player 2 names → "Start tracking" begins a live point-by-point 1v1. Best-of-3, games to 6 win-by-2, tiebreak to 7 at 6-6. Plain incrementing point counts (0,1,2,3…), not tennis scoring. Every tap is undo/redo-able; nothing writes to the ladder until final Submit. Every tap is also **timestamped**, which is the whole basis of the rally reel described under Archive below — the ref pressing a button when a point ends is a more reliable record of where the rally finished than tracking the ball would be, and it was already happening.
   - Live celebrations: 8-8 in a game triggers a full-screen rainbow/confetti overlay; a game win shows a gold banner with the game number; a set win shows a flame overlay.
   - "Ref mode" pill badge next to the section title.
   - Built-in livestream panel: the match is broadcast from **OBS to YouTube
@@ -53,6 +53,31 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
       `docs/youtube-live.md` for the full setup and the quota arithmetic.
   - Live score "bug" overlay and a Match Point tension banner when the score is close.
 - **Archive**: past-match history, editable "fix a game" flow that lets you flip a game's recorded winner if the point math still supports it, CSV export. Each match card also has **AI commentary** and **AI roast** buttons, backed by `/api/ai` (a Netlify function holding the Anthropic key — same pattern as `/api/youtube`); needs `ANTHROPIC_API_KEY` set on the deploy, and says so plainly instead of looking broken if it isn't.
+  - **Rally reel** — any match scored point-by-point can be played back with
+    the standing around removed. Cutting a recording down to the rallies is
+    normally posed as a computer-vision problem; it isn't one here, because
+    the ref already tapped a button every time a point ended and those taps
+    are an exact record of where each rally finished. The one thing nobody
+    recorded — where the serve fell inside the gap between two taps — is a
+    slider rather than a guess dressed up as a measurement.
+    - **Watching costs nothing.** The player is seeked past the dead time, so
+      there is no render, no file and no upload; the video stays on YouTube.
+      Filters (long rallies, pressure points, game winners, aces, per player),
+      a jump list that follows playback, and 1×/1.5×/2×.
+    - **The sync is automatic.** A VOD's timeline starts when the stream
+      started and `/api/youtube` reports that instant, so the match clock and
+      the video clock differ by one constant. It lands within a second or two,
+      and an offset control covers the rest — admins can save a corrected
+      offset back to the match for everyone.
+    - **The real cut happens elsewhere.** Exports an `ffmpeg` script (one
+      re-encoded segment per rally, joined — a stream copy could only cut on
+      keyframes), a JSON cut list, and YouTube chapter markers. A phone should
+      not be transcoding an hour of tennis and does not have the camera
+      original anyway.
+    - Needs one column — `matches.rallies` — see **`docs/rally-reel.sql`**.
+      Without it nothing breaks: submits drop the field and retry, no match
+      ever has timings, and the button simply never appears. The full workflow
+      is in **`docs/rally-reel.md`**.
 - **Rivalries**: pick two players to see head-to-head history, rating swing, and trend; a "fiercest rivalries" leaderboard by games played.
 
 ### 4. Predict
@@ -179,6 +204,8 @@ No custom illustrations or photography — avatars are generated from initials (
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
+- docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
+- docs/rally-reel.sql — the one column the rally reel needs (`matches.rallies`), the shape of what goes in it, and what happens if you skip it.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
 - manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
 
