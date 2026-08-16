@@ -38,7 +38,8 @@ early is fine, one that opens after the serve is not.
 
 1. **The match was scored in the point tracker.** Not typed in afterwards —
    the reel needs the taps. A match reported through the ordinary form has no
-   timings and gets no reel.
+   timings and gets no reel. For footage nobody reffed, use
+   [Auto-cut](auto-cut.md), which finds the rallies by ear instead.
 2. **`matches.rallies` exists.** One column, see
    [`rally-reel.sql`](rally-reel.sql). Without it everything still works, no
    match ever has timings, and the button never appears.
