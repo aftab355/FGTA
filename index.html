@@ -3358,8 +3358,9 @@
   .view-enter{animation:viewEnter .38s cubic-bezier(.16,1,.3,1) both}
 
   /* ============================================================
-     ROBIN+ — the 2-games-each group stage feeding a 4-player
-     knockout. Everything here is namespaced .rp-* so it can be
+     ROBIN+ — the group stage feeding a 4-player knockout: a
+     2-games-each ring with five or more, everyone-twice with
+     exactly four. Everything here is namespaced .rp-* so it can be
      lifted out whole into the target codebase.
      ============================================================ */
   .rp-steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
@@ -3385,6 +3386,8 @@
   .rp-circle{display:block;width:100%;max-width:420px;margin:6px auto 2px;overflow:visible}
   .rp-circle .rp-edge{stroke:var(--line);stroke-width:2;transition:.3s cubic-bezier(.16,1,.3,1)}
   .rp-circle .rp-edge.played{stroke:var(--court);stroke-width:2.5}
+  /* a pairing that has been played once of its two legs */
+  .rp-circle .rp-edge.half{stroke:var(--court);stroke-width:2.5;opacity:.42;stroke-dasharray:6 5}
   .rp-circle .rp-edge.next{stroke:var(--accent);stroke-width:3;stroke-dasharray:5 4;animation:rpDash 1.1s linear infinite}
   @keyframes rpDash{to{stroke-dashoffset:-18}}
   .rp-circle .rp-node{fill:var(--panel-2);stroke:var(--line);stroke-width:1.5}
@@ -3431,6 +3434,12 @@
   .rp-state.in{background:rgba(212,255,43,.14);color:var(--ball)}
   .rp-state.bubble{background:rgba(255,177,0,.15);color:var(--pending)}
   .rp-state.out{background:var(--line-soft);color:var(--dim)}
+  .rp-state.seed{background:var(--line-soft);color:var(--muted)}
+
+  /* the divider between the two legs of a four-player group */
+  .rp-leg-h{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--dim);margin:16px 0 9px;padding-top:12px;border-top:1px dashed var(--line)}
+  .rp-leg-h:first-child{margin-top:2px;padding-top:0;border-top:none}
 
   .rp-bracket{display:flex;gap:14px;align-items:stretch;margin-top:6px;overflow-x:auto;padding-bottom:6px}
   .rp-round{flex:1 1 0;min-width:150px;display:flex;flex-direction:column}
@@ -5779,7 +5788,7 @@
           <div><label>Name</label><input id="tnName" placeholder="FGTA Open" autocomplete="off"></div>
           <div><label>Format</label>
             <select id="tnFormat" onchange="tnFormatHint()">
-              <option value="robin2">Robin+ — 2 games each, top 4, then brackets</option>
+              <option value="robin2">Robin+ — group stage into a 4-player bracket</option>
               <option value="knockout">Knockout</option>
               <option value="roundrobin">Round-robin</option>
               <option value="hybrid">Hybrid — top 3 auto-qualify + play-in + knockout</option>
@@ -12643,8 +12652,17 @@ function tournStartLabel(t){
   return new Date(t.start_date+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 }
 function tournFormatLabel(t){
-  return t.format==="robin2" ? "Robin+ — 2 games each, top 4, brackets"
-       : t.format==="hybrid" ? "Hybrid" : t.format==="knockout" ? "Knockout" : "Round-robin";
+  if(t.format === "robin2"){
+    // the group's shape depends on the size of the field, so the label
+    // only firms up once the draw exists
+    let state = null;
+    try{ state = rpRead(t); }catch(e){}
+    if(!state || !state.cycle) return "Robin+ — group stage into a bracket";
+    return rpShapeOf(state) === "drr"
+      ? "Robin+ — everyone twice, seeded bracket"
+      : "Robin+ — 2 games each, top 4, brackets";
+  }
+  return t.format==="hybrid" ? "Hybrid" : t.format==="knockout" ? "Knockout" : "Round-robin";
 }
 function tournFormatTag(t){
   return t.format==="robin2" ? "R+" : t.format==="hybrid" ? "HYB" : t.format==="knockout" ? "KO" : "RR";
@@ -12655,7 +12673,7 @@ function tnFormatHint(){
   if(!sel || !box) return;
   const f = sel.value;
   if(f === "robin2"){
-    box.textContent = "Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder.";
+    box.textContent = "Robin+ runs a group stage into a 4-player bracket. With five or more it's a two-games-each ring that cuts to the top 4, and a tied qualification line is settled with a 1v1 rather than a tiebreak column. With exactly four, nobody can be cut, so everyone plays everyone twice and the table seeds the bracket. It's an exhibition by default — nothing in it moves the ladder.";
   } else if(f === "hybrid"){
     box.textContent = "Hybrid seeds off the live ladder: the top 3 auto-qualify, seeds 4 and 5 play in for the last spot, then semis into a final.";
   } else if(f === "knockout"){
@@ -12702,17 +12720,30 @@ function renderHybridBracket(t, games){
 /* ============================================================
    ROBIN+ — a round-robin/knockout hybrid built for a small field.
 
-   The shape of it: every player plays exactly **two** group games,
-   the top 4 qualify, and those 4 go straight into semis → final.
-   Anyone still level on the qualification line settles it in a 1v1
-   decider rather than on a tiebreak column.
+   Every Robin+ event ends the same way: four players into semis →
+   final. What changes is how the group earns those four seats, and
+   that depends on how many turned up.
 
-   Two games each means the group stage is a 2-regular graph, i.e.
-   a ring: sit everyone in a circle and each plays their two
-   neighbours. N players, N games, no byes, no one sits out. The
-   interesting question is *which* circle — the ordering decides
-   who draws whom, and with only two games a bad draw is the whole
-   tournament. rpSolve() searches that space (see below).
+   FIVE OR MORE — the ring. Every player plays exactly **two** group
+   games, the top 4 qualify, and anyone still level on the
+   qualification line settles it in a 1v1 decider rather than on a
+   tiebreak column. Two games each means the group is a 2-regular
+   graph, i.e. a ring: sit everyone in a circle and each plays their
+   two neighbours. N players, N games, no byes, no one sits out. The
+   interesting question is *which* circle — the ordering decides who
+   draws whom, and with only two games a bad draw is the whole
+   tournament. rpSolveRing() searches that space.
+
+   EXACTLY FOUR — the double round robin. A ring here would decide
+   nothing: four players and four bracket seats means nobody can be
+   cut, so the group would be two dead games each. Instead everyone
+   plays everyone **twice** — 12 games, six each — and the table
+   seeds the bracket rather than trimming it, #1 v #4 and #2 v #3.
+   A group loss costs you the top seed and the easiest semi, not
+   your place. There is nothing to draw (every pairing happens
+   regardless), so rpSolveDrr() only solves the order of play.
+
+   Below four there is no event: three players can't fill a bracket.
 
    Robin+ events are exhibition by default: they never touch Elo.
    ============================================================ */
@@ -12721,7 +12752,40 @@ const RP_ROUND_GROUP  = "grp";     // grp1..grpN   — group stage
 const RP_ROUND_QUAL   = "qual";    // qual1..qualN — qualification deciders
 const RP_LS_PREFIX    = "fgta_robinplus_";
 const RP_MAX_FIELD    = 12;
-const RP_MIN_FIELD    = 5;         // 4 would qualify everyone; the group has to actually cut someone
+const RP_MIN_FIELD    = 4;         // 3 can't fill a four-player bracket
+const RP_DRR_FIELD    = 4;         // at exactly 4 the group changes shape — see below
+const RP_FILL_TARGET  = 4;         // how many the "top N" button pulls off the ladder
+
+/* ---------- group shape ----------------------------------------
+   Robin+ has two group stages, and the size of the field picks
+   between them:
+
+   ring   5+ players. Everyone sits in a circle and plays their two
+          neighbours — n players, n games. The top 4 qualify, so the
+          group's job is to cut the field down to a bracket.
+   drr    exactly 4. A ring here would decide nothing: four players
+          means four bracket slots, so nobody could be cut, and each
+          player would still only get two games. Instead every pair
+          plays twice — 12 games, six each — and the table seeds the
+          bracket rather than trimming it. Losing a group game costs
+          you the #1 seed, not your place.
+
+   Everything downstream (standings, deciders, the bracket, the
+   champion) reads state.order, so it works the same either way.
+   ---------------------------------------------------------------- */
+function rpShapeFor(n){ return n <= RP_DRR_FIELD ? "drr" : "ring"; }
+function rpShapeOf(state){ return (state && state.shape) || "ring"; }   // v1 states predate the field
+
+/* how many group games each player gets, read off the draw itself */
+function rpGamesEach(state){
+  const counts = {};
+  (state && state.order || []).forEach(fx=>{
+    counts[fx.p1] = (counts[fx.p1]||0) + 1;
+    counts[fx.p2] = (counts[fx.p2]||0) + 1;
+  });
+  const vals = Object.values(counts);
+  return vals.length ? Math.max(...vals) : 0;
+}
 
 /* ---------- persistence ----------------------------------------
    The roster and the generated ring live in tournaments.bracket
@@ -12891,28 +12955,38 @@ function rpStartOrders(players, seed, ctx){
    to back if the ring allows it), and hold the tightest matchup
    back so the group stage builds rather than fizzles.
    ---------------------------------------------------------------- */
-function rpOrderGames(cycle, ctx){
-  const pool = [];
-  for(let i=0;i<cycle.length;i++) pool.push({p1: cycle[i], p2: cycle[(i+1)%cycle.length]});
-  const out = [], lastSeen = {};
+function rpSequence(pool, ctx, lastSeen, offset){
+  pool = pool.slice();
+  const out = [];
   while(pool.length){
+    const at = offset + out.length;
     let bestIdx = 0, bestScore = -Infinity;
     pool.forEach((g,idx)=>{
-      const restA = lastSeen[g.p1] === undefined ? 99 : out.length - lastSeen[g.p1];
-      const restB = lastSeen[g.p2] === undefined ? 99 : out.length - lastSeen[g.p2];
+      const restA = lastSeen[g.p1] === undefined ? 99 : at - lastSeen[g.p1];
+      const restB = lastSeen[g.p2] === undefined ? 99 : at - lastSeen[g.p2];
       const rest  = Math.min(restA, restB, 4);            // beyond 4 games of rest the difference stops mattering
-      const score = rest*10 - ctx.quality(g.p1,g.p2)*3;   // rest first; save the coin-flips for last
+      // rest first; save the coin-flips for last. g.j is an optional
+      // seeded nudge, always smaller than one step of rest, so it can
+      // reshuffle equally-rested games without ever costing anyone a rest
+      const score = rest*10 - ctx.quality(g.p1,g.p2)*3 + (g.j || 0);
       if(score > bestScore){ bestScore = score; bestIdx = idx; }
     });
     const g = pool.splice(bestIdx,1)[0];
-    lastSeen[g.p1] = out.length; lastSeen[g.p2] = out.length;
+    lastSeen[g.p1] = at; lastSeen[g.p2] = at;
     out.push(g);
   }
-  return out.map((g,i)=>({p1:g.p1, p2:g.p2, round: RP_ROUND_GROUP + (i+1)}));
+  return out;
+}
+
+function rpOrderGames(cycle, ctx){
+  const pool = [];
+  for(let i=0;i<cycle.length;i++) pool.push({p1: cycle[i], p2: cycle[(i+1)%cycle.length]});
+  return rpSequence(pool, ctx, {}, 0)
+    .map((g,i)=>({p1:g.p1, p2:g.p2, round: RP_ROUND_GROUP + (i+1)}));
 }
 
 /* ---------- the matchmaker, end to end -------------------------- */
-function rpSolve(players, seed){
+function rpSolveRing(players, seed){
   const ctx = rpContext(players);
   let best = null;
   for(const s of rpStartOrders(players, seed, ctx)){
@@ -12947,13 +13021,82 @@ function rpSolve(players, seed){
   const sosSpread = Math.max(...oppVals) - Math.min(...oppVals);
 
   return {
-    cycle, order, seed,
+    cycle, order, seed, shape: "ring",
     metrics: {
       avgQuality: avgQ, tightest: tight, tightestQ: maxQ, loosest: loose, loosestQ: minQ,
-      freshPairs: fresh, minRest: minRest === 99 ? 0 : minRest,
+      freshPairs: fresh, freshOf: order.length, gamesEach: 2,
+      minRest: minRest === 99 ? 0 : minRest,
       sosSpread, cost: best.cost, cand: rpCycleCost(cycle, ctx)
     }
   };
+}
+
+/* ---------- the four-player group: everyone twice ----------------
+   There is nothing to draw here. With four players every pairing
+   happens twice whatever we do, so no schedule can hand anyone an
+   easier route — each player faces the same three opponents the same
+   number of times, and the "fair draw" the ring works so hard for
+   comes free. What's left to solve is the order of play: split it
+   into two legs so a pair never meets back to back, give people rest
+   between their own games, and hold the closest matchup back.
+   ------------------------------------------------------------------ */
+function rpSolveDrr(players, seed){
+  const ctx = rpContext(players);
+  const n = players.length;
+  const cycle = players.slice().sort((a,b)=>ctx.rating(b)-ctx.rating(a));  // display order only — every pair meets regardless
+
+  const pairs = [];
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++) pairs.push({p1: cycle[i], p2: cycle[j]});
+
+  // Re-drawing can only ever change the order, so the seed has to be
+  // what varies it: each fixture carries a small seeded nudge that the
+  // sequencer adds to its score. Bounded below one step of rest, so a
+  // re-draw reshuffles the running order without ever handing someone
+  // two games back to back that they wouldn't otherwise have had.
+  const rnd = rpRng(seed);
+  const nudged = arr => arr.map(g=>({...g, j: rnd()*4}));
+
+  // leg 2 is the same six games with the sides swapped, and lastSeen
+  // carries over so the join between the legs isn't a back-to-back
+  const lastSeen = {};
+  const leg1 = rpSequence(nudged(pairs), ctx, lastSeen, 0).map(g=>({...g, leg:1}));
+  const leg2 = rpSequence(nudged(pairs.map(g=>({p1:g.p2, p2:g.p1}))), ctx, lastSeen, leg1.length)
+                 .map(g=>({...g, leg:2}));
+  const order = leg1.concat(leg2)
+    .map((g,i)=>({p1:g.p1, p2:g.p2, leg:g.leg, round: RP_ROUND_GROUP + (i+1)}));
+
+  const qualities = order.map(g=>ctx.quality(g.p1,g.p2));
+  const avgQ = qualities.reduce((a,b)=>a+b,0)/order.length;
+  const minQ = Math.min(...qualities), maxQ = Math.max(...qualities);
+
+  const seen = {}; let minRest = 99;
+  order.forEach((g,i)=>{
+    [g.p1,g.p2].forEach(p=>{
+      if(seen[p] !== undefined) minRest = Math.min(minRest, i - seen[p] - 1);
+      seen[p] = i;
+    });
+  });
+
+  return {
+    cycle, order, seed, shape: "drr", legs: 2,
+    metrics: {
+      avgQuality: avgQ,
+      tightest: order[qualities.indexOf(maxQ)], tightestQ: maxQ,
+      loosest:  order[qualities.indexOf(minQ)], loosestQ: minQ,
+      freshPairs: pairs.filter(p=>!ctx.metCount(p.p1,p.p2)).length,
+      freshOf: pairs.length,
+      gamesEach: (n-1)*2,
+      minRest: minRest === 99 ? 0 : minRest,
+      sosSpread: 0,      // identical schedules, by construction
+      pairCount: pairs.length
+    }
+  };
+}
+
+function rpSolve(players, seed){
+  return rpShapeFor(players.length) === "drr"
+    ? rpSolveDrr(players, seed)
+    : rpSolveRing(players, seed);
 }
 
 /* ============================================================
@@ -13005,14 +13148,18 @@ function rpGroupTable(t, state){
   return list;
 }
 
-/* head-to-head between two group players: -1 a ahead, 1 b ahead, 0 nothing to separate them */
+/* head-to-head between two group players: -1 a ahead, 1 b ahead, 0
+   nothing to separate them. They meet twice in a double round robin,
+   so it's the aggregate — a 1-1 split settles nothing and falls
+   through to the next criterion. */
 function rpH2H(t, state, a, b){
-  const fx = (state.order||[]).find(f =>
-    (f.p1===a && f.p2===b) || (f.p1===b && f.p2===a));
-  if(!fx) return 0;
-  const w = rpWinner(rpGame(t.id, fx.round));
-  if(!w) return 0;
-  return w === a ? -1 : 1;
+  let score = 0;
+  (state.order||[]).forEach(f=>{
+    if(!((f.p1===a && f.p2===b) || (f.p1===b && f.p2===a))) return;
+    const w = rpWinner(rpGame(t.id, f.round));
+    if(w === a) score--; else if(w === b) score++;
+  });
+  return score < 0 ? -1 : score > 0 ? 1 : 0;
 }
 
 /* full ordering — hard criteria first, then the soft ones that only
@@ -13049,7 +13196,9 @@ function rpQualification(t, state){
   if(!done) return base;
   if(rows.length <= spots){
     base.qualified = rows.map(r=>r.name);
-    base.note = "Everyone in the field qualifies — the group only sets the seeding.";
+    base.note = rpShapeOf(state) === "drr"
+      ? "Nobody is cut — the group decides the seeding, and the seeding decides the bracket."
+      : "Everyone in the field qualifies — the group only sets the seeding.";
     return base;
   }
 
@@ -13174,7 +13323,8 @@ function rpMiniKnockout(tied){
 
 /* the format eating itself: a ring among the tied, top s advance */
 function rpMiniRing(tied, s, seed){
-  const solved = rpSolve(tied, (seed|0) + 7919);
+  // only reachable with 5+ level for 2+ spots, so it is always a ring
+  const solved = rpSolveRing(tied, (seed|0) + 7919);
   const games = solved.order.map((g,i)=>({p1:g.p1, p2:g.p2, round: RP_ROUND_QUAL + (i+1)}));
   return {kind:"ring", tied, spots:s, auto:[], rounds:[games],
     note:`${tied.length} level for ${s} spots — they play the same two-games-each ring among themselves, top ${s} go through.`};
@@ -13244,17 +13394,18 @@ function rpBracket(t, state, seeds){
 function rpSnapshot(t){
   const state = rpRead(t);
   if(!state || !state.cycle || !state.cycle.length){
-    return {state, stage:"setup"};
+    return {state, stage:"setup", shape: rpShapeOf(state)};
   }
+  const shape = rpShapeOf(state);
   const qual = rpQualification(t, state);
-  if(!qual.complete) return {state, stage:"group", qual};
+  if(!qual.complete) return {state, shape, stage:"group", qual};
 
   const seedOrder = qual.rows.map(r=>r.name);
   let plan = null, resolved = {through:[], pending:null, done:true};
   if(qual.bubble){
     plan = rpPlayoffPlan(qual.bubble, seedOrder, state.seed || 1);
     resolved = rpPlayoffResolve(t, plan);
-    if(!resolved.done) return {state, stage:"playoff", qual, plan, resolved};
+    if(!resolved.done) return {state, shape, stage:"playoff", qual, plan, resolved};
   }
 
   // final four, in group order (deciders slot in where the tie was)
@@ -13264,9 +13415,9 @@ function rpSnapshot(t){
     .slice(0,4);
 
   const br = rpBracket(t, state, seeds);
-  if(br.final.winner) return {state, stage:"done", qual, plan, resolved, seeds, br};
-  if(br.semis.every(s=>s.winner)) return {state, stage:"final", qual, plan, resolved, seeds, br};
-  return {state, stage:"semis", qual, plan, resolved, seeds, br};
+  if(br.final.winner) return {state, shape, stage:"done", qual, plan, resolved, seeds, br};
+  if(br.semis.every(s=>s.winner)) return {state, shape, stage:"final", qual, plan, resolved, seeds, br};
+  return {state, shape, stage:"semis", qual, plan, resolved, seeds, br};
 }
 
 /* the pair a round is between, wherever in the event that round lives */
@@ -13302,11 +13453,14 @@ const rpJs = s => String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");   // safe
 function rpPct(x){ return Math.round(x*100) + "%"; }
 
 /* ---------- progress stepper ---------- */
-function rpStepper(stage, hasBubble){
+function rpStepper(stage, hasBubble, shape){
+  // a four-player group cuts nobody, so the step between group and
+  // semis is where the seeding lands rather than where someone goes out
+  const third = shape === "drr" ? "Seeding" : hasBubble ? "Decider" : "Cut";
   const steps = [
     ["1","Roster",   ["setup"]],
     ["2","Group",    ["group"]],
-    ["3", hasBubble ? "Decider" : "Cut", ["playoff"]],
+    ["3", third,     ["playoff"]],
     ["4","Semis",    ["semis"]],
     ["5","Final",    ["final"]],
     ["🏆","Champion",["done"]]
@@ -13361,6 +13515,60 @@ function rpRingSvg(t, state, snap){
   </svg>`;
 }
 
+/* ---------- the four-player group, drawn ----------
+   The ring's picture is a circle with the neighbours joined. This one
+   is the complete graph — every line is a pairing, and each is walked
+   twice. A line fills in as its two games get played. Rotated 45° so
+   the four names sit on the diagonals and clear each other. */
+function rpDrrSvg(t, state, snap){
+  const ring = state.cycle, n = ring.length;
+  const cx = 165, cy = 152, R = 82, LR = 118;
+  const pos = i => {
+    const a = -Math.PI/2 + Math.PI/n + i*2*Math.PI/n;
+    return {x: cx + R*Math.cos(a), y: cy + R*Math.sin(a), lx: cx + LR*Math.cos(a), ly: cy + LR*Math.sin(a)};
+  };
+  const table = {}; (snap.qual ? snap.qual.rows : []).forEach(r=>table[r.name]=r);
+  const nextRound = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
+  const key = (a,b) => a < b ? a+"|"+b : b+"|"+a;
+
+  const meets = {};
+  (state.order||[]).forEach(fx=>{
+    const k = key(fx.p1, fx.p2);
+    const e = meets[k] || (meets[k] = {played:0, total:0, next:false});
+    e.total++;
+    if(rpGame(t.id, fx.round)) e.played++;
+    if(nextRound && fx.round === nextRound.round) e.next = true;
+  });
+
+  const edges = [];
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    const a = ring[i], b = ring[j];
+    const e = meets[key(a,b)] || {played:0, total:0, next:false};
+    const cls = e.next ? "next"
+              : (e.total && e.played >= e.total) ? "played"
+              : e.played ? "half" : "";
+    const A = pos(i), B = pos(j);
+    edges.push(`<line class="rp-edge ${cls}" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}"><title>${esc(a)} vs ${esc(b)} — ${e.played} of ${e.total} played</title></line>`);
+  }
+
+  const nodes = ring.map((p,i)=>{
+    const P = pos(i), r = table[p];
+    const rec = r ? `${r.w}-${r.l}${r.d?"-"+r.d:""}` : "0-0";
+    const below = P.ly > cy;
+    return `<g>
+      <circle class="rp-node qual" cx="${P.x.toFixed(1)}" cy="${P.y.toFixed(1)}" r="16"></circle>
+      <text class="rp-nsub" x="${P.x.toFixed(1)}" y="${(P.y+3.5).toFixed(1)}">${esc(rec)}</text>
+      <text class="rp-nlabel" x="${P.lx.toFixed(1)}" y="${(P.ly + (below?16:-8)).toFixed(1)}">${esc(p.length>9?p.slice(0,8)+"…":p)}</text>
+    </g>`;
+  }).join("");
+
+  const played = (state.order||[]).filter(fx=>rpGame(t.id, fx.round)).length;
+  return `<svg class="rp-circle" viewBox="0 0 330 300" role="img" aria-label="Group: every player plays every other player twice">
+    ${edges}${nodes}
+    <text class="rp-nsub" x="165" y="286" style="font-size:9px">${played} of ${(state.order||[]).length} group games played — every line twice</text>
+  </svg>`;
+}
+
 /* ---------- roster builder ---------- */
 function rpRosterPanel(t, state){
   const roster = (rpDraftRoster[t.id] || (state && state.roster) || []).slice();
@@ -13375,15 +13583,22 @@ function rpRosterPanel(t, state){
 
   const n = roster.length;
   const ok = n >= RP_MIN_FIELD && n <= RP_MAX_FIELD;
+  const shape = rpShapeFor(n);
   const why = n < RP_MIN_FIELD
-    ? `Needs at least ${RP_MIN_FIELD} — with 4 or fewer everyone qualifies and the group stage decides nothing.`
+    ? `Needs at least ${RP_MIN_FIELD} — three players can't fill a four-player bracket.`
     : n > RP_MAX_FIELD ? `Cap is ${RP_MAX_FIELD} for a two-games-each ring.`
-    : `${n} players · ${n} group games · everyone plays exactly 2.`;
+    : shape === "drr"
+      ? `${n} players · ${n*(n-1)} group games · everyone plays everyone twice, ${(n-1)*2} games each · all ${n} seeded into the bracket.`
+      : `${n} players · ${n} group games · everyone plays exactly 2 · top 4 go through.`;
+
+  const fieldHint = shape === "drr"
+    ? `With four in the field nobody can be cut — there are four bracket slots. So the group goes the other way: <b>everyone plays everyone twice</b>, ${n*(n-1)} games, and the table seeds the bracket #1 v #4 and #2 v #3. A group loss costs you the top seed, not your place.`
+    : `Every player gets exactly two group games. Top 4 go through to the bracket — anyone still level on the line plays a 1v1 for the spot.`;
 
   return `
     <div class="panel" style="margin-top:14px">
       <div class="sec-label" style="margin-top:0">Field <span class="count-pill">${n}</span></div>
-      <div class="pred-hint">Every player gets exactly two group games. Top 4 go through to the bracket — anyone still level on the line plays a 1v1 for the spot.</div>
+      <div class="pred-hint">${fieldHint}</div>
       <div class="rp-chips">${chips}</div>
       ${isAdmin?`
       <div class="grid2">
@@ -13391,7 +13606,7 @@ function rpRosterPanel(t, state){
           onkeydown="if(event.key==='Enter'){event.preventDefault();rpAddPlayer(${t.id})}"></div>
         <div style="display:flex;align-items:flex-end;gap:8px">
           <button class="btn ghost" style="margin:0;flex:1" onclick="rpAddPlayer(${t.id})">Add</button>
-          <button class="btn ghost" style="margin:0;flex:1" onclick="rpFillFromLadder(${t.id})" title="pull the top of the ladder in">Top 5 ↓</button>
+          <button class="btn ghost" style="margin:0;flex:1" onclick="rpFillFromLadder(${t.id})" title="pull the top of the ladder in">Top ${RP_FILL_TARGET} ↓</button>
         </div>
       </div>
       <div class="bracket-note">${esc(why)}</div>
@@ -13406,16 +13621,31 @@ function rpRosterPanel(t, state){
 function rpWhyPanel(state){
   const m = state.metrics; if(!m) return "";
   const g = x => `${esc(x.p1)} vs ${esc(x.p2)}`;
-  return `
-    <div class="rp-metrics">
-      <div class="rp-metric"><div class="rp-metric-v">${rpPct(m.avgQuality)}</div><div class="rp-metric-l">avg closeness</div></div>
-      <div class="rp-metric"><div class="rp-metric-v">${m.minRest}</div><div class="rp-metric-l">min rest (games)</div></div>
-      <div class="rp-metric"><div class="rp-metric-v">${m.freshPairs}/${state.order.length}</div><div class="rp-metric-l">first meetings</div></div>
-      <div class="rp-metric"><div class="rp-metric-v">±${Math.round(m.sosSpread)}</div><div class="rp-metric-l">draw spread</div></div>
-    </div>
-    <details class="rp-why">
-      <summary>Why this draw?</summary>
-      <div class="rp-why-body">
+  const drr = rpShapeOf(state) === "drr";
+  const lastTile = drr
+    ? `<div class="rp-metric"><div class="rp-metric-v">${m.gamesEach||0}</div><div class="rp-metric-l">games each</div></div>`
+    : `<div class="rp-metric"><div class="rp-metric-v">±${Math.round(m.sosSpread)}</div><div class="rp-metric-l">draw spread</div></div>`;
+
+  const body = drr ? `
+        There is no draw to make. Four players means every pairing happens twice whatever order we put them in,
+        so nobody can be handed an easier route — each player faces the same three opponents, the same number of
+        times, and the lopsided-draw problem the five-player ring works hardest to avoid simply doesn't exist here.
+        What is left to decide is the order of play.
+        <br><br>
+        <b>Two legs</b> — the six pairings are played through once, then again with the sides swapped. A pair never
+        meets back to back, so the return game always has something behind it.
+        <br><br>
+        <b>Rest</b> — inside each leg the games are sequenced so nobody plays consecutively where the fixtures allow
+        it (minimum rest here: <b>${m.minRest} game${m.minRest===1?"":"s"}</b>), with the closest matchup held back for last.
+        <br><br>
+        <b>Closeness</b> — this schedule averages <b>${rpPct(m.avgQuality)}</b> (100% is a coin flip).
+        Tightest: <b>${g(m.tightest)}</b> at ${rpPct(m.tightestQ)}. Most lopsided: <b>${g(m.loosest)}</b> at ${rpPct(m.loosestQ)}.
+        <br><br>
+        <b>Freshness</b> — <b>${m.freshPairs}</b> of the ${m.freshOf} pairings are first-time meetings on the ladder.
+        It can't change the fixtures, but it's worth knowing which ones are new.
+        <br><br>
+        Re-drawing shuffles the order of play. It cannot change who plays whom, because everyone already plays everyone.
+  ` : `
         Two games each means the group is a ring — sit everyone in a circle, each plays their two neighbours.
         There are (n−1)!/2 possible rings, so the draw is searched rather than picked: a rating-snaked seed plus 28
         random restarts, each refined by 2-opt, scored on three things pulling against each other.
@@ -13432,7 +13662,18 @@ function rpWhyPanel(state){
         <br><br>
         <b>Order of play</b> — sequenced so nobody plays back to back where the ring allows it
         (minimum rest here: <b>${m.minRest} game${m.minRest===1?"":"s"}</b>), with the closest matchup held back for last.
-      </div>
+  `;
+
+  return `
+    <div class="rp-metrics">
+      <div class="rp-metric"><div class="rp-metric-v">${rpPct(m.avgQuality)}</div><div class="rp-metric-l">avg closeness</div></div>
+      <div class="rp-metric"><div class="rp-metric-v">${m.minRest}</div><div class="rp-metric-l">min rest (games)</div></div>
+      <div class="rp-metric"><div class="rp-metric-v">${m.freshPairs}/${m.freshOf || state.order.length}</div><div class="rp-metric-l">first meetings</div></div>
+      ${lastTile}
+    </div>
+    <details class="rp-why">
+      <summary>${drr ? "Why this schedule?" : "Why this draw?"}</summary>
+      <div class="rp-why-body">${body}</div>
     </details>`;
 }
 
@@ -13505,11 +13746,21 @@ function rpStandingsPanel(t, state, snap){
   // once the decider has been played the bubble is history — show who's in and who's out
   const settled = !qual.bubble || !!(snap.resolved && snap.resolved.done);
 
+  // in a four-player group the whole table goes through, so the last
+  // column is games won rather than strength of schedule (which is
+  // identical for everyone once they've all played everyone) and the
+  // badges say what the row is seeded, not whether it survived
+  const drr = rpShapeOf(state) === "drr";
+  const each = rpGamesEach(state);
+
   const body = rows.map((r,i)=>{
     let cls = "", badge = "";
     if(!qual.complete){
       // mid-group: show the provisional line, nothing is decided yet
       cls = i < spots ? "in" : "out";
+      if(drr) badge = `<span class="rp-state seed">#${i+1} so far</span>`;
+    } else if(drr){
+      cls = "in"; badge = `<span class="rp-state in">seed #${i+1}</span>`;
     } else if(!settled && bubbleNames.has(r.name) && !through.has(r.name)){
       cls = "bubble"; badge = '<span class="rp-state bubble">playoff</span>';
     } else if(through.has(r.name)){
@@ -13518,25 +13769,29 @@ function rpStandingsPanel(t, state, snap){
       cls = "out"; badge = '<span class="rp-state out">out</span>';
     }
     const gd = r.gw - r.gl;
-    return `<tr class="${cls}${i===spots-1?" cut":""}">
+    return `<tr class="${cls}${(!drr && i===spots-1)?" cut":""}">
       <td class="rp-pos">${i+1}</td>
       <td class="rp-nm">${esc(r.name)}${badge}</td>
       <td class="rp-num">${r.w}-${r.l}${r.d?"-"+r.d:""}</td>
-      <td class="rp-num">${r.played}/2</td>
+      <td class="rp-num">${r.played}/${each}</td>
       <td class="rp-num">${gd>0?"+":""}${gd}</td>
-      <td class="rp-num">${r.sos}</td>
+      <td class="rp-num">${drr ? r.gw : r.sos}</td>
     </tr>`;
   }).join("");
+
+  const note = drr
+    ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. Order: wins → head-to-head over both meetings → game difference → games won → ladder rating.`
+    : `Dashed line is the cut — top ${spots} qualify. Order: wins → head-to-head → game difference → games won → strength of opposition → ladder rating.`;
 
   return `
     <div class="panel" style="margin-top:14px">
       <div class="sec-label" style="margin-top:0">Group standings</div>
       <table class="rp-table">
         <tr><th></th><th>Player</th><th style="text-align:right">W-L</th><th style="text-align:right">Played</th>
-            <th style="text-align:right">Diff</th><th style="text-align:right">Opp W</th></tr>
+            <th style="text-align:right">Diff</th><th style="text-align:right">${drr ? "Games" : "Opp W"}</th></tr>
         ${body}
       </table>
-      <div class="bracket-note">Dashed line is the cut — top ${spots} qualify. Order: wins → head-to-head → game difference → games won → strength of opposition → ladder rating.${qual.note?" "+esc(qual.note):""}</div>
+      <div class="bracket-note">${note}${qual.note?" "+esc(qual.note):""}</div>
     </div>`;
 }
 
@@ -13598,7 +13853,9 @@ function rpBracketPanel(t, snap){
   return `
     <div class="panel" style="margin-top:14px">
       <div class="sec-label" style="margin-top:0">Bracket</div>
-      <div class="pred-hint">Top 4 out of the group, seeded #1 v #4 and #2 v #3 — so the two best can only meet in the final.</div>
+      <div class="pred-hint">${snap.shape === "drr"
+        ? "All four out of the group, seeded off the table — #1 v #4 and #2 v #3, so topping the group buys you the easiest semi and the two best can only meet in the final."
+        : "Top 4 out of the group, seeded #1 v #4 and #2 v #3 — so the two best can only meet in the final."}</div>
       <div class="rp-bracket">
         <div class="rp-round"><div class="rp-round-h">Semifinals</div>
           <div class="rp-round-body">${tie(br.semis[0])}${tie(br.semis[1])}</div></div>
@@ -13629,29 +13886,41 @@ function renderRobinPlus(t){
     : "";
 
   if(stage === "setup"){
+    const draftN = (rpDraftRoster[t.id] || (state && state.roster) || []).length;
     return `
-      ${rpStepper(stage, false)}
+      ${rpStepper(stage, false, rpShapeFor(draftN || RP_FILL_TARGET))}
       <div class="panel">
-        <div class="pred-hint"><b>Robin+</b> — everyone plays two group games, the top 4 qualify, then it's semis and a final.
-        Level on the qualification line? That's settled in a 1v1, not on a tiebreak column. Exhibition by default: nothing here moves the ladder.</div>
+        <div class="pred-hint"><b>Robin+</b> — a group stage that earns the bracket, then semis and a final.
+        With five or more, everyone plays two group games and the top 4 qualify (level on the line? settled in a 1v1,
+        not on a tiebreak column). With four, nobody can be cut, so the group turns into everyone-plays-everyone-twice
+        and the table seeds the bracket instead. Exhibition by default: nothing here moves the ladder.</div>
       </div>
       ${rpRosterPanel(t, state)}
       ${localOnly}`;
   }
 
+  const shape = snap.shape;
+  const drr = shape === "drr";
   const ctx = rpContext(state.roster);
   const played = (state.order||[]).filter(fx=>rpGame(t.id, fx.round)).length;
   const nextFx = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
+  const order = state.order || [];
 
-  const fixtures = (state.order||[]).map((fx,i)=>
-    rpFixtureRow(t, fx, i, {ctx, upNext: nextFx && nextFx.round === fx.round})).join("");
+  const fixtures = order.map((fx,i)=>{
+    const head = (drr && fx.leg && (i === 0 || order[i-1].leg !== fx.leg))
+      ? `<div class="rp-leg-h">Leg ${fx.leg} — ${fx.leg === 1 ? "first time round" : "the return games"}</div>`
+      : "";
+    return head + rpFixtureRow(t, fx, i, {ctx, upNext: nextFx && nextFx.round === fx.round});
+  }).join("");
 
   return `
-    ${rpStepper(stage, hasBubble)}
+    ${rpStepper(stage, hasBubble, shape)}
     <div class="panel">
-      <div class="sec-label" style="margin-top:0">The ring</div>
-      <div class="pred-hint">Each player plays the two people either side of them — ${state.cycle.length} players, ${state.order.length} games, two each.</div>
-      ${rpRingSvg(t, state, snap)}
+      <div class="sec-label" style="margin-top:0">${drr ? "The group" : "The ring"}</div>
+      <div class="pred-hint">${drr
+        ? `Everyone plays everyone, twice — ${state.cycle.length} players, ${order.length} games, ${rpGamesEach(state)} each. Nobody goes out here; the table decides who gets the #1 seed and the easiest semi.`
+        : `Each player plays the two people either side of them — ${state.cycle.length} players, ${order.length} games, two each.`}</div>
+      ${drr ? rpDrrSvg(t, state, snap) : rpRingSvg(t, state, snap)}
       ${rpWhyPanel(state)}
     </div>
 
@@ -13715,7 +13984,7 @@ function rpFillFromLadder(tid){
   const t = tournaments.find(x=>x.id===tid); if(!t) return;
   const roster = rpRosterOf(t);
   for(const p of currentStandings){
-    if(roster.length >= 5) break;
+    if(roster.length >= RP_FILL_TARGET) break;
     if(!roster.some(n=>n.toLowerCase()===p.name.toLowerCase())) roster.push(p.name);
   }
   if(!roster.length) return toast("No rated players on the ladder yet", true);
@@ -13733,13 +14002,17 @@ async function rpGenerateSchedule(tid){
   const prev = rpRead(t);
   const playedAny = prev && (prev.order||[]).some(fx=>rpGame(tid, fx.round));
   if(playedAny) return toast("Games are already on record — undo them first", true);
-  if(prev && prev.cycle && !confirm("Re-draw the schedule? The current pairings are replaced.")) return;
+  const nextShape = rpShapeFor(roster.length);
+  if(prev && prev.cycle && !confirm(nextShape === "drr"
+      ? "Re-draw the schedule? Everyone still plays everyone twice — only the order of play changes."
+      : "Re-draw the schedule? The current pairings are replaced.")) return;
 
   const seed = (Math.random()*4294967296) >>> 0;
   const solved = rpSolve(roster, seed);
   const state = {
-    v: 1,
+    v: 2,                              // v1 had no shape — it was always a ring
     roster,
+    shape: solved.shape,
     cycle: solved.cycle,
     order: solved.order,
     metrics: solved.metrics,
@@ -13838,7 +14111,7 @@ function tournEditControls(t){
       <div class="grid2">
         <div><label>Format</label>
           <select id="tnEditFormat">
-            <option value="robin2" ${t.format==="robin2"?"selected":""}>Robin+ (2 games each → top 4 → brackets)</option>
+            <option value="robin2" ${t.format==="robin2"?"selected":""}>Robin+ (group → 4-player bracket)</option>
             <option value="knockout" ${t.format==="knockout"?"selected":""}>Knockout</option>
             <option value="roundrobin" ${t.format==="roundrobin"?"selected":""}>Round-robin</option>
             <option value="hybrid" ${t.format==="hybrid"?"selected":""}>Hybrid</option>
@@ -13946,6 +14219,15 @@ function cupStage(t, phase){
   try{ return rpSnapshot(t).stage; }catch(e){ return null; }
 }
 
+/* which group shape the cup is running — a four-player field cuts
+   nobody, so the rail's third step is the seeding, not the cut */
+function cupShape(t){
+  if(!t || t.format !== "robin2") return "ring";
+  try{ const s = rpRead(t); if(s && s.cycle) return rpShapeOf(s); }catch(e){}
+  const n = cupField(t);
+  return n ? rpShapeFor(n) : "ring";
+}
+
 /* the field, as far as it is known */
 function cupField(t){
   if(!t) return 0;
@@ -13975,7 +14257,10 @@ function cupLine(t, phase){
     return n ? `<b>${n}</b> in the field — the draw is next.` : "Field open — nobody is in yet.";
   }
   const nextGroup = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
-  if(nextGroup) return `Next in the ring: <b>${esc(nextGroup.p1)}</b> vs <b>${esc(nextGroup.p2)}</b>`;
+  if(nextGroup){
+    const where = rpShapeOf(state) === "drr" ? "the group" : "the ring";
+    return `Next in ${where}: <b>${esc(nextGroup.p1)}</b> vs <b>${esc(nextGroup.p2)}</b>`;
+  }
   if(snap.resolved && snap.resolved.pending && snap.resolved.pending.length){
     const g = snap.resolved.pending[0];
     return `Decider for the last spot: <b>${esc(g.p1)}</b> vs <b>${esc(g.p2)}</b>`;
@@ -14006,12 +14291,14 @@ function cupCountdownHtml(target, phase){
   </div>`;
 }
 
-function cupRailHtml(stage){
+function cupRailHtml(stage, shape){
   if(!stage) return "";
   const at = CUP_STAGES.findIndex(s=>s[0]===stage);
   if(at < 0) return "";
-  return `<div class="cup-rail">${CUP_STAGES.map(([key,label],i)=>
-    `<div class="cup-step ${i===at?"now":i<at?"done":""}">${label}</div>`).join("")}</div>`;
+  return `<div class="cup-rail">${CUP_STAGES.map(([key,label],i)=>{
+    const text = (key === "playoff" && shape === "drr") ? "Seeding" : label;
+    return `<div class="cup-step ${i===at?"now":i<at?"done":""}">${text}</div>`;
+  }).join("")}</div>`;
 }
 
 function cupMarqueeHtml(t, variant){
@@ -14056,10 +14343,10 @@ function cupMarqueeHtml(t, variant){
         ${window_?`<span class="cupmark-window">${esc(window_)}</span>`:""}
       </div>
       <h2 class="cupmark-name">${esc(name)}</h2>
-      <div class="cupmark-sub">${esc(t ? tournFormatLabel(t) : "Robin+ — 2 games each, top 4, brackets")}</div>
+      <div class="cupmark-sub">${esc(t ? tournFormatLabel(t) : "Robin+ — group stage into a bracket")}</div>
       ${facts.length?`<div class="cup-facts">${facts.join("")}</div>`:""}
       ${cupCountdownHtml(target, phase)}
-      ${cupRailHtml(cupStage(t, phase))}
+      ${cupRailHtml(cupStage(t, phase), cupShape(t))}
       <div class="cupmark-foot">
         <span class="cupmark-line">${cupLine(t, phase)}</span>
         <button class="cup-cta" onclick="openCupEvent()">Enter the event<span>&rsaquo;</span></button>
