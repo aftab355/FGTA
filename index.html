@@ -3789,6 +3789,53 @@
   .ffi-strap i{display:block;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:9px;
     letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:7px}
 
+  /* ---- the mark in the corner ----
+     The flight is a minute of city with no caption on it, and a film with
+     nobody's name on it is just a screensaver. The mark is the one thing
+     on screen for the whole run: whose app this is, and what it is for. */
+  /* the corner is HUD, and the city behind it is white towers and neon —
+     a scrim keeps the mark and the working readable over both without
+     putting a panel on the screen */
+  .ffi-hud{position:absolute;left:0;top:0;width:min(64vw,440px);height:min(46vh,300px);z-index:5;
+    pointer-events:none;background:radial-gradient(105% 90% at 0% 0%,
+      rgba(4,0,12,.78) 0%, rgba(4,0,12,.5) 42%, rgba(4,0,12,0) 76%);
+    opacity:0;animation:ffiFade .8s ease forwards .25s}
+  .ffi-hud.gone{animation:ffiHudOut .5s ease forwards}
+  @keyframes ffiHudOut{from{opacity:1}to{opacity:0}}
+  .ffi-mark{position:absolute;left:calc(14px + env(safe-area-inset-left));
+    top:calc(14px + env(safe-area-inset-top));z-index:6;pointer-events:none;
+    display:flex;align-items:center;gap:8px;opacity:0;animation:ffiFade .8s ease forwards .25s}
+  .ffi-mark .ffi-ball{width:11px;height:11px;border-radius:50%;flex:0 0 11px;
+    background:radial-gradient(circle at 34% 30%,#f5ff8f 0%,#d4ff2b 48%,#9db81a 100%);
+    box-shadow:0 0 14px rgba(212,255,43,.55)}
+  .ffi-mark b{display:block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    letter-spacing:4px;color:#fff;text-shadow:0 0 18px rgba(212,255,43,.45)}
+  .ffi-mark i{display:block;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:7.5px;
+    letter-spacing:2.2px;text-transform:uppercase;color:rgba(255,255,255,.42);margin-top:3px}
+
+  /* ---- the working, in the corner ----
+     The card at the end lands on a number — 68% · 32% — and a number
+     with no working behind it is a horoscope. The strip does the sum
+     out loud while the flight is going on, one step at a time, so the
+     odds bar at the end is the answer to something the viewer watched
+     being asked. It is the app's real Elo, off the real ratings. */
+  .ffi-math{position:absolute;left:calc(14px + env(safe-area-inset-left));
+    top:calc(58px + env(safe-area-inset-top));z-index:6;pointer-events:none;
+    max-width:min(50vw,300px);transition:opacity .5s ease}
+  .ffi-math.gone{opacity:0}
+  .ffi-math > u{display:block;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:7.5px;
+    letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:7px;
+    opacity:0;animation:ffiFade .6s ease forwards .9s}
+  .ffi-mline{display:flex;align-items:baseline;gap:7px;margin-top:5px;white-space:nowrap;
+    opacity:0;transform:translateX(-8px);animation:ffiMline .5s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes ffiMline{to{opacity:1;transform:translateX(0)}}
+  .ffi-mline i{font-style:normal;font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:1.6px;
+    text-transform:uppercase;color:rgba(255,255,255,.3);flex:0 0 44px;text-align:right}
+  .ffi-mline b{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:400;
+    color:rgba(255,255,255,.72);text-shadow:0 0 16px rgba(0,0,0,.9)}
+  .ffi-mline.hi b{font-weight:700;color:#ff4d9d;text-shadow:0 0 22px rgba(255,45,143,.8)}
+  .ffi-mline.hi i{color:rgba(255,77,157,.6)}
+
   /* ---- the versus card ---- */
   /* The card is built when the film starts and held here, invisible and
      with every animation inside it paused, so the cut to it costs a
@@ -3806,6 +3853,17 @@
   .ffi-vs::before{content:'';position:absolute;inset:0;z-index:-1;
     background:radial-gradient(120% 62% at 50% 46%, rgba(6,0,16,.9) 0%, rgba(6,0,16,.72) 45%, rgba(6,0,16,0) 78%);
     opacity:0;animation:ffiFade .6s ease forwards}
+  /* the card signs itself, above everything else on it */
+  .ffi-vs-brand{display:flex;align-items:center;gap:9px;margin-bottom:14px;
+    opacity:0;animation:ffiFade .5s ease forwards .42s}
+  .ffi-vs-brand .ffi-ball{width:13px;height:13px;border-radius:50%;flex:0 0 13px;
+    background:radial-gradient(circle at 34% 30%,#f5ff8f 0%,#d4ff2b 48%,#9db81a 100%);
+    box-shadow:0 0 18px rgba(212,255,43,.6)}
+  .ffi-vs-brand b{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:6px;
+    color:#fff;text-shadow:0 0 22px rgba(212,255,43,.4)}
+  .ffi-vs-brand i{font-style:normal;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2.4px;
+    text-transform:uppercase;color:rgba(255,255,255,.38);border-left:1px solid rgba(255,255,255,.16);
+    padding-left:9px}
   .ffi-vs-head{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:5px;
     text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:4px;
     opacity:0;animation:ffiFade .5s ease forwards .55s}
@@ -3856,6 +3914,18 @@
   .ffi-odds{height:5px;border-radius:3px;margin-top:12px;overflow:hidden;display:flex;
     background:rgba(255,255,255,.1)}
   .ffi-odds i{display:block;height:100%}
+  /* the sum the flight was doing, landed. Same numbers, same formula —
+     the strip in the corner was working towards this line. */
+  .ffi-oddlab{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2.2px;text-transform:uppercase;
+    color:rgba(255,255,255,.34)}
+  /* laid out as terms rather than a sentence, so a narrow card wraps
+     between them instead of through the middle of the formula */
+  .ffi-eq{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:4px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.6px;
+    color:rgba(255,255,255,.42);margin-top:7px}
+  .ffi-eq span{white-space:nowrap}
+  .ffi-eq b{font-weight:700;color:rgba(255,77,157,.85)}
   .ffi-note{text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.6px;
     text-transform:uppercase;color:rgba(255,255,255,.34);margin-top:18px}
 
@@ -3871,10 +3941,19 @@
     .ffi-vsmark span{font-size:22px}
     .ffi-nm{font-size:21px}
     .ffi-badge{width:60px;height:60px;font-size:21px}
+    /* the working still fits on a phone, but only just — and it must not
+       walk over the card when the card arrives, hence the hard cap */
+    .ffi-math{max-width:calc(100vw - 28px)}
+    .ffi-mline{margin-top:4px}
+    .ffi-mline i{flex:0 0 36px;font-size:7px}
+    .ffi-mline b{font-size:9.5px}
+    .ffi-vs-brand b{font-size:13px;letter-spacing:4px}
+    .ffi-vs-brand i{font-size:7px;letter-spacing:1.8px}
   }
   @media(prefers-reduced-motion:reduce){
     .ffi-strap,.ffi-side.l,.ffi-side.r,.ffi-vsmark span,.ffi-vsmark::after,
-    .ffi-vs-head,.ffi-vs-when,.ffi-foot{animation:none!important;opacity:1!important;transform:none!important}
+    .ffi-vs-head,.ffi-vs-when,.ffi-foot,.ffi-mark,.ffi-vs-brand,.ffi-math > u,
+    .ffi-mline{animation:none!important;opacity:1!important;transform:none!important}
   }
 
 
@@ -22217,6 +22296,7 @@ const FFIntro = (function(){
     const props = [
       {kind:"terrace",  z: 46,  x: ROAD+3,   seed:(R()*1e9)|0},
       {kind:"banner",   z: 104, y: 15,       seed:(R()*1e9)|0, text:"FF CUP"},
+      {kind:"mathwall", z: 245, x: ROAD+1,  y: 19, step:0, seed:(R()*1e9)|0},   // the two ratings
       {kind:"lscourt",  z: 150, seed:(R()*1e9)|0},          // the load screen's court, painted on the road
       {kind:"blimp",    z: 250, y: 48,       seed:(R()*1e9)|0},
       {kind:"court",    z: 250, x:-(ROAD+9), y: 20, seed:(R()*1e9)|0},
@@ -22235,6 +22315,7 @@ const FFIntro = (function(){
       {kind:"plaza",    z: 560, x:-(ROAD+15), seed:(R()*1e9)|0},
       {kind:"rain",     z: 600, x: ROAD+22,  seed:(R()*1e9)|0},
       {kind:"tron",     z: 640, x: ROAD+1,   seed:(R()*1e9)|0},
+      {kind:"mathwall", z: 762, x: 0, y: 26, step:1, center:true, seed:(R()*1e9)|0},  // and the formula, over the avenue
       {kind:"fireworks",z: 790, seed:(R()*1e9)|0}
     ];
 
@@ -22244,7 +22325,8 @@ const FFIntro = (function(){
        metres — the painter's sort cannot resolve that argument, and it
        always looks like a mistake. */
     const CLEAR = {court:[15,19], plaza:[17,20], podium:[17,20], tron:[14,12],
-                   portal:[22,26], lscourt:[26,22], sign:[12,12], trophy:[11,12]};
+                   portal:[22,26], lscourt:[26,22], sign:[12,12], trophy:[11,12],
+                   mathwall:[16,24]};
     props.forEach(p=>{
       const box = CLEAR[p.kind];
       if(!box) return;
@@ -22779,6 +22861,65 @@ const FFIntro = (function(){
     glow(ctx, q2, Math.max(24, 16*q2.s), NEON, 0.26*(1-fogAt(d)));
   }
 
+  /* THE WORKING, PAINTED ON THE CITY
+     The same sum the corner strip is doing, hung on the side of a
+     building: the two ratings early in the flight, the line of Elo they
+     go into later on. By the time the card lands on 68% · 32% the
+     viewer has seen where it comes from twice without being told. */
+  function drawMathWall(ctx, C, p, u, film){
+    const m = mathOf(film);
+    const x = p.x, y = p.y, z = p.z, d = depth(C, x, y, z);
+    if(d < 1 || d > 460) return;
+    const w = p.center ? 27 : 21, h = 13;
+    /* hung on the face a building turns to the avenue, like the fixture
+       screens — or, for the one the flight goes straight at, slung across
+       the avenue itself, so it is dead centre on a phone as well as on a
+       laptop. A portrait frame is a twenty-degree window: anything off to
+       one side is half a sentence on a tall screen. */
+    const side = x < 0 ? -1 : 1;
+    const x0 = p.center ? x - w/2 : x + (side < 0 ? -w : 0), x1 = x0 + w;
+    const q0 = pr(C,x0,y+h,z), q1 = pr(C,x1,y+h,z), q2 = pr(C,x1,y,z), q3 = pr(C,x0,y,z);
+    if(!q0||!q1||!q2||!q3) return;
+    poly(ctx, [q0,q1,q2,q3], rgb(mix([9,4,22],FOGC,fogAt(d)), 0.95),
+         fogged(BALL, d, 0.5), Math.max(0.7, 0.08*q0.s));
+    onQuad(ctx, q0, q1, q3, 210, 130, cx=>{
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      // the brand line every one of these boards is signed with
+      cx.fillStyle = "rgba(212,255,43,.85)";
+      cx.font = "700 12px 'JetBrains Mono',monospace";
+      cx.fillText("FGTA · ELO", 105, 20);
+      cx.strokeStyle = "rgba(212,255,43,.30)"; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(24,32); cx.lineTo(186,32); cx.stroke();
+      if(p.step === 0){
+        // the two live ratings, which is all the sum starts with
+        cx.font = "700 20px 'JetBrains Mono',monospace";
+        cx.textAlign = "left";  cx.fillStyle = "rgba(255,255,255,.95)";
+        cx.fillText(film.iA, 30, 60);  cx.fillText(film.iB, 30, 92);
+        cx.textAlign = "right"; cx.fillStyle = "rgba(255,45,143,.95)";
+        cx.fillText(String(m.ra), 180, 60);
+        cx.fillText(String(m.rb), 180, 92);
+        cx.textAlign = "center"; cx.fillStyle = "rgba(255,255,255,.45)";
+        cx.font = "700 9px 'JetBrains Mono',monospace";
+        cx.fillText("RATING · LIVE", 105, 116);
+      } else {
+        // and the one line of arithmetic they go into
+        cx.fillStyle = "rgba(255,255,255,.95)";
+        cx.font = "700 13px 'JetBrains Mono',monospace";
+        cx.fillText("E = 1 / (1 + 10^(−Δ/" + m.div + "))", 105, 62);
+        cx.fillStyle = "rgba(255,45,143,.95)";
+        cx.font = "700 16px 'JetBrains Mono',monospace";
+        cx.fillText("Δ = " + m.dTxt, 105, 92);
+        cx.fillStyle = "rgba(255,255,255,.45)";
+        cx.font = "700 9px 'JetBrains Mono',monospace";
+        cx.fillText("EXPECTED SCORE", 105, 116);
+      }
+      // the same scan lines the fixture screens run
+      cx.fillStyle = "rgba(0,0,0,.16)";
+      for(let i=((u*34)%4);i<130;i+=4) cx.fillRect(0,i,210,1.3);
+    });
+    glow(ctx, pr(C,(x0+x1)/2,y+h/2,z), Math.max(14, 10*q0.s), BALL, 0.16*(1-fogAt(d)));
+  }
+
   /* a banner slung across the avenue, flapping */
   function drawBanner(ctx, C, p, u){
     const y = p.y, z = p.z, d = depth(C, 0, y, z);
@@ -23133,6 +23274,27 @@ const FFIntro = (function(){
                  pr(C,bx+0.6,ARENA_Y+16+hgt,bz), pr(C,bx-0.6,ARENA_Y+16+hgt,bz)],
            rgb(mix(STONE,[150,140,210],0.35), 0.96));
     }
+    /* the house sign. The flight ends here, and the place it ends at is
+       the app's own — so the arena says whose it is, big enough to read
+       from the last hundred metres of the approach. */
+    (function(){
+      const fz = ARENA_Z - R*0.68, by = ARENA_Y + 2.5, bw = 48, bh = 11;
+      const s0 = pr(C,-bw/2,by+bh,fz), s1 = pr(C,bw/2,by+bh,fz),
+            s2 = pr(C,bw/2,by,fz),     s3 = pr(C,-bw/2,by,fz);
+      if(!s0||!s1||!s3) return;
+      poly(ctx, [s0,s1,s2,s3], "rgba(8,3,20,.82)", "rgba(212,255,43,.35)", 1);
+      onQuad(ctx, s0, s1, s3, 230, 55, cx=>{
+        cx.textAlign = "center"; cx.textBaseline = "middle";
+        cx.fillStyle = "rgba(212,255,43,.95)";
+        cx.font = "700 29px 'JetBrains Mono',monospace";
+        cx.fillText("FGTA", 115, 21);
+        cx.fillStyle = "rgba(255,255,255,.62)";
+        cx.font = "700 10px 'JetBrains Mono',monospace";
+        cx.fillText("CHAMPIONSHIP LADDER", 115, 43);
+      });
+      glow(ctx, pr(C,0,by+bh/2,fz), Math.max(18, 22*s0.s), BALL, 0.20);
+    })();
+
     // the ring of light, and the beams it throws up. Drawn additively —
     // a searchlight brightens what it crosses, it does not tint it brown
     const heart = pr(C, 0, ARENA_Y+18, ARENA_Z);
@@ -23166,6 +23328,60 @@ const FFIntro = (function(){
     setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 420);
   }
 
+  /* ============================================================
+     THE WORKING
+
+     The card at the end lands on a split — 68% · 32% — and a number
+     with nothing behind it is a horoscope. So the film does the sum
+     out loud on the way there: the two live ratings, the gap between
+     them, the gap over the divisor, ten to that power, and the one
+     line of Elo the whole ladder is built on. Six steps, spread
+     across the flight, the last one landing a beat before the card
+     so the odds bar is the answer to a question the viewer watched
+     being asked.
+
+     It is the app's real arithmetic — same ratings, same DIVISOR,
+     same K as every result the ladder has ever scored — derived in
+     one place so the strip in the corner and the line under the odds
+     bar can never disagree. A film restored from the offline cache
+     may predate the divisor and K fields, hence the classic-Elo
+     fallbacks.
+     ============================================================ */
+  function mathOf(film){
+    const ra  = Math.round(film.a.rating), rb = Math.round(film.b.rating);
+    const div = Number(film.divisor) > 0 ? Number(film.divisor) : 400;
+    const k   = film.k === undefined || film.k === null ? 32 : film.k;
+    const d   = ra - rb;
+    const ex  = -d/div;                       // the exponent, written the way the app writes it
+    const pw  = Math.pow(10, ex);
+    const E   = 1/(1+pw);
+    const sgn = n => n === 0 ? "0" : (n < 0 ? "−" : "+") + Math.abs(n);   // two evenly matched players have no gap, not +0
+    return {
+      ra, rb, div, k, d, pw, E,
+      dTxt:  sgn(d),
+      exTxt: (ex < 0 ? "−" : "") + Math.abs(ex).toFixed(3),
+      scTxt: (d < 0 ? "−" : "") + Math.abs(d/div).toFixed(3),
+      pwTxt: pw.toFixed(3),
+      eTxt:  E.toFixed(3),
+      pct:   Math.round(E*100)
+    };
+  }
+
+  /* when each step of the sum arrives, in flight seconds */
+  const MATH_AT = [1.0, 2.6, 4.4, 6.3, 8.2, 9.8];
+  function mathSteps(film){
+    const m = mathOf(film);
+    const rows = [
+      ["rating", film.iA + " " + m.ra + " · " + film.iB + " " + m.rb],
+      ["gap",    "Δ = " + m.ra + " − " + m.rb + " = " + m.dTxt],
+      ["scale",  "Δ / " + m.div + " = " + m.scTxt],
+      ["power",  "10^(" + m.exTxt + ") = " + m.pwTxt],
+      ["expect", "E = 1 / (1 + " + m.pwTxt + ")"],
+      ["odds",   "E = " + m.eTxt + "  →  " + m.pct + "%"]
+    ];
+    return rows.map((r, i) => ({t: MATH_AT[i], k: r[0], v: r[1], hi: i === rows.length-1}));
+  }
+
   function vsCardHtml(film){
     const side = (p, which) => `
       <div class="ffi-side ${which}" style="--pc:${p.color};--pc-dim:${p.color}22;--pc-glow:${p.color}88;--gx:${which==="l"?"85%":"15%"}">
@@ -23178,8 +23394,12 @@ const FFIntro = (function(){
           <div class="ffi-stat"><b>${esc(p.form)}</b><i>last 5</i></div>
         </div>
       </div>`;
-    const a = Math.round(film.prob*100), b = 100-a;
+    /* the split is read off the same working the flight showed, not off
+       film.prob separately — one sum, one answer, no rounding daylight */
+    const m = mathOf(film);
+    const a = m.pct, b = 100-a;
     return `
+      <div class="ffi-vs-brand"><span class="ffi-ball"></span><b>FGTA</b><i>championship ladder</i></div>
       <div class="ffi-vs-head">${esc(film.name)} · ${esc(film.stage)}</div>
       <div class="ffi-vs-when">${esc(film.when)}</div>
       <div class="ffi-pair">
@@ -23194,6 +23414,9 @@ const FFIntro = (function(){
           <i style="width:${b}%;background:${film.b.color}"></i>
         </div>
         <div class="ffi-h2h" style="margin-top:8px">${a}% &middot; ${b}%</div>
+        <div class="ffi-oddlab">FGTA Elo &middot; expected score</div>
+        <div class="ffi-eq"><span>E = 1 / (1 + 10^(&minus;&Delta;/${m.div}))</span><span>&Delta; = ${m.dTxt}</span>
+          <span>K = ${m.k}</span><span><b>E = ${m.eTxt}</b></span></div>
         <div class="ffi-note">tap anywhere to go on</div>
       </div>`;
   }
@@ -23216,6 +23439,9 @@ const FFIntro = (function(){
     el.setAttribute("aria-label", film.a.name + " versus " + film.b.name);
     el.innerHTML = `
       <canvas></canvas>
+      <div class="ffi-hud"></div>
+      <div class="ffi-mark"><span class="ffi-ball"></span><span><b>FGTA</b><i>championship ladder</i></span></div>
+      <div class="ffi-math" aria-hidden="true"><u>FGTA Elo · win expectancy</u></div>
       <div class="ffi-strap"><b>FF CUP</b><i>${esc(film.stage)} · ${esc(film.when)}</i></div>
       <div class="ffi-vs"></div>
       <button class="ffi-skip">Skip</button>`;
@@ -23225,6 +23451,29 @@ const FFIntro = (function(){
     const canvas = el.querySelector("canvas");
     const vs     = el.querySelector(".ffi-vs");
     const strap  = el.querySelector(".ffi-strap");
+    const mathEl = el.querySelector(".ffi-math");
+    const hudEl  = el.querySelector(".ffi-hud");
+
+    /* the sum, one step at a time, off the flight clock — so the working
+       is paced by the film rather than by a timer of its own, and a
+       skipped or restarted film never leaves half a sum on screen.
+       Written with textContent: a player's name reaches this line. */
+    const STEPS = mathSteps(film);
+    let stepAt = 0;
+    function mathTo(u){
+      while(stepAt < STEPS.length && u >= STEPS[stepAt].t){
+        const s = STEPS[stepAt++];
+        const row = document.createElement("div");
+        row.className = "ffi-mline" + (s.hi ? " hi" : "");
+        const lab = document.createElement("i"); lab.textContent = s.k;
+        const val = document.createElement("b"); val.textContent = s.v;
+        row.appendChild(lab); row.appendChild(val);
+        mathEl.appendChild(row);
+      }
+      /* the card carries the finished line — two copies of it on screen
+         at once is one too many, and the scrim goes with it */
+      if(u >= T_VS){ mathEl.classList.add("gone"); hudEl.classList.add("gone"); }
+    }
 
     /* The card is built early and held paused, not injected at the cut:
        parsing and laying out a card that size mid-flight cost a frame
@@ -23248,9 +23497,14 @@ const FFIntro = (function(){
     document.addEventListener("keydown", liveKeys);
     const unlock = ()=>{ if(liveEl === el){ unlocked = true; el.classList.add("unlocked"); } };
 
-    /* reduced motion gets the card and none of the flight */
+    /* reduced motion gets the card and none of the flight — and the card
+       already carries the finished sum, so the working retires with the
+       strap rather than sitting there fully spelled out with nothing
+       moving towards it */
     if(reduce){
       strap.remove();
+      mathEl.remove();
+      hudEl.remove();
       vs.innerHTML = vsCardHtml(film);
       vs.classList.add("on");
       canvas.style.background = "linear-gradient(180deg,#0a0320,#3a0a3c)";
@@ -23393,6 +23647,7 @@ const FFIntro = (function(){
                 : p.kind === "ticker"    ? ()=>drawTicker(ctx, C, p, u, film)
                 : p.kind === "lscourt"   ? ()=>drawLsCourt(ctx, C, p, u)
                 : p.kind === "tron"      ? ()=>drawTron(ctx, C, p, u, film)
+                : p.kind === "mathwall"  ? ()=>drawMathWall(ctx, C, p, u, film)
                 : p.kind === "banner"    ? ()=>drawBanner(ctx, C, p, u)
                 : p.kind === "tram"      ? ()=>drawTram(ctx, C, p, u)
                 : p.kind === "drones"    ? ()=>drawDrones(ctx, C, p, u)
@@ -23449,6 +23704,7 @@ const FFIntro = (function(){
         const k = 1 - Math.abs(u - T_END)/0.5;
         if(k > 0){ ctx.fillStyle = "rgba(255,246,235,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
       }
+      mathTo(u);
       if(!carded && u >= T_VS){
         carded = true;
         vs.classList.add("on");
@@ -23548,7 +23804,12 @@ function ffFilmFor(tid, round){
     whenShort: iso ? rpWhenLabel(iso) : (window.FFCUP ? window.FFCUP.range : ""),
     iA: initials(fx.p1), iB: initials(fx.p2),
     a, b, h2h,
-    prob: 1 / (1 + Math.pow(10, (b.rating - a.rating)/DIVISOR))
+    prob: 1 / (1 + Math.pow(10, (b.rating - a.rating)/DIVISOR)),
+    /* the settings the film shows its working with. Carried on the film
+       rather than read at draw time, so a film cached on a night the
+       admin was previewing a different divisor still adds up. */
+    divisor: DIVISOR,
+    k: K
   };
 }
 
