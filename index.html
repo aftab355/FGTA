@@ -3768,6 +3768,11 @@
   .ffi.out{animation:ffiOut .4s ease forwards}
   @keyframes ffiOut{to{opacity:0}}
   .ffi canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* no way out for the first few seconds — see T_LOCK. The button is not
+     merely hidden: it is out of the layout and out of the a11y tree, so
+     there is nothing to find, tab to or tap. */
+  .ffi:not(.unlocked) .ffi-skip{display:none}
+  .ffi.unlocked .ffi-skip{animation:ffiFade .4s ease both}
   .ffi-skip{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:6;
     font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;
     color:rgba(255,255,255,.55);background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);
@@ -21921,6 +21926,7 @@ const FFIntro = (function(){
   const T_END   = 10.9;   // the flight lands at the arena
   const T_VS    = 11.0;   // the versus card
   const T_HOLD  = 15;     // and how long it holds before closing itself
+  const T_LOCK  = 3.6;    // and how long before it can be skipped at all
 
   /* ---------- deterministic noise ---------- */
   function rng(seed){
@@ -23230,10 +23236,17 @@ const FFIntro = (function(){
        frame shows. */
     setTimeout(()=>{ if(liveEl === el) vs.innerHTML = vsCardHtml(film); }, 60);
 
-    const done = ()=>teardown();
+    /* The film owns the screen for its opening. Until T_LOCK is up there
+       is no Skip button and nothing to tap through to — you get the street
+       run and the first climb whether you meant to or not, which is the
+       whole point of an opening title. After that it is dismissible on a
+       tap, a key or the button, as before. */
+    let unlocked = false;
+    const done = ()=>{ if(unlocked) teardown(); };
     el.addEventListener("click", done);
     liveKeys = e => { if(e.key === "Escape" || e.key === "Enter" || e.key === " ") done(); };
     document.addEventListener("keydown", liveKeys);
+    const unlock = ()=>{ if(liveEl === el){ unlocked = true; el.classList.add("unlocked"); } };
 
     /* reduced motion gets the card and none of the flight */
     if(reduce){
@@ -23241,7 +23254,8 @@ const FFIntro = (function(){
       vs.innerHTML = vsCardHtml(film);
       vs.classList.add("on");
       canvas.style.background = "linear-gradient(180deg,#0a0320,#3a0a3c)";
-      return {start(){ setTimeout(done, (T_HOLD-4)*1000); return this; }, cancel: teardown};
+      unlock();                       // no flight to sit through
+      return {start(){ setTimeout(teardown, (T_HOLD-4)*1000); return this; }, cancel: teardown};
     }
 
     const budget = (window.innerWidth < 760 || (navigator.hardwareConcurrency||4) <= 4) ? 0.55 : 1;
@@ -23452,6 +23466,7 @@ const FFIntro = (function(){
         if(liveEl !== el) return this;
         t0 = performance.now();
         try{ sfx("magic"); }catch(e){}
+        setTimeout(unlock, T_LOCK*1000);
         liveRaf = requestAnimationFrame(frame);
         return this;
       },
@@ -23559,7 +23574,7 @@ function ffWalkInSeen(t, fx){
 }
 
 function ffAutoIntro(t){
-  if(!t || !cupSkinOn()) return;
+  if(!t || !cupSkinOn() || ffPrimed) return;      // boot already gave them the film
   const fx = rpTodaysFixture(t);
   if(!fx || ffWalkInSeen(t, fx)) return;
   setTimeout(()=>ffPlayIntro(t.id, fx.round), 700);
@@ -23570,27 +23585,35 @@ window.ffAutoIntro = ffAutoIntro;
 
    On a day with a game on it the film has to be there the moment the load
    screen wipes — not a beat later, and certainly not after a round trip to
-   the database. So the decision is made from a note the app left itself
-   last time it was open:
+   the database. So the decision is made without one.
 
-     fgta_walkin_next = {d:"2026-08-17", tid, round, film}
+   Two sources, tried in order, both synchronous:
 
-   That is written at the end of every load(), for the next dated fixture
-   the event is still waiting on. On the next boot the note is read
-   synchronously, before any network at all: if it is for today and has not
-   been watched, the city is generated and the first frame painted while
-   the load screen is still up, and the flight starts on the exact frame
-   the wipe begins.
+     1. fgta_walkin_next — {d, tid, round, film}, written at the end of
+        every load() for the next dated fixture the event is waiting on.
+        A finished film, so there is nothing to compute.
+     2. fgta_offline_cache — the app's existing offline snapshot. Slower
+        (it re-derives the film) but still no network, and it covers the
+        visit where the note does not exist yet.
 
-   The cost of that is that the card's numbers are as of the last time the
-   app was open — at worst one session stale, which is a fair trade for the
-   film being instant. Everything else about the fixture (who, when, which
-   round) is fixed the moment it is scheduled.
+   Either way the city is generated and frame zero painted while the load
+   screen is still up, and the flight starts on the frame the wipe begins.
 
-   The first run after a schedule is made has no note yet; ffBootWalkIn
-   below covers that one case off the back of load(), and both routes share
-   the same once-per-game guard so neither can double up on the other. */
+   The cost is that the card's numbers are as of the last time the app was
+   open — at worst one session stale, which is a fair trade for the film
+   being instant. Everything else about the fixture is fixed the moment it
+   is scheduled.
+
+   WHEN it plays: whenever the cinematic load screen plays, which is once
+   per browser session. Open the app on a match day and you get the walk-in;
+   move around inside the app, or reload inside the same session, and you
+   do not. It is the opening titles, so it is tied to the thing that opens.
+
+   ffBootWalkIn below is the last resort: a schedule made since the last
+   session, so neither cache knew about it. That one has to wait for
+   load(), which is as early as the app can possibly know. */
 const FF_NEXT_KEY = "fgta_walkin_next";
+const FF_SEEN_KEY = "fgta_walkin_session";
 let ffPrimed = false;
 
 function ffRememberNextWalkIn(){
@@ -23599,49 +23622,80 @@ function ffRememberNextWalkIn(){
   if(!t || t.format !== "robin2") return;
   const fx = rpNextScheduled(t);
   const iso = fx && rpDateOf(t, fx.round);
-  if(!fx || !iso || !fx.p1 || !fx.p2) { try{ localStorage.removeItem(FF_NEXT_KEY); }catch(e){} return; }
+  if(!fx || !iso || !fx.p1 || !fx.p2){ try{ localStorage.removeItem(FF_NEXT_KEY); }catch(e){} return; }
   const film = ffFilmFor(t.id, fx.round);
   if(!film) return;
   try{ localStorage.setItem(FF_NEXT_KEY, JSON.stringify({d: iso, tid: t.id, round: fx.round, film})); }catch(e){}
 }
 
-/* runs at parse time, off the note alone — no app state, no network */
+/* once per browser session, in step with the load screen */
+function ffSessionClaim(){
+  try{
+    if(sessionStorage.getItem(FF_SEEN_KEY)) return false;
+    sessionStorage.setItem(FF_SEEN_KEY, "1");
+  }catch(e){}
+  return true;
+}
+
+/* source 2: re-derive today's film from the offline snapshot. The globals
+   are borrowed and put straight back — this runs start to finish inside one
+   synchronous call, so nothing else can observe them mid-swap. */
+function ffFilmFromCache(){
+  let cache = null;
+  try{ cache = JSON.parse(localStorage.getItem("fgta_offline_cache") || "null"); }catch(e){}
+  if(!cache || !Array.isArray(cache.tournaments) || !cache.tournaments.length) return null;
+  const keepT = tournaments, keepM = matches;
+  try{
+    tournaments = cache.tournaments;
+    matches = Array.isArray(cache.matches) ? cache.matches : [];
+    const t = cupTournament();
+    if(!t || t.format !== "robin2") return null;
+    const fx = rpTodaysFixture(t);
+    if(!fx) return null;
+    return ffFilmFor(t.id, fx.round);
+  }catch(e){ return null; }
+  finally{ tournaments = keepT; matches = keepM; }
+}
+
+/* runs at parse time, off cached state alone — no app state, no network */
 function ffPrimeWalkIn(){
   if(ffPrimed || !cupSkinOn()) return;
-  let rec = null;
-  try{ rec = JSON.parse(localStorage.getItem(FF_NEXT_KEY) || "null"); }catch(e){}
-  if(!rec || !rec.film || rec.d !== rpToday()) return;
-  const seen = "fgta_walkin_" + rec.tid + "_" + rec.round;
-  try{ if(localStorage.getItem(seen)) return; localStorage.setItem(seen, rec.d); }catch(e){}
+  const today = rpToday();
+
+  let film = null;
+  try{
+    const rec = JSON.parse(localStorage.getItem(FF_NEXT_KEY) || "null");
+    if(rec && rec.film && rec.d === today) film = rec.film;
+  }catch(e){}
+  if(!film) film = ffFilmFromCache();
+  if(!film) return;
+  if(!ffSessionClaim()) return;
 
   ffPrimed = true;
-  const armed = FFIntro.prepare(rec.film);          // city built, first frame painted
+  const armed = FFIntro.prepare(film);          // city built, first frame painted
   const go = ()=>{ armed.start(); buzz(18); };
   if(typeof window.ffWhenRevealed === "function") window.ffWhenRevealed(go);
   else go();
 }
 window.ffPrimeWalkIn = ffPrimeWalkIn;
 
-/* the cold-start case: a schedule made since the last session, so there was
-   no note to read. Fires off the back of the first load(), which is as early
+/* the cold-start case: a schedule made since the last session, so neither
+   cache had it. Fires off the back of the first load(), which is as early
    as the app can possibly know. */
 let ffBooted = false;
 function ffBootWalkIn(){
   try{ ffRememberNextWalkIn(); }catch(e){}      // leave the note for next time, always
   if(ffBooted || ffPrimed) return;
   ffBooted = true;
-  if(!cupSkinOn()) return;
+  if(!cupSkinOn() || document.querySelector(".ffi")) return;
   const t = cupTournament();
   if(!t || t.format !== "robin2") return;
   const fx = rpTodaysFixture(t);
-  if(!fx || document.querySelector(".ffi")) return;
-  const seen = "fgta_walkin_" + t.id + "_" + fx.round;
-  try{ if(localStorage.getItem(seen)) return; }catch(e){}
+  if(!fx) return;
   const film = ffFilmFor(t.id, fx.round);
-  if(!film) return;
-  const armed = FFIntro.prepare(film);
-  try{ localStorage.setItem(seen, rpToday()); }catch(e){}
+  if(!film || !ffSessionClaim()) return;
   ffPrimed = true;
+  const armed = FFIntro.prepare(film);
   if(typeof window.ffWhenRevealed === "function") window.ffWhenRevealed(()=>{ armed.start(); buzz(18); });
   else armed.start();
 }
