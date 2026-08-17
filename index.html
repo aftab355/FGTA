@@ -26,7 +26,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- The supabase-js loader moved down to just above the app's boot code
+     near the end of the body — it used to sit here in the head, unused
+     until then, and being a synchronous external script it blocked the
+     browser from painting any of the page (topbar, countdown, everything
+     below) until it finished fetching. On a slow mobile connection that's
+     the single biggest "why does this feel janky on load" cause. Same
+     execution order relative to the code that uses it, just no longer
+     standing in front of the paint. Preconnect keeps the handshake warm
+     in the meantime. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <template id="__bundler_thumbnail" data-bg-color="#0a0814">
   <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
     <rect width="1200" height="800" fill="#0a0814"/>
@@ -121,7 +130,7 @@
     --glow-mesh:#a259ff;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth;background:var(--bg)}
+  html{scroll-behavior:smooth;background:var(--bg);overflow-x:hidden}
   body{
     background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",'Outfit',sans-serif;
@@ -166,7 +175,7 @@
   .tb-word{display:flex;flex-direction:column;line-height:1}
   .tb-title{font-weight:600;font-size:19px;letter-spacing:.5px;text-transform:uppercase}
   .tb-live{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-top:3px;text-transform:uppercase}
-  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none}
+  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .tb-tabs::-webkit-scrollbar{display:none}
   .tb-tab{
     background:none;border:none;border-bottom:none;color:var(--dim);white-space:nowrap;cursor:pointer;
@@ -3515,7 +3524,7 @@
   .ct-rnote{color:var(--muted);font-style:italic}
 
   /* day switcher */
-  .ct-days{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none}
+  .ct-days{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .ct-days::-webkit-scrollbar{display:none}
   .ct-day{
     flex:1;min-width:46px;background:var(--panel-2);border:1px solid var(--line);
@@ -3887,7 +3896,7 @@
     color:var(--dim);margin:16px 0 9px;padding-top:12px;border-top:1px dashed var(--line)}
   .rp-leg-h:first-child{margin-top:2px;padding-top:0;border-top:none}
 
-  .rp-bracket{display:flex;gap:14px;align-items:stretch;margin-top:6px;overflow-x:auto;padding-bottom:6px}
+  .rp-bracket{display:flex;gap:14px;align-items:stretch;margin-top:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
   .rp-round{flex:1 1 0;min-width:150px;display:flex;flex-direction:column}
   .rp-round-body{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
   .rp-round-h{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
@@ -4104,7 +4113,7 @@
      across the window, plus the running order underneath. Namespaced
      .rp-cal-* so it lifts out with the rest of Robin+.
      ================================================================ */
-  .rp-cal-strip{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
+  .rp-cal-strip{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .rp-cal-strip::-webkit-scrollbar{display:none}
   .rp-cal-day{flex:0 0 60px;border-radius:var(--r-sm);border:1px solid var(--line-soft);
     background:var(--panel-2);padding:8px 4px 7px;text-align:center;cursor:default;
@@ -7371,6 +7380,7 @@
 </div>
 
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================
    CONFIG  —  edit these three values, then deploy to Netlify
