@@ -37,7 +37,26 @@ alter table public.tournaments
   add column if not exists bracket text;
 
 comment on column public.tournaments.bracket is
-  'Robin+ event state as JSON: {v, roster[], shape, cycle[], order[{p1,p2,round,leg}], metrics, seed, bronze, createdAt}. shape is "ring" (5+ players, two games each) or "drr" (exactly 4, everyone twice); absent means "ring". Null for every other format.';
+  'Robin+ event state as JSON: {v, roster[], shape, cycle[], order[{p1,p2,round,leg}], metrics, seed, bronze, dates, createdAt}. shape is "ring" (5+ players, two games each) or "drr" (exactly 4, everyone twice); absent means "ring". dates maps a round key to a local "YYYY-MM-DD" day. Null for every other format.';
+
+-- ------------------------------------------------------------
+-- The calendar needs no migration of its own
+-- ------------------------------------------------------------
+-- A fixture's day is stored in the same blob, under `dates`:
+--
+--   "dates": {"grp1":"2026-08-17", ..., "semi1":"2026-08-30",
+--             "final":"2026-09-01"}
+--
+-- Keys are round keys, so any round the event can have — group
+-- games, qualification deciders, semis, bronze, final — can be
+-- given a day, including rounds nobody has qualified for yet.
+-- Values are plain local dates: a game is played on a day, not at
+-- an instant, and a timestamp would only invite a timezone to move
+-- it. A re-draw carries `dates` across unchanged, because a day is
+-- a slot in the cup window rather than a property of a pairing.
+--
+-- Anything already storing `bracket` gets this for free; anything
+-- falling back to localStorage keeps the days there too.
 
 -- Whoever may already update a tournament may update this column;
 -- no new policy is needed if tournaments already has an admin
