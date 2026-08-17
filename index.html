@@ -3782,9 +3782,17 @@
     letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:7px}
 
   /* ---- the versus card ---- */
+  /* The card is built when the film starts and held here, invisible and
+     with every animation inside it paused, so the cut to it costs a
+     class change rather than a parse and a layout — the old version
+     injected the markup at the cut and dropped the frame it landed on.
+     `visibility` (not just opacity) keeps it out of the hit-testing and
+     the accessibility tree until it is really on screen. */
   .ffi-vs{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;padding:24px;opacity:0}
-  .ffi-vs.on{opacity:1}
+    align-items:center;justify-content:center;padding:24px;opacity:0;visibility:hidden}
+  .ffi-vs, .ffi-vs *, .ffi-vs::before{animation-play-state:paused}
+  .ffi-vs.on{opacity:1;visibility:visible}
+  .ffi-vs.on, .ffi-vs.on *, .ffi-vs.on::before{animation-play-state:running}
   /* the arena behind the card is bright by design, so the card brings its
      own dark to stand on rather than hoping the frame stays quiet */
   .ffi-vs::before{content:'';position:absolute;inset:0;z-index:-1;
@@ -13808,6 +13816,10 @@ async function load(){
   render();
   if(openMatchId!==null) renderComments(openMatchId);
   if(openScheduledMatchId!==null) openScheduledMatch(openScheduledMatchId);
+  /* the draw is in memory now, so this is the first moment the app can
+     know whether the cup has a game on today — see ffBootWalkIn, which
+     only ever fires once and only on the day of a fixture */
+  try{ ffBootWalkIn(); }catch(e){}
 }
 
 /* ============================================================
@@ -21866,28 +21878,32 @@ if(COURT.api) setTimeout(()=>{ try{ fetchCourt(false); }catch(e){} }, 2200);
 /* ============================================================
    FF CUP — THE WALK-IN
 
-   The title film a fixture gets on the day it is played: a flight
-   through the cup's city — rooftop courts mid-rally, a plaza of
-   phone lights, screens, banners, a tram, drones, the blimp — out
-   over the last rooftops, up to the arena floating above it all,
-   and then straight into a versus card for the two players.
+   The title film a fixture gets on the day it is played. The camera
+   leaves the road, climbs over a rooftop court mid-rally, dives back
+   through the plaza, banks out of the avenue and goes straight
+   through a lit office window — corridor, far wall, out — rolling
+   the whole way through a full turn, then up over the skyline, back
+   down among the towers, and finally out to the arena floating above
+   the city. Then a versus card for the two players.
 
-   It is one canvas and one overlay div, drawn from nothing: the
-   city is generated from the fixture's round key, so every game in
-   the event gets its own skyline and the same game always gets the
-   same one. Nothing here is loaded, so it costs a repaint and no
-   bytes.
+   The city is generated from the fixture's round key, so every game
+   in the event gets its own skyline and the same game always gets
+   the same one. Scattered through it is the app itself: the brand
+   ball hanging where the moon should be, the ladder's podium in a
+   plaza, the top bar's ticker running along a building, the rating
+   galaxy as a constellation, the load screen's court painted on the
+   avenue, and a trophy on a roof.
 
-   The whole thing is dressing. FFIntro.play() is safe to call at
-   any time and safe to never call: nothing else in the app reads
-   from it, and it removes itself on the way out.
+   It is one canvas and one overlay, drawn from nothing — no library,
+   no assets. The whole thing is dressing: FFIntro.play() is safe to
+   call at any time and safe to never call, nothing else in the app
+   reads from it, and it removes itself on the way out.
    ============================================================ */
 const FFIntro = (function(){
 
   /* ---------- the beats, in seconds ---------- */
-  const T_FLY   = 6.6;    // flight through the city ends
-  const T_LIFT  = 8.5;    // climb to the arena ends
-  const T_VS    = 8.6;    // the versus card lands
+  const T_END   = 10.9;   // the flight lands at the arena
+  const T_VS    = 11.0;   // the versus card
   const T_HOLD  = 15;     // and how long it holds before closing itself
 
   /* ---------- deterministic noise ---------- */
@@ -21914,6 +21930,7 @@ const FFIntro = (function(){
   const SHADE   = [46,32,74];
   const WARM    = [255,186,96];
   const NEON    = [255,60,150];
+  const BALL    = [212,255,43];       // the app's own tennis-ball chartreuse
 
   const clamp = (v,a,b) => v<a?a:v>b?b:v;
   function mix(a,b,k){ k=clamp(k,0,1); return [a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k, a[2]+(b[2]-a[2])*k]; }
@@ -21955,16 +21972,29 @@ const FFIntro = (function(){
     if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = lw||1; ctx.stroke(); }
     return true;
   }
+  function line(ctx, a, b, stroke, lw){
+    if(!a || !b) return;
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw||1;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
   function dot(ctx, p, r, fill){
     if(!p || r < 0.25) return;
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fillStyle = fill; ctx.fill();
   }
-  /* a glowing point — the cheap bloom the whole film runs on */
+  /* a glowing point — the cheap bloom the whole film runs on. A radial
+     gradient is the most expensive thing a frame does and a two-pixel
+     one is invisible, so the far half of the city never builds them.
+
+     The ceiling matters more than the floor. Every bloom is sized off
+     the projection, so a street lamp passing a metre from the lens asks
+     for a seven-hundred-pixel gradient — one call painting more than the
+     whole canvas, and the reason the first second of the flight used to
+     stutter. Nothing is allowed to bloom wider than half the frame; past
+     that it is a white-out either way. */
+  let GLOW_MAX = 260;
   function glow(ctx, p, r, c, al){
-    /* a radial gradient is the most expensive thing a frame does, and a
-       two-pixel one is not visible — so the far half of the city never
-       builds them */
     if(!p || r < 1.6) return;
+    if(r > GLOW_MAX) r = GLOW_MAX;
     const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
     g.addColorStop(0, rgb(c, al===undefined?0.85:al));
     g.addColorStop(0.4, rgb(c, (al===undefined?0.85:al)*0.32));
@@ -21985,11 +22015,103 @@ const FFIntro = (function(){
   }
 
   /* ============================================================
+     THE FLIGHT PATH
+
+     Keyframes, not formulas. The first version of this switched
+     between three hand-written phases, and where two phases met the
+     camera's speed jumped — a visible hitch two thirds of the way
+     through, in the middle of the best shot. A Catmull-Rom spline
+     through the keys below is continuous in velocity everywhere, so
+     there is no seam left to hit.
+
+     z is authored on a smoothly accelerating curve (40 units/s off
+     the line, 98 by the arena); x, y, pitch and roll are the
+     choreography. Yaw is not authored at all — it is taken from the
+     camera's own velocity, which is what makes it look into its
+     turns instead of sliding through them.
+     ============================================================ */
+  const ROAD = 9;                       // half-width of the avenue
+  const ARENA_Z = 1010, ARENA_Y = 128;
+  const PORTAL = {x: 20, z0: 452, z1: 488, w: 26, h: 46,
+                  wx: 20, wy: 15.5, ww: 11, wh: 9};   // the window it goes through
+
+  //          t      x      y     z     pitch   roll
+  const KEYS = [
+    [ 0.0,   0.0,   3.2,   -45,   0.03,  0.00],   // engines on, street level
+    [ 1.0,   1.6,   2.2,   -5,    0.05, -0.14],   // low, hugging the road
+    [ 1.9,  -2.5,   7.0,    45,   0.09,  0.24],   // under the banner, rising
+    [ 2.8,  -6.0,  17.0,   103,  -0.03,  0.34],   // up over the rooftop court
+    [ 3.6,  -3.5,  23.0,   160,  -0.12, -0.06],   // apex, looking down into it
+    [ 4.4,   1.0,   7.0,   220,   0.10, -0.38],   // dive back to the plaza
+    [ 5.2,   5.0,   3.6,   283,   0.12, -0.10],   // skimming the road
+    [ 6.0,  11.0,   8.0,   349,   0.03,  0.52],   // bank right, out of the avenue
+    [ 6.6,  16.0,  12.0,   400,   0.01,  1.20],   // lining up on the window
+    [ 7.2,  20.0,  15.0,   452,   0.00,  2.20],   // through the glass
+    [ 7.6,  20.0,  15.4,   488,   0.02,  3.10],   // out the far side
+    [ 8.3,  13.0,  25.0,   551,   0.10,  4.50],   // climbing out, still turning
+    [ 9.1,   2.0,  50.0,   626,   0.16,  6.283],  // high over everything, roll closes
+    [ 9.9,   0.0,  30.0,   702,   0.02,  6.283],  // and back down among the towers
+    [10.9,   0.0,  90.0,   800,   0.235, 6.283]   // the last climb, arena in the frame
+  ];
+
+  function cr(p0,p1,p2,p3,t){
+    const t2=t*t, t3=t2*t;
+    return 0.5*((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+  }
+  /* the path sampled at u, as [x,y,z,pitch,roll] */
+  function pathAt(u){
+    const last = KEYS.length-1;
+    if(u >= KEYS[last][0]) return KEYS[last].slice(1);
+    let i = 0;
+    while(i < last-1 && KEYS[i+1][0] <= u) i++;
+    const a = KEYS[i], b = KEYS[i+1];
+    const t = (u - a[0]) / (b[0] - a[0]);
+    const p0 = KEYS[Math.max(0,i-1)], p3 = KEYS[Math.min(last,i+2)];
+    const out = [];
+    for(let c=1;c<=5;c++) out.push(cr(p0[c], a[c], b[c], p3[c], t));
+    return out;
+  }
+
+  function camera(u, W, H){
+    let x, y, z, pitch, roll, f = Math.max(W,H) * 0.62;
+
+    if(u <= T_END){
+      const p = pathAt(u);
+      x = p[0]; y = Math.max(1.4, p[1]); z = p[2]; pitch = p[3]; roll = p[4];
+      f *= 1 + clamp(u/T_END, 0, 1) * 0.12;      // the lens creeps in as the speed builds
+    } else {
+      /* held back from the island rather than inside it — the card is the
+         subject now, and the arena is the thing it stands on */
+      const k = clamp((u-T_END)/9, 0, 1);
+      x = Math.sin(u*0.16)*20;
+      y = 90 + Math.sin(u*0.25)*2.4;
+      z = 800 + k*12;
+      pitch = 0.235; roll = 6.283;
+      f *= 1.12;
+    }
+
+    /* yaw comes from where the camera is going, at half strength — full
+       strength reads as a chase cam, none at all reads as a slide */
+    let yaw = 0;
+    if(u <= T_END){
+      const a = pathAt(Math.max(0, u-0.06)), b = pathAt(Math.min(T_END, u+0.06));
+      yaw = Math.atan2(b[0]-a[0], Math.max(0.001, b[2]-a[2])) * 0.5;
+    } else {
+      yaw = -x/((ARENA_Z-z)||1);
+    }
+
+    return {
+      x, y, z, f, roll,
+      cy: Math.cos(yaw), sy: Math.sin(yaw),
+      cp: Math.cos(pitch), sp: Math.sin(pitch),
+      cr: Math.cos(roll), sr: Math.sin(roll),
+      ox: W/2, oy: H/2, W, H
+    };
+  }
+
+  /* ============================================================
      THE CITY — generated once per fixture
      ============================================================ */
-  const ROAD = 9;          // half-width of the avenue the camera flies down
-  const ARENA_Z = 1010, ARENA_Y = 128;
-
   function buildCity(seed, budget){
     const R = rng(seed);
     const pick = arr => arr[(R()*arr.length)|0];
@@ -22023,42 +22145,71 @@ const FFIntro = (function(){
     });
     if(budget < 1) blocks.sort((a,b)=>a.rank-b.rank).splice((blocks.length*budget)|0);
 
-    /* the plazas, the crowds and the rest of what the city is doing
-       tonight — laid along the flight so they arrive one at a time */
+    /* what the city is doing tonight, laid along the flight so it
+       arrives one thing at a time. The app's own furniture is in here
+       too — the podium, the ticker, the wordmark, the trophy. */
     const props = [
       {kind:"terrace",  z: 46,  x: ROAD+3,   seed:(R()*1e9)|0},
       {kind:"banner",   z: 104, y: 15,       seed:(R()*1e9)|0, text:"FF CUP"},
+      {kind:"lscourt",  z: 150, seed:(R()*1e9)|0},          // the load screen's court, painted on the road
       {kind:"blimp",    z: 250, y: 48,       seed:(R()*1e9)|0},
       {kind:"court",    z: 250, x:-(ROAD+9), y: 20, seed:(R()*1e9)|0},
-      {kind:"plaza",    z: 300, x: ROAD+13,  seed:(R()*1e9)|0},
+      {kind:"sign",     z: 292, x:-(ROAD+2), y: 24, seed:(R()*1e9)|0, text:"FGTA"},
+      {kind:"podium",   z: 300, x: ROAD+13,  seed:(R()*1e9)|0},
       {kind:"tron",     z: 352, x:-(ROAD+1), seed:(R()*1e9)|0},
+      {kind:"ticker",   z: 380, x: ROAD+1,   y: 5,  seed:(R()*1e9)|0},
       {kind:"tram",     z: 404, y: 24,       seed:(R()*1e9)|0},
       {kind:"drones",   z: 430, seed:(R()*1e9)|0},
-      {kind:"banner",   z: 470, y: 26,       seed:(R()*1e9)|0, text:"TONIGHT"},
-      {kind:"court",    z: 520, x: ROAD+11,  y: 20, seed:(R()*1e9)|0},
-      {kind:"tron",     z: 596, x: ROAD+1,   seed:(R()*1e9)|0, flip:true},
-      {kind:"plaza",    z: 640, x:-(ROAD+15), seed:(R()*1e9)|0},
+      {kind:"portal",   z: (PORTAL.z0+PORTAL.z1)/2, x: PORTAL.x, y: PORTAL.h/2, seed:(R()*1e9)|0},
+      {kind:"trophy",   z: 512, x:-(ROAD+12), y: 22, seed:(R()*1e9)|0},
+      {kind:"plaza",    z: 560, x:-(ROAD+15), seed:(R()*1e9)|0},
+      {kind:"rain",     z: 600, x: ROAD+22,  seed:(R()*1e9)|0},
+      {kind:"tron",     z: 640, x: ROAD+1,   seed:(R()*1e9)|0},
       {kind:"fireworks",z: 790, seed:(R()*1e9)|0}
     ];
-    /* A court or a plaza needs somewhere to be. Clear the blocks standing
-       where one goes, so it arrives in a gap in the skyline instead of
-       fighting a tower for the same cubic metres — the painter's sort
-       cannot resolve that argument, and it always looks like a mistake. */
-    const CLEAR = {court:[15,19], plaza:[17,20], tron:[14,12]};
+
+    /* A court, a plaza, a screen or the window needs somewhere to be.
+       Clear the blocks standing where one goes, so it arrives in a gap
+       in the skyline instead of fighting a tower for the same cubic
+       metres — the painter's sort cannot resolve that argument, and it
+       always looks like a mistake. */
+    const CLEAR = {court:[15,19], plaza:[17,20], podium:[17,20], tron:[14,12],
+                   portal:[22,26], lscourt:[26,22], sign:[12,12], trophy:[11,12]};
     props.forEach(p=>{
       const box = CLEAR[p.kind];
       if(!box) return;
       for(let i=blocks.length-1;i>=0;i--){
         const b = blocks[i];
         if(b.rank > 1) continue;
-        if(Math.abs(b.x - p.x) < box[0] && Math.abs(b.z - p.z) < box[1]) blocks.splice(i,1);
+        if(Math.abs(b.x - (p.x||0)) < box[0] && Math.abs(b.z - p.z) < box[1]) blocks.splice(i,1);
       }
     });
 
+    /* And the camera needs air. The flight leaves the avenue twice — out
+       to the window and back again — and a procedural skyline has no idea
+       it is standing in the way. Sample the path and delete anything it
+       would pass through, so the one building the camera goes inside is
+       the one built for it. */
+    (function carve(){
+      const CLEAR_X = 7, CLEAR_Z = 6, CLEAR_Y = 4;
+      const pts = [];
+      for(let t=0; t<=T_END; t+=0.05){ const q = pathAt(t); pts.push([q[0], q[1], q[2]]); }
+      for(let i=blocks.length-1;i>=0;i--){
+        const b = blocks[i];
+        const hx = b.w/2 + CLEAR_X, hz = b.d/2 + CLEAR_Z, top = b.h + CLEAR_Y;
+        for(let j=0;j<pts.length;j++){
+          const q = pts[j];
+          if(q[1] < top && Math.abs(q[0]-b.x) < hx && Math.abs(q[2]-b.z) < hz){
+            blocks.splice(i,1); break;
+          }
+        }
+      }
+    })();
+
     props.forEach(p=>{
-      if(p.kind === "plaza"){
+      if(p.kind === "plaza" || p.kind === "podium"){
         const PR = rng(p.seed), crowd = [];
-        const n = Math.round(150 * budget);
+        const n = Math.round((p.kind === "podium" ? 90 : 150) * budget);
         for(let i=0;i<n;i++) crowd.push({
           dx:(PR()-0.5)*26, dz:(PR()-0.5)*30, ph:PR()*6.28, phone: PR()<0.24, s:0.8+PR()*0.5
         });
@@ -22069,60 +22220,33 @@ const FFIntro = (function(){
         for(let i=0;i<14;i++) swarm.push({dx:(PR()-0.5)*30, y:8+PR()*26, dz:PR()*90, ph:PR()*6.28, sp:0.5+PR()});
         p.swarm = swarm;
       }
+      if(p.kind === "rain"){
+        const PR = rng(p.seed), drops = [];
+        for(let i=0;i<Math.round(90*budget);i++) drops.push({dx:(PR()-0.5)*40, dz:(PR()-0.5)*50, y:PR()*34, sp:14+PR()*10});
+        p.drops = drops;
+      }
     });
+
+    /* the confetti off FX.celebrate, drifting through the whole flight */
+    const CONF = ["🎾","✨","🏆","🔥","⭐"];
+    const confetti = [];
+    for(let i=0;i<Math.round(34*budget);i++) confetti.push({
+      x:(R()-0.5)*90, y:2+R()*46, z:R()*900, e:CONF[(R()*CONF.length)|0],
+      ph:R()*6.28, sp:0.4+R()*0.9, sz:0.8+R()*1.2
+    });
+
+    /* the rating galaxy, hung in the sky as a constellation */
+    const GR = rng(seed ^ 0x5bf03635), gal = {nodes:[], links:[]};
+    for(let i=0;i<9;i++) gal.nodes.push({
+      a:-0.9 + GR()*1.8, h:0.10 + GR()*0.26, r:1.6 + GR()*3.4, tw:GR()*6.28
+    });
+    for(let i=0;i<11;i++) gal.links.push([(GR()*9)|0, (GR()*9)|0]);
 
     // a handful of stars, fixed to the dome rather than the world
     const stars = [];
     for(let i=0;i<90;i++) stars.push({a:R()*6.283, h:R(), b:0.25+R()*0.75, tw:R()*6.283});
 
-    return {blocks, props, stars, seed};
-  }
-
-  /* ============================================================
-     THE CAMERA — one continuous move, three intentions
-     ============================================================ */
-  function camera(u, W, H){
-    const smooth = k => k*k*(3-2*k);
-    let x = 0, y = 3.2, z = -30, yaw = 0, pitch = 0.04, roll = 0, f = Math.max(W,H) * 0.62;
-
-    if(u <= T_FLY){
-      const p = clamp(u/T_FLY, 0, 1);
-      z = -30 + Math.pow(p, 1.42) * 760;              // accelerating the whole way in
-      y = 2.9 + smooth(clamp((u-1.1)/4.4,0,1)) * 23;  // street, then up over the near rooftops
-      // the drift that makes it a flight rather than a dolly
-      yaw   =  Math.sin(u*0.62)*0.115 + Math.sin(u*0.27+1.1)*0.07;
-      roll  = -Math.sin(u*0.62)*0.10  - Math.sin(u*0.27+1.1)*0.05;
-      x     =  Math.sin(u*0.44)*2.6;
-      pitch = 0.03 + smooth(clamp((u-3.4)/3.2,0,1))*0.07;
-      f    *= 1 + p*0.1;                              // the lens creeps in as the speed builds
-    } else if(u <= T_LIFT){
-      const p = smooth(clamp((u-T_FLY)/(T_LIFT-T_FLY), 0, 1));
-      z = 730 + p*72;
-      y = 25.9 + p*62;                                // out over everything
-      x = Math.sin(T_FLY*0.44)*2.6 * (1-p);
-      yaw = Math.sin(T_FLY*0.62)*0.115*(1-p);
-      roll = -0.09*(1-p);
-      pitch = 0.10 + p*0.135;
-      f *= 1.1;
-    } else {
-      /* held back from the island rather than inside it — the card is
-         the subject now, and the arena is the thing it is standing on */
-      const p = clamp((u-T_LIFT)/9, 0, 1);
-      z = 802 + p*12;
-      y = 88 + Math.sin(u*0.25)*2.4;
-      x = Math.sin(u*0.16)*20;
-      yaw = -x/((ARENA_Z-z)||1);
-      pitch = 0.235;
-      f *= 1.1;
-    }
-
-    return {
-      x, y, z, f,
-      cy: Math.cos(yaw), sy: Math.sin(yaw),
-      cp: Math.cos(pitch), sp: Math.sin(pitch),
-      cr: Math.cos(roll), sr: Math.sin(roll),
-      ox: W/2, oy: H/2, W, H
-    };
+    return {blocks, props, stars, confetti, gal, seed};
   }
 
   /* ============================================================
@@ -22142,12 +22266,38 @@ const FFIntro = (function(){
       ctx.fillRect(px, py, 1.4, 1.4);
     });
 
-    // the moon the city is lit by — huge, and well off the avenue so it
-    // never has to share the middle of the frame with the arena
+    /* THE RATING GALAXY, as a constellation — the same force-directed
+       cluster the Analytics tab draws, hung on the dome */
+    const gx = -C.sy*W*0.9 + W*0.62, gy = C.sp*H*1.4 + H*0.16;
+    const gp = city.gal.nodes.map(n=>({x: gx + n.a*W*0.20, y: gy + n.h*H*0.34, r:n.r, tw:n.tw}));
+    if(gp.some(p=>p.x>-60 && p.x<W+60 && p.y>-40 && p.y<H*0.7)){
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      city.gal.links.forEach(([a,b])=>{
+        if(a===b || !gp[a] || !gp[b]) return;
+        line(ctx, gp[a], gp[b], "rgba(255,45,120,.13)", 1);
+      });
+      gp.forEach(p=>{
+        const tw = 0.6 + 0.4*Math.sin(u*0.8 + p.tw);
+        dot(ctx, p, p.r*0.5, rgb([255,158,201], 0.55*tw));
+        glow(ctx, p, p.r*3, [255,45,143], 0.20*tw);
+      });
+      ctx.restore();
+    }
+
+    /* THE BRAND BALL, where the moon should be — lit from the upper
+       left with the seam coming round the rim, exactly like .tb-ball */
     const mp = pr(C, -560, 330, ARENA_Z + 900);
     if(mp){
-      glow(ctx, mp, 210*mp.s*0.5 + 60, [225,215,255], 0.18);
-      dot(ctx, mp, Math.max(6, 90*mp.s), rgb([238,232,255], 0.92));
+      const r = Math.max(8, 90*mp.s);
+      glow(ctx, mp, r*2.6, BALL, 0.13);
+      const g = ctx.createRadialGradient(mp.x - r*0.32, mp.y - r*0.4, r*0.06, mp.x, mp.y, r);
+      g.addColorStop(0, "#f5ff8f"); g.addColorStop(0.45, rgb(BALL)); g.addColorStop(1, "#9db81a");
+      ctx.beginPath(); ctx.arc(mp.x, mp.y, r, 0, 6.2832); ctx.fillStyle = g; ctx.fill();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(mp.x, mp.y, r*0.99, -2.5, -0.4);
+      ctx.strokeStyle = "rgba(255,255,255,.6)"; ctx.lineWidth = Math.max(1, r*0.07); ctx.stroke();
+      ctx.restore();
     }
 
     // horizon haze, which is also what everything fogs into
@@ -22187,18 +22337,19 @@ const FFIntro = (function(){
       for(let s=-1;s<=1;s+=2){
         const base = pr(C, s*(ROAD-0.6), 0, z), top = pr(C, s*(ROAD-0.6), 6.4, z);
         if(!base||!top) continue;
-        ctx.strokeStyle = fogged([120,96,150], top.d, 0.75); ctx.lineWidth = Math.max(0.6, 0.22*top.s);
-        ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke();
+        line(ctx, base, top, fogged([120,96,150], top.d, 0.75), Math.max(0.6, 0.22*top.s));
         glow(ctx, top, Math.max(4, 3.2*top.s), WARM, 0.7*(1-fogAt(top.d)));
       }
     }
   }
 
-  /* ---- one building ---- */
+  /* ---- one building ----
+     `corners` is the eight projected corners the cull pass already
+     computed; re-projecting them here would double the cost of the
+     cheapest half of the frame. */
   function drawBlock(ctx, C, b, u, budget){
     const x0=b.x-b.w/2, x1=b.x+b.w/2, z0=b.z-b.d/2, z1=b.z+b.d/2, h=b.h;
     const d = depth(C, b.x, h/2, b.z);
-    if(d < 1 || d > 620) return;
 
     const face  = mix(mix(SHADE, STONE, 0.62 + b.hue*0.3), SHADE, b.rank*0.22);
     const front = fogged(face, d);
@@ -22206,23 +22357,23 @@ const FFIntro = (function(){
     const top   = fogged(mix(face, STONE, 0.25), d);
 
     if(C.z < z0) poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,0,z0),pr(C,x0,0,z0)], front);
+    if(C.z > z1) poly(ctx, [pr(C,x1,h,z1),pr(C,x0,h,z1),pr(C,x0,0,z1),pr(C,x1,0,z1)], front);
     if(C.x < x0) poly(ctx, [pr(C,x0,h,z1),pr(C,x0,h,z0),pr(C,x0,0,z0),pr(C,x0,0,z1)], side);
     if(C.x > x1) poly(ctx, [pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x1,0,z1),pr(C,x1,0,z0)], side);
     if(C.y > h)  poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x0,h,z1)], top);
 
     // the hairline that keeps the skyline readable against its own fog
-    const e1 = pr(C,x0,h,z0), e2 = pr(C,x1,h,z0);
-    if(e1 && e2){
-      ctx.strokeStyle = fogged(STONE, d, 0.55); ctx.lineWidth = Math.max(0.5, 0.5*e1.s*0.2);
-      ctx.beginPath(); ctx.moveTo(e1.x,e1.y); ctx.lineTo(e2.x,e2.y); ctx.stroke();
-    }
+    line(ctx, pr(C,x0,h,z0), pr(C,x1,h,z0), fogged(STONE, d, 0.55), 0.7);
 
     if(!b.detail || d > 210*budget) return;
 
     // lit windows — only the lit ones past the near band, none at all far out
-    const cols = Math.max(1, Math.floor(b.w/2.1)), rows = Math.max(1, Math.floor(h/2.9));
+    const cols = Math.max(1, Math.floor(b.w/2.9)), rows = Math.max(1, Math.floor(h/3.7));
     const WR = rng(b.seed);
-    const all = d < 55*budget;
+    /* the dark panes only just before a face fills the lens — drawing a
+       whole unlit grid on a building that is about to be behind you was
+       half the cost of the worst frame in the opening seconds */
+    const all = d < 26*budget;
     const cw = (b.w-0.9)/cols, ch = (h-1.2)/rows;
     if(C.z < z0){
       for(let r=0;r<rows;r++){
@@ -22232,11 +22383,9 @@ const FFIntro = (function(){
           if(!on && !all) continue;
           const flick = on && Math.sin(u*1.4 + k*40 + r) > 0.985 ? 0.35 : 1;
           const wx = x0+0.45+c*cw, wy = 0.7+r*ch;
-          const q = [pr(C,wx,wy+ch*0.62,z0-0.05), pr(C,wx+cw*0.66,wy+ch*0.62,z0-0.05),
-                     pr(C,wx+cw*0.66,wy,z0-0.05), pr(C,wx,wy,z0-0.05)];
-          poly(ctx, q, on
-            ? fogged(k < b.lit*0.22 ? NEON : WARM, d, 0.9*flick)
-            : fogged(SHADE, d, 0.5));
+          poly(ctx, [pr(C,wx,wy+ch*0.62,z0-0.05), pr(C,wx+cw*0.66,wy+ch*0.62,z0-0.05),
+                     pr(C,wx+cw*0.66,wy,z0-0.05), pr(C,wx,wy,z0-0.05)],
+            on ? fogged(k < b.lit*0.22 ? NEON : WARM, d, 0.9*flick) : fogged(SHADE, d, 0.5));
         }
       }
     }
@@ -22247,16 +22396,14 @@ const FFIntro = (function(){
     if(b.roof === "mast"){
       const a = pr(C,cx,h,cz), t2 = pr(C,cx,h+5.5,cz);
       if(a && t2){
-        ctx.strokeStyle = fogged(SHADE, d, 0.9); ctx.lineWidth = Math.max(0.6, 0.14*a.s);
-        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(t2.x,t2.y); ctx.stroke();
+        line(ctx, a, t2, fogged(SHADE, d, 0.9), Math.max(0.6, 0.14*a.s));
         if(Math.sin(u*2.4 + b.seed) > 0) glow(ctx, t2, Math.max(3, 1.6*t2.s), [255,60,60], 0.9);
       }
     } else if(b.roof === "tank"){
-      const q = [pr(C,cx-1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h,cz-1.3),pr(C,cx-1.3,h,cz-1.3)];
-      poly(ctx, q, fogged(mix(SHADE,STONE,0.4), d));
+      poly(ctx, [pr(C,cx-1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h+2.4,cz-1.3),
+                 pr(C,cx+1.3,h,cz-1.3),pr(C,cx-1.3,h,cz-1.3)], fogged(mix(SHADE,STONE,0.4), d));
     } else if(b.roof === "peak"){
-      const q = [pr(C,cx,h+3.4,cz),pr(C,x1,h,z0),pr(C,x0,h,z0)];
-      poly(ctx, q, fogged(mix(STONE,SHADE,0.35), d));
+      poly(ctx, [pr(C,cx,h+3.4,cz),pr(C,x1,h,z0),pr(C,x0,h,z0)], fogged(mix(STONE,SHADE,0.35), d));
     }
   }
 
@@ -22269,11 +22416,29 @@ const FFIntro = (function(){
     const y = p.y, x = p.x, z = p.z, d = depth(C, x, y, z);
     if(d < 1 || d > 460) return;
     const hw = 8.5, hl = 13;
-    // the block it stands on, so the court reads as a roof and not a rug
-    poly(ctx, [pr(C,x-hw-1,y,z-hl-1),pr(C,x+hw+1,y,z-hl-1),
-               pr(C,x+hw+1,0,z-hl-1),pr(C,x-hw-1,0,z-hl-1)], fogged(SHADE, d, 0.95));
-    poly(ctx, [pr(C,x-hw-1,y,z-hl-1),pr(C,x+hw+1,y,z-hl-1),
-               pr(C,x+hw+1,y,z+hl+1),pr(C,x-hw-1,y,z+hl+1)], fogged(mix(SHADE,STONE,0.35), d));
+    /* the block it stands on, so the court reads as a roof and not a rug.
+       It gets the same lit face as anything else on the street — a flat
+       dark slab under a bright court just reads as a hole in the city. */
+    const bx0 = x-hw-1, bx1 = x+hw+1, bz0 = z-hl-1, bz1 = z+hl+1;
+    const near = C.z < bz0 ? bz0 : bz1;
+    poly(ctx, [pr(C,bx0,y,near),pr(C,bx1,y,near),pr(C,bx1,0,near),pr(C,bx0,0,near)],
+         fogged(mix(SHADE, STONE, 0.5), d));
+    poly(ctx, [pr(C, C.x < x ? bx0 : bx1, y, bz0), pr(C, C.x < x ? bx0 : bx1, y, bz1),
+               pr(C, C.x < x ? bx0 : bx1, 0, bz1), pr(C, C.x < x ? bx0 : bx1, 0, bz0)],
+         fogged(mix(SHADE, STONE, 0.3), d));
+    if(d < 240){
+      const PR = rng(p.seed|0);
+      for(let r=0;r<Math.floor(y/3.7);r++) for(let c=0;c<Math.floor((hw*2)/2.9);c++){
+        const k = PR();
+        if(k > 0.42) continue;
+        const wx = bx0+0.7+c*2.9, wy = 0.8+r*3.7;
+        poly(ctx, [pr(C,wx,wy+2.2,near-0.05),pr(C,wx+1.9,wy+2.2,near-0.05),
+                   pr(C,wx+1.9,wy,near-0.05),pr(C,wx,wy,near-0.05)],
+             fogged(k < 0.09 ? NEON : WARM, d, 0.88));
+      }
+    }
+    poly(ctx, [pr(C,bx0,y,bz0),pr(C,bx1,y,bz0),pr(C,bx1,y,bz1),pr(C,bx0,y,bz1)],
+         fogged(mix(SHADE,STONE,0.35), d));
     poly(ctx, [pr(C,x-hw,y+0.02,z-hl),pr(C,x+hw,y+0.02,z-hl),pr(C,x+hw,y+0.02,z+hl),pr(C,x-hw,y+0.02,z+hl)],
          fogged([30,124,116], d, 0.97));
     // lines and net
@@ -22281,14 +22446,11 @@ const FFIntro = (function(){
     [[-hw*0.72,-hl*0.86,hw*0.72,-hl*0.86],[-hw*0.72,hl*0.86,hw*0.72,hl*0.86],
      [-hw*0.72,-hl*0.86,-hw*0.72,hl*0.86],[hw*0.72,-hl*0.86,hw*0.72,hl*0.86],
      [-hw*0.72,0,hw*0.72,0]].forEach(s=>{
-      const a = pr(C,x+s[0],y+0.03,z+s[1]), b = pr(C,x+s[2],y+0.03,z+s[3]);
-      if(!a||!b) return;
-      ctx.strokeStyle = ln; ctx.lineWidth = Math.max(0.5, 0.1*a.s);
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      const a = pr(C,x+s[0],y+0.04,z+s[1]), b = pr(C,x+s[2],y+0.04,z+s[3]);
+      line(ctx, a, b, ln, a ? Math.max(0.5, 0.1*a.s) : 1);
     });
-    const nA = pr(C,x-hw*0.8,y+1.1,z), nB = pr(C,x+hw*0.8,y+1.1,z),
-          nC = pr(C,x+hw*0.8,y,z),      nD = pr(C,x-hw*0.8,y,z);
-    poly(ctx, [nA,nB,nC,nD], fogged([230,230,255], d, 0.28));
+    poly(ctx, [pr(C,x-hw*0.8,y+1.1,z),pr(C,x+hw*0.8,y+1.1,z),pr(C,x+hw*0.8,y,z),pr(C,x-hw*0.8,y,z)],
+         fogged([230,230,255], d, 0.28));
 
     // the rally: two figures trading, and a ball on a real arc between them
     const beat = (u*1.15) % 2, side = beat < 1 ? 1 : -1, k = beat % 1;
@@ -22297,15 +22459,13 @@ const FFIntro = (function(){
       const pz = z + s*hl*0.7;
       const base = pr(C, px, y, pz), head = pr(C, px, y+1.85, pz);
       if(!base || !head) continue;
-      ctx.strokeStyle = fogged([16,6,24], d, 0.95);
-      ctx.lineWidth = Math.max(1.2, 0.42*base.s);
-      ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(head.x, head.y); ctx.stroke();
+      line(ctx, base, head, fogged([16,6,24], d, 0.95), Math.max(1.2, 0.42*base.s));
       dot(ctx, head, Math.max(1, 0.3*head.s), fogged([16,6,24], d, 0.95));
     }
     const bz = z + side*hl*0.7 - side*k*hl*1.4;
     const by = y + 0.6 + Math.sin(k*Math.PI)*3.4;
     const bp = pr(C, x + Math.sin(u*1.4)*hw*0.3, by, bz);
-    if(bp){ glow(ctx, bp, Math.max(3, 0.9*bp.s), [220,255,60], 0.85);
+    if(bp){ glow(ctx, bp, Math.max(3, 0.9*bp.s), BALL, 0.85);
             dot(ctx, bp, Math.max(1, 0.24*bp.s), rgb([230,255,90])); }
 
     // four towers, four cones of light
@@ -22313,8 +22473,7 @@ const FFIntro = (function(){
       const lx = x + sx*hw*1.08, lz = z + sz*hl*0.92;
       const b2 = pr(C,lx,y,lz), t2 = pr(C,lx,y+7,lz);
       if(!b2||!t2) continue;
-      ctx.strokeStyle = fogged([150,140,180], d, 0.8); ctx.lineWidth = Math.max(0.6, 0.14*b2.s);
-      ctx.beginPath(); ctx.moveTo(b2.x,b2.y); ctx.lineTo(t2.x,t2.y); ctx.stroke();
+      line(ctx, b2, t2, fogged([150,140,180], d, 0.8), Math.max(0.6, 0.14*b2.s));
       const c1 = pr(C, x - sx*hw*0.4, y, z - sz*hl*0.3);
       if(c1) poly(ctx, [t2, c1, pr(C, x + sx*hw*0.2, y, z + sz*hl*0.2)], fogged([255,245,210], d, 0.10));
       // capped, or four lamps at fifteen metres merge into a second moon
@@ -22323,6 +22482,22 @@ const FFIntro = (function(){
   }
 
   /* a plaza of people watching a screen, phones up */
+  function drawCrowd(ctx, C, p, u){
+    let lit = 0;
+    p.crowd.forEach(c=>{
+      const bob = Math.sin(u*2.6 + c.ph)*0.16;
+      const b = pr(C, p.x+c.dx, 0, p.z+c.dz);
+      const h = pr(C, p.x+c.dx, 1.6*c.s + bob, p.z+c.dz);
+      if(!b || !h) return;
+      line(ctx, b, h, fogged([14,6,26], b.d, 0.9), Math.max(0.7, 0.3*b.s));
+      if(c.phone && b.d < 90 && lit < 16){
+        lit++;
+        const ph = pr(C, p.x+c.dx, 2.2*c.s + bob + Math.sin(u*1.3+c.ph)*0.1, p.z+c.dz);
+        glow(ctx, ph, Math.max(2, 0.7*b.s), [255,240,200], 0.8*(1-fogAt(b.d)));
+      }
+    });
+  }
+
   function drawPlaza(ctx, C, p, u){
     const d = depth(C, p.x, 0, p.z);
     if(d < 1 || d > 480) return;
@@ -22342,19 +22517,125 @@ const FFIntro = (function(){
       });
       glow(ctx, q3, Math.max(20, 14*q3.s), NEON, 0.30*(1-fogAt(d)));
     }
-    p.crowd.forEach(c=>{
-      const bob = Math.sin(u*2.6 + c.ph)*0.16;
-      const b = pr(C, p.x+c.dx, 0, p.z+c.dz);
-      const h = pr(C, p.x+c.dx, 1.6*c.s + bob, p.z+c.dz);
-      if(!b || !h) return;
-      ctx.strokeStyle = fogged([14,6,26], b.d, 0.9);
-      ctx.lineWidth = Math.max(0.7, 0.3*b.s);
-      ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(h.x,h.y); ctx.stroke();
-      if(c.phone && b.d < 130){
-        const ph = pr(C, p.x+c.dx, 2.2*c.s + bob + Math.sin(u*1.3+c.ph)*0.1, p.z+c.dz);
-        glow(ctx, ph, Math.max(2, 0.7*b.s), [255,240,200], 0.8*(1-fogAt(b.d)));
+    drawCrowd(ctx, C, p, u);
+  }
+
+  /* THE PODIUM — the ladder's own, three plinths and the trophy,
+     with a crowd in front of it */
+  function drawPodium(ctx, C, p, u){
+    const d = depth(C, p.x, 2, p.z);
+    if(d < 1 || d > 460) return;
+    poly(ctx, [pr(C,p.x-15,0.05,p.z-17),pr(C,p.x+15,0.05,p.z-17),
+               pr(C,p.x+15,0.05,p.z+17),pr(C,p.x-15,0.05,p.z+17)],
+         fogged([44,18,62], d, 0.9));
+    const pz = p.z - 10;
+    const steps = [[-4.6, 3.4, "🥈", [199,199,217]], [0, 5.6, "🥇", [255,204,0]], [4.6, 2.4, "🥉", [224,121,58]]];
+    steps.forEach(([dx, hgt, medal, col])=>{
+      const x = p.x + dx;
+      poly(ctx, [pr(C,x-2,hgt,pz),pr(C,x+2,hgt,pz),pr(C,x+2,0,pz),pr(C,x-2,0,pz)],
+           fogged(mix(SHADE,STONE,0.5), d));
+      poly(ctx, [pr(C,x-2,hgt,pz),pr(C,x+2,hgt,pz),pr(C,x+2,hgt,pz+4),pr(C,x-2,hgt,pz+4)],
+           fogged(mix(STONE,col,0.45), d));
+      const m = pr(C, x, hgt+1.9, pz+2);
+      if(m && m.s > 1.4){
+        // capped: a medal is a small thing on a plinth, and an uncapped
+        // glyph size turns it into a moon the moment you fly near it
+        ctx.font = Math.min(52, Math.max(7, 2.4*m.s))+"px serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.globalAlpha = 1-fogAt(d);
+        ctx.fillText(medal, m.x, m.y);
+        ctx.globalAlpha = 1;
       }
+      glow(ctx, m, Math.min(46, Math.max(3, 2*(m?m.s:1))), col, 0.45*(1-fogAt(d)));
     });
+    drawCrowd(ctx, C, p, u);
+  }
+
+  /* THE TROPHY — the one on top of the ladder, on top of a roof */
+  function drawTrophy(ctx, C, p, u){
+    const d = depth(C, p.x, p.y, p.z);
+    if(d < 1 || d > 420) return;
+    const x = p.x, y = p.y, z = p.z;
+    poly(ctx, [pr(C,x-5,y,z-5),pr(C,x+5,y,z-5),pr(C,x+5,0,z-5),pr(C,x-5,0,z-5)], fogged(SHADE, d, 0.95));
+    poly(ctx, [pr(C,x-5,y,z-5),pr(C,x+5,y,z-5),pr(C,x+5,y,z+5),pr(C,x-5,y,z+5)],
+         fogged(mix(SHADE,STONE,0.35), d));
+    const t = pr(C, x, y + 4 + Math.sin(u*0.9)*0.3, z);
+    if(t && t.s > 0.9){
+      glow(ctx, t, Math.min(70, Math.max(6, 4*t.s)), [255,204,0], 0.55*(1-fogAt(d)));
+      ctx.font = Math.min(110, Math.max(9, 5.5*t.s))+"px serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.globalAlpha = 1-fogAt(d);
+      ctx.fillText("🏆", t.x, t.y);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* THE WORDMARK — a rooftop sign in the ladder's neon */
+  function drawSign(ctx, C, p, u){
+    const d = depth(C, p.x, p.y, p.z);
+    if(d < 1 || d > 460) return;
+    const x = p.x, y = p.y, z = p.z, w = 16, h = 5;
+    const q0 = pr(C,x-w/2,y+h,z), q1 = pr(C,x+w/2,y+h,z), q3 = pr(C,x-w/2,y,z);
+    if(!q0||!q1||!q3) return;
+    // the frame it is bolted to
+    poly(ctx, [pr(C,x-w/2-0.6,y+h+0.6,z+0.4),pr(C,x+w/2+0.6,y+h+0.6,z+0.4),
+               pr(C,x+w/2+0.6,y-0.6,z+0.4),pr(C,x-w/2-0.6,y-0.6,z+0.4)], fogged([18,8,30], d, 0.92));
+    const flick = Math.sin(u*7.3) > -0.94 ? 1 : 0.35;    // one tube not quite right
+    onQuad(ctx, q0, q1, q3, 160, 50, cx=>{
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      cx.font = "700 34px 'JetBrains Mono',monospace";
+      cx.fillStyle = "rgba(255,45,143,"+(0.9*flick)+")";
+      cx.fillText(p.text, 80, 26);
+      cx.fillStyle = "rgba(255,240,250,"+(0.95*flick)+")";
+      cx.font = "700 33px 'JetBrains Mono',monospace";
+      cx.fillText(p.text, 80, 25);
+    });
+    glow(ctx, pr(C,x,y+h/2,z), Math.max(14, 9*q0.s), NEON, 0.30*flick*(1-fogAt(d)));
+  }
+
+  /* THE TICKER — the top bar's own line, running along a building */
+  function drawTicker(ctx, C, p, u, film){
+    const d = depth(C, p.x, p.y, p.z);
+    if(d < 1 || d > 360) return;
+    const side = p.x < 0 ? -1 : 1;
+    const x0 = p.x + (side < 0 ? -30 : 0), x1 = x0 + 30, y = p.y, h = 2.6, z = p.z;
+    const q0 = pr(C,x0,y+h,z), q1 = pr(C,x1,y+h,z), q3 = pr(C,x0,y,z);
+    if(!q0||!q1||!q3) return;
+    poly(ctx, [q0,q1,pr(C,x1,y,z),q3], rgb(mix([10,3,20],FOGC,fogAt(d)), 0.96));
+    const msg = "  LIVE · K=32 · START 100 · FGTA CHAMPIONSHIP LADDER · " + film.stage.toUpperCase() + " · ";
+    onQuad(ctx, q0, q1, q3, 300, 26, cx=>{
+      cx.save();
+      cx.beginPath(); cx.rect(0,0,300,26); cx.clip();
+      cx.font = "700 15px 'JetBrains Mono',monospace";
+      cx.textBaseline = "middle";
+      cx.fillStyle = "rgba(255,45,143,.95)";
+      const wid = cx.measureText(msg).width || 300;
+      let off = -((u*70) % wid);
+      while(off < 300){ cx.fillText(msg, off, 14); off += wid; }
+      cx.restore();
+    });
+    glow(ctx, pr(C,(x0+x1)/2,y+h/2,z), Math.max(10, 7*q0.s), NEON, 0.22*(1-fogAt(d)));
+  }
+
+  /* THE LOAD SCREEN'S COURT, painted on the avenue and lit from under */
+  function drawLsCourt(ctx, C, p, u){
+    const z = p.z, d = depth(C, 0, 0, z);
+    if(d < 1 || d > 320) return;
+    const hw = ROAD - 1.4, hl = 18;
+    poly(ctx, [pr(C,-hw,0.07,z-hl),pr(C,hw,0.07,z-hl),pr(C,hw,0.07,z+hl),pr(C,-hw,0.07,z+hl)],
+         fogged([18,66,72], d, 0.8));
+    const ln = fogged([120,240,255], d, 0.85);
+    const seg = [[-hw*0.8,-hl*0.9,hw*0.8,-hl*0.9],[-hw*0.8,hl*0.9,hw*0.8,hl*0.9],
+                 [-hw*0.8,-hl*0.9,-hw*0.8,hl*0.9],[hw*0.8,-hl*0.9,hw*0.8,hl*0.9],
+                 [-hw*0.55,-hl*0.5,hw*0.55,-hl*0.5],[-hw*0.55,hl*0.5,hw*0.55,hl*0.5],
+                 [0,-hl*0.5,0,hl*0.5],[-hw*0.8,0,hw*0.8,0]];
+    seg.forEach(s=>{
+      const a = pr(C,s[0],0.09,z+s[1]), b = pr(C,s[2],0.09,z+s[3]);
+      line(ctx, a, b, ln, a ? Math.max(0.7, 0.12*a.s) : 1);
+    });
+    // the ball resting at the net, as it does on the load screen
+    const bp = pr(C, 0, 0.5 + Math.abs(Math.sin(u*1.6))*1.6, z);
+    if(bp){ glow(ctx, bp, Math.max(3, 1.1*bp.s), BALL, 0.9); dot(ctx, bp, Math.max(1,0.3*bp.s), rgb([230,255,90])); }
   }
 
   /* a screen the size of a building, running the fixture */
@@ -22370,7 +22651,7 @@ const FFIntro = (function(){
           q2 = pr(C, x1, y,   z), q3 = pr(C, x0, y,   z);
     if(!q0||!q1||!q2||!q3) return;
     poly(ctx, [q0,q1,q2,q3], rgb(mix([12,4,26],FOGC,fogAt(d)), 0.96), fogged(NEON, d, 0.8), Math.max(0.8,0.1*q0.s));
-    const phase = Math.floor(u*0.62) % 2;
+    const phase = Math.floor(u*0.62) % 3;
     onQuad(ctx, q0, q1, q3, 170, 110, cx=>{
       const g = cx.createLinearGradient(0,0,0,110);
       g.addColorStop(0, "rgba(255,45,143,.30)"); g.addColorStop(1, "rgba(255,138,43,.16)");
@@ -22387,13 +22668,21 @@ const FFIntro = (function(){
         cx.fillStyle = "rgba(255,255,255,.6)";
         cx.font = "700 11px 'JetBrains Mono',monospace";
         cx.fillText(film.stage.toUpperCase(), 85, 84);
-      } else {
+      } else if(phase === 1){
         cx.fillStyle = "rgba(255,255,255,.95)";
         cx.font = "700 24px 'JetBrains Mono',monospace";
         cx.fillText("FF CUP", 85, 44);
         cx.fillStyle = "rgba(255,214,120,.9)";
         cx.font = "700 12px 'JetBrains Mono',monospace";
         cx.fillText(film.whenShort.toUpperCase(), 85, 74);
+      } else {
+        // the app's own buttons, advertised back at it
+        cx.font = "22px serif";
+        cx.fillText("🎤", 34, 40); cx.fillText("⛈", 68, 40);
+        cx.fillText("🗳", 102, 40); cx.fillText("⚔", 136, 40);
+        cx.fillStyle = "rgba(255,255,255,.7)";
+        cx.font = "700 10px 'JetBrains Mono',monospace";
+        cx.fillText("BANTER · STORM · POLL · CALLOUT", 85, 78);
       }
       // scan lines
       cx.fillStyle = "rgba(0,0,0,.18)";
@@ -22411,12 +22700,11 @@ const FFIntro = (function(){
       const xa = -w/2 + (w/segs)*i, xb = xa + w/segs;
       const sag = k => Math.cos(k*Math.PI)* -0.9 + Math.sin(u*2 + k*4)*0.32;
       const ka = i/segs, kb = (i+1)/segs;
-      const q = [pr(C,xa,y+sag(ka),z), pr(C,xb,y+sag(kb),z),
-                 pr(C,xb,y+sag(kb)-h,z+0.1), pr(C,xa,y+sag(ka)-h,z+0.1)];
-      poly(ctx, q, fogged(i%2 ? [190,26,96] : [230,40,120], d, 0.95));
+      poly(ctx, [pr(C,xa,y+sag(ka),z), pr(C,xb,y+sag(kb),z),
+                 pr(C,xb,y+sag(kb)-h,z+0.1), pr(C,xa,y+sag(ka)-h,z+0.1)],
+           fogged(i%2 ? [190,26,96] : [230,40,120], d, 0.95));
     }
-    const t0 = pr(C,-w/2,y-0.9,z), t1 = pr(C,w/2,y-0.9,z), t3 = pr(C,-w/2,y-h,z);
-    onQuad(ctx, t0, t1, t3, 240, 34, cx=>{
+    onQuad(ctx, pr(C,-w/2,y-0.9,z), pr(C,w/2,y-0.9,z), pr(C,-w/2,y-h,z), 240, 34, cx=>{
       cx.fillStyle = "rgba(255,240,210,.95)";
       cx.font = "700 20px 'JetBrains Mono',monospace";
       cx.textAlign = "center"; cx.textBaseline = "middle";
@@ -22428,17 +22716,12 @@ const FFIntro = (function(){
   function drawTram(ctx, C, p, u){
     const y = p.y, z = p.z, d = depth(C, 0, y, z);
     if(d < 1 || d > 460) return;
-    const a = pr(C,-90,y,z), b = pr(C,90,y,z);
-    if(a && b){
-      ctx.strokeStyle = fogged(SHADE, d, 0.95); ctx.lineWidth = Math.max(1.4, 0.8*a.s);
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    }
+    line(ctx, pr(C,-90,y,z), pr(C,90,y,z), fogged(SHADE, d, 0.95), Math.max(1.4, 30/d));
     const tx = -70 + ((u*16) % 150);
     for(let c=0;c<5;c++){
       const cx0 = tx + c*7.4;
-      const q = [pr(C,cx0,y+3.2,z-1.4),pr(C,cx0+6.4,y+3.2,z-1.4),
-                 pr(C,cx0+6.4,y+0.4,z-1.4),pr(C,cx0,y+0.4,z-1.4)];
-      poly(ctx, q, fogged([236,232,250], d, 0.92));
+      poly(ctx, [pr(C,cx0,y+3.2,z-1.4),pr(C,cx0+6.4,y+3.2,z-1.4),
+                 pr(C,cx0+6.4,y+0.4,z-1.4),pr(C,cx0,y+0.4,z-1.4)], fogged([236,232,250], d, 0.92));
       for(let w=0;w<4;w++){
         const wx = cx0+0.7+w*1.5;
         poly(ctx, [pr(C,wx,y+2.6,z-1.5),pr(C,wx+1,y+2.6,z-1.5),
@@ -22460,10 +22743,10 @@ const FFIntro = (function(){
     });
   }
 
-  /* the blimp, with the cup's name down its side */
+  /* the blimp, with the cup's name down its side. It keeps to its own
+     side of the sky — the middle of the frame belongs to the avenue
+     and, at the end of it, the arena. */
   function drawBlimp(ctx, C, p, u){
-    // it keeps to its own side of the sky — the middle of the frame
-    // belongs to the avenue and, at the end of it, the arena
     const x = -62 + ((u*3.4) % 38), y = p.y + Math.sin(u*0.5)*2, z = p.z;
     const d = depth(C, x, y, z);
     if(d < 1 || d > 620) return;
@@ -22488,18 +22771,32 @@ const FFIntro = (function(){
   function drawTerrace(ctx, C, p, u){
     const d = depth(C, p.x, 2, p.z);
     if(d < 1 || d > 300) return;
-    const q = [pr(C,p.x-1,4.2,p.z-7),pr(C,p.x+7,4.2,p.z-7),pr(C,p.x+7,4.2,p.z+7),pr(C,p.x-1,4.2,p.z+7)];
-    poly(ctx, q, fogged([255,138,43], d, 0.5));
+    poly(ctx, [pr(C,p.x-1,4.2,p.z-7),pr(C,p.x+7,4.2,p.z-7),
+               pr(C,p.x+7,4.2,p.z+7),pr(C,p.x-1,4.2,p.z+7)], fogged([255,138,43], d, 0.5));
     const R2 = rng(p.seed);
     for(let i=0;i<9;i++){
       const tx = p.x + 0.6 + R2()*5, tz = p.z - 6 + R2()*12;
       const b = pr(C, tx, 0, tz), h = pr(C, tx, 1.5, tz);
       if(!b||!h) continue;
-      ctx.strokeStyle = fogged([16,6,24], d, 0.9); ctx.lineWidth = Math.max(0.7, 0.28*b.s);
-      ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(h.x,h.y); ctx.stroke();
+      line(ctx, b, h, fogged([16,6,24], d, 0.9), Math.max(0.7, 0.28*b.s));
       glow(ctx, pr(C, tx, 0.9, tz), Math.max(2, 0.6*b.s), WARM, 0.5*(1-fogAt(d)));
     }
-    glow(ctx, pr(C, p.x+3, 2.6, p.z), Math.max(14, 8*(q[0]?q[0].s:2)), WARM, 0.28*(1-fogAt(d)));
+  }
+
+  /* THE WEATHER FX — one district getting rained on */
+  function drawRain(ctx, C, p, u){
+    const d = depth(C, p.x, 14, p.z);
+    if(d < 1 || d > 420) return;
+    ctx.strokeStyle = fogged([170,200,255], d, 0.35);
+    ctx.lineWidth = Math.max(0.5, 40/d);
+    ctx.beginPath();
+    p.drops.forEach(r=>{
+      const y = 34 - ((u*r.sp + r.y*3) % 34);
+      const a = pr(C, p.x+r.dx, y, p.z+r.dz), b = pr(C, p.x+r.dx+0.4, y-1.6, p.z+r.dz);
+      if(!a||!b) return;
+      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    });
+    ctx.stroke();
   }
 
   /* fireworks over the far rooftops, once the arena is in sight */
@@ -22524,6 +22821,119 @@ const FFIntro = (function(){
       glow(ctx, c, rad*0.8, col, (1-k)*0.5);
       ctx.restore();
     }
+  }
+
+  /* ---- THE WINDOW ----
+     The tower the camera goes through. Its two long faces are drawn as
+     four bands around a hole, so you can see the lit corridor through
+     the opening on the way in and the city again through the far one.
+     Inside, the corridor's ceiling strips are what make 36 metres of
+     office feel like a tunnel at ninety a second. */
+  function drawPortalFace(ctx, C, P, z, d, colr, lit){
+    const x0 = P.x - P.w/2, x1 = P.x + P.w/2;
+    const wx0 = P.wx - P.ww/2, wx1 = P.wx + P.ww/2;
+    const wy0 = P.wy - P.wh/2, wy1 = P.wy + P.wh/2;
+    const band = (a,b,c,e) => poly(ctx, [pr(C,a,e,z),pr(C,b,e,z),pr(C,b,c,z),pr(C,a,c,z)], colr);
+    band(x0, x1, wy1, P.h);          // above the opening
+    band(x0, x1, 0,   wy0);          // below it
+    band(x0, wx0, wy0, wy1);         // left of it
+    band(wx1, x1, wy0, wy1);         // right of it
+    /* the rest of the floor, so the tower the camera is aiming at reads
+       as a building with one window open rather than a blank cliff.
+       Dropped at the same range as every other building's grid — left on
+       further out, it is the only lit grid in the distance and reads as
+       a slab hanging over the avenue. */
+    if(lit && d < 230){
+      const PR = rng(0x9e3779b9);
+      for(let r=0;r<Math.floor(P.h/3.7);r++){
+        for(let c=0;c<Math.floor(P.w/2.9);c++){
+          const k = PR();
+          const wx = x0+0.8+c*2.9, wy = 0.9+r*3.7;
+          if(wx+1.9 > wx0 && wx < wx1 && wy+2.4 > wy0 && wy < wy1) continue;   // the opening
+          poly(ctx, [pr(C,wx,wy+2.4,z-0.05),pr(C,wx+1.9,wy+2.4,z-0.05),
+                     pr(C,wx+1.9,wy,z-0.05),pr(C,wx,wy,z-0.05)],
+               k < 0.34 ? fogged(k < 0.07 ? NEON : WARM, d, 0.9) : fogged(SHADE, d, 0.55));
+        }
+      }
+    }
+    // the frame, lit from inside
+    const fr = fogged([255,206,150], d, 0.7);
+    line(ctx, pr(C,wx0,wy0,z), pr(C,wx1,wy0,z), fr, 1.6);
+    line(ctx, pr(C,wx0,wy1,z), pr(C,wx1,wy1,z), fr, 1.6);
+  }
+
+  function drawPortal(ctx, C, P, u){
+    const cz = (P.z0 + P.z1)/2, d = depth(C, P.x, P.h/2, cz);
+    if(d < -40 || d > 520) return;
+    const body   = fogged(mix(SHADE, STONE, 0.58), Math.max(4,d));
+    const inner  = fogged([26,12,40], Math.max(6,d), 0.99);   // what a wall looks like from indoors
+    const wx0 = P.wx - P.ww/2, wx1 = P.wx + P.ww/2;
+    const wy0 = P.wy - P.wh/2, wy1 = P.wy + P.wh/2;
+
+    /* The far wall: its inside face while the camera is still short of
+       the building or inside it, its outside face once it is past. */
+    if(C.z < P.z1) drawPortalFace(ctx, C, P, P.z1, d, inner, false);
+    else           drawPortalFace(ctx, C, P, P.z1, d, body,  true);
+
+    // the corridor: four walls between the two openings, lit down the middle
+    const wall = (ax,ay,bx,by) => poly(ctx,
+      [pr(C,ax,ay,P.z0), pr(C,bx,by,P.z0), pr(C,bx,by,P.z1), pr(C,ax,ay,P.z1)], inner);
+    wall(wx0, wy1, wx1, wy1);        // ceiling
+    wall(wx0, wy0, wx1, wy0);        // floor
+    wall(wx0, wy0, wx0, wy1);        // left
+    wall(wx1, wy0, wx1, wy1);        // right
+    /* the strip lights, which are what make thirty-six metres of office
+       feel like a tunnel at ninety a second. Their width is capped: one
+       passing a hand from the lens would otherwise be a bar across the
+       whole frame. */
+    for(let z = P.z0 + 3; z < P.z1; z += 5){
+      const a = pr(C, wx0+1.4, wy1-0.25, z), b = pr(C, wx1-1.4, wy1-0.25, z);
+      if(!a||!b) continue;
+      line(ctx, a, b, "rgba(255,222,170,.9)", Math.min(9, Math.max(1, 0.22*a.s)));
+      glow(ctx, {x:(a.x+b.x)/2, y:(a.y+b.y)/2}, Math.min(90, Math.max(3, 2.4*a.s)), WARM, 0.32);
+    }
+    // and something on the wall to have flown past
+    onQuad(ctx, pr(C,wx0+0.05,wy1-1.2,P.z0+4), pr(C,wx0+0.05,wy1-1.2,P.z0+11),
+           pr(C,wx0+0.05,wy1-4.4,P.z0+4), 90, 42, cx=>{
+      cx.fillStyle = "rgba(255,45,143,.9)"; cx.fillRect(0,0,90,42);
+      cx.fillStyle = "rgba(255,255,255,.95)";
+      cx.font = "700 15px 'JetBrains Mono',monospace";
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      cx.fillText("FGTA", 45, 21);
+    });
+
+    /* the flanks and the roof, so that from anywhere but head-on the
+       tower is a box and not a pair of billboards with a gap between */
+    const px0 = P.x - P.w/2, px1 = P.x + P.w/2;
+    if(C.x < px0) poly(ctx, [pr(C,px0,P.h,P.z1),pr(C,px0,P.h,P.z0),
+                             pr(C,px0,0,P.z0),pr(C,px0,0,P.z1)], fogged(mix(SHADE,STONE,0.3), Math.max(4,d)));
+    if(C.x > px1) poly(ctx, [pr(C,px1,P.h,P.z0),pr(C,px1,P.h,P.z1),
+                             pr(C,px1,0,P.z1),pr(C,px1,0,P.z0)], fogged(mix(SHADE,STONE,0.3), Math.max(4,d)));
+    if(C.y > P.h) poly(ctx, [pr(C,px0,P.h,P.z0),pr(C,px1,P.h,P.z0),
+                             pr(C,px1,P.h,P.z1),pr(C,px0,P.h,P.z1)], fogged(mix(SHADE,STONE,0.7), Math.max(4,d)));
+
+    // the near face last, so it covers everything except the way in
+    if(C.z < P.z0){
+      drawPortalFace(ctx, C, P, P.z0, d, body, true);
+      glow(ctx, pr(C, P.wx, P.wy, P.z0), Math.min(160, Math.max(8, 5*(C.f/Math.max(8,d)))), WARM, 0.4);
+    }
+  }
+
+  /* THE CONFETTI off FX.celebrate, drifting through the whole city */
+  function drawConfetti(ctx, C, city, u){
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    city.confetti.forEach(c=>{
+      const y = c.y + Math.sin(u*c.sp + c.ph)*1.8;
+      const x = c.x + Math.sin(u*0.4 + c.ph)*3;
+      const q = pr(C, x, y, c.z);
+      if(!q || q.d > 190) return;
+      const sz = c.sz * q.s * 0.55;
+      if(sz < 5) return;
+      ctx.globalAlpha = (1 - fogAt(q.d)) * 0.85;
+      ctx.font = Math.min(90, sz) + "px serif";
+      ctx.fillText(c.e, q.x, q.y);
+      ctx.globalAlpha = 1;
+    });
   }
 
   /* ---- the arena the whole flight is aimed at ---- */
@@ -22561,9 +22971,9 @@ const FFIntro = (function(){
       const a = (i/9)*6.2832 + 0.3;
       const bx = Math.cos(a)*R*0.62, bz = Math.sin(a)*R*0.44 + ARENA_Z;
       const hgt = 20 + ((i*37)%11);
-      const q = [pr(C,bx-2.4,ARENA_Y+16,bz), pr(C,bx+2.4,ARENA_Y+16,bz),
-                 pr(C,bx+0.6,ARENA_Y+16+hgt,bz), pr(C,bx-0.6,ARENA_Y+16+hgt,bz)];
-      poly(ctx, q, rgb(mix(STONE,[150,140,210],0.35), 0.96));
+      poly(ctx, [pr(C,bx-2.4,ARENA_Y+16,bz), pr(C,bx+2.4,ARENA_Y+16,bz),
+                 pr(C,bx+0.6,ARENA_Y+16+hgt,bz), pr(C,bx-0.6,ARENA_Y+16+hgt,bz)],
+           rgb(mix(STONE,[150,140,210],0.35), 0.96));
     }
     // the ring of light, and the beams it throws up. Drawn additively —
     // a searchlight brightens what it crosses, it does not tint it brown
@@ -22650,6 +23060,16 @@ const FFIntro = (function(){
     const vs     = el.querySelector(".ffi-vs");
     const strap  = el.querySelector(".ffi-strap");
 
+    /* The card is built early and held paused, not injected at the cut:
+       parsing and laying out a card that size mid-flight cost a frame
+       exactly where the film could least afford one, and the CSS keeps
+       every animation inside it paused until .on arrives. It is built
+       one tick after the first frame rather than before it, so the cost
+       lands inside the overlay's own fade-in where nothing is moving
+       yet — the opening of the flight is the other place a dropped
+       frame shows. */
+    setTimeout(()=>{ if(liveEl === el) vs.innerHTML = vsCardHtml(film); }, 60);
+
     const done = ()=>teardown();
     el.addEventListener("click", done);
     liveKeys = e => { if(e.key === "Escape" || e.key === "Enter" || e.key === " ") done(); };
@@ -22670,7 +23090,12 @@ const FFIntro = (function(){
     const ctx  = canvas.getContext("2d");
     let W = 0, H = 0, dpr = 1, skyGrad = null, vigGrad = null;
     function size(){
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      /* A film is not a document: at ninety units a second nobody is
+         counting pixels, and a retina backing store costs four times the
+         fill for a picture that is moving too fast to resolve. Capped
+         well below the display's own ratio, which is most of what keeps
+         this at frame rate on a phone. */
+      dpr = Math.min(1.25, window.devicePixelRatio || 1);
       W = el.clientWidth; H = el.clientHeight;
       canvas.width = Math.max(1, W*dpr); canvas.height = Math.max(1, H*dpr);
       ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -22683,10 +23108,81 @@ const FFIntro = (function(){
       vigGrad = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.25,W/2,H/2,Math.max(W,H)*0.75);
       vigGrad.addColorStop(0,"rgba(0,0,0,0)");
       vigGrad.addColorStop(1,"rgba(4,0,10,.72)");
+      GLOW_MAX = Math.max(60, Math.min(W,H)*0.42);
     }
     size();
     const onResize = ()=>size();
     window.addEventListener("resize", onResize);
+
+    /* scratch for the cull pass — allocated once, not sixty times a second */
+    const CORN = new Array(8), FACE = new Array(4);
+
+    /* Is the whole viewport inside this convex quad? A building face that
+       contains all four screen corners hides everything behind it, and at
+       street level there is almost always one — the near rank is a solid
+       wall a few metres away. Without this the painter's order draws the
+       entire city and then buries it, which is where the worst frames of
+       the opening seconds came from. */
+    function coversViewport(q, W, H){
+      for(let c=0;c<4;c++){
+        const px = (c&1) ? W : 0, py = (c&2) ? H : 0;
+        let sign = 0;
+        for(let i=0;i<4;i++){
+          const a = q[i], b = q[(i+1)&3];
+          const cr = (b.x-a.x)*(py-a.y) - (b.y-a.y)*(px-a.x);
+          if(cr === 0) continue;
+          const sg = cr > 0 ? 1 : -1;
+          if(sign === 0) sign = sg; else if(sg !== sign) return false;
+        }
+      }
+      return true;
+    }
+    /* the depth at which the city stops being visible this frame */
+    function occlusionDepth(C){
+      let at = Infinity;
+      const bl = city.blocks;
+      for(let i=0;i<bl.length;i++){
+        const b = bl[i];
+        const d = depth(C, b.x, b.h/2, b.z);
+        if(d <= 1 || d > 80 || d >= at) continue;
+        const x0=b.x-b.w/2, x1=b.x+b.w/2, z0=b.z-b.d/2, z1=b.z+b.d/2;
+        const faces = [];
+        if(C.z < z0) faces.push([[x0,b.h,z0],[x1,b.h,z0],[x1,0,z0],[x0,0,z0]]);
+        if(C.z > z1) faces.push([[x1,b.h,z1],[x0,b.h,z1],[x0,0,z1],[x1,0,z1]]);
+        if(C.x < x0) faces.push([[x0,b.h,z1],[x0,b.h,z0],[x0,0,z0],[x0,0,z1]]);
+        if(C.x > x1) faces.push([[x1,b.h,z0],[x1,b.h,z1],[x1,0,z1],[x1,0,z0]]);
+        for(let fi=0; fi<faces.length; fi++){
+          const f = faces[fi];
+          let ok = true;
+          for(let k=0;k<4;k++){
+            const p = pr(C, f[k][0], f[k][1], f[k][2]);
+            if(!p){ ok = false; break; }
+            FACE[k] = p;
+          }
+          if(ok && coversViewport(FACE, C.W, C.H)){ at = d; break; }
+        }
+      }
+      return at;
+    }
+    /* Is any part of this box on screen? Eight projections cost a fraction
+       of one fill, and most of the city on any given frame is off to the
+       side or behind you. Skipping those took the worst frame of the
+       opening seconds from ~118ms to a fifth of that. */
+    function boxOnScreen(C, x, y0, y1, z, hw, hd){
+      let minx=1e9, maxx=-1e9, miny=1e9, maxy=-1e9, any=false, behind=false;
+      for(let i=0;i<8;i++){
+        const px = x + ((i&1)?hw:-hw), py = (i&2)?y1:y0, pz = z + ((i&4)?hd:-hd);
+        const p = pr(C, px, py, pz);
+        CORN[i] = p;
+        if(!p){ behind = true; continue; }
+        any = true;
+        if(p.x<minx)minx=p.x; if(p.x>maxx)maxx=p.x;
+        if(p.y<miny)miny=p.y; if(p.y>maxy)maxy=p.y;
+      }
+      if(!any) return false;
+      if(behind) return true;                       // straddling the near plane — keep it
+      return !(maxx < 0 || minx > C.W || maxy < 0 || miny > C.H);
+    }
 
     try{ sfx("magic"); }catch(e){}
     let slammed = false, carded = false;
@@ -22701,61 +23197,82 @@ const FFIntro = (function(){
       ctx.clearRect(0,0,W,H);
       drawSky(ctx, C, u, city, skyGrad);
 
-      // painter's algorithm over everything with a place in the world
+      // painter's algorithm over everything with a place in the world,
+      // minus whatever a nearer wall is already covering
+      const far = occlusionDepth(C);
       const list = [];
-      city.blocks.forEach(b=>{
+      for(let i=0;i<city.blocks.length;i++){
+        const b = city.blocks[i];
         const d = depth(C, b.x, b.h/2, b.z);
-        if(d > 1 && d < 640) list.push({d, f: ()=>drawBlock(ctx, C, b, u, budget)});
-      });
+        if(d <= 1 || d > 640 || d > far) continue;
+        if(!boxOnScreen(C, b.x, 0, b.h, b.z, b.w/2, b.d/2)) continue;
+        list.push({d, b, f: null});
+      }
       city.props.forEach(p=>{
         const d = depth(C, p.x||0, p.y||4, p.z);
-        if(d <= 1 || d > 660) return;
+        if(d <= -40 || d > 660 || d > far) return;
         const f = p.kind === "court"     ? ()=>drawCourt(ctx, C, p, u)
                 : p.kind === "plaza"     ? ()=>drawPlaza(ctx, C, p, u)
+                : p.kind === "podium"    ? ()=>drawPodium(ctx, C, p, u)
+                : p.kind === "trophy"    ? ()=>drawTrophy(ctx, C, p, u)
+                : p.kind === "sign"      ? ()=>drawSign(ctx, C, p, u)
+                : p.kind === "ticker"    ? ()=>drawTicker(ctx, C, p, u, film)
+                : p.kind === "lscourt"   ? ()=>drawLsCourt(ctx, C, p, u)
                 : p.kind === "tron"      ? ()=>drawTron(ctx, C, p, u, film)
                 : p.kind === "banner"    ? ()=>drawBanner(ctx, C, p, u)
                 : p.kind === "tram"      ? ()=>drawTram(ctx, C, p, u)
                 : p.kind === "drones"    ? ()=>drawDrones(ctx, C, p, u)
                 : p.kind === "blimp"     ? ()=>drawBlimp(ctx, C, p, u)
                 : p.kind === "terrace"   ? ()=>drawTerrace(ctx, C, p, u)
+                : p.kind === "rain"      ? ()=>drawRain(ctx, C, p, u)
+                : p.kind === "portal"    ? ()=>drawPortal(ctx, C, PORTAL, u)
                 : p.kind === "fireworks" ? ()=>drawFireworks(ctx, C, p, u)
                 : null;
-        if(f) list.push({d, f});
+        if(f) list.push({d, b:null, f});
       });
-      list.push({d: depth(C, 0, ARENA_Y, ARENA_Z), f: ()=>drawArena(ctx, C, u)});
+      const ad = depth(C, 0, ARENA_Y, ARENA_Z);
+      if(ad < far) list.push({d: ad, b:null, f: ()=>drawArena(ctx, C, u)});
       list.sort((a,b)=>b.d - a.d);
 
       drawGround(ctx, C, u);
-      for(let i=0;i<list.length;i++) list[i].f();
+      for(let i=0;i<list.length;i++){
+        const it = list[i];
+        if(it.b) drawBlock(ctx, C, it.b, u, budget); else it.f();
+      }
+      drawConfetti(ctx, C, city, u);
 
       // speed lines while the flight is at its quickest
-      if(u > 1.2 && u < T_FLY){
-        const k = Math.min(1, (u-1.2)/1.6) * (1 - Math.max(0,(u-T_FLY+1))/1);
+      if(u > 1.4 && u < T_END){
+        const k = Math.min(1, (u-1.4)/1.6);
         ctx.strokeStyle = "rgba(255,255,255,.16)";
+        ctx.globalAlpha = k*0.5;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
         for(let i=0;i<14;i++){
           const a = (i/14)*6.2832 + u*0.4;
           const r0 = Math.min(W,H)*0.36, r1 = r0 + 60 + Math.sin(i*3+u)*40;
-          ctx.lineWidth = 1.4;
-          ctx.globalAlpha = k*0.5;
-          ctx.beginPath();
           ctx.moveTo(W/2+Math.cos(a)*r0, H/2+Math.sin(a)*r0);
           ctx.lineTo(W/2+Math.cos(a)*r1, H/2+Math.sin(a)*r1);
-          ctx.stroke();
         }
+        ctx.stroke();
         ctx.globalAlpha = 1;
       }
 
       // a vignette, so the middle of the frame always wins
       ctx.fillStyle = vigGrad; ctx.fillRect(0,0,W,H);
 
-      // the arrival: whiteout, then the card
-      if(u > T_LIFT - 0.35 && u < T_LIFT + 0.6){
-        const k = 1 - Math.abs(u - T_LIFT)/0.5;
+      // going through the glass is a bang of light, not a fade
+      if(u > 6.9 && u < 7.9){
+        const k = 1 - Math.abs(u - 7.2)/0.32;
+        if(k > 0){ ctx.fillStyle = "rgba(255,236,200,"+(k*k*0.55)+")"; ctx.fillRect(0,0,W,H); }
+      }
+      // and so is the arrival
+      if(u > T_END - 0.35 && u < T_END + 0.6){
+        const k = 1 - Math.abs(u - T_END)/0.5;
         if(k > 0){ ctx.fillStyle = "rgba(255,246,235,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
       }
       if(!carded && u >= T_VS){
         carded = true;
-        vs.innerHTML = vsCardHtml(film);
         vs.classList.add("on");
         setTimeout(()=>{ if(liveEl === el) teardown(); }, T_HOLD*1000);
       }
@@ -22853,18 +23370,50 @@ function ffPlayIntro(tid, round){
 window.ffPlayIntro = ffPlayIntro;
 
 /* ---------- the day's game announces itself ----------
-   Opening the cup on a day with a game on it plays that fixture's
-   walk-in — once per game per device, so it is an occasion and not
-   a toll gate. */
+   A fixture dated today plays its walk-in once per game per device, so
+   it is an occasion and not a toll gate. Two things ask for it: opening
+   the cup, and opening the app at all. */
+function ffWalkInSeen(t, fx){
+  const key = "fgta_walkin_" + t.id + "_" + fx.round;
+  try{
+    if(localStorage.getItem(key)) return true;
+    localStorage.setItem(key, rpToday());
+  }catch(e){}
+  return false;
+}
+
 function ffAutoIntro(t){
   if(!t || !cupSkinOn()) return;
   const fx = rpTodaysFixture(t);
-  if(!fx) return;
-  const key = "fgta_walkin_" + t.id + "_" + fx.round;
-  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key, rpToday()); }catch(e){}
+  if(!fx || ffWalkInSeen(t, fx)) return;
   setTimeout(()=>ffPlayIntro(t.id, fx.round), 700);
 }
 window.ffAutoIntro = ffAutoIntro;
+
+/* Opening the app on a day with a game on it is itself the cue. Called
+   at the end of the first load() of the session, once the roster and
+   the draw are actually in memory — before that there is no fixture to
+   find. It waits for the cinematic load screen to clear so the two
+   never play over each other, and goes through the same once-per-game
+   guard as every other route in, so opening the app and then opening
+   the cup does not play it twice. */
+let ffBooted = false;
+function ffBootWalkIn(){
+  if(ffBooted) return;
+  ffBooted = true;
+  if(!cupSkinOn()) return;
+  const t = cupTournament();
+  if(!t || t.format !== "robin2") return;
+  const fx = rpTodaysFixture(t);
+  if(!fx) return;
+  const wait = document.getElementById("loadScreen") ? 2900 : 500;
+  setTimeout(()=>{
+    if(document.querySelector(".ffi")) return;      // already watching it
+    if(ffWalkInSeen(t, fx)) return;
+    ffPlayIntro(t.id, fx.round);
+  }, wait);
+}
+window.ffBootWalkIn = ffBootWalkIn;
 
 
 /* ---------- PWA: install + offline ---------- */
