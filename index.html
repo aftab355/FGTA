@@ -3705,6 +3705,162 @@
     .rr-tune-l i{display:none}
   }
 
+  /* ================================================================
+     FF CUP — THE CALENDAR
+
+     Every fixture in the event can be given a day inside the cup
+     window. The panel below is that schedule: a strip of day cells
+     across the window, plus the running order underneath. Namespaced
+     .rp-cal-* so it lifts out with the rest of Robin+.
+     ================================================================ */
+  .rp-cal-strip{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
+  .rp-cal-strip::-webkit-scrollbar{display:none}
+  .rp-cal-day{flex:0 0 60px;border-radius:var(--r-sm);border:1px solid var(--line-soft);
+    background:var(--panel-2);padding:8px 4px 7px;text-align:center;cursor:default;
+    transition:.24s cubic-bezier(.16,1,.3,1)}
+  .rp-cal-day.has{border-color:var(--accent);background:var(--accent-dim)}
+  .rp-cal-day.today{box-shadow:0 0 0 1px var(--accent-glow),0 8px 22px -12px var(--accent-glow)}
+  .rp-cal-day.past{opacity:.42}
+  .rp-cal-dow{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--dim)}
+  .rp-cal-num{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--ink);line-height:1.2}
+  .rp-cal-day.has .rp-cal-num{color:var(--accent)}
+  .rp-cal-dots{display:flex;gap:3px;justify-content:center;height:5px;margin-top:4px}
+  .rp-cal-dots i{width:4px;height:4px;border-radius:50%;background:var(--accent)}
+  .rp-cal-dots i.done{background:var(--dim)}
+
+  .rp-cal-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:8px}
+  .rp-cal-row.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow)}
+  .rp-cal-row.done{opacity:.6}
+  .rp-cal-when{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.8px;
+    color:var(--dim);min-width:62px;text-transform:uppercase}
+  .rp-cal-row.today .rp-cal-when{color:var(--accent)}
+  .rp-cal-main{flex:1;min-width:0;font-size:13.5px;color:var(--ink)}
+  .rp-cal-main .vs{color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px}
+  .rp-cal-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:.5px;margin-top:3px}
+  .rp-date-in{font-family:'JetBrains Mono',monospace;font-size:11px;padding:7px 8px;border-radius:9px;
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);width:100%}
+  .rp-when-tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.7px;text-transform:uppercase;
+    padding:2px 7px;border-radius:6px;background:var(--line-soft);color:var(--muted);white-space:nowrap}
+  .rp-when-tag.today{background:var(--accent-dim);color:var(--accent)}
+
+  /* the button that runs the walk-in film for a fixture */
+  .rp-intro-btn{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--ball);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;
+    padding:7px 9px;border-radius:var(--r-pill);cursor:pointer;transition:.2s cubic-bezier(.16,1,.3,1)}
+  .rp-intro-btn:hover{border-color:var(--ball);transform:translateY(-1px);box-shadow:0 6px 18px -10px var(--ball-glow)}
+
+  /* ================================================================
+     FF CUP — THE WALK-IN
+
+     A full-screen title film for a fixture: a flight through the
+     city on canvas, then the two players on a versus card. The
+     canvas draws itself (see FFIntro in the app script); everything
+     below is the frame around it and the card that lands at the end.
+     ================================================================ */
+  .ffi{position:fixed;inset:0;z-index:9999;background:#05000b;opacity:0;
+    animation:ffiIn .35s ease forwards;overflow:hidden;touch-action:none}
+  @keyframes ffiIn{to{opacity:1}}
+  .ffi.out{animation:ffiOut .4s ease forwards}
+  @keyframes ffiOut{to{opacity:0}}
+  .ffi canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .ffi-skip{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:6;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;
+    color:rgba(255,255,255,.55);background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);
+    padding:8px 13px;border-radius:var(--r-pill);cursor:pointer;backdrop-filter:blur(8px)}
+  .ffi-skip:hover{color:#fff;border-color:rgba(255,255,255,.4)}
+
+  /* the strap that rides along the bottom of the flight */
+  .ffi-strap{position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));z-index:4;
+    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4.4s ease forwards .5s}
+  @keyframes ffiStrap{0%{opacity:0;transform:translateY(14px)}18%{opacity:1;transform:translateY(0)}
+    78%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-10px)}}
+  .ffi-strap b{display:block;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:6px;
+    text-transform:uppercase;color:#ffd27a;text-shadow:0 0 24px rgba(255,140,0,.8)}
+  .ffi-strap i{display:block;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:7px}
+
+  /* ---- the versus card ---- */
+  .ffi-vs{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:24px;opacity:0}
+  .ffi-vs.on{opacity:1}
+  /* the arena behind the card is bright by design, so the card brings its
+     own dark to stand on rather than hoping the frame stays quiet */
+  .ffi-vs::before{content:'';position:absolute;inset:0;z-index:-1;
+    background:radial-gradient(120% 62% at 50% 46%, rgba(6,0,16,.9) 0%, rgba(6,0,16,.72) 45%, rgba(6,0,16,0) 78%);
+    opacity:0;animation:ffiFade .6s ease forwards}
+  .ffi-vs-head{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:5px;
+    text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:4px;
+    opacity:0;animation:ffiFade .5s ease forwards .55s}
+  .ffi-vs-when{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;
+    text-transform:uppercase;color:#ff4d9d;text-shadow:0 0 20px rgba(255,45,143,.7);margin-bottom:20px;
+    opacity:0;animation:ffiFade .5s ease forwards .68s}
+  @keyframes ffiFade{to{opacity:1}}
+
+  .ffi-pair{display:flex;align-items:stretch;gap:0;width:100%;max-width:760px}
+  .ffi-side{flex:1 1 0;min-width:0;padding:20px 16px;position:relative;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0));
+    border:1px solid rgba(255,255,255,.1)}
+  .ffi-side.l{border-radius:var(--r-md) 0 0 var(--r-md);text-align:right;
+    transform:translateX(-120%);animation:ffiSlideL .72s cubic-bezier(.16,1,.3,1) forwards .1s}
+  .ffi-side.r{border-radius:0 var(--r-md) var(--r-md) 0;text-align:left;border-left:none;
+    transform:translateX(120%);animation:ffiSlideR .72s cubic-bezier(.16,1,.3,1) forwards .1s}
+  @keyframes ffiSlideL{to{transform:translateX(0)}}
+  @keyframes ffiSlideR{to{transform:translateX(0)}}
+  .ffi-side::before{content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at var(--gx) 50%, var(--pc-dim), transparent 70%)}
+  .ffi-badge{width:74px;height:74px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;letter-spacing:1px;
+    border:2px solid var(--pc);color:var(--pc);background:rgba(0,0,0,.45);
+    box-shadow:0 0 40px -6px var(--pc-glow),inset 0 0 24px -10px var(--pc);position:relative}
+  .ffi-nm{font-size:26px;font-weight:700;color:#fff;margin-top:12px;line-height:1.15;
+    text-shadow:0 4px 30px rgba(0,0,0,.7);word-break:break-word}
+  .ffi-seed{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--pc);margin-top:6px}
+  .ffi-stats{display:flex;gap:14px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+  .ffi-side.r .ffi-stats{justify-content:flex-start}
+  .ffi-stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:15px;color:#fff}
+  .ffi-stat i{display:block;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:8px;
+    letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:3px}
+
+  .ffi-vsmark{flex:0 0 62px;display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+  .ffi-vsmark span{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:#fff;
+    text-shadow:0 0 30px rgba(255,45,143,.9),0 0 60px rgba(255,140,0,.5);
+    transform:scale(3.4);opacity:0;animation:ffiSlam .5s cubic-bezier(.16,1,.3,1) forwards .5s}
+  @keyframes ffiSlam{to{transform:scale(1);opacity:1}}
+  .ffi-vsmark::after{content:'';position:absolute;width:62px;height:62px;border-radius:50%;
+    border:2px solid rgba(255,45,143,.85);transform:scale(.2);opacity:0;
+    animation:ffiShock .8s cubic-bezier(.16,1,.3,1) forwards .58s}
+  @keyframes ffiShock{0%{transform:scale(.2);opacity:.9}100%{transform:scale(4);opacity:0}}
+
+  .ffi-foot{width:100%;max-width:760px;margin-top:16px;opacity:0;animation:ffiFade .6s ease forwards 1s}
+  .ffi-h2h{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    letter-spacing:1.4px;text-transform:uppercase;color:rgba(255,255,255,.5);justify-content:center}
+  .ffi-odds{height:5px;border-radius:3px;margin-top:12px;overflow:hidden;display:flex;
+    background:rgba(255,255,255,.1)}
+  .ffi-odds i{display:block;height:100%}
+  .ffi-note{text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.6px;
+    text-transform:uppercase;color:rgba(255,255,255,.34);margin-top:18px}
+
+  @media(max-width:640px){
+    .ffi-pair{flex-direction:column;max-width:340px}
+    .ffi-side.l{border-radius:var(--r-md) var(--r-md) 0 0;text-align:center;transform:translateY(-60px)}
+    .ffi-side.r{border-radius:0 0 var(--r-md) var(--r-md);border-left:1px solid rgba(255,255,255,.1);
+      border-top:none;text-align:center;transform:translateY(60px)}
+    @keyframes ffiSlideL{to{transform:translateY(0)}}
+    @keyframes ffiSlideR{to{transform:translateY(0)}}
+    .ffi-stats,.ffi-side.r .ffi-stats{justify-content:center}
+    .ffi-vsmark{flex:0 0 30px;margin:-15px 0;z-index:3}
+    .ffi-vsmark span{font-size:22px}
+    .ffi-nm{font-size:21px}
+    .ffi-badge{width:60px;height:60px;font-size:21px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .ffi-strap,.ffi-side.l,.ffi-side.r,.ffi-vsmark span,.ffi-vsmark::after,
+    .ffi-vs-head,.ffi-vs-when,.ffi-foot{animation:none!important;opacity:1!important;transform:none!important}
+  }
+
 
   /* ================================================================
      FF CUP EVENT SKIN — "HIGH SUMMER · BLOWN OUT"
@@ -14955,6 +15111,134 @@ function rpPairForRound(t, round){
   return null;
 }
 
+/* ---------- the calendar ---------------------------------------
+   A fixture can be given a day. The days live in the same state
+   blob as the draw (tournaments.bracket, mirrored to localStorage),
+   keyed by round, so scheduling needs no migration of its own and
+   a re-draw that keeps the round keys keeps the dates with them.
+
+   Dates are plain local "YYYY-MM-DD" strings — a game is played on
+   a day, not at an instant, and a timestamp would only invite a
+   timezone to move it.
+   ---------------------------------------------------------------- */
+const RP_DAY_MS = 86400000;
+
+function rpISO(d){
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0")
+       + "-" + String(d.getDate()).padStart(2,"0");
+}
+function rpDay(iso){ return new Date(iso + "T00:00:00"); }
+function rpToday(){ return rpISO(new Date()); }
+
+function rpDates(t){
+  const s = rpRead(t);
+  return (s && s.dates) || {};
+}
+function rpDateOf(t, round){ return rpDates(t)[round] || null; }
+
+/* "today" / "tomorrow" / "Sat 23 Aug" — the day, said the way you'd say it */
+function rpWhenLabel(iso){
+  if(!iso) return "";
+  const today = rpToday();
+  if(iso === today) return "today";
+  const diff = Math.round((rpDay(iso) - rpDay(today)) / RP_DAY_MS);
+  if(diff === 1)  return "tomorrow";
+  if(diff === -1) return "yesterday";
+  const d = rpDay(iso);
+  return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+}
+
+/* the cup's window, as a list of days — the marquee's dates when the
+   tournament row has none of its own */
+function rpWindowDays(t){
+  const w = window.FFCUP;
+  let from = t && t.start_date ? rpDay(t.start_date) : (w ? new Date(w.start) : new Date());
+  let to   = w ? new Date(w.end) : new Date(from.getTime() + 13*RP_DAY_MS);
+  if(to < from) to = new Date(from.getTime() + 13*RP_DAY_MS);
+  const days = [];
+  for(let d = new Date(from.getFullYear(),from.getMonth(),from.getDate());
+      d <= to && days.length < 90; d = new Date(d.getTime() + RP_DAY_MS)){
+    days.push(rpISO(d));
+  }
+  return days;
+}
+
+/* every fixture in the event, in playing order, whether or not the
+   round it belongs to has been reached yet — the calendar schedules
+   the semis before anyone has qualified for them */
+function rpAllFixtures(t){
+  const out = [];
+  let snap = null;
+  try{ snap = rpSnapshot(t); }catch(e){}
+  const state = snap && snap.state;
+  if(!state || !state.order || !state.order.length) return out;   // nothing drawn, nothing to schedule
+
+  (state.order || []).forEach((fx,i)=>{
+    out.push({round:fx.round, p1:fx.p1, p2:fx.p2, label:"G"+(i+1), kind:"group",
+              stage:(state.shape === "drr" && fx.leg) ? "Leg "+fx.leg : "Group"});
+  });
+
+  if(snap && snap.plan){
+    const pendingByRound = {};
+    (snap.resolved && snap.resolved.pending || []).forEach(p=>pendingByRound[p.round]=p);
+    snap.plan.rounds.forEach((games, ri)=>{
+      games.forEach((g,i)=>{
+        const pend = pendingByRound[g.round];
+        out.push({
+          round: g.round,
+          p1: pend ? pend.p1 : (typeof g.p1 === "string" ? g.p1 : null),
+          p2: pend ? pend.p2 : (typeof g.p2 === "string" ? g.p2 : null),
+          label: snap.plan.rounds.length > 1 ? "D"+(ri+1)+"."+(i+1) : "D"+(i+1),
+          kind: "decider", stage: "Decider"
+        });
+      });
+    });
+  }
+
+  const br = snap && snap.br;
+  const knock = [
+    {round:"semi1", label:"SF1", stage:"Semifinal", g: br && br.semis[0]},
+    {round:"semi2", label:"SF2", stage:"Semifinal", g: br && br.semis[1]},
+    {round:"bronze",label:"3rd", stage:"3rd place", g: br && br.bronze, only: !!(state && state.bronze)},
+    {round:"final", label:"F",   stage:"Final",     g: br && br.final}
+  ];
+  knock.forEach(k=>{
+    if(k.round === "bronze" && !k.only) return;
+    out.push({round:k.round, p1:k.g?k.g.p1:null, p2:k.g?k.g.p2:null,
+              label:k.label, kind:"bracket", stage:k.stage});
+  });
+  return out;
+}
+
+/* the fixtures sitting on one day, played or not */
+function rpFixturesOn(t, iso){
+  const dates = rpDates(t);
+  return rpAllFixtures(t).filter(fx => dates[fx.round] === iso);
+}
+
+/* the next fixture the event is actually waiting on, with its day —
+   what the marquee and the walk-in both key off */
+function rpNextScheduled(t){
+  const dates = rpDates(t);
+  const open  = rpAllFixtures(t).filter(fx => !rpGame(t.id, fx.round));
+  const today = rpToday();
+  const dated = open.filter(fx => dates[fx.round]).sort((a,b)=>
+    dates[a.round] < dates[b.round] ? -1 : dates[a.round] > dates[b.round] ? 1 : 0);
+  return dated.find(fx => dates[fx.round] >= today)
+      || dated[0]
+      || open.find(fx => fx.p1 && fx.p2)
+      || null;
+}
+
+/* today's game, if the league put one on today and nobody has
+   reported it yet */
+function rpTodaysFixture(t){
+  const today = rpToday();
+  const dates = rpDates(t);
+  return rpAllFixtures(t).find(fx =>
+    dates[fx.round] === today && fx.p1 && fx.p2 && !rpGame(t.id, fx.round)) || null;
+}
+
 /* ============================================================
    ROBIN+ — UI
    ============================================================ */
@@ -15244,9 +15528,27 @@ function rpFixtureRow(t, fx, i, opts){
     line = `${esc(fx.p1)} <span class="vs">vs</span> ${esc(fx.p2)}`;
   }
 
-  const meta = m
-    ? `${m.sets ? esc(m.sets) + " · " : ""}${when(m.created_at)}`
-    : q !== null ? `${rpPct(q)} close${live ? " · up next" : ""}` : "";
+  const iso   = rpDateOf(t, fx.round);
+  const today = iso === rpToday();
+
+  const metaBits = [];
+  if(m){
+    if(m.sets) metaBits.push(esc(m.sets));
+    metaBits.push(when(m.created_at));
+  }else{
+    if(iso) metaBits.push("on " + rpWhenLabel(iso));
+    if(q !== null) metaBits.push(`${rpPct(q)} close`);
+    if(live) metaBits.push("up next");
+  }
+  const meta = metaBits.join(" · ");
+
+  /* the walk-in is offered on any fixture with two named players — but
+     only shouted about on the day it is actually being played */
+  const canPlay = fx.p1 && fx.p2;
+  const intro = canPlay
+    ? `<button class="rp-intro-btn" title="Play the walk-in"
+         onclick="event.stopPropagation();ffPlayIntro(${t.id},'${rpJs(fx.round)}')">▶ ${today && !m ? "Walk-in" : "Intro"}</button>`
+    : "";
 
   const clickable = isAdmin && fx.p1 && fx.p2;
   return `
@@ -15254,19 +15556,29 @@ function rpFixtureRow(t, fx, i, opts){
          ${clickable?`onclick="rpToggleReport('${esc(fx.round)}',${t.id})"`:""}>
       <span class="rp-fix-n">${opts.label || ("G"+(i+1))}</span>
       <div class="rp-fix-main">
-        <div class="rp-fix-line">${line}${m && isAdmin?'<span class="pred-tag">tap to edit</span>':""}</div>
+        <div class="rp-fix-line">${line}${today && !m ? '<span class="rp-when-tag today">today</span>' : ""}${m && isAdmin?'<span class="pred-tag">tap to edit</span>':""}</div>
         ${meta?`<div class="rp-fix-meta">${meta}</div>`:""}
       </div>
       ${q!==null && !m ? `<span class="rp-qual" title="how close this should be"><span style="width:${Math.round(q*100)}%"></span></span>` : ""}
+      ${intro}
     </div>
     ${isOpen ? rpReportPanel(t, fx, m) : ""}`;
 }
 
 function rpReportPanel(t, fx, m){
   const stage = (fx.round||"").indexOf(RP_ROUND_GROUP) === 0 ? "group" : "knockout";
+  const iso = rpDateOf(t, fx.round);
+  const days = rpWindowDays(t);
   return `
     <div class="rp-report" onclick="event.stopPropagation()">
-      <label>Score <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional — ${esc(fx.p1)} first)</span></label>
+      <label>Day <span style="opacity:.6;text-transform:none;letter-spacing:0">(when this one is played)</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="rp-date-in" type="date" value="${iso||""}"
+          ${days.length?`min="${days[0]}" max="${days[days.length-1]}"`:""}
+          onchange="rpSetDate(${t.id},'${rpJs(fx.round)}',this.value)">
+        ${iso?`<button class="btn ghost" style="margin:0;width:auto;padding:8px 12px" onclick="rpSetDate(${t.id},'${rpJs(fx.round)}','')">Clear</button>`:""}
+      </div>
+      <label style="margin-top:12px;display:block">Score <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional — ${esc(fx.p1)} first)</span></label>
       <input id="rpScore" placeholder="11-8   or   6-4, 3-6, 7-5" autocomplete="off" value="${m && m.sets ? esc(m.sets) : ""}">
       <div class="rp-winbtns" style="margin-top:10px">
         <button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',1)">${esc(fx.p1)} won</button>
@@ -15278,6 +15590,82 @@ function rpReportPanel(t, fx, m){
         <button class="btn ghost" style="margin:0;flex:1" onclick="rpToggleReport(null,${t.id})">Cancel</button>
         ${m?`<button class="btn ghost" style="margin:0;flex:1;color:var(--danger)" onclick="rpUndoResult(${t.id},'${esc(fx.round)}')">Undo result</button>`:""}
       </div>
+    </div>`;
+}
+
+/* ---------- the calendar ----------
+   The event laid out over the days of the cup window: which day each
+   fixture is on, what is on today, and — for an admin — a date picker
+   per fixture plus one button that spreads the whole draw across the
+   window in playing order. */
+function rpCalendarPanel(t){
+  const fixtures = rpAllFixtures(t);
+  if(!fixtures.length) return "";
+  const dates  = rpDates(t);
+  const days   = rpWindowDays(t);
+  const today  = rpToday();
+  const dated  = fixtures.filter(fx => dates[fx.round]);
+  const undated= fixtures.filter(fx => !dates[fx.round]);
+
+  const strip = days.map(iso=>{
+    const on = fixtures.filter(fx => dates[fx.round] === iso);
+    const d  = rpDay(iso);
+    return `<div class="rp-cal-day ${on.length?"has":""} ${iso===today?"today":""} ${iso<today?"past":""}"
+      title="${on.length ? on.map(fx=>`${fx.p1||"TBD"} v ${fx.p2||"TBD"}`).join(" · ") : "nothing on"}">
+      <div class="rp-cal-dow">${d.toLocaleDateString(undefined,{weekday:"short"})}</div>
+      <div class="rp-cal-num">${d.getDate()}</div>
+      <div class="rp-cal-dots">${on.map(fx=>`<i class="${rpGame(t.id,fx.round)?"done":""}"></i>`).join("")}</div>
+    </div>`;
+  }).join("");
+
+  const row = fx=>{
+    const iso  = dates[fx.round] || "";
+    const m    = rpGame(t.id, fx.round);
+    const isToday = iso === today;
+    const names = fx.p1 && fx.p2
+      ? `${esc(fx.p1)} <span class="vs">vs</span> ${esc(fx.p2)}`
+      : `<span class="pw-dim">${esc(fx.stage)} — players decided by the round before</span>`;
+    return `<div class="rp-cal-row ${isToday && !m ? "today":""} ${m?"done":""}">
+      <span class="rp-cal-when">${iso ? esc(rpWhenLabel(iso)) : "—"}</span>
+      <div class="rp-cal-main">
+        ${names}
+        <div class="rp-cal-sub">${esc(fx.label)} · ${esc(fx.stage)}${m?" · played":""}</div>
+      </div>
+      ${isAdmin ? `<input class="rp-date-in" style="width:138px;flex:none" type="date" value="${iso}"
+          ${days.length?`min="${days[0]}" max="${days[days.length-1]}"`:""}
+          onchange="rpSetDate(${t.id},'${rpJs(fx.round)}',this.value)">` : ""}
+      ${fx.p1 && fx.p2 ? `<button class="rp-intro-btn" onclick="ffPlayIntro(${t.id},'${rpJs(fx.round)}')">▶ Intro</button>` : ""}
+    </div>`;
+  };
+
+  const inOrder = dated.slice().sort((a,b)=>
+    dates[a.round] < dates[b.round] ? -1 : dates[a.round] > dates[b.round] ? 1 :
+    fixtures.indexOf(a) - fixtures.indexOf(b));
+
+  const todays = rpTodaysFixture(t);
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">The calendar
+        <span class="count-pill">${dated.length}/${fixtures.length} dated</span></div>
+      <div class="pred-hint">${isAdmin
+        ? "Give every game a day and the event runs itself: the day it comes up, the fixture gets its walk-in — a flight over the city and a versus card for the two players."
+        : "The days each game is on. On the day, the fixture opens with its walk-in."}</div>
+      <div class="rp-cal-strip">${strip}</div>
+      ${todays ? `<div class="rp-warn" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span><b>Today:</b> ${esc(todays.p1)} vs ${esc(todays.p2)} — ${esc(todays.stage)}.</span>
+        <button class="rp-intro-btn" onclick="ffPlayIntro(${t.id},'${rpJs(todays.round)}')">▶ Play the walk-in</button>
+      </div>` : ""}
+      ${inOrder.length ? `<div style="margin-top:12px">${inOrder.map(row).join("")}</div>` : ""}
+      ${undated.length ? `
+        <div class="rp-leg-h">Not on the calendar yet</div>
+        ${undated.map(row).join("")}` : ""}
+      ${isAdmin ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn ghost" style="margin:0;width:auto;flex:1 1 180px" onclick="rpAutoSchedule(${t.id})">Spread across the window</button>
+          ${dated.length?`<button class="btn ghost" style="margin:0;width:auto;flex:0 1 170px;white-space:nowrap" onclick="rpClearDates(${t.id})">Clear the days</button>`:""}
+        </div>
+        <div class="bracket-note">Spreading lays the draw out in playing order over ${days.length} day${days.length===1?"":"s"} of the cup window, games that are already dated included.</div>` : ""}
     </div>`;
 }
 
@@ -15476,6 +15864,7 @@ function renderRobinPlus(t){
       ${fixtures}
     </div>
 
+    ${rpCalendarPanel(t)}
     ${rpStandingsPanel(t, state, snap)}
     ${rpPlayoffPanel(t, snap)}
     ${(stage==="semis"||stage==="final"||stage==="done") ? rpBracketPanel(t, snap) : ""}
@@ -15580,6 +15969,10 @@ async function rpGenerateSchedule(tid){
     metrics: solved.metrics,
     seed,
     bronze: prev ? !!prev.bronze : false,
+    /* the days survive a re-draw: they are slots in the window, not
+       properties of a pairing — "the third game is on the 21st" holds
+       however the third game comes out */
+    dates: (prev && prev.dates) || {},
     createdAt: new Date().toISOString()
   };
   const res = await rpWrite(t, state);
@@ -15590,6 +15983,62 @@ async function rpGenerateSchedule(tid){
   renderTournaments(); renderTournamentDetail(tid);
 }
 window.rpGenerateSchedule = rpGenerateSchedule;
+
+/* ---------- putting the event in the diary ---------- */
+async function rpSaveDates(t, dates){
+  const state = rpRead(t);
+  if(!state) return toast("Draw the schedule first", true);
+  state.dates = dates;
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  renderTournaments(); renderTournamentDetail(t.id); renderCupMarquee();
+  return res;
+}
+
+async function rpSetDate(tid, round, iso){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const dates = Object.assign({}, rpDates(t));
+  if(iso) dates[round] = iso; else delete dates[round];
+  const res = await rpSaveDates(t, dates);
+  if(res && !res.error) toast(iso ? "Set for "+rpWhenLabel(iso)+" ✓" : "Day cleared");
+}
+window.rpSetDate = rpSetDate;
+
+/* Lay the whole draw out over the window in playing order. Games go one
+   per day while there is room, and double up evenly once there isn't —
+   so a 12-game group across 16 days plays every other day rather than
+   emptying itself into the first fortnight and leaving the final homeless. */
+async function rpAutoSchedule(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const fixtures = rpAllFixtures(t);
+  const days = rpWindowDays(t);
+  if(!fixtures.length) return toast("Nothing to schedule yet", true);
+  if(!days.length) return toast("No cup window to schedule inside", true);
+  if(Object.keys(rpDates(t)).length &&
+     !confirm("Spread all "+fixtures.length+" games across the window? Days already set are replaced.")) return;
+
+  const dates = {};
+  fixtures.forEach((fx,i)=>{
+    // evenly spaced through the window, order preserved, last game on the last day
+    const at = fixtures.length === 1 ? 0
+      : Math.round(i * (days.length - 1) / (fixtures.length - 1));
+    dates[fx.round] = days[Math.min(days.length-1, Math.max(0, at))];
+  });
+  const res = await rpSaveDates(t, dates);
+  if(res && !res.error) toast(res.local ? "Calendar set ✓ (this device only)" : "Calendar set ✓");
+}
+window.rpAutoSchedule = rpAutoSchedule;
+
+async function rpClearDates(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  if(!confirm("Take every game off the calendar?")) return;
+  const res = await rpSaveDates(t, {});
+  if(res && !res.error) toast("Calendar cleared");
+}
+window.rpClearDates = rpClearDates;
 
 function rpToggleReport(round, tid){
   if(!isAdmin) return;
@@ -15818,6 +16267,14 @@ function cupLine(t, phase){
     const n = cupField(t);
     return n ? `<b>${n}</b> in the field — the draw is next.` : "Field open — nobody is in yet.";
   }
+  /* a game on today's date outranks everything else the marquee could say */
+  const todays = rpTodaysFixture(t);
+  if(todays) return `<b>Today</b> — ${esc(todays.p1)} vs ${esc(todays.p2)}`;
+  const soon = rpNextScheduled(t);
+  if(soon && soon.p1 && soon.p2 && rpDateOf(t, soon.round)){
+    const w = rpWhenLabel(rpDateOf(t, soon.round));
+    return `${esc(w.charAt(0).toUpperCase()+w.slice(1))}: <b>${esc(soon.p1)}</b> vs <b>${esc(soon.p2)}</b>`;
+  }
   const nextGroup = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
   if(nextGroup){
     const where = rpShapeOf(state) === "drr" ? "the group" : "the ring";
@@ -15888,6 +16345,10 @@ function cupMarqueeHtml(t, variant){
     </div>`;
   }
 
+  /* a fixture dated today gets its own button — the walk-in is the
+     event's front door on the day it is actually being played */
+  const todays = (t && t.format === "robin2" && phase === "live") ? rpTodaysFixture(t) : null;
+
   const facts = [];
   const field = cupField(t);
   if(field) facts.push(`<span class="cup-fact"><b>${field}</b> in the field</span>`);
@@ -15911,6 +16372,7 @@ function cupMarqueeHtml(t, variant){
       ${cupRailHtml(cupStage(t, phase), cupShape(t))}
       <div class="cupmark-foot">
         <span class="cupmark-line">${cupLine(t, phase)}</span>
+        ${todays ? `<button class="cup-cta" onclick="ffPlayIntro(${t.id},'${rpJs(todays.round)}')">Watch the walk-in<span>&rsaquo;</span></button>` : ""}
         <button class="cup-cta" onclick="openCupEvent()">Enter the event<span>&rsaquo;</span></button>
       </div>
     </div>
@@ -15982,6 +16444,8 @@ function openCupEvent(){
     openTournament(t.id);
     const d = $("tournDetail");
     if(d) d.scrollIntoView({behavior:"smooth", block:"start"});
+    /* if there is a game on today, this is the moment it announces itself */
+    if(t.format === "robin2") ffAutoIntro(t);
   }, 360);
 }
 window.openCupEvent = openCupEvent;
@@ -21397,6 +21861,1011 @@ try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo defaul
 setTimeout(()=>{ try{ cmpMode("post"); renderNews(); }catch(e){} }, 60);
 /* warm the court cache in the background so the tab opens instantly */
 if(COURT.api) setTimeout(()=>{ try{ fetchCourt(false); }catch(e){} }, 2200);
+
+
+/* ============================================================
+   FF CUP — THE WALK-IN
+
+   The title film a fixture gets on the day it is played: a flight
+   through the cup's city — rooftop courts mid-rally, a plaza of
+   phone lights, screens, banners, a tram, drones, the blimp — out
+   over the last rooftops, up to the arena floating above it all,
+   and then straight into a versus card for the two players.
+
+   It is one canvas and one overlay div, drawn from nothing: the
+   city is generated from the fixture's round key, so every game in
+   the event gets its own skyline and the same game always gets the
+   same one. Nothing here is loaded, so it costs a repaint and no
+   bytes.
+
+   The whole thing is dressing. FFIntro.play() is safe to call at
+   any time and safe to never call: nothing else in the app reads
+   from it, and it removes itself on the way out.
+   ============================================================ */
+const FFIntro = (function(){
+
+  /* ---------- the beats, in seconds ---------- */
+  const T_FLY   = 6.6;    // flight through the city ends
+  const T_LIFT  = 8.5;    // climb to the arena ends
+  const T_VS    = 8.6;    // the versus card lands
+  const T_HOLD  = 15;     // and how long it holds before closing itself
+
+  /* ---------- deterministic noise ---------- */
+  function rng(seed){
+    let a = seed >>> 0;
+    return function(){
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hash(s){
+    let h = 2166136261 >>> 0;
+    s = String(s);
+    for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  /* ---------- colour ---------- */
+  const SKY_HI  = [8,3,22], SKY_LO = [70,14,64], HAZE = [150,34,104];
+  const FOGC    = [58,16,62];
+  const STONE   = [214,206,236];      // the pale faces the moon picks out
+  const SHADE   = [46,32,74];
+  const WARM    = [255,186,96];
+  const NEON    = [255,60,150];
+
+  const clamp = (v,a,b) => v<a?a:v>b?b:v;
+  function mix(a,b,k){ k=clamp(k,0,1); return [a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k, a[2]+(b[2]-a[2])*k]; }
+  function rgb(c,al){ return "rgba("+(c[0]|0)+","+(c[1]|0)+","+(c[2]|0)+","+(al===undefined?1:al)+")"; }
+  function fogAt(d){ return clamp((d-40)/330, 0, 0.93); }
+  function fogged(c,d,al){ return rgb(mix(c, FOGC, fogAt(d)), al); }
+
+  /* ---------- projection ----------
+     y is up, z is forward, the camera looks down +z with yaw/pitch/roll.
+     Returns null for anything behind the near plane, and every draw
+     helper below treats a null corner as "don't draw" — a polygon
+     straddling the camera is always either beside you or gone. */
+  function pr(C, x, y, z){
+    const dx = x - C.x, dy = y - C.y, dz = z - C.z;
+    const ax = dx*C.cy - dz*C.sy;
+    const az = dx*C.sy + dz*C.cy;
+    const ay = dy*C.cp - az*C.sp;
+    const bz = dy*C.sp + az*C.cp;
+    if(bz < 0.5) return null;
+    const s = C.f / bz;
+    let px = ax*s, py = -ay*s;
+    if(C.sr){ const rx = px*C.cr - py*C.sr, ry = px*C.sr + py*C.cr; px = rx; py = ry; }
+    return {x: C.ox + px, y: C.oy + py, d: bz, s: s};
+  }
+  /* how far in front of the camera something is, for the painter's sort */
+  function depth(C, x, y, z){
+    const dx = x - C.x, dy = y - C.y, dz = z - C.z;
+    const az = dx*C.sy + dz*C.cy;
+    return dy*C.sp + az*C.cp;
+  }
+
+  function poly(ctx, pts, fill, stroke, lw){
+    for(let i=0;i<pts.length;i++) if(!pts[i]) return false;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+    if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = lw||1; ctx.stroke(); }
+    return true;
+  }
+  function dot(ctx, p, r, fill){
+    if(!p || r < 0.25) return;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fillStyle = fill; ctx.fill();
+  }
+  /* a glowing point — the cheap bloom the whole film runs on */
+  function glow(ctx, p, r, c, al){
+    /* a radial gradient is the most expensive thing a frame does, and a
+       two-pixel one is not visible — so the far half of the city never
+       builds them */
+    if(!p || r < 1.6) return;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    g.addColorStop(0, rgb(c, al===undefined?0.85:al));
+    g.addColorStop(0.4, rgb(c, (al===undefined?0.85:al)*0.32));
+    g.addColorStop(1, rgb(c, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fill();
+  }
+  /* text laid onto a projected quad — affine off three corners, which
+     is a hair off true perspective and completely invisible at speed */
+  function onQuad(ctx, p0, p1, p3, w, h, draw){
+    if(!p0 || !p1 || !p3) return;
+    const a=(p1.x-p0.x)/w, b=(p1.y-p0.y)/w, c=(p3.x-p0.x)/h, d=(p3.y-p0.y)/h;
+    if(!isFinite(a)||!isFinite(d)) return;
+    ctx.save();
+    ctx.transform(a,b,c,d,p0.x,p0.y);
+    draw(ctx);
+    ctx.restore();
+  }
+
+  /* ============================================================
+     THE CITY — generated once per fixture
+     ============================================================ */
+  const ROAD = 9;          // half-width of the avenue the camera flies down
+  const ARENA_Z = 1010, ARENA_Y = 128;
+
+  function buildCity(seed, budget){
+    const R = rng(seed);
+    const pick = arr => arr[(R()*arr.length)|0];
+    const blocks = [];
+
+    // three ranks either side: the near wall the camera skims, a taller
+    // second rank behind it, and silhouettes holding the horizon
+    const ranks = [
+      {from: ROAD+1,  spread: 13, hMin: 11, hMax: 26, gap: 15, detail: 2},
+      {from: ROAD+16, spread: 22, hMin: 20, hMax: 58, gap: 21, detail: 1},
+      {from: ROAD+44, spread: 60, hMin: 30, hMax: 96, gap: 34, detail: 0}
+    ];
+    ranks.forEach((rk, ri)=>{
+      for(let side=-1; side<=1; side+=2){
+        for(let z=-60; z<960; z += rk.gap * (0.7 + R()*0.7)){
+          if(ri === 2 && R() < 0.3) continue;
+          const w = 6 + R()*rk.spread*0.5;
+          const d = 7 + R()*rk.spread*0.6;
+          const h = rk.hMin + R()*(rk.hMax - rk.hMin);
+          blocks.push({
+            x: side * (rk.from + R()*rk.spread + w/2),
+            z: z, w: w, d: d, h: h,
+            rank: ri, detail: rk.detail,
+            seed: (R()*1e9)|0,
+            lit: 0.18 + R()*0.4,             // how much of it is awake
+            hue: R(),                        // pale stone vs. warmer stone
+            roof: pick(["flat","peak","tank","mast","flat"])
+          });
+        }
+      }
+    });
+    if(budget < 1) blocks.sort((a,b)=>a.rank-b.rank).splice((blocks.length*budget)|0);
+
+    /* the plazas, the crowds and the rest of what the city is doing
+       tonight — laid along the flight so they arrive one at a time */
+    const props = [
+      {kind:"terrace",  z: 46,  x: ROAD+3,   seed:(R()*1e9)|0},
+      {kind:"banner",   z: 104, y: 15,       seed:(R()*1e9)|0, text:"FF CUP"},
+      {kind:"blimp",    z: 250, y: 48,       seed:(R()*1e9)|0},
+      {kind:"court",    z: 250, x:-(ROAD+9), y: 20, seed:(R()*1e9)|0},
+      {kind:"plaza",    z: 300, x: ROAD+13,  seed:(R()*1e9)|0},
+      {kind:"tron",     z: 352, x:-(ROAD+1), seed:(R()*1e9)|0},
+      {kind:"tram",     z: 404, y: 24,       seed:(R()*1e9)|0},
+      {kind:"drones",   z: 430, seed:(R()*1e9)|0},
+      {kind:"banner",   z: 470, y: 26,       seed:(R()*1e9)|0, text:"TONIGHT"},
+      {kind:"court",    z: 520, x: ROAD+11,  y: 20, seed:(R()*1e9)|0},
+      {kind:"tron",     z: 596, x: ROAD+1,   seed:(R()*1e9)|0, flip:true},
+      {kind:"plaza",    z: 640, x:-(ROAD+15), seed:(R()*1e9)|0},
+      {kind:"fireworks",z: 790, seed:(R()*1e9)|0}
+    ];
+    /* A court or a plaza needs somewhere to be. Clear the blocks standing
+       where one goes, so it arrives in a gap in the skyline instead of
+       fighting a tower for the same cubic metres — the painter's sort
+       cannot resolve that argument, and it always looks like a mistake. */
+    const CLEAR = {court:[15,19], plaza:[17,20], tron:[14,12]};
+    props.forEach(p=>{
+      const box = CLEAR[p.kind];
+      if(!box) return;
+      for(let i=blocks.length-1;i>=0;i--){
+        const b = blocks[i];
+        if(b.rank > 1) continue;
+        if(Math.abs(b.x - p.x) < box[0] && Math.abs(b.z - p.z) < box[1]) blocks.splice(i,1);
+      }
+    });
+
+    props.forEach(p=>{
+      if(p.kind === "plaza"){
+        const PR = rng(p.seed), crowd = [];
+        const n = Math.round(150 * budget);
+        for(let i=0;i<n;i++) crowd.push({
+          dx:(PR()-0.5)*26, dz:(PR()-0.5)*30, ph:PR()*6.28, phone: PR()<0.24, s:0.8+PR()*0.5
+        });
+        p.crowd = crowd;
+      }
+      if(p.kind === "drones"){
+        const PR = rng(p.seed), swarm = [];
+        for(let i=0;i<14;i++) swarm.push({dx:(PR()-0.5)*30, y:8+PR()*26, dz:PR()*90, ph:PR()*6.28, sp:0.5+PR()});
+        p.swarm = swarm;
+      }
+    });
+
+    // a handful of stars, fixed to the dome rather than the world
+    const stars = [];
+    for(let i=0;i<90;i++) stars.push({a:R()*6.283, h:R(), b:0.25+R()*0.75, tw:R()*6.283});
+
+    return {blocks, props, stars, seed};
+  }
+
+  /* ============================================================
+     THE CAMERA — one continuous move, three intentions
+     ============================================================ */
+  function camera(u, W, H){
+    const smooth = k => k*k*(3-2*k);
+    let x = 0, y = 3.2, z = -30, yaw = 0, pitch = 0.04, roll = 0, f = Math.max(W,H) * 0.62;
+
+    if(u <= T_FLY){
+      const p = clamp(u/T_FLY, 0, 1);
+      z = -30 + Math.pow(p, 1.42) * 760;              // accelerating the whole way in
+      y = 2.9 + smooth(clamp((u-1.1)/4.4,0,1)) * 23;  // street, then up over the near rooftops
+      // the drift that makes it a flight rather than a dolly
+      yaw   =  Math.sin(u*0.62)*0.115 + Math.sin(u*0.27+1.1)*0.07;
+      roll  = -Math.sin(u*0.62)*0.10  - Math.sin(u*0.27+1.1)*0.05;
+      x     =  Math.sin(u*0.44)*2.6;
+      pitch = 0.03 + smooth(clamp((u-3.4)/3.2,0,1))*0.07;
+      f    *= 1 + p*0.1;                              // the lens creeps in as the speed builds
+    } else if(u <= T_LIFT){
+      const p = smooth(clamp((u-T_FLY)/(T_LIFT-T_FLY), 0, 1));
+      z = 730 + p*72;
+      y = 25.9 + p*62;                                // out over everything
+      x = Math.sin(T_FLY*0.44)*2.6 * (1-p);
+      yaw = Math.sin(T_FLY*0.62)*0.115*(1-p);
+      roll = -0.09*(1-p);
+      pitch = 0.10 + p*0.135;
+      f *= 1.1;
+    } else {
+      /* held back from the island rather than inside it — the card is
+         the subject now, and the arena is the thing it is standing on */
+      const p = clamp((u-T_LIFT)/9, 0, 1);
+      z = 802 + p*12;
+      y = 88 + Math.sin(u*0.25)*2.4;
+      x = Math.sin(u*0.16)*20;
+      yaw = -x/((ARENA_Z-z)||1);
+      pitch = 0.235;
+      f *= 1.1;
+    }
+
+    return {
+      x, y, z, f,
+      cy: Math.cos(yaw), sy: Math.sin(yaw),
+      cp: Math.cos(pitch), sp: Math.sin(pitch),
+      cr: Math.cos(roll), sr: Math.sin(roll),
+      ox: W/2, oy: H/2, W, H
+    };
+  }
+
+  /* ============================================================
+     THE DRAW
+     ============================================================ */
+  function drawSky(ctx, C, u, city, skyGrad){
+    const {W,H} = C;
+    ctx.fillStyle = skyGrad; ctx.fillRect(0,0,W,H);
+
+    // stars sit on the dome: they shift with the camera's aim, not its position
+    const sx = -C.sy*W*0.9, sy2 = C.sp*H*1.4;
+    city.stars.forEach(s=>{
+      const px = ((s.a/6.283)*W*2 + sx) % (W*2) - W*0.5;
+      const py = s.h*H*0.6 + sy2 - H*0.1;
+      if(px<-20||px>W+20||py<-20||py>H) return;
+      ctx.fillStyle = rgb([255,240,255], s.b * (0.45+0.55*Math.abs(Math.sin(u*0.9+s.tw))));
+      ctx.fillRect(px, py, 1.4, 1.4);
+    });
+
+    // the moon the city is lit by — huge, and well off the avenue so it
+    // never has to share the middle of the frame with the arena
+    const mp = pr(C, -560, 330, ARENA_Z + 900);
+    if(mp){
+      glow(ctx, mp, 210*mp.s*0.5 + 60, [225,215,255], 0.18);
+      dot(ctx, mp, Math.max(6, 90*mp.s), rgb([238,232,255], 0.92));
+    }
+
+    // horizon haze, which is also what everything fogs into
+    const hz = pr(C, 0, 0, C.z + 700);
+    if(hz){
+      const hg = ctx.createLinearGradient(0, hz.y-H*0.28, 0, hz.y+H*0.1);
+      hg.addColorStop(0, rgb(HAZE, 0));
+      hg.addColorStop(0.7, rgb(HAZE, 0.28));
+      hg.addColorStop(1, rgb(HAZE, 0.05));
+      ctx.fillStyle = hg; ctx.fillRect(0, hz.y-H*0.28, W, H*0.38);
+    }
+  }
+
+  function drawGround(ctx, C, u){
+    const near = C.z + 4, far = C.z + 780;
+    const q = [pr(C,-320,0,far), pr(C,320,0,far), pr(C,320,0,near), pr(C,-320,0,near)];
+    poly(ctx, q, rgb([20,8,32], 0.98));
+
+    // the avenue, wet enough to carry the city back up at you
+    const road = [pr(C,-ROAD,0.02,far), pr(C,ROAD,0.02,far), pr(C,ROAD,0.02,near), pr(C,-ROAD,0.02,near)];
+    if(poly(ctx, road, rgb([34,14,52], 0.95))){
+      ctx.save(); ctx.clip();
+      const sheen = ctx.createLinearGradient(0, C.oy, 0, C.H);
+      sheen.addColorStop(0, rgb(NEON, 0.16));
+      sheen.addColorStop(1, rgb(NEON, 0));
+      ctx.fillStyle = sheen; ctx.fillRect(0, C.oy, C.W, C.H);
+      ctx.restore();
+    }
+    // centre dashes, which are most of what sells the speed
+    const step = 14, first = Math.floor((C.z+6)/step)*step;
+    for(let z=first; z<C.z+420; z+=step){
+      const a = pr(C,-0.5,0.05,z), b = pr(C,0.5,0.05,z), c = pr(C,0.5,0.05,z+6), d = pr(C,-0.5,0.05,z+6);
+      poly(ctx, [a,b,c,d], fogged([255,214,120], z-C.z, 0.5));
+    }
+    // street lamps down both kerbs
+    for(let z=first-step; z<C.z+260; z+=26){
+      for(let s=-1;s<=1;s+=2){
+        const base = pr(C, s*(ROAD-0.6), 0, z), top = pr(C, s*(ROAD-0.6), 6.4, z);
+        if(!base||!top) continue;
+        ctx.strokeStyle = fogged([120,96,150], top.d, 0.75); ctx.lineWidth = Math.max(0.6, 0.22*top.s);
+        ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke();
+        glow(ctx, top, Math.max(4, 3.2*top.s), WARM, 0.7*(1-fogAt(top.d)));
+      }
+    }
+  }
+
+  /* ---- one building ---- */
+  function drawBlock(ctx, C, b, u, budget){
+    const x0=b.x-b.w/2, x1=b.x+b.w/2, z0=b.z-b.d/2, z1=b.z+b.d/2, h=b.h;
+    const d = depth(C, b.x, h/2, b.z);
+    if(d < 1 || d > 620) return;
+
+    const face  = mix(mix(SHADE, STONE, 0.62 + b.hue*0.3), SHADE, b.rank*0.22);
+    const front = fogged(face, d);
+    const side  = fogged(mix(face, SHADE, 0.5), d);
+    const top   = fogged(mix(face, STONE, 0.25), d);
+
+    if(C.z < z0) poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,0,z0),pr(C,x0,0,z0)], front);
+    if(C.x < x0) poly(ctx, [pr(C,x0,h,z1),pr(C,x0,h,z0),pr(C,x0,0,z0),pr(C,x0,0,z1)], side);
+    if(C.x > x1) poly(ctx, [pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x1,0,z1),pr(C,x1,0,z0)], side);
+    if(C.y > h)  poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x0,h,z1)], top);
+
+    // the hairline that keeps the skyline readable against its own fog
+    const e1 = pr(C,x0,h,z0), e2 = pr(C,x1,h,z0);
+    if(e1 && e2){
+      ctx.strokeStyle = fogged(STONE, d, 0.55); ctx.lineWidth = Math.max(0.5, 0.5*e1.s*0.2);
+      ctx.beginPath(); ctx.moveTo(e1.x,e1.y); ctx.lineTo(e2.x,e2.y); ctx.stroke();
+    }
+
+    if(!b.detail || d > 210*budget) return;
+
+    // lit windows — only the lit ones past the near band, none at all far out
+    const cols = Math.max(1, Math.floor(b.w/2.1)), rows = Math.max(1, Math.floor(h/2.9));
+    const WR = rng(b.seed);
+    const all = d < 55*budget;
+    const cw = (b.w-0.9)/cols, ch = (h-1.2)/rows;
+    if(C.z < z0){
+      for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+          const k = WR();
+          const on = k < b.lit;
+          if(!on && !all) continue;
+          const flick = on && Math.sin(u*1.4 + k*40 + r) > 0.985 ? 0.35 : 1;
+          const wx = x0+0.45+c*cw, wy = 0.7+r*ch;
+          const q = [pr(C,wx,wy+ch*0.62,z0-0.05), pr(C,wx+cw*0.66,wy+ch*0.62,z0-0.05),
+                     pr(C,wx+cw*0.66,wy,z0-0.05), pr(C,wx,wy,z0-0.05)];
+          poly(ctx, q, on
+            ? fogged(k < b.lit*0.22 ? NEON : WARM, d, 0.9*flick)
+            : fogged(SHADE, d, 0.5));
+        }
+      }
+    }
+
+    if(b.detail < 2 || d > 150) return;
+    // roof kit: a tank, a mast with a warning light, or a peak
+    const cx = b.x, cz = b.z;
+    if(b.roof === "mast"){
+      const a = pr(C,cx,h,cz), t2 = pr(C,cx,h+5.5,cz);
+      if(a && t2){
+        ctx.strokeStyle = fogged(SHADE, d, 0.9); ctx.lineWidth = Math.max(0.6, 0.14*a.s);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(t2.x,t2.y); ctx.stroke();
+        if(Math.sin(u*2.4 + b.seed) > 0) glow(ctx, t2, Math.max(3, 1.6*t2.s), [255,60,60], 0.9);
+      }
+    } else if(b.roof === "tank"){
+      const q = [pr(C,cx-1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h,cz-1.3),pr(C,cx-1.3,h,cz-1.3)];
+      poly(ctx, q, fogged(mix(SHADE,STONE,0.4), d));
+    } else if(b.roof === "peak"){
+      const q = [pr(C,cx,h+3.4,cz),pr(C,x1,h,z0),pr(C,x0,h,z0)];
+      poly(ctx, q, fogged(mix(STONE,SHADE,0.35), d));
+    }
+  }
+
+  /* ============================================================
+     WHAT THE CITY IS DOING TONIGHT
+     ============================================================ */
+
+  /* a floodlit court on a roof, mid-rally */
+  function drawCourt(ctx, C, p, u){
+    const y = p.y, x = p.x, z = p.z, d = depth(C, x, y, z);
+    if(d < 1 || d > 460) return;
+    const hw = 8.5, hl = 13;
+    // the block it stands on, so the court reads as a roof and not a rug
+    poly(ctx, [pr(C,x-hw-1,y,z-hl-1),pr(C,x+hw+1,y,z-hl-1),
+               pr(C,x+hw+1,0,z-hl-1),pr(C,x-hw-1,0,z-hl-1)], fogged(SHADE, d, 0.95));
+    poly(ctx, [pr(C,x-hw-1,y,z-hl-1),pr(C,x+hw+1,y,z-hl-1),
+               pr(C,x+hw+1,y,z+hl+1),pr(C,x-hw-1,y,z+hl+1)], fogged(mix(SHADE,STONE,0.35), d));
+    poly(ctx, [pr(C,x-hw,y+0.02,z-hl),pr(C,x+hw,y+0.02,z-hl),pr(C,x+hw,y+0.02,z+hl),pr(C,x-hw,y+0.02,z+hl)],
+         fogged([30,124,116], d, 0.97));
+    // lines and net
+    const ln = fogged([235,245,255], d, 0.7);
+    [[-hw*0.72,-hl*0.86,hw*0.72,-hl*0.86],[-hw*0.72,hl*0.86,hw*0.72,hl*0.86],
+     [-hw*0.72,-hl*0.86,-hw*0.72,hl*0.86],[hw*0.72,-hl*0.86,hw*0.72,hl*0.86],
+     [-hw*0.72,0,hw*0.72,0]].forEach(s=>{
+      const a = pr(C,x+s[0],y+0.03,z+s[1]), b = pr(C,x+s[2],y+0.03,z+s[3]);
+      if(!a||!b) return;
+      ctx.strokeStyle = ln; ctx.lineWidth = Math.max(0.5, 0.1*a.s);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+    const nA = pr(C,x-hw*0.8,y+1.1,z), nB = pr(C,x+hw*0.8,y+1.1,z),
+          nC = pr(C,x+hw*0.8,y,z),      nD = pr(C,x-hw*0.8,y,z);
+    poly(ctx, [nA,nB,nC,nD], fogged([230,230,255], d, 0.28));
+
+    // the rally: two figures trading, and a ball on a real arc between them
+    const beat = (u*1.15) % 2, side = beat < 1 ? 1 : -1, k = beat % 1;
+    for(let s=-1;s<=1;s+=2){
+      const px = x + Math.sin(u*1.4 + (s>0?0:2.1))*hw*0.42;
+      const pz = z + s*hl*0.7;
+      const base = pr(C, px, y, pz), head = pr(C, px, y+1.85, pz);
+      if(!base || !head) continue;
+      ctx.strokeStyle = fogged([16,6,24], d, 0.95);
+      ctx.lineWidth = Math.max(1.2, 0.42*base.s);
+      ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(head.x, head.y); ctx.stroke();
+      dot(ctx, head, Math.max(1, 0.3*head.s), fogged([16,6,24], d, 0.95));
+    }
+    const bz = z + side*hl*0.7 - side*k*hl*1.4;
+    const by = y + 0.6 + Math.sin(k*Math.PI)*3.4;
+    const bp = pr(C, x + Math.sin(u*1.4)*hw*0.3, by, bz);
+    if(bp){ glow(ctx, bp, Math.max(3, 0.9*bp.s), [220,255,60], 0.85);
+            dot(ctx, bp, Math.max(1, 0.24*bp.s), rgb([230,255,90])); }
+
+    // four towers, four cones of light
+    for(let sx=-1; sx<=1; sx+=2) for(let sz=-1; sz<=1; sz+=2){
+      const lx = x + sx*hw*1.08, lz = z + sz*hl*0.92;
+      const b2 = pr(C,lx,y,lz), t2 = pr(C,lx,y+7,lz);
+      if(!b2||!t2) continue;
+      ctx.strokeStyle = fogged([150,140,180], d, 0.8); ctx.lineWidth = Math.max(0.6, 0.14*b2.s);
+      ctx.beginPath(); ctx.moveTo(b2.x,b2.y); ctx.lineTo(t2.x,t2.y); ctx.stroke();
+      const c1 = pr(C, x - sx*hw*0.4, y, z - sz*hl*0.3);
+      if(c1) poly(ctx, [t2, c1, pr(C, x + sx*hw*0.2, y, z + sz*hl*0.2)], fogged([255,245,210], d, 0.10));
+      // capped, or four lamps at fifteen metres merge into a second moon
+      glow(ctx, t2, Math.min(34, Math.max(5, 2.6*t2.s)), [255,246,214], 0.8*(1-fogAt(d)));
+    }
+  }
+
+  /* a plaza of people watching a screen, phones up */
+  function drawPlaza(ctx, C, p, u){
+    const d = depth(C, p.x, 0, p.z);
+    if(d < 1 || d > 480) return;
+    poly(ctx, [pr(C,p.x-15,0.05,p.z-17),pr(C,p.x+15,0.05,p.z-17),
+               pr(C,p.x+15,0.05,p.z+17),pr(C,p.x-15,0.05,p.z+17)],
+         fogged([44,18,62], d, 0.9));
+    // the screen they are all facing
+    const sx = p.x, sy = 6.5, sz = p.z - 15;
+    const q0 = pr(C,sx-7,sy+4.4,sz), q1 = pr(C,sx+7,sy+4.4,sz), q3 = pr(C,sx-7,sy,sz);
+    if(q0 && q1 && q3){
+      poly(ctx, [q0,q1,pr(C,sx+7,sy,sz),q3], rgb(mix([255,45,143],FOGC,fogAt(d)), 0.9));
+      onQuad(ctx, q0, q1, q3, 140, 44, cx=>{
+        cx.fillStyle = "rgba(255,255,255,.92)";
+        cx.font = "700 22px 'JetBrains Mono',monospace";
+        cx.textAlign = "center"; cx.textBaseline = "middle";
+        cx.fillText("FF CUP", 70, 22);
+      });
+      glow(ctx, q3, Math.max(20, 14*q3.s), NEON, 0.30*(1-fogAt(d)));
+    }
+    p.crowd.forEach(c=>{
+      const bob = Math.sin(u*2.6 + c.ph)*0.16;
+      const b = pr(C, p.x+c.dx, 0, p.z+c.dz);
+      const h = pr(C, p.x+c.dx, 1.6*c.s + bob, p.z+c.dz);
+      if(!b || !h) return;
+      ctx.strokeStyle = fogged([14,6,26], b.d, 0.9);
+      ctx.lineWidth = Math.max(0.7, 0.3*b.s);
+      ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(h.x,h.y); ctx.stroke();
+      if(c.phone && b.d < 130){
+        const ph = pr(C, p.x+c.dx, 2.2*c.s + bob + Math.sin(u*1.3+c.ph)*0.1, p.z+c.dz);
+        glow(ctx, ph, Math.max(2, 0.7*b.s), [255,240,200], 0.8*(1-fogAt(b.d)));
+      }
+    });
+  }
+
+  /* a screen the size of a building, running the fixture */
+  function drawTron(ctx, C, p, u, film){
+    const x = p.x, y = 12, z = p.z, d = depth(C, x, y, z);
+    if(d < 1 || d > 420) return;
+    const w = 18, h = 12;
+    /* hung on the face a building turns to the avenue, not on its flank —
+       a screen edge-on to the flight is a bright sliver and nothing else */
+    const side = x < 0 ? -1 : 1;
+    const x0 = x + (side < 0 ? -w : 0), x1 = x0 + w;
+    const q0 = pr(C, x0, y+h, z), q1 = pr(C, x1, y+h, z),
+          q2 = pr(C, x1, y,   z), q3 = pr(C, x0, y,   z);
+    if(!q0||!q1||!q2||!q3) return;
+    poly(ctx, [q0,q1,q2,q3], rgb(mix([12,4,26],FOGC,fogAt(d)), 0.96), fogged(NEON, d, 0.8), Math.max(0.8,0.1*q0.s));
+    const phase = Math.floor(u*0.62) % 2;
+    onQuad(ctx, q0, q1, q3, 170, 110, cx=>{
+      const g = cx.createLinearGradient(0,0,0,110);
+      g.addColorStop(0, "rgba(255,45,143,.30)"); g.addColorStop(1, "rgba(255,138,43,.16)");
+      cx.fillStyle = g; cx.fillRect(0,0,170,110);
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      if(phase === 0){
+        cx.fillStyle = "rgba(255,255,255,.95)";
+        cx.font = "700 30px 'JetBrains Mono',monospace";
+        cx.fillText(film.iA, 48, 46);
+        cx.fillText(film.iB, 122, 46);
+        cx.fillStyle = "rgba(255,214,120,.95)";
+        cx.font = "700 17px 'JetBrains Mono',monospace";
+        cx.fillText("VS", 85, 46);
+        cx.fillStyle = "rgba(255,255,255,.6)";
+        cx.font = "700 11px 'JetBrains Mono',monospace";
+        cx.fillText(film.stage.toUpperCase(), 85, 84);
+      } else {
+        cx.fillStyle = "rgba(255,255,255,.95)";
+        cx.font = "700 24px 'JetBrains Mono',monospace";
+        cx.fillText("FF CUP", 85, 44);
+        cx.fillStyle = "rgba(255,214,120,.9)";
+        cx.font = "700 12px 'JetBrains Mono',monospace";
+        cx.fillText(film.whenShort.toUpperCase(), 85, 74);
+      }
+      // scan lines
+      cx.fillStyle = "rgba(0,0,0,.18)";
+      for(let i=((u*40)%4);i<110;i+=4) cx.fillRect(0,i,170,1.4);
+    });
+    glow(ctx, q2, Math.max(24, 16*q2.s), NEON, 0.26*(1-fogAt(d)));
+  }
+
+  /* a banner slung across the avenue, flapping */
+  function drawBanner(ctx, C, p, u){
+    const y = p.y, z = p.z, d = depth(C, 0, y, z);
+    if(d < 1 || d > 420) return;
+    const segs = 8, w = (ROAD+3)*2, h = 3.4;
+    for(let i=0;i<segs;i++){
+      const xa = -w/2 + (w/segs)*i, xb = xa + w/segs;
+      const sag = k => Math.cos(k*Math.PI)* -0.9 + Math.sin(u*2 + k*4)*0.32;
+      const ka = i/segs, kb = (i+1)/segs;
+      const q = [pr(C,xa,y+sag(ka),z), pr(C,xb,y+sag(kb),z),
+                 pr(C,xb,y+sag(kb)-h,z+0.1), pr(C,xa,y+sag(ka)-h,z+0.1)];
+      poly(ctx, q, fogged(i%2 ? [190,26,96] : [230,40,120], d, 0.95));
+    }
+    const t0 = pr(C,-w/2,y-0.9,z), t1 = pr(C,w/2,y-0.9,z), t3 = pr(C,-w/2,y-h,z);
+    onQuad(ctx, t0, t1, t3, 240, 34, cx=>{
+      cx.fillStyle = "rgba(255,240,210,.95)";
+      cx.font = "700 20px 'JetBrains Mono',monospace";
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      cx.fillText(p.text, 120, 18);
+    });
+  }
+
+  /* an elevated line, and a train crossing it */
+  function drawTram(ctx, C, p, u){
+    const y = p.y, z = p.z, d = depth(C, 0, y, z);
+    if(d < 1 || d > 460) return;
+    const a = pr(C,-90,y,z), b = pr(C,90,y,z);
+    if(a && b){
+      ctx.strokeStyle = fogged(SHADE, d, 0.95); ctx.lineWidth = Math.max(1.4, 0.8*a.s);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    const tx = -70 + ((u*16) % 150);
+    for(let c=0;c<5;c++){
+      const cx0 = tx + c*7.4;
+      const q = [pr(C,cx0,y+3.2,z-1.4),pr(C,cx0+6.4,y+3.2,z-1.4),
+                 pr(C,cx0+6.4,y+0.4,z-1.4),pr(C,cx0,y+0.4,z-1.4)];
+      poly(ctx, q, fogged([236,232,250], d, 0.92));
+      for(let w=0;w<4;w++){
+        const wx = cx0+0.7+w*1.5;
+        poly(ctx, [pr(C,wx,y+2.6,z-1.5),pr(C,wx+1,y+2.6,z-1.5),
+                   pr(C,wx+1,y+1.3,z-1.5),pr(C,wx,y+1.3,z-1.5)], fogged(WARM, d, 0.95));
+      }
+    }
+  }
+
+  /* camera drones weaving over the street */
+  function drawDrones(ctx, C, p, u){
+    p.swarm.forEach(s=>{
+      const z = p.z + s.dz + Math.sin(u*s.sp + s.ph)*8;
+      const x = s.dx + Math.sin(u*0.8 + s.ph)*6;
+      const y = s.y + Math.sin(u*1.7 + s.ph)*1.6;
+      const q = pr(C, x, y, z);
+      if(!q || q.d > 400) return;
+      glow(ctx, q, Math.max(2.5, 1.1*q.s), Math.sin(u*6+s.ph)>0 ? [90,220,255] : [255,70,140], 0.9*(1-fogAt(q.d)));
+      dot(ctx, q, Math.max(0.8, 0.16*q.s), rgb([240,250,255], 0.9));
+    });
+  }
+
+  /* the blimp, with the cup's name down its side */
+  function drawBlimp(ctx, C, p, u){
+    // it keeps to its own side of the sky — the middle of the frame
+    // belongs to the avenue and, at the end of it, the arena
+    const x = -62 + ((u*3.4) % 38), y = p.y + Math.sin(u*0.5)*2, z = p.z;
+    const d = depth(C, x, y, z);
+    if(d < 1 || d > 620) return;
+    const c = pr(C, x, y, z), nose = pr(C, x+11, y, z), tail = pr(C, x-11, y, z);
+    if(!c || !nose || !tail) return;
+    const rx = Math.abs(nose.x - tail.x)/2, ry = Math.max(2, rx*0.3);
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, Math.max(3,rx), Math.max(1.5,ry), 0, 0, 6.2832);
+    ctx.fillStyle = fogged(mix(STONE,SHADE,0.3), d, 0.95); ctx.fill();
+    ctx.clip();
+    ctx.fillStyle = fogged(NEON, d, 0.75);
+    ctx.fillRect(c.x-rx, c.y-ry*0.22, rx*2, ry*0.44);
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.font = "700 "+Math.max(5, ry*0.7)+"px 'JetBrains Mono',monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("FF CUP", c.x, c.y);
+    ctx.restore();
+    glow(ctx, tail, Math.max(2, ry*0.5), [255,70,70], 0.8);
+  }
+
+  /* a terrace still full, screen on */
+  function drawTerrace(ctx, C, p, u){
+    const d = depth(C, p.x, 2, p.z);
+    if(d < 1 || d > 300) return;
+    const q = [pr(C,p.x-1,4.2,p.z-7),pr(C,p.x+7,4.2,p.z-7),pr(C,p.x+7,4.2,p.z+7),pr(C,p.x-1,4.2,p.z+7)];
+    poly(ctx, q, fogged([255,138,43], d, 0.5));
+    const R2 = rng(p.seed);
+    for(let i=0;i<9;i++){
+      const tx = p.x + 0.6 + R2()*5, tz = p.z - 6 + R2()*12;
+      const b = pr(C, tx, 0, tz), h = pr(C, tx, 1.5, tz);
+      if(!b||!h) continue;
+      ctx.strokeStyle = fogged([16,6,24], d, 0.9); ctx.lineWidth = Math.max(0.7, 0.28*b.s);
+      ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(h.x,h.y); ctx.stroke();
+      glow(ctx, pr(C, tx, 0.9, tz), Math.max(2, 0.6*b.s), WARM, 0.5*(1-fogAt(d)));
+    }
+    glow(ctx, pr(C, p.x+3, 2.6, p.z), Math.max(14, 8*(q[0]?q[0].s:2)), WARM, 0.28*(1-fogAt(d)));
+  }
+
+  /* fireworks over the far rooftops, once the arena is in sight */
+  function drawFireworks(ctx, C, p, u){
+    const R2 = rng(p.seed);
+    for(let i=0;i<4;i++){
+      const t0 = i*1.35 + R2()*0.6;
+      const k = ((u - t0) % 4.2) / 1.5;
+      if(k < 0 || k > 1) continue;
+      const x = (R2()-0.5)*160, y = 44 + R2()*40, z = p.z + R2()*140;
+      const c = pr(C, x, y, z);
+      if(!c) continue;
+      const col = i%2 ? [255,190,90] : [255,80,160];
+      const n = 16, rad = k*Math.max(8, 26*c.s);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";      // sparks add light, they don't paint over it
+      ctx.globalAlpha = (1-k)*(1-fogAt(c.d));
+      for(let j=0;j<n;j++){
+        const a = (j/n)*6.2832 + i;
+        dot(ctx, {x: c.x+Math.cos(a)*rad, y: c.y+Math.sin(a)*rad*0.9 + k*k*10}, Math.max(0.8, 1.6*c.s*0.4), rgb(col));
+      }
+      glow(ctx, c, rad*0.8, col, (1-k)*0.5);
+      ctx.restore();
+    }
+  }
+
+  /* ---- the arena the whole flight is aimed at ---- */
+  function drawArena(ctx, C, u){
+    const d = depth(C, 0, ARENA_Y, ARENA_Z);
+    if(d < 1) return;
+    const R = 62, seg = 30;
+    const rim = [], base = [], top = [];
+    for(let i=0;i<seg;i++){
+      const a = (i/seg)*6.2832;
+      rim.push(pr(C, Math.cos(a)*R, ARENA_Y, Math.sin(a)*R*0.72 + ARENA_Z));
+      top.push(pr(C, Math.cos(a)*R*0.74, ARENA_Y+16, Math.sin(a)*R*0.53 + ARENA_Z));
+      base.push(pr(C, Math.cos(a)*R*0.96, ARENA_Y-3, Math.sin(a)*R*0.69 + ARENA_Z));
+    }
+    const tip = pr(C, 0, ARENA_Y-78, ARENA_Z);
+    // the crystal underside
+    if(tip){
+      for(let i=0;i<seg;i++){
+        const a = base[i], b = base[(i+1)%seg];
+        if(!a||!b) continue;
+        const k = 0.35 + 0.45*Math.abs(Math.cos((i/seg)*6.2832));
+        poly(ctx, [a,b,tip], rgb(mix([48,26,96],[150,120,235], k), 0.95));
+      }
+    }
+    // the deck, and the bowl standing on it
+    poly(ctx, rim.filter(Boolean), rgb(mix(STONE,[190,180,230],0.4), 0.97));
+    for(let i=0;i<seg;i++){
+      const a = rim[i], b = rim[(i+1)%seg], c = top[(i+1)%seg], e = top[i];
+      if(!a||!b||!c||!e) continue;
+      const k = 0.4 + 0.5*Math.abs(Math.cos((i/seg)*6.2832 + 0.6));
+      poly(ctx, [a,b,c,e], rgb(mix([64,40,110], STONE, k), 0.96));
+    }
+    // spires, because a stadium on an island in the sky may as well
+    for(let i=0;i<9;i++){
+      const a = (i/9)*6.2832 + 0.3;
+      const bx = Math.cos(a)*R*0.62, bz = Math.sin(a)*R*0.44 + ARENA_Z;
+      const hgt = 20 + ((i*37)%11);
+      const q = [pr(C,bx-2.4,ARENA_Y+16,bz), pr(C,bx+2.4,ARENA_Y+16,bz),
+                 pr(C,bx+0.6,ARENA_Y+16+hgt,bz), pr(C,bx-0.6,ARENA_Y+16+hgt,bz)];
+      poly(ctx, q, rgb(mix(STONE,[150,140,210],0.35), 0.96));
+    }
+    // the ring of light, and the beams it throws up. Drawn additively —
+    // a searchlight brightens what it crosses, it does not tint it brown
+    const heart = pr(C, 0, ARENA_Y+18, ARENA_Z);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    glow(ctx, heart, Math.max(30, 70*(heart?heart.s:1)), [255,214,140], 0.5);
+    for(let i=0;i<6;i++){
+      const a = u*0.35 + (i/6)*6.2832;
+      const bx = Math.cos(a)*R*0.8, bz = Math.sin(a)*R*0.56 + ARENA_Z;
+      const b0 = pr(C, bx, ARENA_Y+8, bz), b1 = pr(C, bx*2.4, ARENA_Y+170, bz + Math.sin(a)*40);
+      if(!b0||!b1) continue;
+      const g = ctx.createLinearGradient(b0.x,b0.y,b1.x,b1.y);
+      g.addColorStop(0, "rgba(255,206,130,.30)"); g.addColorStop(1, "rgba(255,45,143,0)");
+      poly(ctx, [b0, {x:b1.x-18,y:b1.y}, {x:b1.x+18,y:b1.y}], g);
+    }
+    ctx.restore();
+  }
+
+  /* ============================================================
+     THE RUN
+     ============================================================ */
+  let liveEl = null, liveRaf = null, liveKeys = null;
+
+  function teardown(){
+    if(liveRaf) cancelAnimationFrame(liveRaf);
+    liveRaf = null;
+    if(liveKeys){ document.removeEventListener("keydown", liveKeys); liveKeys = null; }
+    const el = liveEl; liveEl = null;
+    if(!el) return;
+    el.classList.add("out");
+    setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 420);
+  }
+
+  function vsCardHtml(film){
+    const side = (p, which) => `
+      <div class="ffi-side ${which}" style="--pc:${p.color};--pc-dim:${p.color}22;--pc-glow:${p.color}88;--gx:${which==="l"?"85%":"15%"}">
+        <div class="ffi-badge">${esc(p.initials)}</div>
+        <div class="ffi-nm">${esc(p.name)}</div>
+        <div class="ffi-seed">${esc(p.seedLine)}</div>
+        <div class="ffi-stats">
+          <div class="ffi-stat"><b>${p.rating}</b><i>rating</i></div>
+          <div class="ffi-stat"><b>${esc(p.record)}</b><i>this cup</i></div>
+          <div class="ffi-stat"><b>${esc(p.form)}</b><i>last 5</i></div>
+        </div>
+      </div>`;
+    const a = Math.round(film.prob*100), b = 100-a;
+    return `
+      <div class="ffi-vs-head">${esc(film.name)} · ${esc(film.stage)}</div>
+      <div class="ffi-vs-when">${esc(film.when)}</div>
+      <div class="ffi-pair">
+        ${side(film.a, "l")}
+        <div class="ffi-vsmark"><span>VS</span></div>
+        ${side(film.b, "r")}
+      </div>
+      <div class="ffi-foot">
+        <div class="ffi-h2h">${esc(film.h2h)}</div>
+        <div class="ffi-odds">
+          <i style="width:${a}%;background:${film.a.color}"></i>
+          <i style="width:${b}%;background:${film.b.color}"></i>
+        </div>
+        <div class="ffi-h2h" style="margin-top:8px">${a}% &middot; ${b}%</div>
+        <div class="ffi-note">tap anywhere to go on</div>
+      </div>`;
+  }
+
+  function play(film){
+    teardown();
+    const reduce = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+    const el = document.createElement("div");
+    el.className = "ffi";
+    el.setAttribute("role","dialog");
+    el.setAttribute("aria-label", film.a.name + " versus " + film.b.name);
+    el.innerHTML = `
+      <canvas></canvas>
+      <div class="ffi-strap"><b>FF CUP</b><i>${esc(film.stage)} · ${esc(film.when)}</i></div>
+      <div class="ffi-vs"></div>
+      <button class="ffi-skip">Skip</button>`;
+    document.body.appendChild(el);
+    liveEl = el;
+
+    const canvas = el.querySelector("canvas");
+    const vs     = el.querySelector(".ffi-vs");
+    const strap  = el.querySelector(".ffi-strap");
+
+    const done = ()=>teardown();
+    el.addEventListener("click", done);
+    liveKeys = e => { if(e.key === "Escape" || e.key === "Enter" || e.key === " ") done(); };
+    document.addEventListener("keydown", liveKeys);
+
+    /* reduced motion gets the card and none of the flight */
+    if(reduce){
+      strap.remove();
+      vs.innerHTML = vsCardHtml(film);
+      vs.classList.add("on");
+      canvas.style.background = "linear-gradient(180deg,#0a0320,#3a0a3c)";
+      setTimeout(done, (T_HOLD-4)*1000);
+      return;
+    }
+
+    const budget = (window.innerWidth < 760 || (navigator.hardwareConcurrency||4) <= 4) ? 0.55 : 1;
+    const city = buildCity(hash(film.key), budget);
+    const ctx  = canvas.getContext("2d");
+    let W = 0, H = 0, dpr = 1, skyGrad = null, vigGrad = null;
+    function size(){
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = el.clientWidth; H = el.clientHeight;
+      canvas.width = Math.max(1, W*dpr); canvas.height = Math.max(1, H*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      /* the two full-screen gradients don't change with the camera, so they
+         are built once per size rather than 60 times a second */
+      skyGrad = ctx.createLinearGradient(0,0,0,H);
+      skyGrad.addColorStop(0,   rgb(SKY_HI));
+      skyGrad.addColorStop(0.5, rgb(mix(SKY_HI, SKY_LO, 0.55)));
+      skyGrad.addColorStop(1,   rgb(SKY_LO));
+      vigGrad = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.25,W/2,H/2,Math.max(W,H)*0.75);
+      vigGrad.addColorStop(0,"rgba(0,0,0,0)");
+      vigGrad.addColorStop(1,"rgba(4,0,10,.72)");
+    }
+    size();
+    const onResize = ()=>size();
+    window.addEventListener("resize", onResize);
+
+    try{ sfx("magic"); }catch(e){}
+    let slammed = false, carded = false;
+    const t0 = performance.now();
+
+    function frame(now){
+      if(liveEl !== el){ window.removeEventListener("resize", onResize); return; }
+      const u = (now - t0)/1000;
+
+      const C = camera(u, W, H);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,W,H);
+      drawSky(ctx, C, u, city, skyGrad);
+
+      // painter's algorithm over everything with a place in the world
+      const list = [];
+      city.blocks.forEach(b=>{
+        const d = depth(C, b.x, b.h/2, b.z);
+        if(d > 1 && d < 640) list.push({d, f: ()=>drawBlock(ctx, C, b, u, budget)});
+      });
+      city.props.forEach(p=>{
+        const d = depth(C, p.x||0, p.y||4, p.z);
+        if(d <= 1 || d > 660) return;
+        const f = p.kind === "court"     ? ()=>drawCourt(ctx, C, p, u)
+                : p.kind === "plaza"     ? ()=>drawPlaza(ctx, C, p, u)
+                : p.kind === "tron"      ? ()=>drawTron(ctx, C, p, u, film)
+                : p.kind === "banner"    ? ()=>drawBanner(ctx, C, p, u)
+                : p.kind === "tram"      ? ()=>drawTram(ctx, C, p, u)
+                : p.kind === "drones"    ? ()=>drawDrones(ctx, C, p, u)
+                : p.kind === "blimp"     ? ()=>drawBlimp(ctx, C, p, u)
+                : p.kind === "terrace"   ? ()=>drawTerrace(ctx, C, p, u)
+                : p.kind === "fireworks" ? ()=>drawFireworks(ctx, C, p, u)
+                : null;
+        if(f) list.push({d, f});
+      });
+      list.push({d: depth(C, 0, ARENA_Y, ARENA_Z), f: ()=>drawArena(ctx, C, u)});
+      list.sort((a,b)=>b.d - a.d);
+
+      drawGround(ctx, C, u);
+      for(let i=0;i<list.length;i++) list[i].f();
+
+      // speed lines while the flight is at its quickest
+      if(u > 1.2 && u < T_FLY){
+        const k = Math.min(1, (u-1.2)/1.6) * (1 - Math.max(0,(u-T_FLY+1))/1);
+        ctx.strokeStyle = "rgba(255,255,255,.16)";
+        for(let i=0;i<14;i++){
+          const a = (i/14)*6.2832 + u*0.4;
+          const r0 = Math.min(W,H)*0.36, r1 = r0 + 60 + Math.sin(i*3+u)*40;
+          ctx.lineWidth = 1.4;
+          ctx.globalAlpha = k*0.5;
+          ctx.beginPath();
+          ctx.moveTo(W/2+Math.cos(a)*r0, H/2+Math.sin(a)*r0);
+          ctx.lineTo(W/2+Math.cos(a)*r1, H/2+Math.sin(a)*r1);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // a vignette, so the middle of the frame always wins
+      ctx.fillStyle = vigGrad; ctx.fillRect(0,0,W,H);
+
+      // the arrival: whiteout, then the card
+      if(u > T_LIFT - 0.35 && u < T_LIFT + 0.6){
+        const k = 1 - Math.abs(u - T_LIFT)/0.5;
+        if(k > 0){ ctx.fillStyle = "rgba(255,246,235,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
+      }
+      if(!carded && u >= T_VS){
+        carded = true;
+        vs.innerHTML = vsCardHtml(film);
+        vs.classList.add("on");
+        setTimeout(()=>{ if(liveEl === el) teardown(); }, T_HOLD*1000);
+      }
+      if(!slammed && u >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
+
+      liveRaf = requestAnimationFrame(frame);
+    }
+    liveRaf = requestAnimationFrame(frame);
+  }
+
+  return {play, close: teardown};
+})();
+window.FFIntro = FFIntro;
+
+/* ---------- the film's cast list ----------
+   Everything the walk-in says about a player is read live off the
+   ladder and the event, so a card played in week two is a different
+   card from the same fixture's card in week one. */
+function ffPlayerCard(name, tid, seedLine){
+  const st  = currentStandings.find(s => (s.name||"").toLowerCase() === (name||"").toLowerCase());
+  const own = tournStandings(tid).find(r => r.name === name);
+  const recent = matches
+    .filter(m => m.status === "approved" && (m.p1 === name || m.p2 === name))
+    .sort((a,b)=> new Date(b.created_at) - new Date(a.created_at))
+    .slice(0,5)
+    .map(m => {
+      const o = Number(m.outcome);
+      if(o === 0.5) return "D";
+      return (o === 1 ? m.p1 : m.p2) === name ? "W" : "L";
+    }).join("") || "—";
+  return {
+    name,
+    initials: initials(name),
+    color: playerColor(name),
+    rating: Math.round(st ? st.rating : (typeof START === "number" ? START : 100)),
+    record: own ? `${own.w}-${own.l}${own.d?"-"+own.d:""}` : "0-0",
+    form: recent,
+    seedLine: seedLine || "in the field"
+  };
+}
+
+/* the whole film, assembled from a tournament and one of its rounds */
+function ffFilmFor(tid, round){
+  const t = tournaments.find(x=>x.id===tid);
+  if(!t) return null;
+  const fx = rpAllFixtures(t).find(f => f.round === round) || rpPairForRound(t, round);
+  if(!fx || !fx.p1 || !fx.p2) return null;
+
+  let seeds = [];
+  try{ const snap = rpSnapshot(t); if(snap && snap.qual) seeds = snap.qual.rows.map(r=>r.name); }catch(e){}
+  const seedOf = n => {
+    const i = seeds.indexOf(n);
+    return i < 0 ? "in the field" : "#" + (i+1) + " in the group";
+  };
+
+  const a = ffPlayerCard(fx.p1, tid, seedOf(fx.p1));
+  const b = ffPlayerCard(fx.p2, tid, seedOf(fx.p2));
+
+  // every previous meeting, cup or ladder
+  const met = matches.filter(m => m.status === "approved" &&
+    ((m.p1 === fx.p1 && m.p2 === fx.p2) || (m.p1 === fx.p2 && m.p2 === fx.p1)));
+  let aw = 0, bw = 0;
+  met.forEach(m=>{
+    const o = Number(m.outcome);
+    if(o === 0.5) return;
+    if((o === 1 ? m.p1 : m.p2) === fx.p1) aw++; else bw++;
+  });
+  const h2h = met.length
+    ? `Head to head ${aw}–${bw} in ${met.length} meeting${met.length===1?"":"s"}`
+    : "They have never played";
+
+  const iso  = rpDateOf(t, round);
+  const when = iso
+    ? rpDay(iso).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"})
+    : (window.FFCUP ? window.FFCUP.range : "");
+
+  return {
+    key: t.id + ":" + round + ":" + fx.p1 + ":" + fx.p2,
+    name: t.name || "FF Cup",
+    stage: (fx.stage || "Fixture") + (fx.label ? " · " + fx.label : ""),
+    when: when,
+    whenShort: iso ? rpWhenLabel(iso) : (window.FFCUP ? window.FFCUP.range : ""),
+    iA: initials(fx.p1), iB: initials(fx.p2),
+    a, b, h2h,
+    prob: 1 / (1 + Math.pow(10, (b.rating - a.rating)/DIVISOR))
+  };
+}
+
+function ffPlayIntro(tid, round){
+  const film = ffFilmFor(tid, round);
+  if(!film) return toast("Both players have to be known first", true);
+  FFIntro.play(film);
+  buzz(18);
+}
+window.ffPlayIntro = ffPlayIntro;
+
+/* ---------- the day's game announces itself ----------
+   Opening the cup on a day with a game on it plays that fixture's
+   walk-in — once per game per device, so it is an occasion and not
+   a toll gate. */
+function ffAutoIntro(t){
+  if(!t || !cupSkinOn()) return;
+  const fx = rpTodaysFixture(t);
+  if(!fx) return;
+  const key = "fgta_walkin_" + t.id + "_" + fx.round;
+  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key, rpToday()); }catch(e){}
+  setTimeout(()=>ffPlayIntro(t.id, fx.round), 700);
+}
+window.ffAutoIntro = ffAutoIntro;
+
 
 /* ---------- PWA: install + offline ---------- */
 if("serviceWorker" in navigator){
