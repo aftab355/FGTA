@@ -530,7 +530,10 @@
   /* ===== SUB-NAVIGATION ===== */
   /* ===== CINEMATIC LOAD SCREEN ===== */
   .loadscreen{
-    position:fixed;inset:0;z-index:9999;display:grid;place-items:center;
+    /* above the walk-in's own overlay (z 9999), so on a match day the film
+       is already running underneath and the wipe reveals it — the cut has
+       to be the wipe itself, not a gap after it */
+    position:fixed;inset:0;z-index:10000;display:grid;place-items:center;
     background:radial-gradient(ellipse at center, var(--panel), var(--bg) 75%);
     flex-direction:column;gap:20px;
   }
@@ -21623,18 +21626,31 @@ setInterval(updateCountdowns, 1000); // started once here; walks the DOM each ti
 window.addEventListener("resize", moveTabIndicator);
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndicator).catch(()=>{});
 
-/* cinematic load screen — once per session */
+/* cinematic load screen — once per session.
+
+   It also publishes the one moment anything else might need: ffWhenRevealed
+   fires the instant the wipe starts, which is what the FF Cup walk-in hangs
+   itself on so that on a match day the film is already running behind the
+   wipe instead of arriving some milliseconds after it. Defined before the
+   load screen decides whether to run at all, so a caller gets the same
+   promise-shaped answer either way. */
 (function(){
   const ls=document.getElementById("loadScreen");
-  if(!ls) return;
+  let fired=false; const waiting=[];
+  window.ffWhenRevealed = function(cb){
+    if(fired) cb(); else waiting.push(cb);
+  };
+  const reveal = ()=>{ if(fired) return; fired=true; waiting.splice(0).forEach(cb=>{ try{ cb(); }catch(e){} }); };
+
   let seen=false;
   try{ seen=sessionStorage.getItem("fgta_loaded")==="1"; }catch(e){}
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if(seen || reduce){ ls.remove(); return; }
+  if(!ls || seen || reduce){ if(ls) ls.remove(); reveal(); return; }
   try{ sessionStorage.setItem("fgta_loaded","1"); }catch(e){}
   // hold the cinematic for its full run, then wipe and reveal
   setTimeout(()=>{
     ls.classList.add("done");
+    reveal();                       // the frame the wipe begins, not the frame it ends
     const main=document.querySelector(".wrap"); if(main) main.classList.add("reveal-in");
     setTimeout(()=>ls.remove(), 650);
   }, 2400);
@@ -22072,6 +22088,50 @@ const FFIntro = (function(){
     return out;
   }
 
+  /* ---- THE BALL ----
+     Every move the camera makes is a move after this. It is sampled from
+     the same spline, half a second further along, so the camera is always
+     chasing it and the two can never disagree: the rise over the rooftop
+     court is the camera following it up off a rally, the dive is following
+     it down, the bank out of the avenue is following it round the gantry,
+     and the window is where it goes through and the camera goes after it.
+     A small perpendicular wobble keeps it from sitting dead centre like a
+     thing on a rail. */
+  const BALL_LEAD = 0.52;
+  function ballAt(u){
+    const p = pathAt(Math.min(T_END, u + BALL_LEAD));
+    return [p[0] + Math.sin(u*2.3)*1.7,
+            Math.max(1.2, p[1] + Math.cos(u*1.8)*1.1 + 1.3),
+            p[2]];
+  }
+  /* it drags a tail of where it has just been, which is most of what makes
+     a two-pixel dot read as something travelling */
+  function drawHeroBall(ctx, C, u){
+    for(let i=7;i>=0;i--){
+      const b = ballAt(Math.max(0, u - i*0.045));
+      const q = pr(C, b[0], b[1], b[2]);
+      if(!q) continue;
+      const k = 1 - i/8;
+      if(i === 0){
+        /* floored, not just capped: the lead is a fixed half-second, so the
+           faster the flight gets the further ahead the ball is and the
+           smaller it would draw — exactly backwards for the one object the
+           whole camera move is about */
+        const r = Math.min(90, Math.max(7, 0.42*q.s));
+        glow(ctx, q, r*3.4, BALL, 0.85);
+        const g = ctx.createRadialGradient(q.x-r*0.3, q.y-r*0.38, r*0.05, q.x, q.y, r);
+        g.addColorStop(0, "#f8ffb0"); g.addColorStop(0.5, rgb(BALL)); g.addColorStop(1, "#9db81a");
+        ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, 6.2832); ctx.fillStyle = g; ctx.fill();
+        if(r > 5){
+          ctx.beginPath(); ctx.arc(q.x, q.y, r*0.98, -2.4 + u*3, -0.5 + u*3);
+          ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = Math.max(1, r*0.1); ctx.stroke();
+        }
+      } else {
+        glow(ctx, q, Math.min(60, Math.max(4.5*k, 0.30*q.s*k)), BALL, 0.32*k);
+      }
+    }
+  }
+
   function camera(u, W, H){
     let x, y, z, pitch, roll, f = Math.max(W,H) * 0.62;
 
@@ -22154,10 +22214,14 @@ const FFIntro = (function(){
       {kind:"lscourt",  z: 150, seed:(R()*1e9)|0},          // the load screen's court, painted on the road
       {kind:"blimp",    z: 250, y: 48,       seed:(R()*1e9)|0},
       {kind:"court",    z: 250, x:-(ROAD+9), y: 20, seed:(R()*1e9)|0},
+      {kind:"birds",    z: 214, x:-14, y: 23, seed:(R()*1e9)|0},
       {kind:"sign",     z: 292, x:-(ROAD+2), y: 24, seed:(R()*1e9)|0, text:"FGTA"},
+      {kind:"ticker",   z: 200, x: ROAD+1,   y: 5,  seed:(R()*1e9)|0},
       {kind:"podium",   z: 300, x: ROAD+13,  seed:(R()*1e9)|0},
       {kind:"tron",     z: 352, x:-(ROAD+1), seed:(R()*1e9)|0},
-      {kind:"ticker",   z: 380, x: ROAD+1,   y: 5,  seed:(R()*1e9)|0},
+      {kind:"debris",   z: 292, seed:(R()*1e9)|0},
+      {kind:"gantry",   z: 345, y: 13,       seed:(R()*1e9)|0},
+      {kind:"birds",    z: 372, x: 14, y: 20, seed:(R()*1e9)|0},
       {kind:"tram",     z: 404, y: 24,       seed:(R()*1e9)|0},
       {kind:"drones",   z: 430, seed:(R()*1e9)|0},
       {kind:"portal",   z: (PORTAL.z0+PORTAL.z1)/2, x: PORTAL.x, y: PORTAL.h/2, seed:(R()*1e9)|0},
@@ -22219,6 +22283,24 @@ const FFIntro = (function(){
         const PR = rng(p.seed), swarm = [];
         for(let i=0;i<14;i++) swarm.push({dx:(PR()-0.5)*30, y:8+PR()*26, dz:PR()*90, ph:PR()*6.28, sp:0.5+PR()});
         p.swarm = swarm;
+      }
+      if(p.kind === "birds"){
+        const PR = rng(p.seed), flock = [];
+        // scattered outward and upward, each starting a beat after the last
+        for(let i=0;i<12;i++) flock.push({
+          dx:(PR()-0.5)*10, dy:(PR()-0.5)*4, dz:(PR()-0.5)*12,
+          vx:(PR()-0.5)*13, vy:2.5+PR()*7, vz:2+PR()*11,
+          t0: 1.4 + PR()*0.5, ph: PR()*6.28
+        });
+        p.flock = flock;
+      }
+      if(p.kind === "debris"){
+        const PR = rng(p.seed), bits = [];
+        for(let i=0;i<Math.round(34*budget);i++) bits.push({
+          x:(PR()-0.5)*ROAD*1.9, dz:(PR()-0.5)*34, h:1.4+PR()*4.5,
+          sp:0.5+PR()*1.3, ph:PR()*6.28, warm: PR()<0.55
+        });
+        p.bits = bits;
       }
       if(p.kind === "rain"){
         const PR = rng(p.seed), drops = [];
@@ -22799,6 +22881,76 @@ const FFIntro = (function(){
     ctx.stroke();
   }
 
+  /* THE GANTRY — a crane arm slung across the avenue with its counterweight
+     down the far side, leaving one gap. It sits exactly where the flight
+     banks right and climbs out of the street, so the manoeuvre reads as
+     going round something rather than as the camera changing its mind. */
+  function drawGantry(ctx, C, p, u){
+    const z = p.z, d = depth(C, 0, 12, z);
+    if(d < 1 || d > 420) return;
+    const x0 = -ROAD-4, x1 = 6, y = p.y;
+    // the two legs
+    [x0+1.5, x1-1.5].forEach(lx=>{
+      poly(ctx, [pr(C,lx-0.7,y,z),pr(C,lx+0.7,y,z),pr(C,lx+0.7,0,z),pr(C,lx-0.7,0,z)],
+           fogged(mix(SHADE,[255,176,60],0.45), d, 0.97));
+    });
+    // the span, and the hazard stripes down it
+    poly(ctx, [pr(C,x0,y+2.2,z),pr(C,x1,y+2.2,z),pr(C,x1,y,z),pr(C,x0,y,z)],
+         fogged([242,176,42], d, 0.97));
+    const n = 9;
+    for(let i=0;i<n;i+=2){
+      const a2 = x0 + (x1-x0)*(i/n), b2 = x0 + (x1-x0)*((i+1)/n);
+      poly(ctx, [pr(C,a2,y+2.2,z-0.06),pr(C,b2,y+2.2,z-0.06),
+                 pr(C,b2,y,z-0.06),pr(C,a2,y,z-0.06)], fogged([26,14,34], d, 0.92));
+    }
+    // the lamp on the open end, which is the thing you actually steer by
+    const tip = pr(C, x1, y+3, z);
+    if(Math.sin(u*4.2) > -0.2) glow(ctx, tip, Math.min(70, Math.max(4, 2.4*(tip?tip.s:1))), [255,80,60], 0.9);
+    dot(ctx, tip, Math.max(1, 0.3*(tip?tip.s:1)), rgb([255,120,90], 0.95));
+    // and the netting hanging off it, so the gap is unmistakable
+    for(let i=0;i<12;i++){
+      const lx = x0 + (x1-x0)*(i/12);
+      line(ctx, pr(C,lx,y,z), pr(C,lx, y-2.4-Math.sin(u*1.6+i)*0.5, z),
+           fogged([200,170,220], d, 0.35), 1);
+    }
+  }
+
+  /* BIRDS — they break off the roofs as the ball goes over, which is what
+     tells you something just passed */
+  function drawBirds(ctx, C, p, u){
+    const d = depth(C, p.x, p.y, p.z);
+    if(d < 1 || d > 400) return;
+    ctx.strokeStyle = fogged([236,226,255], d, 0.8);
+    ctx.lineWidth = Math.max(0.6, 30/d);
+    ctx.beginPath();
+    p.flock.forEach(f=>{
+      const k = Math.max(0, u - f.t0);
+      const x = p.x + f.dx + f.vx*k, y = p.y + f.dy + f.vy*k, z = p.z + f.dz + f.vz*k;
+      const q = pr(C, x, y, z);
+      if(!q) return;
+      const w = Math.max(1.5, 0.5*q.s), flap = Math.sin(u*11 + f.ph)*w*0.5;
+      ctx.moveTo(q.x-w, q.y-flap); ctx.lineTo(q.x, q.y); ctx.lineTo(q.x+w, q.y-flap);
+    });
+    ctx.stroke();
+  }
+
+  /* DEBRIS — paper and leaves off the road, kicked up by whatever just went
+     through at head height */
+  function drawDebris(ctx, C, p, u){
+    const d = depth(C, 0, 3, p.z);
+    if(d < 1 || d > 300) return;
+    p.bits.forEach(b=>{
+      const k = (u*b.sp + b.ph) % 6.2832;
+      const x = b.x + Math.sin(k)*3.2;
+      const y = 0.4 + (1-Math.cos(k))*b.h;
+      const q = pr(C, x, y, p.z + b.dz + Math.sin(k*0.7)*4);
+      if(!q || q.d > 200) return;
+      const w = Math.max(0.8, 0.22*q.s), hh = w*(0.4+0.6*Math.abs(Math.sin(k*2)));
+      ctx.fillStyle = fogged(b.warm ? [236,214,170] : [180,150,210], q.d, 0.8);
+      ctx.fillRect(q.x-w/2, q.y-hh/2, w, hh);
+    });
+  }
+
   /* fireworks over the far rooftops, once the arena is in sight */
   function drawFireworks(ctx, C, p, u){
     const R2 = rng(p.seed);
@@ -23040,7 +23192,15 @@ const FFIntro = (function(){
       </div>`;
   }
 
-  function play(film){
+  /* build() does everything except run the clock. play() starts it at once;
+     prepare() hands back the starter, so the boot path can have the city
+     generated, the canvas sized and the first frame already painted while
+     the load screen is still up — and then begin on the exact frame the
+     wipe starts, with nothing left to compute. */
+  function play(film){ return build(film).start(); }
+  function prepare(film){ return build(film); }
+
+  function build(film){
     teardown();
     const reduce = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
@@ -23081,8 +23241,7 @@ const FFIntro = (function(){
       vs.innerHTML = vsCardHtml(film);
       vs.classList.add("on");
       canvas.style.background = "linear-gradient(180deg,#0a0320,#3a0a3c)";
-      setTimeout(done, (T_HOLD-4)*1000);
-      return;
+      return {start(){ setTimeout(done, (T_HOLD-4)*1000); return this; }, cancel: teardown};
     }
 
     const budget = (window.innerWidth < 760 || (navigator.hardwareConcurrency||4) <= 4) ? 0.55 : 1;
@@ -23184,14 +23343,15 @@ const FFIntro = (function(){
       return !(maxx < 0 || minx > C.W || maxy < 0 || miny > C.H);
     }
 
-    try{ sfx("magic"); }catch(e){}
-    let slammed = false, carded = false;
-    const t0 = performance.now();
+    let slammed = false, carded = false, t0 = 0;
 
     function frame(now){
       if(liveEl !== el){ window.removeEventListener("resize", onResize); return; }
-      const u = (now - t0)/1000;
+      drawFrame((now - t0)/1000);
+      liveRaf = requestAnimationFrame(frame);
+    }
 
+    function drawFrame(u){
       const C = camera(u, W, H);
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.clearRect(0,0,W,H);
@@ -23225,6 +23385,9 @@ const FFIntro = (function(){
                 : p.kind === "blimp"     ? ()=>drawBlimp(ctx, C, p, u)
                 : p.kind === "terrace"   ? ()=>drawTerrace(ctx, C, p, u)
                 : p.kind === "rain"      ? ()=>drawRain(ctx, C, p, u)
+                : p.kind === "gantry"    ? ()=>drawGantry(ctx, C, p, u)
+                : p.kind === "birds"     ? ()=>drawBirds(ctx, C, p, u)
+                : p.kind === "debris"    ? ()=>drawDebris(ctx, C, p, u)
                 : p.kind === "portal"    ? ()=>drawPortal(ctx, C, PORTAL, u)
                 : p.kind === "fireworks" ? ()=>drawFireworks(ctx, C, p, u)
                 : null;
@@ -23239,6 +23402,7 @@ const FFIntro = (function(){
         const it = list[i];
         if(it.b) drawBlock(ctx, C, it.b, u, budget); else it.f();
       }
+      drawHeroBall(ctx, C, u);
       drawConfetti(ctx, C, city, u);
 
       // speed lines while the flight is at its quickest
@@ -23277,13 +23441,25 @@ const FFIntro = (function(){
         setTimeout(()=>{ if(liveEl === el) teardown(); }, T_HOLD*1000);
       }
       if(!slammed && u >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
-
-      liveRaf = requestAnimationFrame(frame);
     }
-    liveRaf = requestAnimationFrame(frame);
+
+    /* paint frame zero now, so a prepared film is never a blank rectangle
+       waiting behind the wipe */
+    drawFrame(0);
+
+    return {
+      start(){
+        if(liveEl !== el) return this;
+        t0 = performance.now();
+        try{ sfx("magic"); }catch(e){}
+        liveRaf = requestAnimationFrame(frame);
+        return this;
+      },
+      cancel: teardown
+    };
   }
 
-  return {play, close: teardown};
+  return {play, prepare, close: teardown};
 })();
 window.FFIntro = FFIntro;
 
@@ -23390,30 +23566,89 @@ function ffAutoIntro(t){
 }
 window.ffAutoIntro = ffAutoIntro;
 
-/* Opening the app on a day with a game on it is itself the cue. Called
-   at the end of the first load() of the session, once the roster and
-   the draw are actually in memory — before that there is no fixture to
-   find. It waits for the cinematic load screen to clear so the two
-   never play over each other, and goes through the same once-per-game
-   guard as every other route in, so opening the app and then opening
-   the cup does not play it twice. */
+/* ---------- opening the app IS the cue ----------
+
+   On a day with a game on it the film has to be there the moment the load
+   screen wipes — not a beat later, and certainly not after a round trip to
+   the database. So the decision is made from a note the app left itself
+   last time it was open:
+
+     fgta_walkin_next = {d:"2026-08-17", tid, round, film}
+
+   That is written at the end of every load(), for the next dated fixture
+   the event is still waiting on. On the next boot the note is read
+   synchronously, before any network at all: if it is for today and has not
+   been watched, the city is generated and the first frame painted while
+   the load screen is still up, and the flight starts on the exact frame
+   the wipe begins.
+
+   The cost of that is that the card's numbers are as of the last time the
+   app was open — at worst one session stale, which is a fair trade for the
+   film being instant. Everything else about the fixture (who, when, which
+   round) is fixed the moment it is scheduled.
+
+   The first run after a schedule is made has no note yet; ffBootWalkIn
+   below covers that one case off the back of load(), and both routes share
+   the same once-per-game guard so neither can double up on the other. */
+const FF_NEXT_KEY = "fgta_walkin_next";
+let ffPrimed = false;
+
+function ffRememberNextWalkIn(){
+  if(!cupSkinOn()) return;
+  const t = cupTournament();
+  if(!t || t.format !== "robin2") return;
+  const fx = rpNextScheduled(t);
+  const iso = fx && rpDateOf(t, fx.round);
+  if(!fx || !iso || !fx.p1 || !fx.p2) { try{ localStorage.removeItem(FF_NEXT_KEY); }catch(e){} return; }
+  const film = ffFilmFor(t.id, fx.round);
+  if(!film) return;
+  try{ localStorage.setItem(FF_NEXT_KEY, JSON.stringify({d: iso, tid: t.id, round: fx.round, film})); }catch(e){}
+}
+
+/* runs at parse time, off the note alone — no app state, no network */
+function ffPrimeWalkIn(){
+  if(ffPrimed || !cupSkinOn()) return;
+  let rec = null;
+  try{ rec = JSON.parse(localStorage.getItem(FF_NEXT_KEY) || "null"); }catch(e){}
+  if(!rec || !rec.film || rec.d !== rpToday()) return;
+  const seen = "fgta_walkin_" + rec.tid + "_" + rec.round;
+  try{ if(localStorage.getItem(seen)) return; localStorage.setItem(seen, rec.d); }catch(e){}
+
+  ffPrimed = true;
+  const armed = FFIntro.prepare(rec.film);          // city built, first frame painted
+  const go = ()=>{ armed.start(); buzz(18); };
+  if(typeof window.ffWhenRevealed === "function") window.ffWhenRevealed(go);
+  else go();
+}
+window.ffPrimeWalkIn = ffPrimeWalkIn;
+
+/* the cold-start case: a schedule made since the last session, so there was
+   no note to read. Fires off the back of the first load(), which is as early
+   as the app can possibly know. */
 let ffBooted = false;
 function ffBootWalkIn(){
-  if(ffBooted) return;
+  try{ ffRememberNextWalkIn(); }catch(e){}      // leave the note for next time, always
+  if(ffBooted || ffPrimed) return;
   ffBooted = true;
   if(!cupSkinOn()) return;
   const t = cupTournament();
   if(!t || t.format !== "robin2") return;
   const fx = rpTodaysFixture(t);
-  if(!fx) return;
-  const wait = document.getElementById("loadScreen") ? 2900 : 500;
-  setTimeout(()=>{
-    if(document.querySelector(".ffi")) return;      // already watching it
-    if(ffWalkInSeen(t, fx)) return;
-    ffPlayIntro(t.id, fx.round);
-  }, wait);
+  if(!fx || document.querySelector(".ffi")) return;
+  const seen = "fgta_walkin_" + t.id + "_" + fx.round;
+  try{ if(localStorage.getItem(seen)) return; }catch(e){}
+  const film = ffFilmFor(t.id, fx.round);
+  if(!film) return;
+  const armed = FFIntro.prepare(film);
+  try{ localStorage.setItem(seen, rpToday()); }catch(e){}
+  ffPrimed = true;
+  if(typeof window.ffWhenRevealed === "function") window.ffWhenRevealed(()=>{ armed.start(); buzz(18); });
+  else armed.start();
 }
 window.ffBootWalkIn = ffBootWalkIn;
+
+/* prime immediately — this is the whole point of the note */
+try{ ffPrimeWalkIn(); }catch(e){}
 
 
 /* ---------- PWA: install + offline ---------- */
