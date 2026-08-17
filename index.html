@@ -58,6 +58,67 @@
     --r-sm:12px; --r-md:18px; --r-lg:26px; --r-pill:999px;
     /* warm, soft, diffuse elevation instead of a hard offset block shadow */
     --shadow:0 24px 60px -28px rgba(0,0,0,.6);
+
+    /* ===== DEPTH & CONTRAST PALETTE =================================
+       Ten tokens layered on top of the base system above. Nothing here
+       replaces a brand colour: --accent stays the hot pink, --bg stays
+       the near-black grape. These are the *lighting* — where the light
+       lands, where it doesn't, and the cool counterweights that let the
+       pink read as the loudest thing on the page rather than the only
+       saturated one.
+
+       Every value that is ever set as a text colour clears WCAG AA
+       (4.5:1) against --bg, --panel AND --panel-2, and against the
+       retinted panels of the live weather themes further down. The two
+       that don't (--surface-bevel-light, --glow-mesh) are never type:
+       one is a 1px edge, the other is a backdrop wash. Measured ratios
+       are noted per token.
+
+       The whole block is re-tinted per weather theme and per the ffcup
+       skin, so the depth follows the palette instead of fighting it. */
+
+    /* -- highlights & specular accents -- */
+    /* rim light: the near-white a hot-pink surface throws back off a top
+       edge. Top hairlines, 1px rims, glowing micro-accents. 12.7:1 on
+       --panel. */
+    --highlight-rim:#ffd9ec;
+    /* the same light gone diffuse — soft luminous tint for gradient
+       overlays and hovered states, used mostly at 8-20% via color-mix.
+       9.1:1 on --panel when it does carry type. */
+    --highlight-ambient:#ffa8d2;
+
+    /* -- deep shadows & ambient occlusion -- */
+    /* cast shadow with a plum undertone. Flat black punches a hole in a
+       violet page; this sinks into it. */
+    --shadow-tinted:#0a0414;
+    /* grounding tone — one step below --bg. Sunken wells, progress
+       tracks, footer/sidebar depth, anything that should read as cut
+       into the page rather than sitting on it. */
+    --surface-sunken:#0f0a1e;
+
+    /* -- high-contrast secondary accents -- */
+    /* the true complement of --accent (338° → 158°). Reserved for the
+       loudest things on the page: primary CTAs, live badges, pings.
+       11.2:1 on --panel; near-black type on it reads at 13.9:1. */
+    --accent-pop:#2ff2b3;
+    /* split-complementary supports: an electric indigo that sits
+       between the grape base and the pink accent, and a signal azure
+       that reads instantly as "interactive, not brand". Tags, chart
+       series, hover states. 5.5:1 and 6.9:1 on --panel. */
+    --accent-split-a:#9b82ff;
+    --accent-split-b:#3fb0ff;
+
+    /* -- 3D / skeuomorphic layering -- */
+    /* bevel pair: a lit top/left edge and a shadowed bottom/right one.
+       Tinted rather than white/black so a bevelled card still looks cut
+       from the same material as the page. Edges only, never type —
+       --surface-bevel-light clears the 3:1 non-text bar at 3.1:1. */
+    --surface-bevel-light:#6d64a8;
+    --surface-bevel-shadow:#160f2c;
+    /* diffuse mesh glow — radial backdrops behind focal points, the
+       bloom under floating/blurred surfaces. Always well under 20%
+       alpha, so it is a wash and never a foreground. */
+    --glow-mesh:#a259ff;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;background:var(--bg)}
@@ -74,7 +135,11 @@
   ::selection{background:var(--accent);color:#04140e}
   :focus-visible{outline:1.5px solid var(--accent);outline-offset:3px}
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
-    outline:1.5px solid var(--accent);outline-offset:3px;box-shadow:0 0 0 5px var(--accent-glow);
+    /* the accent ring keeps doing the work; the rim light is added as a
+       thin outer bloom so the marker still reads on the surfaces that
+       are themselves close to the accent hue (cup skin, hot weather) */
+    outline:1.5px solid var(--highlight-rim);outline-offset:3px;
+    box-shadow:0 0 0 5px var(--accent-glow), 0 0 18px -4px color-mix(in srgb, var(--highlight-rim) 55%, transparent);
   }
 
   /* ===== APP SHELL — TOP BAR ===== */
@@ -403,7 +468,7 @@
   .odds-name em{font-style:normal;color:var(--dim);font-size:11px}
   .odds-pct{font-weight:600;color:var(--accent);font-size:17px}
   .odds-pct.r{color:var(--silver)}
-  .odds-bar{height:8px;border-radius:6px;background:#15171a;overflow:hidden}
+  .odds-bar{height:8px;border-radius:6px;background:var(--surface-sunken);overflow:hidden}
   .odds-bar span{display:block;height:100%;background:var(--accent);border-radius:6px;transition:width .25s}
   .odds-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
   .chart-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
@@ -717,7 +782,7 @@
   .po-side:last-child .po-pct{color:var(--silver)}
   .po-r{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim)}
   .po-vs{font-family:'JetBrains Mono',monospace;color:var(--dim);font-size:13px}
-  .pred-bar{height:8px;border-radius:6px;background:#15171a;overflow:hidden;margin-bottom:14px}
+  .pred-bar{height:8px;border-radius:6px;background:var(--surface-sunken);overflow:hidden;margin-bottom:14px}
   .pred-bar span{display:block;height:100%;background:var(--accent)}
   .pred-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:13px}
   .pred-table th{text-align:right;color:var(--dim);font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
@@ -740,7 +805,7 @@
   .st-name{font-weight:500}
   .st-r{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-left:5px}
   .st-champ{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent);white-space:nowrap}
-  .st-bar{display:inline-block;width:70px;height:6px;background:#15171a;border-radius:6px;overflow:hidden;margin-left:8px;vertical-align:middle}
+  .st-bar{display:inline-block;width:70px;height:6px;background:var(--surface-sunken);border-radius:6px;overflow:hidden;margin-left:8px;vertical-align:middle}
   .st-bar span{display:block;height:100%;background:var(--accent)}
   .st-t3{font-family:'JetBrains Mono',monospace;color:var(--muted)}
   .wif-caption{font-size:14px;margin-bottom:4px}
@@ -755,7 +820,7 @@
   .upset-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px 12px;padding:9px 0;border-bottom:1px solid var(--line)}
   .upset-row:last-child{border-bottom:none}
   .upset-pct{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--pending)}
-  .upset-bar{grid-column:1/-1;height:5px;background:#15171a;border-radius:6px;overflow:hidden}
+  .upset-bar{grid-column:1/-1;height:5px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .upset-bar span{display:block;height:100%;background:var(--pending)}
   .wi-row{display:grid;grid-template-columns:26px 1fr auto auto auto;gap:12px;align-items:center;
     padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);margin-bottom:7px}
@@ -827,7 +892,7 @@
   .skill-row:last-of-type{border-bottom:none}
   .skill-name{font-weight:700;font-size:14px}
   .skill-track{position:relative;height:22px}
-  .skill-track::before{content:'';position:absolute;left:0;right:0;top:10px;height:2px;background:#15171a;border-radius:3px}
+  .skill-track::before{content:'';position:absolute;left:0;right:0;top:10px;height:2px;background:var(--surface-sunken);border-radius:3px}
   .skill-band{position:absolute;top:5px;height:12px;background:var(--accent);opacity:.22;border-radius:6px}
   .skill-dot{position:absolute;top:5px;width:4px;height:12px;background:var(--accent);border-radius:3px;transform:translateX(-2px)}
   .skill-val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;text-align:right}
@@ -835,7 +900,7 @@
   .skill-conf{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);text-align:right}
   .tl-row{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center;margin-bottom:7px}
   .tl-name{font-size:13px;color:var(--muted)}
-  .tl-bars{display:flex;height:16px;border-radius:6px;overflow:hidden;background:#15171a}
+  .tl-bars{display:flex;height:16px;border-radius:6px;overflow:hidden;background:var(--surface-sunken)}
   .tl-seg{background:var(--accent);height:100%}
   .dna-svg{width:100%;height:auto;max-width:520px;display:block;margin:6px auto 0}
   .dna-label{fill:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px}
@@ -860,7 +925,7 @@
   .attr-bars{display:flex;flex-direction:column;gap:9px}
   .attr-row{display:grid;grid-template-columns:78px 1fr 30px;gap:10px;align-items:center}
   .attr-name{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
-  .attr-track{height:7px;background:#15171a;border-radius:6px;overflow:hidden}
+  .attr-track{height:7px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .attr-fill{height:100%;border-radius:6px;transition:width .4s ease}
   .attr-fill.a-elite{background:var(--accent)}
   .attr-fill.a-good{background:#8fd98f}
@@ -992,7 +1057,7 @@
   .lev-row{padding:11px 0;border-bottom:1px solid var(--line)}
   .lev-row:last-of-type{border-bottom:none}
   .lev-names{font-size:15px;margin-bottom:6px}
-  .lev-bar{height:7px;background:#15171a;border-radius:6px;overflow:hidden}
+  .lev-bar{height:7px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .lev-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--accent));border-radius:6px}
   .lev-detail{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);margin-top:5px}
   .path-list{display:flex;flex-direction:column;gap:6px;margin-top:12px}
@@ -1450,7 +1515,7 @@
   .pi-name{font-weight:700;font-size:15px}
   .pi-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
   .pi-num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;text-align:right}
-  .pbar{display:block;height:8px;background:#15171a;border-radius:6px;overflow:hidden}
+  .pbar{display:block;height:8px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .pbar>span{display:block;height:100%;border-radius:6px;transition:width .5s cubic-bezier(.3,.8,.4,1)}
   .form-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
     padding:10px 0;border-bottom:1px solid var(--line)}
@@ -1508,7 +1573,7 @@
   .pi-name{font-weight:700;font-size:15px}
   .pi-sub{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim)}
   .pi-num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;text-align:right}
-  .pbar{display:block;height:7px;background:#15171a;border-radius:6px;overflow:hidden}
+  .pbar{display:block;height:7px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .pbar span{display:block;height:100%;border-radius:6px;transition:width .5s cubic-bezier(.3,.8,.4,1)}
   .form-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
     padding:9px 0;border-bottom:1px solid var(--line)}
@@ -1645,7 +1710,7 @@
   .hype-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
   .hype-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
   .hype-val{font-weight:700;font-size:15px;color:var(--accent)}
-  .hype-track{height:10px;background:#15171a;border-radius:6px;overflow:hidden}
+  .hype-track{height:10px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .hype-fill{display:block;height:100%;border-radius:6px;
     background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 40%, white));
     background-size:200% 100%;animation:hypeflow 3s linear infinite;transition:width .8s cubic-bezier(.3,.8,.4,1)}
@@ -1700,6 +1765,13 @@
     --line-soft:rgba(190,230,255,.06); --ink:#eef4f8; --muted:#9fb0bc; --dim:#66788a;
     --accent:#5fd8ff; --accent-dim:#12333f; --accent-glow:rgba(95,216,255,.35);
     --ball:#d8f6ff; --ball-glow:rgba(216,246,255,.3); --court:#8fe0ff;
+    /* depth layer, re-tinted to the cold palette: the light going over
+       this surface is the same ice blue the accent is */
+    --highlight-rim:#e2f6ff; --highlight-ambient:#a8dcff;
+    --shadow-tinted:#040c14; --surface-sunken:#0d141b;
+    --accent-pop:#5affc8; --accent-split-a:#8fb0ff; --accent-split-b:#4fc6ff;
+    --surface-bevel-light:#5d7a90; --surface-bevel-shadow:#111a23;
+    --glow-mesh:#59a8ff;
   }
   body[data-heat="cold"] .panel{box-shadow:0 0 0 1px rgba(190,230,255,.16) inset, 0 24px 60px -28px rgba(0,10,20,.6)}
   body[data-heat="cold"] .panel::before{background:linear-gradient(90deg,#bff0ff,var(--accent))}
@@ -1712,6 +1784,13 @@
     --line-soft:rgba(255,150,80,.06); --ink:#f6eef0; --muted:#b39ba0; --dim:#7c6a6e;
     --accent:#ff7a1f; --accent-dim:#3d1c0a; --accent-glow:rgba(255,122,31,.3);
     --ball:#ffdd55; --ball-glow:rgba(255,221,85,.28); --court:#ff4d2e;
+    /* depth layer, re-tinted hot: ember highlights, a cool teal pop to
+       stop the whole frame going one temperature */
+    --highlight-rim:#ffe2c8; --highlight-ambient:#ffb98a;
+    --shadow-tinted:#12040a; --surface-sunken:#170f14;
+    --accent-pop:#2fe6c4; --accent-split-a:#ff9ec4; --accent-split-b:#ffc93d;
+    --surface-bevel-light:#8a6558; --surface-bevel-shadow:#1e1219;
+    --glow-mesh:#ff6a3d;
   }
   body[data-heat="hot"] .panel{
     box-shadow:0 0 26px -4px rgba(255,77,46,.5), 0 24px 60px -28px rgba(0,0,0,.6);
@@ -1792,6 +1871,14 @@
     --bg:#1b2027; --panel:#252b34; --panel-2:#2e343f; --line:rgba(200,212,226,.16);
     --line-soft:rgba(200,212,226,.08); --ink:#eceff3; --muted:#a1abb8; --dim:#6d7684;
     --accent:#8fb4d9; --accent-dim:#26333f; --ball:#c9d6e3; --court:#5f7d99;
+    /* depth layer, re-tinted overcast: flatter highlights, deeper slate
+       occlusion, and the pop accent left saturated so CTAs still cut
+       through the grey */
+    --highlight-rim:#e8f0f8; --highlight-ambient:#b8ccdf;
+    --shadow-tinted:#070a0e; --surface-sunken:#12161c;
+    --accent-pop:#4fe0b8; --accent-split-a:#a0a8ff; --accent-split-b:#5fb8f0;
+    --surface-bevel-light:#78838f; --surface-bevel-shadow:#161b22;
+    --glow-mesh:#7d93b8;
   }
   body[data-wx="rain"] .panel::after,body[data-wx="storm"] .panel::after{
     content:'';position:absolute;inset:0;pointer-events:none;opacity:.1;z-index:0;
@@ -1830,13 +1917,13 @@
     .ticker-wrap{margin-bottom:10px}
   }
   /* ===== BRADLEY-TERRY ===== */
-  .bt-bar{display:block;height:5px;background:#15171a;border-radius:6px;overflow:hidden;margin-top:4px}
+  .bt-bar{display:block;height:5px;background:var(--surface-sunken);border-radius:6px;overflow:hidden;margin-top:4px}
   .bt-bar span{display:block;height:100%;border-radius:6px}
 
   /* ===== BOOTSTRAP ===== */
   .boot-row{display:grid;grid-template-columns:82px 1fr 110px;gap:12px;align-items:center;padding:9px 0}
   .boot-name{font-weight:600;font-size:14px}
-  .boot-track{position:relative;height:12px;background:#15171a;border-radius:6px}
+  .boot-track{position:relative;height:12px;background:var(--surface-sunken);border-radius:6px}
   .boot-band{position:absolute;top:0;bottom:0;border-radius:6px;opacity:.45}
   .boot-mid{position:absolute;top:50%;width:3px;height:18px;background:var(--ink);transform:translate(-50%,-50%);border-radius:3px}
   .boot-nums{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-align:right;display:flex;align-items:center;gap:6px;justify-content:flex-end}
@@ -1852,7 +1939,7 @@
   .pr-row:last-child{border-bottom:none}
   .pr-pos{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--dim);text-align:center}
   .pr-name{font-weight:600;font-size:14px}
-  .pr-bar{height:6px;background:#15171a;border-radius:6px;overflow:hidden}
+  .pr-bar{height:6px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .pr-bar span{display:block;height:100%;border-radius:6px}
   .pr-score{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;text-align:right}
 
@@ -2592,7 +2679,7 @@
     font-family:'JetBrains Mono',monospace;flex-wrap:wrap}
   .sl-line{display:grid;grid-template-columns:56px 1fr 52px;gap:12px;align-items:center;padding:6px 0}
   .sl-line-score{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px}
-  .sl-line-bar{height:8px;background:#15171a;border-radius:6px;overflow:hidden}
+  .sl-line-bar{height:8px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .sl-line-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:6px}
   .sl-line-pct{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-align:right}
 
@@ -2621,10 +2708,53 @@
   }
   .pend{ background:var(--panel)!important; }
 
-  /* buttons: soft, diffuse elevation — gentle lift on hover, calm press */
-  .btn{ box-shadow:0 10px 28px -14px rgba(255,45,120,.45); }
-  .btn:hover{ filter:brightness(1.06); transform:translateY(-1px); box-shadow:0 14px 34px -14px rgba(255,45,120,.55); }
-  .btn:active{ transform:translateY(0); box-shadow:0 6px 16px -10px rgba(255,45,120,.4); }
+  /* Buttons: soft diffuse elevation, plus a real bevel. The 1px
+     highlight-rim inset along the top and the bevel-shadow inset along
+     the bottom are what make the pill read as a physical key — and
+     because they swap on :active, the press is a change in lighting
+     rather than a 1px nudge. The glow colours were hardcoded to the
+     default pink; they run through --accent now so the weather themes
+     and the cup skin light their own buttons. */
+  .btn{
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 50%, transparent) inset,
+      0 -8px 16px -10px color-mix(in srgb, var(--surface-bevel-shadow) 55%, transparent) inset,
+      0 10px 28px -14px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .btn:hover{
+    filter:brightness(1.06); transform:translateY(-1px);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 70%, transparent) inset,
+      0 -8px 16px -10px color-mix(in srgb, var(--surface-bevel-shadow) 55%, transparent) inset,
+      0 14px 34px -14px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .btn:active{
+    transform:translateY(1px);
+    box-shadow:
+      0 2px 5px color-mix(in srgb, var(--surface-bevel-shadow) 60%, transparent) inset,
+      0 -1px 0 color-mix(in srgb, var(--highlight-rim) 22%, transparent) inset,
+      0 4px 12px -10px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  /* ghost buttons carry the same bevel, lit from the surface tones
+     instead of from the accent */
+  .btn.ghost{
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 55%, transparent) inset,
+      0 -10px 18px -14px color-mix(in srgb, var(--surface-bevel-shadow) 80%, transparent) inset,
+      0 8px 20px -14px color-mix(in srgb, var(--shadow-tinted) 70%, transparent);
+  }
+  .btn.ghost:hover{
+    border-color:color-mix(in srgb, var(--surface-bevel-light) 70%, transparent)!important;
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 20%, transparent) inset,
+      0 -10px 18px -14px color-mix(in srgb, var(--surface-bevel-shadow) 80%, transparent) inset,
+      0 12px 26px -14px color-mix(in srgb, var(--shadow-tinted) 80%, transparent);
+  }
+  .btn.ghost:active{
+    box-shadow:
+      0 2px 5px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
+      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 35%, transparent) inset;
+  }
 
   /* section labels: a quiet accent dot + hairline rule */
   .sec-label{ color:var(--muted); }
@@ -2646,10 +2776,20 @@
      html was transparent, body's background propagated to the canvas and never
      painted as a box, but the moment html carries one, an opaque body draws over
      anything sitting behind it. */
+  /* Four washes, not two. The accent pair stays exactly as it was — that
+     ambient pink is the brand and it still reads first. Underneath it a
+     --glow-mesh bloom drifts off-centre at the top and a --accent-pop
+     one answers it from the far side low down, so the page has a light
+     source with a direction instead of a symmetrical vignette. Both new
+     layers are under 6%: at that strength they are a temperature shift
+     across the frame rather than visible colour, which is what stops
+     the mesh from reading as a second brand hue. */
   body{
     background:
       radial-gradient(ellipse 120% 70% at 50% -10%, color-mix(in srgb,var(--accent) 4%, transparent), transparent 55%),
       radial-gradient(ellipse 100% 60% at 50% 108%, color-mix(in srgb,var(--accent) 3%, transparent), transparent 55%),
+      radial-gradient(ellipse 85% 55% at 18% -4%, color-mix(in srgb,var(--glow-mesh) 5.5%, transparent), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 86% 88%, color-mix(in srgb,var(--accent-pop) 3.5%, transparent), transparent 62%),
       transparent!important;
     background-attachment:fixed;
   }
@@ -2690,21 +2830,37 @@
      ============================================================ */
   .topbar{
     background:linear-gradient(180deg, color-mix(in srgb,#171225 92%, transparent), color-mix(in srgb,#0a0814 94%, transparent))!important;
-    box-shadow:0 1px 0 rgba(255,255,255,.07) inset, 0 14px 34px -20px rgba(0,0,0,.8)!important;
-    border-bottom:1px solid color-mix(in srgb, var(--line) 60%, white 6%)!important;
+    /* bevel-light along the top edge, tinted occlusion falling off the
+       bottom — the bar reads as a lit lip over the page, not a flat band */
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 55%, transparent) inset,
+      0 14px 34px -20px color-mix(in srgb, var(--shadow-tinted) 88%, transparent)!important;
+    border-bottom:1px solid color-mix(in srgb, var(--line) 60%, var(--highlight-rim) 8%)!important;
   }
   .tb-tab.on{
-    box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 -6px 12px -8px rgba(0,0,0,.4) inset, 0 4px 12px -4px rgba(0,0,0,.5)!important;
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 40%, transparent) inset,
+      0 -6px 12px -8px color-mix(in srgb, var(--surface-bevel-shadow) 70%, transparent) inset,
+      0 4px 12px -4px color-mix(in srgb, var(--shadow-tinted) 60%, transparent)!important;
   }
 
   .panel{
-    background:linear-gradient(160deg, color-mix(in srgb, var(--panel) 97%, white 5%) 0%, var(--panel) 45%, color-mix(in srgb, var(--panel) 90%, black 10%) 100%)!important;
-    border:1px solid color-mix(in srgb, var(--line) 65%, white 10%)!important;
+    /* the surface ramp: bevel-light catching the top-left, the panel's
+       own tone through the middle, bevel-shadow sinking the bottom-right */
+    background:linear-gradient(160deg,
+      color-mix(in srgb, var(--panel) 92%, var(--surface-bevel-light) 8%) 0%,
+      var(--panel) 45%,
+      color-mix(in srgb, var(--panel) 82%, var(--surface-bevel-shadow) 18%) 100%)!important;
+    border:1px solid color-mix(in srgb, var(--line) 65%, var(--surface-bevel-light) 14%)!important;
     box-shadow:
-      0 1px 0 rgba(255,255,255,.07) inset,
-      0 -22px 44px -34px rgba(0,0,0,.65) inset,
-      0 26px 54px -22px rgba(0,0,0,.55),
-      0 2px 0 rgba(0,0,0,.35)!important;
+      /* 1px lit bevel across the top */
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 60%, transparent) inset,
+      /* ambient occlusion pooling in the lower half */
+      0 -22px 44px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
+      /* the cast shadow, plum rather than black */
+      0 26px 54px -22px color-mix(in srgb, var(--shadow-tinted) 70%, transparent),
+      /* contact edge */
+      0 2px 0 color-mix(in srgb, var(--shadow-tinted) 45%, transparent)!important;
     /* NO permanent will-change here. A ladder page carries 8-14 panels; a
        standing `will-change:transform` promoted every one of them to its own
        compositor layer for the whole session — tens of MB of GPU texture that
@@ -2715,15 +2871,23 @@
   .panel:hover{will-change:transform}
   .panel::after{
     content:'';position:absolute;top:0;left:0;right:0;height:46%;
-    background:linear-gradient(180deg, rgba(255,255,255,.05), transparent);
+    /* specular fall across the top of the card */
+    background:linear-gradient(180deg, color-mix(in srgb, var(--highlight-ambient) 7%, transparent), transparent);
     pointer-events:none;
   }
+  /* on hover the card lifts, so the rim light sharpens and the cast
+     shadow both deepens and spreads — the two have to move together or
+     the lift reads as a colour change instead of a change in height */
   .panel:hover{
+    border-color:color-mix(in srgb, var(--line) 55%, var(--surface-bevel-light) 26%)!important;
     box-shadow:
-      0 1px 0 rgba(255,255,255,.1) inset,
-      0 -22px 44px -34px rgba(0,0,0,.65) inset,
-      0 38px 76px -24px rgba(0,0,0,.65),
-      0 2px 0 rgba(0,0,0,.35)!important;
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 22%, transparent) inset,
+      0 -22px 44px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
+      0 38px 76px -24px color-mix(in srgb, var(--shadow-tinted) 80%, transparent),
+      0 2px 0 color-mix(in srgb, var(--shadow-tinted) 45%, transparent)!important;
+  }
+  .panel:hover::after{
+    background:linear-gradient(180deg, color-mix(in srgb, var(--highlight-ambient) 12%, transparent), transparent);
   }
 
   /* podium: raised chrome plinths, glossy avatar spheres */
@@ -2732,70 +2896,294 @@
   .pod{ transform-style:preserve-3d; }
   .pod-av .avi{
     box-shadow:
-      0 1px 0 rgba(255,255,255,.35) inset,
-      0 -4px 8px rgba(0,0,0,.35) inset,
-      0 8px 18px -6px rgba(0,0,0,.55)!important;
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 35%, transparent) inset,
+      0 -4px 8px color-mix(in srgb, var(--surface-bevel-shadow) 70%, transparent) inset,
+      0 8px 18px -6px color-mix(in srgb, var(--shadow-tinted) 75%, transparent)!important;
   }
   .pod-1 .pod-av .avi{
     box-shadow:
-      0 1px 0 rgba(255,255,255,.4) inset,
-      0 -4px 8px rgba(0,0,0,.3) inset,
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 45%, transparent) inset,
+      0 -4px 8px color-mix(in srgb, var(--surface-bevel-shadow) 60%, transparent) inset,
       0 0 0 2px var(--gold),
       0 10px 24px -6px rgba(255,204,0,.4)!important;
   }
   .pod-base{
-    box-shadow:0 1px 0 rgba(255,255,255,.45) inset, 0 -6px 14px rgba(0,0,0,.3) inset, 0 10px 20px -8px rgba(0,0,0,.5)!important;
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 50%, transparent) inset,
+      0 -6px 14px color-mix(in srgb, var(--surface-bevel-shadow) 65%, transparent) inset,
+      0 10px 20px -8px color-mix(in srgb, var(--shadow-tinted) 70%, transparent)!important;
   }
 
   /* match rows (history, pending, feed) — same chrome treatment as panels */
   .pend{
-    background:linear-gradient(160deg, color-mix(in srgb, var(--panel) 97%, white 5%) 0%, var(--panel) 50%, color-mix(in srgb, var(--panel) 90%, black 10%) 100%)!important;
-    border:1px solid color-mix(in srgb, var(--line) 65%, white 8%)!important;
+    background:linear-gradient(160deg,
+      color-mix(in srgb, var(--panel) 94%, var(--surface-bevel-light) 6%) 0%,
+      var(--panel) 50%,
+      color-mix(in srgb, var(--panel) 84%, var(--surface-bevel-shadow) 16%) 100%)!important;
+    border:1px solid color-mix(in srgb, var(--line) 65%, var(--surface-bevel-light) 12%)!important;
     box-shadow:
-      0 1px 0 rgba(255,255,255,.06) inset,
-      0 -14px 26px -22px rgba(0,0,0,.6) inset,
-      0 12px 26px -14px rgba(0,0,0,.5)!important;
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 50%, transparent) inset,
+      0 -14px 26px -22px color-mix(in srgb, var(--surface-bevel-shadow) 80%, transparent) inset,
+      0 12px 26px -14px color-mix(in srgb, var(--shadow-tinted) 65%, transparent)!important;
     position:relative;overflow:hidden;
   }
   .pend::after{
     content:'';position:absolute;top:0;left:0;right:0;height:50%;
-    background:linear-gradient(180deg, rgba(255,255,255,.045), transparent);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--highlight-ambient) 6%, transparent), transparent);
     pointer-events:none;
   }
   .pend.clickable:hover{
+    border-color:color-mix(in srgb, var(--line) 55%, var(--surface-bevel-light) 24%)!important;
     box-shadow:
-      0 1px 0 rgba(255,255,255,.09) inset,
-      0 -14px 26px -22px rgba(0,0,0,.6) inset,
-      0 18px 36px -16px rgba(0,0,0,.6)!important;
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 18%, transparent) inset,
+      0 -14px 26px -22px color-mix(in srgb, var(--surface-bevel-shadow) 80%, transparent) inset,
+      0 18px 36px -16px color-mix(in srgb, var(--shadow-tinted) 78%, transparent)!important;
     transform:translateY(-2px);
   }
 
   /* mini/pill buttons: raised chrome */
   .mini{
-    box-shadow:0 1px 0 rgba(255,255,255,.12) inset, 0 3px 8px -3px rgba(0,0,0,.4);
-    background-image:linear-gradient(160deg, rgba(255,255,255,.05), transparent 60%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 65%, transparent) inset,
+      0 3px 8px -3px color-mix(in srgb, var(--shadow-tinted) 60%, transparent);
+    background-image:linear-gradient(160deg, color-mix(in srgb, var(--highlight-ambient) 7%, transparent), transparent 60%);
   }
   .mini.yes{
-    box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 -3px 8px rgba(0,0,0,.15) inset, 0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 55%, transparent) inset,
+      0 -3px 8px color-mix(in srgb, var(--surface-bevel-shadow) 35%, transparent) inset,
+      0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
   }
   .mini.no{
-    box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 3px 8px -3px rgba(0,0,0,.4);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 45%, transparent) inset,
+      0 3px 8px -3px color-mix(in srgb, var(--shadow-tinted) 60%, transparent);
   }
   .mini:hover{
-    box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 6px 16px -5px rgba(0,0,0,.5)!important;
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 30%, transparent) inset,
+      0 6px 16px -5px color-mix(in srgb, var(--shadow-tinted) 70%, transparent)!important;
+  }
+  /* pressed: the bevel inverts — light off the top, shadow into it */
+  .mini:active{
+    box-shadow:
+      0 1px 2px color-mix(in srgb, var(--surface-bevel-shadow) 90%, transparent) inset,
+      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 30%, transparent) inset!important;
+    transform:translateY(1px);
   }
 
   /* tag pills: subtle inset bevel so they read as raised chips, not flat text */
   .sets-tag, .c-badge{
-    box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 -2px 4px rgba(0,0,0,.25) inset;
-    border:1px solid color-mix(in srgb, var(--line) 50%, white 6%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 45%, transparent) inset,
+      0 -2px 4px color-mix(in srgb, var(--surface-bevel-shadow) 50%, transparent) inset;
+    border:1px solid color-mix(in srgb, var(--line) 50%, var(--surface-bevel-light) 10%);
   }
 
-  /* scrollbars, quiet and thin */
+  /* scrollbars, quiet and thin — the thumb now carries the bevel tone so
+     it reads as a raised runner in a sunken channel */
   ::-webkit-scrollbar{width:8px;height:8px}
   ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:var(--r-pill);border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--surface-bevel-light);border-radius:var(--r-pill);border:2px solid var(--bg);opacity:.6}
   ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+  /* ============================================================
+     DEPTH & CONTRAST APPLICATION PASS
+     Everything below spends the ten tokens declared at :root. The
+     chrome pass above already carries the bevels on panels, rows and
+     buttons; this section covers the parts that were still flat —
+     sunken wells, focus and hover lighting, the ambient glow behind
+     the focal points, and the contrast accents on badges and metrics.
+     Nothing here changes a brand colour: --accent still owns every
+     primary state, and the new accents are only ever used where the
+     old design had no colour at all.
+     ============================================================ */
+
+  /* -- sunken wells --------------------------------------------------
+     Progress tracks, meters and bar backgrounds were a flat #15171a —
+     a cold near-black that belonged to no palette on the page and did
+     not move when the weather themes retinted everything around it.
+     They point at --surface-sunken now (see the bulk swap above) and
+     pick up a 1px occlusion lip here, so a filled bar reads as sitting
+     *in* a channel rather than painted on top of one. */
+  .odds-bar,.pred-bar,.st-bar,.upset-bar,.attr-track,.lev-bar,.pbar,.tl-bars,.sl-line-bar{
+    box-shadow:
+      0 1px 2px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
+      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 22%, transparent) inset;
+  }
+  /* text inputs are wells too — same logic, plus the focus ring now
+     lights with the rim highlight over the accent glow it already had */
+  input:not([type="checkbox"]):not([type="radio"]),select,textarea{
+    box-shadow:
+      0 1px 2px color-mix(in srgb, var(--surface-bevel-shadow) 70%, transparent) inset,
+      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 18%, transparent) inset;
+  }
+  input:hover,select:hover,textarea:hover{
+    border-color:color-mix(in srgb, var(--line) 40%, var(--surface-bevel-light) 45%);
+  }
+  input:focus,select:focus,textarea:focus{
+    border-color:var(--accent);
+    box-shadow:
+      0 1px 2px color-mix(in srgb, var(--surface-bevel-shadow) 70%, transparent) inset,
+      0 0 0 3px var(--accent-glow),
+      0 0 0 1px color-mix(in srgb, var(--highlight-rim) 30%, transparent);
+  }
+
+  /* -- ambient mesh glow behind the focal points ---------------------
+     One diffuse bloom per focal surface, sitting *behind* the content
+     (z-index:0 under the existing z-index:1/2 children) and outside the
+     card's own background so it survives the skins' background
+     overrides. The hero gets a warm mesh-to-pop sweep; the section
+     panels get a much quieter single bloom that only rises on hover. */
+  .bcast{position:relative;isolation:isolate}
+  .bcast::before{
+    content:'';position:absolute;inset:-30% -10% auto -10%;height:150%;
+    z-index:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 55% 60% at 22% 12%, color-mix(in srgb, var(--glow-mesh) 20%, transparent), transparent 68%),
+      radial-gradient(ellipse 45% 55% at 82% 24%, color-mix(in srgb, var(--accent-pop) 11%, transparent), transparent 66%);
+    filter:blur(6px);
+  }
+  .bcast>*{position:relative;z-index:1}
+  .podium{
+    /* the plinths stand on a floor now: a pool of mesh glow behind them
+       and the tinted occlusion they cast onto it */
+    background:
+      radial-gradient(ellipse 60% 70% at 50% 108%, color-mix(in srgb, var(--glow-mesh) 13%, transparent), transparent 70%),
+      var(--panel)!important;
+  }
+  .podium::before{
+    content:'';position:absolute;left:0;right:0;bottom:0;height:42%;
+    pointer-events:none;z-index:0;
+    background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--shadow-tinted) 45%, transparent));
+  }
+  .pod{position:relative;z-index:1}
+  /* the #1 spotlight was a flat accent wash — it reads as a light now,
+     hot in the middle and falling off through the mesh tint */
+  .pod-spot{
+    background:radial-gradient(circle,
+      color-mix(in srgb, var(--highlight-ambient) 45%, transparent) 0%,
+      color-mix(in srgb, var(--glow-mesh) 28%, transparent) 45%,
+      transparent 72%)!important;
+    opacity:.65!important;
+  }
+
+  /* -- contrast accents ----------------------------------------------
+     The complement, used sparingly and only where the page previously
+     had no colour to give: live/positive metrics, the count pill, and
+     the section-label dot on a hovered panel. */
+  .count-pill{
+    background:linear-gradient(180deg,
+      color-mix(in srgb, var(--panel-2) 88%, var(--surface-bevel-light) 12%),
+      var(--panel-2));
+    border-color:color-mix(in srgb, var(--line) 60%, var(--surface-bevel-light) 18%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 40%, transparent) inset,
+      0 -2px 4px color-mix(in srgb, var(--surface-bevel-shadow) 45%, transparent) inset;
+  }
+  /* stat tiles: bevelled, and the hover state now lights the value in
+     the pop accent instead of only recolouring the border */
+  .stat{
+    background:linear-gradient(160deg,
+      color-mix(in srgb, var(--panel) 93%, var(--surface-bevel-light) 7%),
+      color-mix(in srgb, var(--panel) 88%, var(--surface-bevel-shadow) 12%));
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 45%, transparent) inset,
+      0 -8px 16px -14px color-mix(in srgb, var(--surface-bevel-shadow) 90%, transparent) inset,
+      0 6px 14px -10px color-mix(in srgb, var(--shadow-tinted) 55%, transparent);
+  }
+  .stat:hover{
+    border-color:color-mix(in srgb, var(--accent-pop) 55%, transparent);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 18%, transparent) inset,
+      0 6px 18px -10px color-mix(in srgb, var(--accent-pop) 35%, transparent);
+  }
+  .stat:hover .stat-v{color:var(--accent-pop);border-bottom-color:var(--accent-pop)}
+  /* the live dot and its badge: the complement is the only colour on the
+     page that survives next to the red LIVE flag without muddying it */
+  .bcast-live{text-shadow:0 0 12px color-mix(in srgb, var(--danger) 45%, transparent)}
+  .brow:hover{
+    border-color:color-mix(in srgb, var(--accent-split-b) 45%, transparent)!important;
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 45%, transparent) inset,
+      -6px 0 18px -12px color-mix(in srgb, var(--accent-split-b) 50%, transparent),
+      0 10px 22px -14px color-mix(in srgb, var(--shadow-tinted) 70%, transparent);
+  }
+  /* chart legend chips: each dot already carries its series colour, so
+     the chip itself only needs the bevel and an indigo hover */
+  .chart-chip{
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 40%, transparent) inset,
+      0 -2px 5px color-mix(in srgb, var(--surface-bevel-shadow) 40%, transparent) inset;
+  }
+  .chart-chip:hover{
+    border-color:color-mix(in srgb, var(--accent-split-a) 50%, transparent);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 15%, transparent) inset,
+      0 4px 12px -8px color-mix(in srgb, var(--accent-split-a) 45%, transparent);
+  }
+  /* secondary/utility affordances pick up the azure — distinct from the
+     pink brand states, so "interactive" and "on brand" stop competing */
+  .tb-ico:hover,.back-btn:hover{
+    border-color:color-mix(in srgb, var(--accent-split-b) 45%, transparent)!important;
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--accent-split-b) 18%, transparent),
+               0 4px 12px -8px color-mix(in srgb, var(--accent-split-b) 40%, transparent);
+  }
+  .util-menu button:hover,.ac-item:hover,.ac-item.hi{
+    box-shadow:inset 2px 0 0 var(--accent-split-a);
+  }
+
+  /* -- floating surfaces ---------------------------------------------
+     Modals, menus and toasts are the only things on the page that
+     genuinely float, so they get the deepest cast shadow plus the mesh
+     bloom under them — the two together are what sell the height. */
+  .modal-card,.util-menu,.ac-menu,.chart-tip{
+    border-color:color-mix(in srgb, var(--line) 60%, var(--surface-bevel-light) 20%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 55%, transparent) inset,
+      0 30px 70px -20px color-mix(in srgb, var(--shadow-tinted) 88%, transparent),
+      0 0 60px -12px color-mix(in srgb, var(--glow-mesh) 16%, transparent);
+  }
+  .modal{background:color-mix(in srgb, var(--shadow-tinted) 72%, transparent)}
+  .toast{
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--highlight-rim) 45%, transparent) inset,
+      0 18px 40px -16px color-mix(in srgb, var(--shadow-tinted) 85%, transparent),
+      0 0 40px -14px color-mix(in srgb, var(--glow-mesh) 22%, transparent);
+  }
+
+  /* -- the board and its header -------------------------------------- */
+  .board{
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 50%, transparent) inset,
+      0 -20px 40px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
+      0 26px 54px -24px color-mix(in srgb, var(--shadow-tinted) 65%, transparent);
+    border-color:color-mix(in srgb, var(--line) 65%, var(--surface-bevel-light) 12%);
+  }
+  .row:hover{
+    background:linear-gradient(90deg,
+      color-mix(in srgb, var(--highlight-ambient) 7%, var(--panel-2)),
+      var(--panel-2) 55%);
+    box-shadow:inset 3px 0 0 color-mix(in srgb, var(--accent-split-b) 70%, transparent);
+  }
+
+  /* -- app chrome sits on the sunken tone ---------------------------- */
+  .botbar{
+    box-shadow:
+      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 45%, transparent) inset,
+      0 -14px 34px -20px color-mix(in srgb, var(--shadow-tinted) 90%, transparent);
+  }
+
+  /* keyboard focus: the rim light is the clearest "you are here" marker
+     available on a page this dark, and it is legible on every skin */
+  :focus-visible{
+    outline-color:var(--highlight-rim);
+    box-shadow:0 0 0 5px var(--accent-glow), 0 0 18px -4px color-mix(in srgb, var(--highlight-rim) 55%, transparent);
+  }
+
+  @media(prefers-reduced-motion:reduce){
+    .bcast::before{filter:none}
+  }
 
   /* ============================================================
      BROADCAST HERO — live scoreboard + champion podium
@@ -3034,7 +3422,7 @@
     color:var(--dim);text-align:center}
   .attr-vs-val{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;text-align:left}
   .attr-vs-val.l{text-align:right}
-  .attr-track-l,.attr-track-r{height:6px;background:#15171a;overflow:hidden;display:flex;border-radius:6px}
+  .attr-track-l,.attr-track-r{height:6px;background:var(--surface-sunken);overflow:hidden;display:flex;border-radius:6px}
   .attr-track-l{justify-content:flex-end}
   .attr-track-l .attr-fill,.attr-track-r .attr-fill{height:100%;border-radius:6px}
   @media(max-width:640px){
@@ -3982,6 +4370,18 @@
     /* the shadow is plum and never black, and it still falls far below
        the object with no contact point */
     --shadow:0 48px 90px -38px rgba(38,0,22,.92);
+
+    /* depth layer, cup-graded. Same rule as the rest of this skin: the
+       darkest tone on the page is still magenta, so the occlusion tones
+       are plum rather than black, and the highlights blow out toward
+       --flare instead of toward white. The pop accent is the one place
+       a cool colour is allowed — it is what keeps a CTA readable in a
+       frame this saturated. */
+    --highlight-rim:#ffe6a8; --highlight-ambient:#ff8dc4;
+    --shadow-tinted:#12000b; --surface-sunken:#1c0313;
+    --accent-pop:#4fffd0; --accent-split-a:#b98cff; --accent-split-b:#ffb347;
+    --surface-bevel-light:#ab5882; --surface-bevel-shadow:#2a0619;
+    --glow-mesh:#ff4da8;
   }
   :root[data-skin="ffcup"]{background:#16000e!important}
   :root[data-skin="ffcup"] ::selection{background:var(--hot);color:#2b0016}
