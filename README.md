@@ -19,6 +19,7 @@ The app is a single page with a top nav (desktop) / bottom nav + "More" sheet (m
   - Ranked row (.row): rank number (gold/silver/bronze gradient badges for top 3), avatar, name, W-L record, rating (underlined in accent pink), peak rating in gold.
   - Header row: uppercase, JetBrains Mono, small caps style, dark-on-light inverted (ink background, bg-color text).
   - Pending-match approval queue (admin only): each row has Approve/Reject mini-buttons.
+  - **"Goes to" (admin only)**: every queue row — and every approved result row, on the ladder page and in the Matches archive — carries a destination picker: the ladder, or any event. The ref chooses where a tracked game is filed when they submit it (see Point Tracker), but the ref can be wrong, so the admin gets the last word from the same row as Approve. It writes the same fields the ref's picker does (`tournament_id`, plus `round` when the pair is an unplayed fixture in that event's draw), so a re-filed game is indistinguishable from one submitted correctly; moving a game back to the ladder clears the round with it. Editable on approved games too, not just pending ones — standings recompute from scratch on every render, so re-filing a game that already went through corrects the ladder on the next paint instead of needing it rejected and re-entered. Every move is written to the admin audit log with where it came from and where it went.
 - **Content**: Standings are computed live from the matches table (Elo, K=32, start rating 100).
 
 ### 2. Home / Feed

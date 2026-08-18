@@ -441,7 +441,7 @@
   .pend-info b{font-weight:600}
   .pend-info .vs{color:var(--dim);margin:0 7px;font-family:'JetBrains Mono',monospace}
   .pend-meta{font-size:11px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.3px}
-  .pend-actions{display:flex;gap:8px}
+  .pend-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .mini{padding:9px 16px;border-radius:var(--r-pill);border:1px solid transparent;cursor:pointer;font-weight:600;font-size:12.5px;letter-spacing:.3px;text-transform:none;font-family:'JetBrains Mono',monospace;transition:.2s cubic-bezier(.16,1,.3,1)}
   .mini.yes{background:var(--accent);color:#04140e;border-color:var(--accent)}
   .mini.no{background:transparent;color:var(--danger);border-color:var(--line)}
@@ -2542,6 +2542,17 @@
     .pt-target-sel{flex:1 1 100%}
     .pt-target-note{font-size:10px}
   }
+
+  /* the admin's copy of the same choice. .pend is a two-column grid and its
+     action row does not wrap, so this takes a full-width row of its own
+     underneath rather than squeezing in beside Approve/Reject — three
+     buttons plus a select do not fit across a phone. */
+  .pend-file{grid-column:1/-1;display:flex;align-items:center;gap:8px;min-width:0;
+    padding-top:10px;border-top:1px solid var(--line-soft)}
+  .pend-file>span{font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:1px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+  .pend-file>select{flex:1 1 auto;width:auto;min-width:0;max-width:260px;
+    padding:5px 8px;font-size:12px}
 
   /* match controls — "undo/redo" is one thought and "end this match" is
      another, so they're two groups separated by a wide column gap rather than
@@ -8767,7 +8778,7 @@ function ptRalliesPayload(){
     video:PT.video||null, points:PT.rallies});
 }
 /* ============================================================
-   WHERE A TRACKED GAME IS FILED
+   WHERE A GAME IS FILED — the ladder, or an event
 
    A tracked game used to have exactly one destination: the ladder.
    That is wrong during a cup — the games being reffed are cup games,
@@ -8798,8 +8809,9 @@ let ptTarget = "ladder";
 try{ ptTarget = localStorage.getItem(PT_TARGET_KEY) || "ladder"; }catch(e){}
 
 /* events a game can be filed under: unfinished ones only — a completed
-   event's table is history and shouldn't grow a new game. */
-function ptTargetEvents(){
+   event's table is history and shouldn't grow a new game. Shared by the
+   ref's picker and the admin's re-file control in the pending queue. */
+function fileEvents(){
   const all = Array.isArray(tournaments) ? tournaments : [];
   const open = all.filter(t => t && t.status !== "completed");
   let cup = null;
@@ -8814,8 +8826,8 @@ function ptTargetEvents(){
    Anything that no longer resolves (event deleted, finished, cup not
    drawn yet) reads as the ladder — the safe answer, and the picker
    shows it as the selected one so the fallback is never invisible. */
-function ptResolveTarget(v){
-  const events = ptTargetEvents();
+function resolveFileTarget(v){
+  const events = fileEvents();
   if(!v || v === "ladder") return null;
   if(v === "cup"){
     let cup = null;
@@ -8826,7 +8838,7 @@ function ptResolveTarget(v){
 }
 
 /* the value the picker should show for a row (symbolic for the cup) */
-function ptTargetValueFor(t){
+function fileTargetValue(t){
   if(!t) return "ladder";
   let cup = null;
   try{ cup = typeof cupTournament === "function" ? cupTournament() : null; }catch(e){}
@@ -8844,7 +8856,7 @@ function ptCurrentTargetValue(){
    result of that fixture rather than a loose extra game. Only rounds with
    no approved result yet are offered, so re-reffing a finished fixture
    can't quietly overwrite it — that stays an admin edit. */
-function ptEventRound(t, a, b){
+function eventRoundFor(t, a, b){
   if(!t || typeof rpSnapshot !== "function") return null;
   let snap = null;
   try{ snap = rpSnapshot(t); }catch(e){ return null; }
@@ -8866,7 +8878,7 @@ function ptEventRound(t, a, b){
 /* a fixture's round key as something a human reads. The keys come from
    RP_ROUND_GROUP / RP_ROUND_QUAL and the bracket: grpN, qualN, semi1/semi2,
    final, bronze. */
-function ptRoundLabel(round){
+function roundLabel(round){
   const r = String(round||"");
   if(r === "final") return "the final";
   if(r === "bronze") return "the 3rd-place game";
@@ -8887,13 +8899,13 @@ function ptSetTarget(v){
 window.ptSetTarget = ptSetTarget;
 
 function ptTargetPickerHTML(){
-  const events = ptTargetEvents();
+  const events = fileEvents();
   const cur = ptCurrentTargetValue();
-  const t = ptResolveTarget(cur);
-  const sel = ptTargetValueFor(t);   // the resolved value, so a dead choice shows as the ladder
+  const t = resolveFileTarget(cur);
+  const sel = fileTargetValue(t);   // the resolved value, so a dead choice shows as the ladder
   const opts = [`<option value="ladder"${sel==="ladder"?" selected":""}>Ladder — a normal rated game</option>`]
     .concat(events.map(ev => {
-      const v = ptTargetValueFor(ev);
+      const v = fileTargetValue(ev);
       return `<option value="${esc(v)}"${sel===v?" selected":""}>🏆 ${esc(ev.name)}</option>`;
     }));
   let note;
@@ -8905,9 +8917,9 @@ function ptTargetPickerHTML(){
     const elo = t.counts_elo === false
       ? `<b class="pt-target-noelo">does not touch Elo</b>`
       : `<b class="pt-target-elo">also moves Elo</b>`;
-    const round = (PT && PT.a && PT.b) ? ptEventRound(t, PT.a, PT.b) : null;
+    const round = (PT && PT.a && PT.b) ? eventRoundFor(t, PT.a, PT.b) : null;
     note = `Files under <b>${esc(t.name)}</b> — ${elo}.`;
-    if(round) note += ` Slots into <b>${esc(ptRoundLabel(round))}</b> in the draw.`;
+    if(round) note += ` Slots into <b>${esc(roundLabel(round))}</b> in the draw.`;
   }
   /* Both mounts can be in the document at once — the setup one is hidden
      rather than removed while a match is live — so this markup carries no
@@ -8942,10 +8954,10 @@ async function ptSubmit(){
      ladder, which is the shape the row already has, so there is nothing to
      add for it. An event adds its id, plus its round when these two players
      are a fixture in that event's draw. */
-  const target = ptResolveTarget(ptCurrentTargetValue());
+  const target = resolveFileTarget(ptCurrentTargetValue());
   if(target){
     row.tournament_id = target.id;
-    const round = ptEventRound(target, PT.a, PT.b);
+    const round = eventRoundFor(target, PT.a, PT.b);
     if(round) row.round = round;
   }
   const rallies=ptRalliesPayload();
@@ -13381,7 +13393,8 @@ function render(){
             <button class="mini yes" onclick="setStatus(${m.id},'approved')">Approve</button>
             <button class="mini no" onclick="setStatus(${m.id},'rejected')">Reject</button>
             <button class="mini no" onclick="deleteMatchPermanently(${m.id})">Delete</button>
-          </div></div>`).join("")
+          </div>
+          ${refileSelectHTML(m)}</div>`).join("")
       : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">Queue is empty.</div>';
   }
 
@@ -13392,7 +13405,7 @@ function render(){
     ? hist.map(m=>`<div class="pend clickable" onclick="openMatch(${m.id})"><div>
         <div class="pend-info">${result(m)}${m.sets?' <span class="sets-tag">sets</span>':''}${(()=>{const n=comments.filter(c=>c.match_id===m.id).length;return n?` <span class="c-badge">💬 ${n}</span>`:'';})()}</div>
         <div class="pend-meta">${when(m.created_at)}${m.sets?' · '+esc(m.sets):''}</div></div>
-        ${isAdmin?`<div class="pend-actions"><button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button></div>`:''}
+        ${isAdmin?`<div class="pend-actions"><button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button></div>${refileSelectHTML(m)}`:''}
       </div>`).join("")
     : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">Nothing confirmed yet.</div>';
 
@@ -14010,7 +14023,7 @@ function renderAllMatches(){
       <div class="pend clickable" onclick="openMatch(${m.id})"><div>
         <div class="pend-info">${result(m)}${tournBadge}${m.sets?' <span class="sets-tag">sets</span>':''}${cCount?` <span class="c-badge">💬 ${cCount}</span>`:''}</div>
         <div class="pend-meta">${when(m.created_at)}${m.sets?' · '+esc(m.sets):''}</div></div>
-        ${isAdmin?`<div class="pend-actions"><button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button></div>`:''}
+        ${isAdmin?`<div class="pend-actions"><button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button></div>${refileSelectHTML(m)}`:''}
       </div>${preview}
     </div>`;
   }
@@ -14891,6 +14904,84 @@ async function bulkSetStatus(status){
 window.bulkSetStatus = bulkSetStatus;
 
 /* ---------- admin: permanently delete a match ---------- */
+/* ---------- admin: re-file a game -------------------------------
+   The ref picks a destination when they submit, but the ref can be
+   wrong — a cup game reffed on autopilot lands on the ladder, or a
+   friendly gets filed under the cup. The admin looking at the queue is
+   the last person who can fix that before the result is live, so the
+   destination is editable from the same row as Approve.
+
+   It writes the same two fields the ref's picker does — tournament_id,
+   and round when the pair is an unplayed fixture in that event's draw —
+   so a re-filed game is indistinguishable from one submitted correctly.
+   Moving a game back to the ladder clears the round with it: a round
+   pointing at no tournament would strand the fixture.
+
+   Deliberately allowed on approved games too, not just pending ones.
+   Standings are recomputed from scratch on every render (see
+   computeStandings/countsForElo), so re-filing a game that has already
+   gone through corrects the ladder on the next paint rather than
+   needing the result to be rejected and re-entered.
+   ---------------------------------------------------------------- */
+async function refileMatch(id, value){
+  if(!isAdmin) return toast("Admin only", true);
+  const m = matches.find(x=>x.id===id);
+  if(!m) return;
+  /* resolved against every tournament, not just the open ones: the admin is
+     naming one explicitly, so unlike the ref's remembered preference there is
+     nothing here to "safely fall back" from — including when the row offers
+     the completed event the game already belongs to. */
+  const all = Array.isArray(tournaments) ? tournaments : [];
+  const target = (!value || value === "ladder")
+    ? null
+    : (all.find(t => String(t.id) === String(value)) || null);
+  if(value && value !== "ladder" && !target) return toast("That event no longer exists", true);
+  const patch = {tournament_id: target ? target.id : null, round: null};
+  if(target){
+    const r = eventRoundFor(target, m.p1, m.p2);
+    if(r) patch.round = r;
+  }
+  /* same "only if the schema has it" story as the tracker's submit: an
+     older project may predate the round column, and re-filing must still
+     work there. tournament_id is not optional — without it there is no
+     re-filing to do, so that error is worth showing. */
+  let {error} = await sb.from("matches").update(patch).eq("id", id);
+  if(error && /round/.test(error.message||"")){
+    delete patch.round;
+    ({error} = await sb.from("matches").update(patch).eq("id", id));
+  }
+  if(error) return toast(error.message, true);
+  const where = target ? target.name : "the ladder";
+  toast(`Filed under ${where} ✓`);
+  logAdminAction("refile_match", {id, p1:m.p1, p2:m.p2,
+    from: m.tournament_id || null, to: patch.tournament_id, round: patch.round || null});
+  load();
+}
+window.refileMatch = refileMatch;
+
+/* the destination picker for one game's row in the admin queue */
+function refileSelectHTML(m){
+  const cur = m.tournament_id
+    ? (fileEvents().find(t => t.id === m.tournament_id) || null)
+    : null;
+  /* an event that has since completed is still where this game lives, so it
+     stays in the list for this row — dropping it would silently show the
+     game as a ladder game and re-file it on the next change */
+  const rows = fileEvents().slice();
+  if(m.tournament_id && !cur){
+    const gone = (Array.isArray(tournaments) ? tournaments : []).find(t => t.id === m.tournament_id);
+    if(gone) rows.unshift(gone);
+  }
+  const sel = m.tournament_id ? String(m.tournament_id) : "ladder";
+  const opts = [`<option value="ladder"${sel==="ladder"?" selected":""}>Ladder</option>`]
+    .concat(rows.map(ev =>
+      `<option value="${ev.id}"${sel===String(ev.id)?" selected":""}>🏆 ${esc(ev.name)}</option>`));
+  return `<label class="pend-file"><span>goes to</span>
+      <select onchange="event.stopPropagation();refileMatch(${m.id}, this.value)"
+              onclick="event.stopPropagation()">${opts.join("")}</select>
+    </label>`;
+}
+
 async function deleteMatchPermanently(id){
   if(!isAdmin) return;
   const m = matches.find(x=>x.id===id);
