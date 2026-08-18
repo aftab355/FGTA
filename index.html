@@ -2521,6 +2521,28 @@
   .pt-well-sub{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.55;
     color:var(--dim);margin-bottom:10px}
 
+  /* WHERE THIS GAME GETS FILED — the ladder, or an event.
+     It is the only control on this screen that changes what the result
+     *means* (an event with counts_elo off never touches a rating), so it
+     reads as a labelled row with the consequence spelled out underneath
+     rather than one more mini button in the row of them. */
+  .pt-target{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .pt-target-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+  .pt-target-row>label{display:flex;align-items:center;gap:10px;flex:1 1 100%;min-width:0;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+    letter-spacing:1.2px;text-transform:uppercase;color:var(--dim)}
+  .pt-target-sel{width:auto;flex:1 1 190px;min-width:0;padding:6px 8px;
+    font-size:13px;letter-spacing:0;text-transform:none;font-weight:400}
+  .pt-target-note{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.55;color:var(--dim)}
+  .pt-target-note b{color:var(--ink);font-weight:600}
+  .pt-target-note .pt-target-elo{color:var(--court)}
+  .pt-target-note .pt-target-noelo{color:var(--accent)}
+  @media (max-width:520px){
+    .pt-target-row>label{flex-wrap:wrap;gap:8px}
+    .pt-target-sel{flex:1 1 100%}
+    .pt-target-note{font-size:10px}
+  }
+
   /* match controls — "undo/redo" is one thought and "end this match" is
      another, so they're two groups separated by a wide column gap rather than
      four equal pills in a row (which is how "discard match" ended up sitting
@@ -6680,6 +6702,7 @@
             <input id="ptA" data-ac="players" placeholder="player 1" autocomplete="off">
             <input id="ptB" data-ac="players" placeholder="player 2" autocomplete="off">
           </div>
+          <div class="pt-well" style="margin-top:12px" data-pt-target-mount></div>
           <button class="btn" style="margin-top:14px" onclick="ptStart()">Start tracking</button>
         </div>
         <div id="ptLive" style="display:none"></div>
@@ -8334,7 +8357,11 @@ function ptDefaultState(a,b){
        anchor that turns those stamps into positions in the broadcast. Both
        are plain fields on PT so undo/redo, the localStorage draft and the
        submit payload all carry them for free. */
-    rallies:[], video:null};
+    rallies:[], video:null,
+    /* where this game gets filed on submit — see WHERE A TRACKED GAME IS
+       FILED. Set from the standing preference in ptStart; on PT rather than
+       module-level so the localStorage draft carries it. */
+    target:"ladder"};
 }
 function ptPersist(){
   try{
@@ -8348,6 +8375,9 @@ function ptStart(){
   const a=($("ptA").value||"").trim(), b=($("ptB").value||"").trim();
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
+  /* the match carries the target it was started under, so resuming a draft
+     doesn't quietly re-file it under whatever was picked for a later game */
+  PT.target=ptTarget;
   ptLogExpanded=false;
   /* covers "link the stream, then start the match" — the other order is
      handled from ptLinkStream. Either way the match ends up knowing which
@@ -8736,12 +8766,188 @@ function ptRalliesPayload(){
     startedAt:PT.startedAt, endedAt:PT.endedAt||null,
     video:PT.video||null, points:PT.rallies});
 }
+/* ============================================================
+   WHERE A TRACKED GAME IS FILED
+
+   A tracked game used to have exactly one destination: the ladder.
+   That is wrong during a cup — the games being reffed are cup games,
+   and filing them as loose ladder games both loses them from the
+   event and moves ratings the event may not be meant to move.
+
+   So the submit target is a choice: the ladder, or any event that
+   hasn't finished. Picking an event sets matches.tournament_id, which
+   is the same field the admin tournament screens write — nothing new
+   downstream, the event page and the draw pick the game up on their
+   own. Whether it *also* moves Elo is then the event's own counts_elo
+   flag (see countsForElo), not a second switch here: one event, one
+   answer, and no way for the two to disagree.
+
+   The choice is remembered in localStorage between matches, because a
+   ref working a cup reffs the whole cup — having to re-pick the event
+   every game is exactly how games end up on the ladder by accident.
+   It is also copied onto PT at start, so a draft resumed mid-match
+   keeps the target it was started under even if the preference has
+   since been changed for a later game.
+   ============================================================ */
+const PT_TARGET_KEY = "fgta_tracker_target";
+/* "ladder" | "cup" | a tournament id. "cup" is symbolic on purpose: it
+   resolves through cupTournament() at render/submit time, so a cup row
+   that gets renamed or re-created is still the thing the preference
+   points at, instead of silently falling back to the ladder. */
+let ptTarget = "ladder";
+try{ ptTarget = localStorage.getItem(PT_TARGET_KEY) || "ladder"; }catch(e){}
+
+/* events a game can be filed under: unfinished ones only — a completed
+   event's table is history and shouldn't grow a new game. */
+function ptTargetEvents(){
+  const all = Array.isArray(tournaments) ? tournaments : [];
+  const open = all.filter(t => t && t.status !== "completed");
+  let cup = null;
+  try{ cup = typeof cupTournament === "function" ? cupTournament() : null; }catch(e){}
+  /* the cup leads the list — while it's on it's the answer nearly every time */
+  return cup && open.indexOf(cup) >= 0
+    ? [cup].concat(open.filter(t => t !== cup))
+    : open;
+}
+
+/* the stored choice as a real tournament row, or null for the ladder.
+   Anything that no longer resolves (event deleted, finished, cup not
+   drawn yet) reads as the ladder — the safe answer, and the picker
+   shows it as the selected one so the fallback is never invisible. */
+function ptResolveTarget(v){
+  const events = ptTargetEvents();
+  if(!v || v === "ladder") return null;
+  if(v === "cup"){
+    let cup = null;
+    try{ cup = typeof cupTournament === "function" ? cupTournament() : null; }catch(e){}
+    return cup && events.indexOf(cup) >= 0 ? cup : null;
+  }
+  return events.find(t => String(t.id) === String(v)) || null;
+}
+
+/* the value the picker should show for a row (symbolic for the cup) */
+function ptTargetValueFor(t){
+  if(!t) return "ladder";
+  let cup = null;
+  try{ cup = typeof cupTournament === "function" ? cupTournament() : null; }catch(e){}
+  return (cup && cup.id === t.id) ? "cup" : String(t.id);
+}
+
+/* the target in force right now: the one frozen onto the live match if
+   there is one, otherwise the standing preference */
+function ptCurrentTargetValue(){
+  return (PT && PT.target) ? PT.target : ptTarget;
+}
+
+/* The fixture in an event these two are down to play, if there is one.
+   Filing the game under its round is what makes the draw read it as the
+   result of that fixture rather than a loose extra game. Only rounds with
+   no approved result yet are offered, so re-reffing a finished fixture
+   can't quietly overwrite it — that stays an admin edit. */
+function ptEventRound(t, a, b){
+  if(!t || typeof rpSnapshot !== "function") return null;
+  let snap = null;
+  try{ snap = rpSnapshot(t); }catch(e){ return null; }
+  if(!snap || !snap.state) return null;
+  const fixtures = [];
+  (snap.state.order || []).forEach(f => fixtures.push(f));
+  if(snap.resolved && snap.resolved.pending) snap.resolved.pending.forEach(g => fixtures.push(g));
+  if(snap.plan && snap.plan.kind === "ring" && snap.plan.rounds)
+    (snap.plan.rounds[0] || []).forEach(g => fixtures.push(g));
+  if(snap.br) snap.br.semis.concat([snap.br.final, snap.br.bronze])
+    .forEach(g => { if(g) fixtures.push(g); });
+  const same = (x, y) => String(x||"").trim().toLowerCase() === String(y||"").trim().toLowerCase();
+  const hit = fixtures.find(f => f && f.round && f.p1 && f.p2
+    && ((same(f.p1,a) && same(f.p2,b)) || (same(f.p1,b) && same(f.p2,a)))
+    && !rpGame(t.id, f.round));
+  return hit ? hit.round : null;
+}
+
+/* a fixture's round key as something a human reads. The keys come from
+   RP_ROUND_GROUP / RP_ROUND_QUAL and the bracket: grpN, qualN, semi1/semi2,
+   final, bronze. */
+function ptRoundLabel(round){
+  const r = String(round||"");
+  if(r === "final") return "the final";
+  if(r === "bronze") return "the 3rd-place game";
+  if(/^semi/.test(r)) return "a semi-final";
+  if(/^qual/.test(r)) return "a qualifying decider";
+  if(/^grp/.test(r)) return "a group game";
+  return "a fixture";
+}
+
+function ptSetTarget(v){
+  ptTarget = v || "ladder";
+  try{ localStorage.setItem(PT_TARGET_KEY, ptTarget); }catch(e){}
+  /* a match already in progress moves with the choice — the ref changing
+     it at the wrap-up is the whole point of the control being there too */
+  if(PT){ PT.target = ptTarget; ptPersist(); }
+  ptRenderTargetMounts();
+}
+window.ptSetTarget = ptSetTarget;
+
+function ptTargetPickerHTML(){
+  const events = ptTargetEvents();
+  const cur = ptCurrentTargetValue();
+  const t = ptResolveTarget(cur);
+  const sel = ptTargetValueFor(t);   // the resolved value, so a dead choice shows as the ladder
+  const opts = [`<option value="ladder"${sel==="ladder"?" selected":""}>Ladder — a normal rated game</option>`]
+    .concat(events.map(ev => {
+      const v = ptTargetValueFor(ev);
+      return `<option value="${esc(v)}"${sel===v?" selected":""}>🏆 ${esc(ev.name)}</option>`;
+    }));
+  let note;
+  if(!t){
+    note = `Files as an ordinary ladder game — <b class="pt-target-elo">moves Elo</b> once it's approved.`;
+    if(cur !== "ladder" && events.length === 0)
+      note += ` <span class="pt-target-noelo">No event is open to file under right now.</span>`;
+  } else {
+    const elo = t.counts_elo === false
+      ? `<b class="pt-target-noelo">does not touch Elo</b>`
+      : `<b class="pt-target-elo">also moves Elo</b>`;
+    const round = (PT && PT.a && PT.b) ? ptEventRound(t, PT.a, PT.b) : null;
+    note = `Files under <b>${esc(t.name)}</b> — ${elo}.`;
+    if(round) note += ` Slots into <b>${esc(ptRoundLabel(round))}</b> in the draw.`;
+  }
+  /* Both mounts can be in the document at once — the setup one is hidden
+     rather than removed while a match is live — so this markup carries no
+     id of its own and the label wraps its select instead of pointing at one.
+     Two copies of the same control, no duplicate ids, both still labelled. */
+  return `<div class="pt-target">
+      <div class="pt-target-row">
+        <label>Submit toward
+          <select class="pt-target-sel" onchange="ptSetTarget(this.value)">${opts.join("")}</select>
+        </label>
+      </div>
+      <div class="pt-target-note">${note}</div>
+    </div>`;
+}
+
+/* one picker, rendered into every mount — the setup screen and the
+   wrap-up well both carry one, so the target can be set before the first
+   point and checked again before submitting */
+function ptRenderTargetMounts(){
+  document.querySelectorAll("[data-pt-target-mount]")
+    .forEach(el => { el.innerHTML = ptTargetPickerHTML(); });
+}
+window.ptRenderTargetMounts = ptRenderTargetMounts;
+
 async function ptSubmit(){
   if(!PT || (!PT.winner && !PT.draw)) return;
   const outcome = PT.winner==='a'?1:(PT.winner==='b'?0:0.5);
   const umpireRating = ($("ptUmpireRating")?.value||"");
   const row={p1:PT.a,p2:PT.b,outcome,status:"pending",sets:ptSetsString()||null,games:JSON.stringify(ptGamesPayload())};
   if(umpireRating) row.umpire_rating=Number(umpireRating);
+  /* the submit target — see WHERE A TRACKED GAME IS FILED. null is the
+     ladder, which is the shape the row already has, so there is nothing to
+     add for it. An event adds its id, plus its round when these two players
+     are a fixture in that event's draw. */
+  const target = ptResolveTarget(ptCurrentTargetValue());
+  if(target){
+    row.tournament_id = target.id;
+    const round = ptEventRound(target, PT.a, PT.b);
+    if(round) row.round = round;
+  }
   const rallies=ptRalliesPayload();
   if(rallies) row.rallies=rallies;
   const btn=$("ptSubmitBtn"); if(btn) btn.disabled=true;
@@ -8751,7 +8957,10 @@ async function ptSubmit(){
      whichever one it named and try again — the old fixed if-chain only worked
      when the columns went missing in the order it happened to test them, and
      silently gave up on the second one. */
-  const OPTIONAL=["umpire_rating","rallies","games"];
+  /* tournament_id is deliberately NOT in here: dropping it would silently
+     file a cup game on the ladder, which is the exact mistake this control
+     exists to prevent. If that column is missing, the error is the answer. */
+  const OPTIONAL=["umpire_rating","rallies","games","round"];
   let error;
   for(let attempt=0; attempt<=OPTIONAL.length; attempt++){
     ({error}=await sb.from("matches").insert(row));
@@ -8762,7 +8971,8 @@ async function ptSubmit(){
   }
   if(error){ if(btn) btn.disabled=false; return toast(error.message,true); }
   broadcastTicker(`🎾 ${PT.a} vs ${PT.b} — ${PT.draw?'drawn':'tracked live'}`);
-  toast("Submitted — waiting for approval ✓");
+  toast(target ? `Submitted to ${target.name} — waiting for approval ✓`
+               : "Submitted to the ladder — waiting for approval ✓");
   PT=null; ptHistory=[]; ptFuture=[];
   ptPersist();
   $("ptA").value=""; $("ptB").value="";
@@ -8781,6 +8991,9 @@ function renderTracker(){
   ptSyncRefPanel();
   ptSyncBroadcastIfLive();
   if(!$("ptLive")) return;
+  /* the setup screen's copy of the submit-target picker — filled here because
+     the "no match yet" branch returns before #ptLive is ever written */
+  ptRenderTargetMounts();
   if(!PT){ $("ptSetup").style.display=""; $("ptLive").style.display="none"; return; }
   $("ptSetup").style.display="none"; $("ptLive").style.display="";
   const cA="var(--accent)", cB="var(--court)";
@@ -8829,6 +9042,7 @@ function renderTracker(){
       ${decided ? `<div class="pt-final">${PT.draw?`🤝 Recorded as a draw`:`🏆 ${esc(PT.winner==='a'?PT.a:PT.b)} wins ${PT.setsA}–${PT.setsB}`}</div>
         <div class="pt-well">
           <div class="pt-well-h">Wrap up</div>
+          <div data-pt-target-mount style="margin-bottom:12px"></div>
           <label class="pt-zoom-label">umpire fairness <select id="ptUmpireRating" style="width:auto;padding:6px 8px">
             <option value="">skip</option><option value="5">5 — spotless</option><option value="4">4 — good</option><option value="3">3 — fine</option><option value="2">2 — shaky</option><option value="1">1 — biased</option>
           </select></label>
@@ -8870,6 +9084,8 @@ function renderTracker(){
       </div>
     </div>
   `;
+  /* again, now that the wrap-up well exists in the freshly written markup */
+  ptRenderTargetMounts();
   ptTickTimer();
 }
 window.renderTracker=renderTracker;
@@ -13199,6 +13415,10 @@ function render(){
   refreshOdds();
   renderHealth();
   renderCupMarquee();
+  /* the pickers list the open events, which only exist once load() has been
+     through — refresh them here so a ref already sitting on ref mode when the
+     app finishes loading sees the cup in the list without leaving the screen */
+  try{ ptRenderTargetMounts(); }catch(e){}
   if(activeView==="feed") renderFeedSoon();
   drawChart(standings);
   const approvedCount = matches.filter(m=>m.status==="approved").length;
