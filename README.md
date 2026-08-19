@@ -183,11 +183,11 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 
 For the duration of the FF Cup the app wears a tournament skin — **jet black · anti-gravity**. Everything above still describes the permanent design; the skin is a layer on top of it, not a replacement.
 
-**Runs Aug 17 – Sep 1.** Those two dates live in one place: the `FF CUP WINDOW` script just after `</header>` in `index.html`. The badge in the top bar, the lockup on the load screen and the marquee on the landing page all read from them (the script publishes `window.FFCUP` for the app), so they can't drift. To move the cup, change `START` / `END` there and nothing else.
+**Runs Aug 17 – Sep 6.** Those two dates live in one place: the `FF CUP WINDOW` script just after `</header>` in `index.html`. The badge in the top bar, the lockup on the load screen and the marquee on the landing page all read from them (the script publishes `window.FFCUP` for the app), so they can't drift. To move the cup, change `START` / `END` there and nothing else.
 
 **How it is switched on:** `data-skin="ffcup"` on the `<html>` element. The skin's CSS is one block at the end of the `<style>` in `index.html`, headed `FF CUP EVENT SKIN`, and every rule in it is scoped to `:root[data-skin="ffcup"]`. The window script also sets `data-cup="pre"` / `"live"` on the same element (the badge's date line pulses only while the cup is actually on).
 
-**It retires itself.** After Sep 1 the window script removes `data-skin` on load and the app is back to normal with no intervention. That leaves only the dead CSS to delete:
+**It retires itself.** After Sep 6 the window script removes `data-skin` on load and the app is back to normal with no intervention. That leaves only the dead CSS to delete:
 
 1. Delete the `FF CUP EVENT SKIN` block from the `<style>`, and the `WET BLACK` gloss block that follows it (section 10 of the same comment numbering — it is scoped to `:root[data-skin="ffcup"]` throughout, so it is inert off-skin either way).
 2. Delete the `FF CUP WINDOW` script after `</header>`, the `<span class="ffcup-chip">` in the top bar, the `<div class="ls-cup">` on the load screen, the `FF CUP — THE MARQUEE` JS block, the ten `<div class="cup-mount">` stubs, the `<button class="ms-cup">` in the mobile sheet, and the two `<span class="cup-flag">`s in the navigation.

@@ -6125,7 +6125,7 @@
     <circle class="ls-ball" cx="150" cy="200" r="9" fill="var(--ball)"/>
   </svg>
   <div class="ls-word">FGTA<span>LADDER</span></div>
-  <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 1</i></div>
+  <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 6</i></div>
 </div>
 
 <!-- ===== APP SHELL: TOP BAR (lives outside .wrap so transforms on .wrap never break its fixed positioning) ===== -->
@@ -6137,7 +6137,7 @@
       <span class="tb-live" id="tagline">loading…</span>
     </div>
     <span class="ffcup-chip" id="ffcupChip" title="Open the FF Cup" role="button" tabindex="0"
-      onclick="openCupEvent()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCupEvent()}"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 1</i></span>
+      onclick="openCupEvent()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCupEvent()}"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 6</i></span>
   </div>
 
   <nav class="tb-tabs" id="topTabs">
@@ -6194,7 +6194,7 @@
    normal self on the next paint; deleting the CSS block is then the only
    cleanup left. */
 (function(){
-  var START='2026-08-17', END='2026-09-01';           // inclusive, local time
+  var START='2026-08-17', END='2026-09-06';           // inclusive, local time
   function at(s,endOfDay){
     var p=s.split('-');
     return new Date(+p[0], p[1]-1, +p[2], endOfDay?23:0, endOfDay?59:0, endOfDay?59:0);
@@ -6212,7 +6212,7 @@
     name:  'FF Cup',
     start: start,          // Date — first day, 00:00 local
     end:   end,            // Date — last day, 23:59 local
-    range: range,          // "Aug 17 – Sep 1"
+    range: range,          // "Aug 17 – Sep 6"
     state: root.dataset.cup
   };
 })();
