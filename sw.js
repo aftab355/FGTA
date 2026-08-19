@@ -8,7 +8,7 @@
  * Bump VERSION on deploys that change what's precached; it's what forces old
  * caches to be dropped on activate.
  */
-const VERSION = "2026-08-19";
+const VERSION = "2026-08-19b";
 const CACHE = `fgta-shell-${VERSION}`;
 const SHELL_URLS = [
   "/",
