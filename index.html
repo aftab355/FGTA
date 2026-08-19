@@ -15609,6 +15609,29 @@ function rpParseScore(sets){
   return {a, b};
 }
 
+/* ---------- row orientation ------------------------------------
+   A fixture knows its pair as p1 v p2, but the match row is stored
+   however the result was reported — the same two names can sit the
+   other way round. Every read of a result has to go through the
+   row's own orientation, or the score says one thing and the win
+   column says the other. ------------------------------------------ */
+function rpRowFlipped(m, first){
+  return !!m && (m.p1 || "").toLowerCase() !== String(first || "").toLowerCase();
+}
+/* "6-4, 3-6" -> "4-6, 6-3" */
+function rpFlipSets(sets){
+  return String(sets || "").split(",").map(part=>{
+    const bits = part.trim().split("-");
+    return bits.length === 2 ? bits[1].trim() + "-" + bits[0].trim() : part.trim();
+  }).join(", ");
+}
+/* a row's score string, read for `first` — so the number that leads
+   belongs to the name that leads wherever it is being shown */
+function rpSetsFor(m, first){
+  if(!m || !m.sets) return "";
+  return rpRowFlipped(m, first) ? rpFlipSets(m.sets) : m.sets;
+}
+
 /* group table — wins first, then the games you actually won */
 function rpGroupTable(t, state){
   const rows = {};
@@ -15620,12 +15643,14 @@ function rpGroupTable(t, state){
     A.opponents.push(fx.p2); B.opponents.push(fx.p1);
     if(!m) return;
     A.played++; B.played++;
+    // the row's own orientation: the fixture is stored p1-first, the match row may not be
+    const flipped = rpRowFlipped(m, fx.p1);
     const o = Number(m.outcome);
-    if(o === 1){ A.w++; B.l++; } else if(o === 0){ B.w++; A.l++; } else { A.d++; B.d++; }
+    const aWon = flipped ? o === 0 : o === 1;
+    const bWon = flipped ? o === 1 : o === 0;
+    if(aWon){ A.w++; B.l++; } else if(bWon){ B.w++; A.l++; } else { A.d++; B.d++; }
     if(m.sets){
       const s = rpParseScore(m.sets);
-      // the row's own orientation: the fixture is stored p1-first, the match row may not be
-      const flipped = (m.p1 || "").toLowerCase() !== fx.p1.toLowerCase();
       A.gw += flipped ? s.b : s.a; A.gl += flipped ? s.a : s.b;
       B.gw += flipped ? s.a : s.b; B.gl += flipped ? s.b : s.a;
     }
@@ -15734,11 +15759,12 @@ function rpSplitOnH2H(t, state, block, left){
     const m = rpGame(t.id, fx.round);
     if(!m) return;
     played++;
+    const flipped = rpRowFlipped(m, fx.p1);
     const o = Number(m.outcome);
-    if(o === 1) mini[fx.p1].w++; else if(o === 0) mini[fx.p2].w++;
+    if(flipped ? o === 0 : o === 1) mini[fx.p1].w++;
+    else if(flipped ? o === 1 : o === 0) mini[fx.p2].w++;
     if(m.sets){
       const s = rpParseScore(m.sets);
-      const flipped = (m.p1||"").toLowerCase() !== fx.p1.toLowerCase();
       const a = flipped ? s.b : s.a, b = flipped ? s.a : s.b;
       mini[fx.p1].gd += a - b; mini[fx.p2].gd += b - a;
     }
@@ -16336,9 +16362,10 @@ function rpFixtureRow(t, fx, i, opts){
   const q = ctx && fx.p1 && fx.p2 ? ctx.quality(fx.p1, fx.p2) : null;
   const live = !m && opts.upNext;
 
-  let line;
+  let line, leads = null;   // whose games the score should lead with
   if(m){
     const o = Number(m.outcome);
+    leads = o === 0 ? m.p2 : m.p1;          // the winner leads the line, so the score follows
     line = o === 0.5
       ? `<b>${esc(m.p1)}</b> <span class="vs">drew</span> <b>${esc(m.p2)}</b>`
       : `<b>${esc(o===1?m.p1:m.p2)}</b> <span class="vs">beat</span> ${esc(o===1?m.p2:m.p1)}`;
@@ -16353,7 +16380,7 @@ function rpFixtureRow(t, fx, i, opts){
 
   const metaBits = [];
   if(m){
-    if(m.sets) metaBits.push(esc(m.sets));
+    if(m.sets) metaBits.push(esc(rpSetsFor(m, leads)));
     metaBits.push(when(m.created_at));
   }else{
     if(iso) metaBits.push("on " + rpWhenLabel(iso));
@@ -16399,7 +16426,7 @@ function rpReportPanel(t, fx, m){
         ${iso?`<button class="btn ghost" style="margin:0;width:auto;padding:8px 12px" onclick="rpSetDate(${t.id},'${rpJs(fx.round)}','')">Clear</button>`:""}
       </div>
       <label style="margin-top:12px;display:block">Score <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional — ${esc(fx.p1)} first)</span></label>
-      <input id="rpScore" placeholder="11-8   or   6-4, 3-6, 7-5" autocomplete="off" value="${m && m.sets ? esc(m.sets) : ""}">
+      <input id="rpScore" placeholder="11-8   or   6-4, 3-6, 7-5" autocomplete="off" value="${m && m.sets ? esc(rpSetsFor(m, fx.p1)) : ""}">
       <div class="rp-winbtns" style="margin-top:10px">
         <button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',1)">${esc(fx.p1)} won</button>
         <button class="rp-winbtn" onclick="rpSaveResult(${t.id},'${esc(fx.round)}',0)">${esc(fx.p2)} won</button>
@@ -16598,7 +16625,7 @@ function rpBracketPanel(t, snap){
            ${clickable?`onclick="rpToggleReport('${esc(g.round)}',${t.id})"`:""}>
         ${slot(g.p1)}${slot(g.p2)}
       </div>
-      ${m && m.sets?`<div class="bracket-note" style="text-align:center;margin-top:4px">${esc(m.sets)}</div>`:""}
+      ${m && m.sets?`<div class="bracket-note" style="text-align:center;margin-top:4px">${esc(rpSetsFor(m, g.p1))}</div>`:""}
       ${open?rpReportPanel(t,{p1:g.p1,p2:g.p2,round:g.round},m):""}
     </div>`;
   };
