@@ -1401,6 +1401,16 @@
   .tool-block:last-child{border-bottom:none;padding-bottom:0}
   .tool-block:first-child{padding-top:0}
   .tool-h{font-weight:700;font-size:15px;margin-bottom:8px}
+  /* a tool-block that folds away — the audit log is long and noisy, so it
+     starts closed and remembers whichever way you left it */
+  .tool-fold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px}
+  .tool-fold>summary::-webkit-details-marker{display:none}
+  .tool-fold>summary::after{content:'\25be';margin-left:auto;font-size:12px;font-weight:400;color:var(--dim);
+    transition:transform .18s ease}
+  .tool-fold[open]>summary::after{transform:rotate(180deg)}
+  .tool-fold>summary:hover{color:var(--court)}
+  .tool-fold:not([open])>summary{margin-bottom:0}
+  .tool-fold-c{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5px;font-weight:400;color:var(--dim)}
   .tool-btns{display:flex;gap:10px;flex-wrap:wrap}
   .div-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
   .div-opt{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);
@@ -6867,11 +6877,11 @@
         <div id="playerRosterList" style="margin-top:12px"></div>
       </div>
 
-      <div class="tool-block">
-        <div class="tool-h">🧾 Audit log</div>
+      <details class="tool-block tool-fold" id="auditLogFold" ontoggle="rememberAuditLogOpen(this.open)">
+        <summary class="tool-h">🧾 Audit log <span class="tool-fold-c" id="auditLogCount"></span></summary>
         <div class="pred-hint">Most recent admin actions — approvals, edits, deletes, mutes and more.</div>
         <div id="auditLogList" style="margin-top:12px"></div>
-      </div>
+      </details>
     </div>
   </section>
 
@@ -19019,11 +19029,25 @@ function renderMutedNames(){
     : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">No muted names.</div>';
 }
 
+/* the audit log lives behind a fold — it's 50 rows of JSON nobody wants
+   greeting them every time the admin panel opens. Closed by default; the
+   choice sticks per browser. */
+const AUDIT_OPEN_KEY = "fgta_audit_open";
+function rememberAuditLogOpen(open){ try{ localStorage.setItem(AUDIT_OPEN_KEY, open?"1":"0"); }catch(e){} }
+window.rememberAuditLogOpen = rememberAuditLogOpen;
+
 function renderAuditLog(){
   const el=$("auditLogList"); if(!el) return;
   const rows = adminActions.slice()
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
     .slice(0,50);
+  const fold=$("auditLogFold");
+  if(fold){
+    let want=false; try{ want = localStorage.getItem(AUDIT_OPEN_KEY)==="1"; }catch(e){}
+    fold.open = want;
+  }
+  const cnt=$("auditLogCount");
+  if(cnt) cnt.textContent = rows.length ? `(${rows.length}${adminActions.length>rows.length?'+':''})` : "";
   el.innerHTML = rows.length
     ? rows.map(a=>`<div class="pend">
         <div><div class="pend-info"><b>${esc(a.action)}</b> — ${esc(a.actor_email||'unknown')}</div>
