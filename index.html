@@ -163,7 +163,7 @@
     border-bottom:1px solid var(--line);
     transition:transform .25s cubic-bezier(.4,0,.2,1);
   }
-  .tb-brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+  .tb-brand{display:flex;align-items:center;gap:11px;flex:0 1 auto;min-width:0}
   .tb-ball{
     width:26px;height:26px;border-radius:50%;flex-shrink:0;
     background:radial-gradient(circle at 34% 30%, #f5ff8f 0%, var(--ball) 45%, #9db81a 100%);
@@ -172,9 +172,11 @@
   }
   .tb-ball::after{content:'';position:absolute;inset:0;border-radius:50%;
     border-top:1.5px solid rgba(255,255,255,.55);transform:rotate(34deg);}
-  .tb-word{display:flex;flex-direction:column;line-height:1}
-  .tb-title{font-weight:600;font-size:19px;letter-spacing:.5px;text-transform:uppercase}
-  .tb-live{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-top:3px;text-transform:uppercase}
+  .tb-word{display:flex;flex-direction:column;line-height:1;min-width:0;overflow:hidden}
+  .tb-title{font-weight:600;font-size:19px;letter-spacing:.5px;text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tb-live{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-top:3px;text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .tb-tabs::-webkit-scrollbar{display:none}
   .tb-tab{
@@ -188,7 +190,7 @@
     content:'';position:absolute;left:16px;right:16px;bottom:-7px;height:2px;border-radius:var(--r-pill);
     background:var(--accent);opacity:.7;
   }
-  .tb-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}
+  .tb-actions{display:flex;gap:6px;flex:0 0 auto;align-items:center;margin-left:auto}
   .tb-ico{
     width:38px;height:38px;border-radius:6px;border:1px solid var(--line);background:transparent;
     color:var(--muted);cursor:pointer;font-size:16px;transition:.15s;display:grid;place-items:center;
@@ -294,6 +296,11 @@
     border-radius:24px 24px 0 0;border-top:1px solid var(--line);
     padding:12px 18px calc(24px + env(safe-area-inset-bottom));
     animation:sheet-up .28s cubic-bezier(.2,.8,.3,1);
+    /* the sheet grows with the number of tiles in it — cap it at the screen
+       and let it scroll rather than letting the top row run off the top */
+    max-height:calc(100vh - 20px);
+    max-height:calc(100dvh - 20px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   @keyframes sheet-up{from{transform:translateY(100%)}}
   .ms-handle{width:38px;height:4px;border-radius:3px;background:var(--line);margin:2px auto 18px}
@@ -304,7 +311,9 @@
     align-items:center;gap:8px;font-size:12.5px;font-weight:600;transition:.15s;
   }
   .ms-grid button span{font-size:22px}
+  .ms-grid button i{font-style:normal}
   .ms-grid button:hover{border-color:var(--accent)}
+  .ms-grid button.on{border-color:var(--accent);color:var(--accent)}
 
   /* ===== RESPONSIVE LAYOUT SYSTEM ===== */
   .layout{display:block}
@@ -6108,6 +6117,111 @@
     :root[data-skin="ffcup"] .stat::after{transition:none!important}
   }
 
+  /* ================================================================
+     MOBILE FIT — the phone-width pass
+
+     Everything below exists because a real phone (390px and down) was
+     showing the app broken in three specific ways:
+
+       1. the top bar overflowed its own viewport, carrying the ☰ button
+          — and with it the only way into Admin — clean off the right
+          edge. You had to turn the phone sideways to reach it.
+       2. single-line flex rows built for a desktop column (the cup
+          calendar above all) squeezed their text column to a few pixels,
+          so names and meta broke one word per line and ran under the
+          controls beside them.
+       3. fixed-width controls and tables sat wider than the screen.
+
+     The rules are grouped by what they fix, not by selector, so a later
+     change to any one row is easy to find. Kept at the end of the sheet
+     so they land after the component styles they correct.
+     ================================================================ */
+
+  /* ---- 1. the top bar always fits, so ☰ / Admin is always reachable --- */
+  @media(max-width:640px){
+    .topbar{padding-left:15px;padding-right:15px;gap:10px}
+    .tb-brand{gap:9px}
+    .tb-actions{gap:5px}
+    .tb-ico{width:36px;height:36px;font-size:15px}
+  }
+  @media(max-width:560px){
+    /* "live · K=32 · start 100" is the widest thing in the bar and the
+       least load-bearing — the same numbers are in Help. Dropping it is
+       what buys the room for the action buttons. */
+    .tb-live{display:none}
+    .tb-title{font-size:18px}
+  }
+  @media(max-width:400px){
+    .topbar{padding-left:11px;padding-right:11px;gap:8px}
+    .tb-brand{gap:8px}
+    .tb-title{font-size:17px}
+    .tb-actions{gap:3px}
+    .tb-ico{width:34px;height:34px;font-size:14px}
+    .tb-ball{width:23px;height:23px}
+    :root[data-skin="ffcup"] .ffcup-chip{padding:4px 7px 5px}
+    :root[data-skin="ffcup"] .ffcup-chip b{font-size:9px;letter-spacing:1.4px}
+    :root[data-skin="ffcup"] .ffcup-chip i{font-size:6.5px;letter-spacing:.4px}
+  }
+  /* the overflow menu is anchored to the bar's padding, not a fixed 20px */
+  @media(max-width:640px){ .util-menu{right:15px;left:15px;min-width:0} }
+  @media(max-width:400px){ .util-menu{right:11px;left:11px} }
+
+  /* ---- 2. the cup calendar row ---------------------------------------
+     Desktop keeps the single line: day · fixture · date picker · intro.
+     On a phone that is four things fighting over ~300px, and the fixture
+     — the only part you actually read — lost. Below 720px the row becomes
+     two lines: the fixture gets the full width, the controls sit under it. */
+  .rp-cal-row .rp-date-in{width:138px;flex:none}
+  @media(max-width:720px){
+    .rp-cal-row{
+      display:grid;grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:"when when" "main main" "date intro";
+      align-items:center;gap:7px 10px;padding:11px 12px;
+    }
+    .rp-cal-row .rp-cal-when{grid-area:when;min-width:0;font-size:9px}
+    .rp-cal-row .rp-cal-main{grid-area:main;font-size:14px}
+    .rp-cal-row .rp-cal-sub{margin-top:4px}
+    .rp-cal-row .rp-date-in{grid-area:date;width:100%;flex:initial;justify-self:stretch}
+    /* with no picker (i.e. not an admin) the date cell is simply empty and
+       the button keeps its place at the end of the line */
+    .rp-cal-row .rp-intro-btn{grid-area:intro;justify-self:end}
+  }
+
+  /* ---- 3. the fixture rows in the draw ------------------------------- */
+  @media(max-width:480px){
+    .rp-fix{flex-wrap:wrap;row-gap:6px}
+    .rp-fix-main{flex:1 1 calc(100% - 36px)}
+    .rp-fix .rp-qual{order:3;flex:1 1 auto;width:auto;margin-left:36px}
+    .rp-fix .rp-intro-btn{order:4}
+  }
+
+  /* ---- 4. tables never push the page sideways ------------------------ */
+  @media(max-width:480px){
+    .rp-table{font-size:12px}
+    .rp-table th,.rp-table td{padding:8px 5px}
+    .rp-table .rp-nm{overflow-wrap:anywhere}
+    .rp-state{margin-left:4px;font-size:8.5px;padding:2px 5px}
+  }
+
+  /* ---- 5. buttons keep their own label -------------------------------
+     A .mini in a wrapping flex row was shrinking below its text instead
+     of dropping to the next line, which is what clipped "▶ Watch". */
+  .pt-stream-row .mini,.pt-copy-row .mini{flex:0 0 auto;white-space:nowrap}
+
+  /* ---- 6. general phone hygiene --------------------------------------
+     Long unbroken strings (links, codes, names pasted in) are the one
+     thing that can still force a horizontal scrollbar on any panel. */
+  @media(max-width:560px){
+    .panel,.rp-fix,.rp-cal-row,.pw-legend,.pred-hint,.bracket-note{overflow-wrap:break-word}
+    input,select,textarea{max-width:100%}
+  }
+  @media(max-width:400px),(max-height:700px){
+    .ms-grid{gap:9px}
+    .ms-grid button{padding:12px 6px;gap:6px;font-size:11.5px}
+    .ms-grid button span{font-size:19px}
+    .ms-handle{margin-bottom:12px}
+  }
+
 </style>
 <body>
 <div id="hudGrid" aria-hidden="true"></div>
@@ -6251,6 +6365,10 @@
       <button onclick="cycleSurface()"><span>◉</span>Surface</button>
       <button onclick="toggleStadium();toggleMoreSheet()"><span>◎</span>Stadium</button>
       <button onclick="openHelp();toggleMoreSheet()"><span>?</span>Help</button>
+      <button onclick="installApp();toggleMoreSheet()" id="msInstallBtn" style="display:none"><span>⤓</span>Install</button>
+      <!-- the same admin sign-in the ☰ menu offers, put where a phone can
+           reach it without the top bar -->
+      <button id="msAdminBtn" onclick="toggleMoreSheet();document.getElementById('adminBtn').click()"><span>◆</span><i id="msAdminLbl">Admin</i></button>
     </div>
   </div>
 </div>
@@ -16478,7 +16596,7 @@ function rpCalendarPanel(t){
         ${names}
         <div class="rp-cal-sub">${esc(fx.label)} · ${esc(fx.stage)}${m?" · played":""}</div>
       </div>
-      ${isAdmin ? `<input class="rp-date-in" style="width:138px;flex:none" type="date" value="${iso}"
+      ${isAdmin ? `<input class="rp-date-in" type="date" value="${iso}"
           ${days.length?`min="${days[0]}" max="${days[days.length-1]}"`:""}
           onchange="rpSetDate(${t.id},'${rpJs(fx.round)}',this.value)">` : ""}
       ${fx.p1 && fx.p2 ? `<button class="rp-intro-btn" onclick="ffPlayIntro(${t.id},'${rpJs(fx.round)}')">▶ Intro</button>` : ""}
@@ -22172,6 +22290,8 @@ function refreshAfterAdminChange(){
   if(openMatchId!==null) openMatch(openMatchId);
 }
 function updateAdminBtn(){
+  const m=$("msAdminLbl");   if(m) m.textContent = isAdmin ? "Admin ✓" : "Admin";
+  const mb=$("msAdminBtn");  if(mb) mb.classList.toggle("on", isAdmin);
   const b=$("adminBtn"); if(!b) return;
   b.classList.toggle("on", isAdmin);
   b.textContent = isAdmin ? "◆ admin ✓" : "◆ admin";
@@ -24722,20 +24842,26 @@ if("serviceWorker" in navigator){
 }
 
 let deferredInstall = null;
+
+/* the offer lives in two places now — the ☰ menu on a wide screen and the
+   bottom bar's More sheet on a phone — so they are shown and hidden together */
+function showInstallOffer(on){
+  const b=$("installBtn");   if(b)  b.style.display  = on ? "inline-block" : "none";
+  const m=$("msInstallBtn"); if(m)  m.style.display  = on ? "" : "none";
+}
+
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();
   deferredInstall = e;
-  const b=$("installBtn");
-  if(b) b.style.display="inline-block";
+  showInstallOffer(true);
 });
 
 async function installApp(){
-  const b=$("installBtn");
   if(deferredInstall){
     deferredInstall.prompt();
     const {outcome} = await deferredInstall.userChoice;
     deferredInstall = null;
-    if(b) b.style.display="none";
+    showInstallOffer(false);
     if(outcome==="accepted") toast("Installing…");
     return;
   }
@@ -24752,7 +24878,7 @@ const runningInstalled = window.matchMedia("(display-mode: standalone)").matches
   || window.matchMedia("(display-mode: fullscreen)").matches
   || window.navigator.standalone;
 if(runningInstalled){
-  const b=$("installBtn"); if(b) b.style.display="none";
+  showInstallOffer(false);
 }
 
 </script>
