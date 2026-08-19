@@ -4155,21 +4155,127 @@
      across the window, plus the running order underneath. Namespaced
      .rp-cal-* so it lifts out with the rest of Robin+.
      ================================================================ */
-  .rp-cal-strip{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .rp-cal-strip::-webkit-scrollbar{display:none}
-  .rp-cal-day{flex:0 0 60px;border-radius:var(--r-sm);border:1px solid var(--line-soft);
-    background:var(--panel-2);padding:8px 4px 7px;text-align:center;cursor:default;
-    transition:.24s cubic-bezier(.16,1,.3,1)}
-  .rp-cal-day.has{border-color:var(--accent);background:var(--accent-dim)}
-  .rp-cal-day.today{box-shadow:0 0 0 1px var(--accent-glow),0 8px 22px -12px var(--accent-glow)}
-  .rp-cal-day.past{opacity:.42}
-  .rp-cal-dow{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.2px;
+  /* ---- the month grid ------------------------------------------------
+     The window is laid out as real weeks, Monday first, running from the
+     Monday of the opening week to the Sunday of the closing one — so a
+     cup that straddles two months is still one continuous grid and the
+     columns always mean the same weekday.
+
+     Two lights carry the whole read of the board:
+       blue   a day with a 1v1 — the group games and any decider
+       white  a day with a bracket game — semis, third place, the final
+     A day with both gets both, stacked. The colours are fixed here
+     rather than taken from the palette: they are a legend, and they have
+     to mean the same thing under every skin and weather theme. */
+  .rp-cal{
+    --rp-1v1:#3fb0ff;  --rp-1v1-glow:rgba(63,176,255,.55);
+    --rp-brk:#ffffff;  --rp-brk-glow:rgba(255,255,255,.42);
+    margin-top:12px;
+  }
+  .rp-cal-mhead{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.6px;
+    text-transform:uppercase;color:var(--muted);margin:2px 0 8px}
+  .rp-cal-dows,.rp-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+  .rp-cal-dows{margin-bottom:5px}
+  .rp-cal-dows span{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.6px;
+    color:var(--dim);text-align:center}
+
+  .rp-cd{
+    aspect-ratio:1;min-height:40px;border-radius:10px;
+    border:1px solid var(--line-soft);background:var(--panel-2);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:2px;cursor:pointer;position:relative;overflow:hidden;
+    transition:.22s cubic-bezier(.16,1,.3,1);
+  }
+  .rp-cd:disabled{cursor:default}
+  /* a cell only there to hold the week's shape */
+  .rp-cd.pad{visibility:hidden}
+  /* inside the grid but outside the cup window */
+  .rp-cd.out{background:transparent;border-style:dashed;opacity:.3;cursor:default}
+  .rp-cd.past{opacity:.5}
+  .rp-cd-n{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+    color:var(--muted);line-height:1}
+  .rp-cd-mon{position:absolute;top:3px;left:0;right:0;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:.8px;
     text-transform:uppercase;color:var(--dim)}
-  .rp-cal-num{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--ink);line-height:1.2}
-  .rp-cal-day.has .rp-cal-num{color:var(--accent)}
-  .rp-cal-dots{display:flex;gap:3px;justify-content:center;height:5px;margin-top:4px}
-  .rp-cal-dots i{width:4px;height:4px;border-radius:50%;background:var(--accent)}
-  .rp-cal-dots i.done{background:var(--dim)}
+  /* the month is named inside its first cell, so that cell's own content
+     shifts down a touch to leave the tag its line */
+  .rp-cd.has-mon{padding-top:9px}
+  .rp-cd-dots{display:flex;gap:3px;justify-content:center;align-items:center;height:6px}
+  .rp-cd-dots i{width:5px;height:5px;border-radius:50%;flex:none}
+  .rp-cd-dots i.g{background:var(--rp-1v1)}
+  .rp-cd-dots i.b{background:var(--rp-brk)}
+  .rp-cd-dots i.done{opacity:.3}
+
+  /* the glows */
+  .rp-cd.has-g{
+    border-color:color-mix(in srgb, var(--rp-1v1) 55%, transparent);
+    background:color-mix(in srgb, var(--rp-1v1) 11%, var(--panel-2));
+    box-shadow:0 0 16px -3px var(--rp-1v1-glow), inset 0 0 20px -12px var(--rp-1v1);
+  }
+  .rp-cd.has-g .rp-cd-n{color:var(--rp-1v1)}
+  .rp-cd.has-b{
+    border-color:color-mix(in srgb, var(--rp-brk) 60%, transparent);
+    background:color-mix(in srgb, var(--rp-brk) 9%, var(--panel-2));
+    box-shadow:0 0 16px -3px var(--rp-brk-glow), inset 0 0 20px -12px var(--rp-brk);
+  }
+  .rp-cd.has-b .rp-cd-n{color:var(--rp-brk)}
+  /* both on one day: the blue field keeps the day readable, the white
+     ring says the bracket is also here */
+  .rp-cd.has-g.has-b{
+    border-color:color-mix(in srgb, var(--rp-brk) 70%, transparent);
+    background:color-mix(in srgb, var(--rp-1v1) 12%, var(--panel-2));
+    box-shadow:0 0 16px -3px var(--rp-1v1-glow), 0 0 22px -6px var(--rp-brk-glow),
+               inset 0 0 20px -12px var(--rp-1v1);
+  }
+  .rp-cd.has-g.has-b .rp-cd-n{color:var(--rp-brk)}
+  /* every game on the day has been played */
+  .rp-cd.done{box-shadow:none;opacity:.55}
+
+  /* today and the day you are looking at have to be told apart at a
+     glance, and neither may borrow blue or white — those two are spoken
+     for. So they mark different parts of the cell: today underlines its
+     own number, the selected day takes a ring around the whole cell. */
+  .rp-cd.today .rp-cd-n{position:relative}
+  .rp-cd.today .rp-cd-n::after{
+    content:'';position:absolute;left:-1px;right:-1px;bottom:-3px;height:2px;
+    border-radius:2px;background:var(--accent);
+  }
+  .rp-cd.sel{
+    outline:2px solid var(--accent);outline-offset:-2px;
+    transform:translateY(-1px);
+  }
+  .rp-cd:not(.out):not(.pad):hover{transform:translateY(-1px);border-color:var(--muted)}
+
+  /* what the two lights mean, said once under the grid */
+  /* square cells are right on a phone, where the grid is ~44px a side.
+     Given a desktop column they would be 200px squares of empty space —
+     past about 560px the row takes a fixed, calendar-shaped height. */
+  @media(min-width:560px){
+    .rp-cd{aspect-ratio:auto;height:64px;min-height:0}
+    .rp-cd-n{font-size:15px}
+  }
+
+  .rp-cal-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.5px;color:var(--dim)}
+  .rp-cal-key span{display:inline-flex;align-items:center;gap:6px}
+  .rp-cal-key i{width:7px;height:7px;border-radius:50%;flex:none}
+  .rp-cal-key i.g{background:var(--rp-1v1);box-shadow:0 0 8px -1px var(--rp-1v1-glow)}
+  .rp-cal-key i.b{background:var(--rp-brk);box-shadow:0 0 8px -1px var(--rp-brk-glow)}
+  .rp-cal-key i.d{background:var(--dim)}
+
+  /* the selected day, written out under the grid */
+  .rp-cal-day-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:14px 0 8px}
+  .rp-cal-day-h b{font-size:14px;color:var(--ink);font-weight:600}
+  .rp-cal-day-h i{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-style:normal;
+    letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .rp-cal-empty{font-size:12.5px;color:var(--dim);padding:12px;border-radius:var(--r-sm);
+    border:1px dashed var(--line-soft);text-align:center}
+  /* the kind badge that replaces the day label inside a day's own list */
+  .rp-kind-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;
+    text-transform:uppercase;padding:3px 7px;border-radius:6px;white-space:nowrap;
+    border:1px solid transparent}
+  .rp-kind-tag.g{color:#3fb0ff;background:rgba(63,176,255,.12);border-color:rgba(63,176,255,.35)}
+  .rp-kind-tag.b{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
 
   .rp-cal-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-sm);
     border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:8px}
@@ -6187,6 +6293,19 @@
     .rp-cal-row .rp-intro-btn{grid-area:intro;justify-self:end}
   }
 
+  /* ---- 2b. the month grid on a narrow screen -------------------------
+     Seven columns is seven columns; the room has to come out of the gaps
+     and the type, not the number of cells. */
+  @media(max-width:400px){
+    .rp-cal-dows,.rp-cal-grid{gap:4px}
+    .rp-cd{min-height:36px;border-radius:8px;gap:2px}
+    .rp-cd-n{font-size:12.5px}
+    .rp-cd-mon{font-size:7px;top:2px}
+    .rp-cd.has-mon{padding-bottom:4px}
+    .rp-cd-dots i{width:4px;height:4px}
+    .rp-cal-key{font-size:9px;gap:5px 11px}
+  }
+
   /* ---- 3. the fixture rows in the draw ------------------------------- */
   @media(max-width:480px){
     .rp-fix{flex-wrap:wrap;row-gap:6px}
@@ -6239,7 +6358,7 @@
     <circle class="ls-ball" cx="150" cy="200" r="9" fill="var(--ball)"/>
   </svg>
   <div class="ls-word">FGTA<span>LADDER</span></div>
-  <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 6</i></div>
+  <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 8</i></div>
 </div>
 
 <!-- ===== APP SHELL: TOP BAR (lives outside .wrap so transforms on .wrap never break its fixed positioning) ===== -->
@@ -6251,7 +6370,7 @@
       <span class="tb-live" id="tagline">loading…</span>
     </div>
     <span class="ffcup-chip" id="ffcupChip" title="Open the FF Cup" role="button" tabindex="0"
-      onclick="openCupEvent()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCupEvent()}"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 6</i></span>
+      onclick="openCupEvent()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCupEvent()}"><b>FF Cup</b><i id="ffcupDates">Aug 17 – Sep 8</i></span>
   </div>
 
   <nav class="tb-tabs" id="topTabs">
@@ -6308,7 +6427,7 @@
    normal self on the next paint; deleting the CSS block is then the only
    cleanup left. */
 (function(){
-  var START='2026-08-17', END='2026-09-06';           // inclusive, local time
+  var START='2026-08-17', END='2026-09-08';           // inclusive, local time
   function at(s,endOfDay){
     var p=s.split('-');
     return new Date(+p[0], p[1]-1, +p[2], endOfDay?23:0, endOfDay?59:0, endOfDay?59:0);
@@ -6326,7 +6445,7 @@
     name:  'FF Cup',
     start: start,          // Date — first day, 00:00 local
     end:   end,            // Date — last day, 23:59 local
-    range: range,          // "Aug 17 – Sep 6"
+    range: range,          // "Aug 17 – Sep 8"
     state: root.dataset.cup
   };
 })();
@@ -16559,10 +16678,38 @@ function rpReportPanel(t, fx, m){
 }
 
 /* ---------- the calendar ----------
-   The event laid out over the days of the cup window: which day each
-   fixture is on, what is on today, and — for an admin — a date picker
-   per fixture plus one button that spreads the whole draw across the
-   window in playing order. */
+   The event as a month grid: the cup window laid out as real weeks,
+   Monday first, so you can see at a glance which days have a game on
+   and which are free. Two lights carry it —
+
+     blue    a day with a 1v1: the group games, and any decider
+     white   a day with a bracket game: semis, third place, the final
+
+   A day with both gets both. Tapping a day writes it out underneath,
+   which is where the walk-in button lives and — for an admin — the
+   date picker that moves a fixture to another day. Anything not yet
+   given a day is listed below that, so nothing can hide from the
+   person doing the scheduling.
+
+   The grid runs from the Monday of the opening week to the Sunday of
+   the closing one, so a cup straddling two months is still one
+   continuous board and a column always means the same weekday. */
+
+/* which of the two lights a fixture is: the bracket proper is white,
+   everything in the round-robin phase (group games and the deciders
+   that settle a tie in it) is blue */
+function rpCalKind(fx){ return fx.kind === "bracket" ? "b" : "g"; }
+
+/* the day the calendar is showing underneath the grid. Held outside the
+   render so it survives the re-render that follows every edit. */
+let rpCalSel = null;
+
+function rpCalSelect(tid, iso){
+  rpCalSel = iso;
+  renderTournamentDetail(tid);
+}
+window.rpCalSelect = rpCalSelect;
+
 function rpCalendarPanel(t){
   const fixtures = rpAllFixtures(t);
   if(!fixtures.length) return "";
@@ -16572,29 +16719,88 @@ function rpCalendarPanel(t){
   const dated  = fixtures.filter(fx => dates[fx.round]);
   const undated= fixtures.filter(fx => !dates[fx.round]);
 
-  const strip = days.map(iso=>{
-    const on = fixtures.filter(fx => dates[fx.round] === iso);
-    const d  = rpDay(iso);
-    return `<div class="rp-cal-day ${on.length?"has":""} ${iso===today?"today":""} ${iso<today?"past":""}"
-      title="${on.length ? on.map(fx=>`${fx.p1||"TBD"} v ${fx.p2||"TBD"}`).join(" · ") : "nothing on"}">
-      <div class="rp-cal-dow">${d.toLocaleDateString(undefined,{weekday:"short"})}</div>
-      <div class="rp-cal-num">${d.getDate()}</div>
-      <div class="rp-cal-dots">${on.map(fx=>`<i class="${rpGame(t.id,fx.round)?"done":""}"></i>`).join("")}</div>
-    </div>`;
-  }).join("");
+  /* every day of the window that has something on it, in playing order */
+  const onDay = iso => fixtures.filter(fx => dates[fx.round] === iso);
 
-  const row = fx=>{
+  /* what the grid opens on: today if the cup is running, else the first
+     day with a game left to play, else the first day of the window */
+  const inWindow = iso => days.indexOf(iso) >= 0;
+  const firstOpen = dated
+    .filter(fx => !rpGame(t.id, fx.round))
+    .map(fx => dates[fx.round])
+    .sort()[0];
+  const sel = (rpCalSel && inWindow(rpCalSel)) ? rpCalSel
+            : inWindow(today) ? today
+            : (firstOpen || days[0] || today);
+
+  /* ---- the grid: whole weeks, Monday first ---- */
+  const first = rpDay(days[0]), last = rpDay(days[days.length-1]);
+  const gridFrom = new Date(first.getTime() - ((first.getDay()+6)%7) * RP_DAY_MS);
+  const gridTo   = new Date(last.getTime()  + (6-(last.getDay()+6)%7) * RP_DAY_MS);
+
+  let cells = "", cursorMonth = null;
+  for(let d = new Date(gridFrom); d <= gridTo; d = new Date(d.getTime() + RP_DAY_MS)){
+    const iso = rpISO(d);
+    const out = !inWindow(iso);
+    if(out){
+      cells += `<div class="rp-cd out" aria-hidden="true"><span class="rp-cd-n">${d.getDate()}</span></div>`;
+      continue;
+    }
+    const on   = onDay(iso);
+    const kinds= new Set(on.map(rpCalKind));
+    const allPlayed = on.length > 0 && on.every(fx => rpGame(t.id, fx.round));
+    /* the month is named on its first day inside the window, so a cup
+       that crosses into September says so on the board itself */
+    const mon  = d.getMonth();
+    const showMonth = mon !== cursorMonth;
+    cursorMonth = mon;
+    const label = on.length
+      ? on.map(fx => `${fx.p1||"TBD"} v ${fx.p2||"TBD"} (${fx.stage})`).join(" · ")
+      : "nothing on";
+    cells += `<button type="button"
+      class="rp-cd ${kinds.has("g")?"has-g":""} ${kinds.has("b")?"has-b":""} ${allPlayed?"done":""}
+             ${iso===today?"today":""} ${iso===sel?"sel":""} ${iso<today?"past":""} ${showMonth?"has-mon":""}"
+      onclick="rpCalSelect(${t.id},'${iso}')"
+      aria-pressed="${iso===sel}"
+      title="${esc(d.toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))} — ${esc(label)}">
+      ${showMonth?`<i class="rp-cd-mon">${d.toLocaleDateString(undefined,{month:"short"})}</i>`:""}
+      <span class="rp-cd-n">${d.getDate()}</span>
+      <span class="rp-cd-dots">${on.slice(0,4).map(fx =>
+        `<i class="${rpCalKind(fx)} ${rpGame(t.id,fx.round)?"done":""}"></i>`).join("")}</span>
+    </button>`;
+  }
+
+  const monthSpan = first.getMonth() === last.getMonth()
+    ? first.toLocaleDateString(undefined,{month:"long",year:"numeric"})
+    : first.toLocaleDateString(undefined,{month:"long"}) + " – " +
+      last.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+
+  const grid = `
+    <div class="rp-cal">
+      <div class="rp-cal-mhead">${esc(monthSpan)}</div>
+      <div class="rp-cal-dows">${["M","T","W","T","F","S","S"].map(x=>`<span>${x}</span>`).join("")}</div>
+      <div class="rp-cal-grid">${cells}</div>
+      <div class="rp-cal-key">
+        <span><i class="g"></i>1v1 — group</span>
+        <span><i class="b"></i>bracket</span>
+        <span><i class="d"></i>played</span>
+      </div>
+    </div>`;
+
+  /* ---- one fixture, as it reads inside a day ---- */
+  const row = (fx, opts)=>{
     const iso  = dates[fx.round] || "";
     const m    = rpGame(t.id, fx.round);
-    const isToday = iso === today;
+    const kind = rpCalKind(fx);
     const names = fx.p1 && fx.p2
       ? `${esc(fx.p1)} <span class="vs">vs</span> ${esc(fx.p2)}`
       : `<span class="pw-dim">${esc(fx.stage)} — players decided by the round before</span>`;
-    return `<div class="rp-cal-row ${isToday && !m ? "today":""} ${m?"done":""}">
-      <span class="rp-cal-when">${iso ? esc(rpWhenLabel(iso)) : "—"}</span>
+    return `<div class="rp-cal-row ${iso===today && !m ? "today":""} ${m?"done":""}">
+      <span class="rp-cal-when"><span class="rp-kind-tag ${kind}">${kind==="b"?"Bracket":"1v1"}</span></span>
       <div class="rp-cal-main">
         ${names}
-        <div class="rp-cal-sub">${esc(fx.label)} · ${esc(fx.stage)}${m?" · played":""}</div>
+        <div class="rp-cal-sub">${esc(fx.label)} · ${esc(fx.stage)}${m?" · played":
+          (opts && opts.undated ? " · no day yet" : "")}</div>
       </div>
       ${isAdmin ? `<input class="rp-date-in" type="date" value="${iso}"
           ${days.length?`min="${days[0]}" max="${days[days.length-1]}"`:""}
@@ -16603,9 +16809,14 @@ function rpCalendarPanel(t){
     </div>`;
   };
 
-  const inOrder = dated.slice().sort((a,b)=>
-    dates[a.round] < dates[b.round] ? -1 : dates[a.round] > dates[b.round] ? 1 :
-    fixtures.indexOf(a) - fixtures.indexOf(b));
+  const selOn = onDay(sel);
+  const selDay = `
+    <div class="rp-cal-day-h">
+      <b>${esc(rpDay(sel).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"}))}</b>
+      <i>${esc(rpWhenLabel(sel))}</i>
+    </div>
+    ${selOn.length ? selOn.map(fx=>row(fx)).join("")
+      : `<div class="rp-cal-empty">Nothing on this day.${isAdmin?" Move a game here with any date picker below.":""}</div>`}`;
 
   const todays = rpTodaysFixture(t);
 
@@ -16616,15 +16827,15 @@ function rpCalendarPanel(t){
       <div class="pred-hint">${isAdmin
         ? "Give every game a day and the event runs itself: the day it comes up, the fixture gets its walk-in — a flight over the city and a versus card for the two players."
         : "The days each game is on. On the day, the fixture opens with its walk-in."}</div>
-      <div class="rp-cal-strip">${strip}</div>
-      ${todays ? `<div class="rp-warn" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ${grid}
+      ${todays ? `<div class="rp-warn" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
         <span><b>Today:</b> ${esc(todays.p1)} vs ${esc(todays.p2)} — ${esc(todays.stage)}.</span>
         <button class="rp-intro-btn" onclick="ffPlayIntro(${t.id},'${rpJs(todays.round)}')">▶ Play the walk-in</button>
       </div>` : ""}
-      ${inOrder.length ? `<div style="margin-top:12px">${inOrder.map(row).join("")}</div>` : ""}
+      ${selDay}
       ${undated.length ? `
         <div class="rp-leg-h">Not on the calendar yet</div>
-        ${undated.map(row).join("")}` : ""}
+        ${undated.map(fx=>row(fx,{undated:true})).join("")}` : ""}
       ${isAdmin ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
           <button class="btn ghost" style="margin:0;width:auto;flex:1 1 180px" onclick="rpAutoSchedule(${t.id})">Spread across the window</button>
