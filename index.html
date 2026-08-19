@@ -5765,6 +5765,223 @@
       0 44px 84px -36px rgba(26,0,14,1)!important;
   }
 
+
+  /* ---- the results board -------------------------------------------
+     The marquee sells the event; this slab reports it. It sits directly
+     under the marquee on the landing page for the length of the cup, so
+     the table, the games and the bracket are on the first screen rather
+     than two taps in behind "Enter the event".
+
+     Deliberately quieter than the marquee above it: the same plum glass,
+     but no filament, no sweep, no horizon. The marquee is the light —
+     two lit slabs stacked would fight, and the one you are meant to READ
+     would lose. Everything here is type on a surface.
+
+     Like every other cup class it is dead markup off-skin: the mount
+     collapses when empty, so the day the skin comes off the landing page
+     is back to the ladder with no gap left behind. */
+  .cup-board-mount:empty{display:none}
+
+  :root[data-skin="ffcup"] .cupboard{
+    position:relative;margin:0 0 24px;padding:20px 22px 22px;
+    border-radius:var(--r-lg);
+    border:1px solid var(--line);
+    background:
+      linear-gradient(180deg, rgba(255,200,230,.045) 0%, rgba(255,120,190,.012) 30%, transparent 70%),
+      linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 55%, #1d0314 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.3),
+      inset 0 -30px 46px -40px rgba(255,45,143,.5),
+      0 34px 66px -34px rgba(26,0,14,.9);
+  }
+
+  /* ---- head: what this is, where the event is, the way in ---- */
+  :root[data-skin="ffcup"] .cupboard-head{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding-bottom:15px;margin-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  :root[data-skin="ffcup"] .cupboard-tag{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:800;
+    letter-spacing:2.4px;text-transform:uppercase;
+    color:var(--hot);text-shadow:0 0 14px rgba(255,45,143,.7);
+  }
+  :root[data-skin="ffcup"] .cupboard-tag i{
+    width:6px;height:6px;border-radius:50%;background:var(--hot);
+    box-shadow:0 0 10px var(--hot), 0 0 22px rgba(255,45,143,.8);
+    animation:hudPulse 2.2s ease-in-out infinite;
+  }
+  /* nothing is still moving once there is a champion — the dot stops
+     rather than promising a game that is never coming */
+  :root[data-skin="ffcup"] .cupboard[data-stage="done"] .cupboard-tag i{animation:none}
+  :root[data-skin="ffcup"] .cupboard-sub{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  /* the way through to the thing you can actually act on. A ghost of the
+     marquee's CTA — same shape, none of the wattage, because the board is
+     the destination now and this is only the footnote to it. */
+  :root[data-skin="ffcup"] .cupboard-more{
+    margin-left:auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    padding:8px 15px;border-radius:var(--r-pill);
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;
+    letter-spacing:2px;text-transform:uppercase;color:var(--ink);
+    border:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+    transition:color .3s ease, border-color .3s ease, background .3s ease;
+  }
+  :root[data-skin="ffcup"] .cupboard-more span{font-size:13px;line-height:1;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+  :root[data-skin="ffcup"] .cupboard-more:hover{
+    color:var(--flare);border-color:rgba(255,226,168,.4);
+    background:linear-gradient(180deg, rgba(255,45,143,.16), rgba(255,45,143,.04));
+  }
+  :root[data-skin="ffcup"] .cupboard-more:hover span{transform:translateX(3px)}
+
+  /* ---- two columns on a desk, one stack on a phone ---- */
+  :root[data-skin="ffcup"] .cupboard-grid{
+    display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;
+  }
+  :root[data-skin="ffcup"] .cupboard-col{min-width:0}
+  :root[data-skin="ffcup"] .cb-h{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:800;
+    letter-spacing:2.4px;text-transform:uppercase;color:var(--muted);
+    margin:0 0 10px;
+  }
+  :root[data-skin="ffcup"] .cb-empty{
+    padding:16px 0;font-family:'JetBrains Mono',monospace;
+    font-size:10px;letter-spacing:1.2px;color:var(--dim);
+  }
+
+  /* ---- the table ---- */
+  :root[data-skin="ffcup"] .cb-table{
+    width:100%;border-collapse:collapse;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink);
+  }
+  :root[data-skin="ffcup"] .cb-table th{
+    padding:0 6px 7px;text-align:right;white-space:nowrap;
+    font-size:8px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--dim);border-bottom:1px solid var(--line);
+  }
+  :root[data-skin="ffcup"] .cb-table th:nth-child(2){text-align:left}
+  :root[data-skin="ffcup"] .cb-table td{
+    padding:8px 6px;border-bottom:1px solid var(--line-soft);vertical-align:middle;
+  }
+  :root[data-skin="ffcup"] .cb-table tr:last-child td{border-bottom:0}
+  :root[data-skin="ffcup"] .cb-pos{width:20px;color:var(--dim);font-size:10px}
+  :root[data-skin="ffcup"] .cb-nm{
+    font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;width:100%;
+  }
+  :root[data-skin="ffcup"] .cb-num{text-align:right;white-space:nowrap;color:var(--muted);font-size:10.5px}
+  /* who is through, who is on the bubble, who is gone — the row itself
+     carries the state, so the table reads without a legend */
+  :root[data-skin="ffcup"] .cb-table tr.in    .cb-nm{color:var(--ink)}
+  :root[data-skin="ffcup"] .cb-table tr.in    .cb-pos{color:var(--hot);text-shadow:0 0 10px rgba(255,45,143,.6)}
+  :root[data-skin="ffcup"] .cb-table tr.out   .cb-nm,
+  :root[data-skin="ffcup"] .cb-table tr.out   .cb-num{color:var(--dim)}
+  :root[data-skin="ffcup"] .cb-table tr.bubble .cb-pos{color:var(--sun)}
+  /* the cut is a line you can see, not a note underneath the table */
+  :root[data-skin="ffcup"] .cb-table tr.cut td{border-bottom:1px dashed rgba(255,45,143,.5)}
+  :root[data-skin="ffcup"] .cb-state{
+    margin-left:8px;padding:2px 7px 3px;border-radius:var(--r-pill);
+    font-size:7.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    border:1px solid var(--line);color:var(--muted);
+  }
+  :root[data-skin="ffcup"] .cb-state.in,
+  :root[data-skin="ffcup"] .cb-state.seed{
+    color:var(--hot);border-color:rgba(255,45,143,.45);background:rgba(255,45,143,.1);
+  }
+  :root[data-skin="ffcup"] .cb-state.bubble{
+    color:var(--sun);border-color:rgba(255,138,43,.45);background:rgba(255,138,43,.1);
+  }
+  :root[data-skin="ffcup"] .cb-state.out{color:var(--dim)}
+
+  /* ---- the bracket, flattened to one line per tie ---- */
+  :root[data-skin="ffcup"] .cb-tie{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 11px;margin-bottom:7px;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+  }
+  /* the tie being played now is the only one with any light on it */
+  :root[data-skin="ffcup"] .cb-tie.live{
+    border-color:rgba(255,45,143,.45);
+    box-shadow:inset 0 0 26px -12px rgba(255,45,143,.7);
+  }
+  :root[data-skin="ffcup"] .cb-tie-l{
+    flex:none;width:34px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;
+    letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+  }
+  :root[data-skin="ffcup"] .cb-tie-slots{
+    display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto;
+  }
+  :root[data-skin="ffcup"] .cb-slot{
+    display:flex;align-items:baseline;gap:7px;min-width:0;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  :root[data-skin="ffcup"] .cb-slot i{
+    font-style:normal;font-size:8px;letter-spacing:1px;color:var(--dim);flex:none;min-width:14px;
+  }
+  :root[data-skin="ffcup"] .cb-slot.win{color:var(--ink);font-weight:800}
+  :root[data-skin="ffcup"] .cb-slot.lose{color:var(--dim)}
+  :root[data-skin="ffcup"] .cb-slot.tbd{color:var(--dim);opacity:.7}
+  :root[data-skin="ffcup"] .cb-tie-s{
+    flex:none;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    letter-spacing:.6px;color:var(--dim);
+  }
+
+  /* ---- what has been played ---- */
+  :root[data-skin="ffcup"] .cb-res{
+    display:flex;align-items:center;gap:11px;
+    padding:8px 0;border-bottom:1px solid var(--line-soft);
+  }
+  :root[data-skin="ffcup"] .cb-res:last-child{border-bottom:0;padding-bottom:0}
+  :root[data-skin="ffcup"] .cb-res-n{
+    flex:none;min-width:30px;padding:3px 7px 4px;border-radius:var(--r-pill);text-align:center;
+    border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;
+    letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);
+  }
+  :root[data-skin="ffcup"] .cb-res-main{min-width:0;flex:1 1 auto}
+  :root[data-skin="ffcup"] .cb-res-line{
+    font-size:12.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  :root[data-skin="ffcup"] .cb-res-line b{color:var(--ink);font-weight:800}
+  :root[data-skin="ffcup"] .cb-res-line .vs{color:var(--dim);font-size:10.5px}
+  :root[data-skin="ffcup"] .cb-res-meta{
+    margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);
+  }
+
+  /* ---- the one moment the board is allowed to shout ---- */
+  :root[data-skin="ffcup"] .cb-champ{
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:14px 16px;margin-bottom:16px;border-radius:var(--r-md);
+    border:1px solid rgba(255,226,168,.35);
+    background:linear-gradient(180deg, rgba(255,45,143,.18), rgba(255,138,43,.06));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 0 34px -16px var(--accent-glow);
+  }
+  :root[data-skin="ffcup"] .cb-champ-t{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:800;
+    letter-spacing:2.4px;text-transform:uppercase;color:var(--flare);
+  }
+  :root[data-skin="ffcup"] .cb-champ-n{
+    font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:800;
+    letter-spacing:1.6px;color:var(--ink);text-shadow:0 0 20px rgba(255,45,143,.55);
+  }
+
+  @media(max-width:760px){
+    :root[data-skin="ffcup"] .cupboard{padding:16px 15px 18px}
+    :root[data-skin="ffcup"] .cupboard-grid{grid-template-columns:minmax(0,1fr);gap:20px}
+    :root[data-skin="ffcup"] .cupboard-more{margin-left:0;width:100%;justify-content:center}
+    :root[data-skin="ffcup"] .cupboard-sub{white-space:normal}
+    :root[data-skin="ffcup"] .cb-table{font-size:11px}
+  }
+
   @media(max-width:560px){
     :root[data-skin="ffcup"] .cup-cd{gap:6px}
     :root[data-skin="ffcup"] .cup-cd-cell{padding:10px 3px 8px}
@@ -5801,6 +6018,7 @@
     :root[data-skin="ffcup"] .cupmark-status i,
     :root[data-skin="ffcup"] .cup-cd-cell[data-unit="s"] b,
     :root[data-skin="ffcup"] .cup-step.now::after,
+    :root[data-skin="ffcup"] .cupboard-tag i,
     :root[data-skin="ffcup"] .cup-flag,
     :root[data-skin="ffcup"] #hudGrid::before,
     :root[data-skin="ffcup"] #hudGrid::after{animation:none!important}
@@ -6519,6 +6737,7 @@
   <div id="view-feed" style="display:none">
     <!-- the cup outranks the timeline: nothing renders above this while the event is on -->
     <div class="cup-mount" data-cup-mount="full"></div>
+    <div class="cup-board-mount"></div>
     <div id="otdBox" style="display:none"></div>
     <div id="tickerWrap" class="ticker-wrap" style="display:none">
       <span class="ticker-live">● LIVE</span>
@@ -6622,6 +6841,10 @@
   <!-- ===== FF CUP MARQUEE — sits above the broadcast hero, i.e. above
        everything else on the landing page, for the length of the event ===== -->
   <div class="cup-mount" data-cup-mount="full"></div>
+  <!-- ...and the results directly under it, so the cup's table, games and
+       bracket are on the landing page rather than behind "Enter the event".
+       Empty markup off-skin, like the marquee — see THE RESULTS BOARD. -->
+  <div class="cup-board-mount"></div>
 
   <!-- ===== UPCOMING MATCH BROADCAST (compact, above the hero) ===== -->
   <div id="upcomingBcast"></div>
@@ -17555,6 +17778,208 @@ function cupMarqueeHtml(t, variant){
   </div>`;
 }
 
+/* ============================================================
+   FF CUP — THE RESULTS BOARD
+
+   The marquee promotes the event; this one shows it. For the length
+   of the cup the landing page carries the live table, the games that
+   have actually been played and the bracket as it fills in, so the
+   result of a cup game is on the first screen you open rather than
+   two taps away behind "Enter the event".
+
+   Read-only by design. No report panel, no admin control, no second
+   copy of the state: every number here is read from the same
+   rpSnapshot() the event page renders from, so the board and the
+   bracket can never disagree. Anything you can do with a result is
+   still done inside Events — the CTA in the header is the way there.
+
+   It is temporary in exactly the way the marquee is. It renders only
+   while the skin is on, into mounts that are inert markup off-skin,
+   so the day after the final — when the FF CUP WINDOW script drops
+   data-skin — the board empties itself on the next paint and the
+   landing page is back to the ladder with nothing to undo.
+   ============================================================ */
+
+const CUP_BOARD_RESULTS = 6;      // how many played games the board carries
+
+const CUP_BOARD_STAGE = {
+  setup:"Field", group:"Group stage", playoff:"Qualification decider",
+  semis:"Semifinals", final:"Final", done:"Complete"
+};
+
+/* a round key, said out loud — the board mixes group and knockout
+   games in one list, so each row has to say which it was */
+function cupRoundLabel(round){
+  const r = String(round || "");
+  if(r === "final")  return "Final";
+  if(r === "bronze") return "3rd";
+  if(r.indexOf("semi") === 0) return "SF" + r.slice(4);
+  if(r.indexOf(RP_ROUND_QUAL)  === 0) return "Dec";
+  if(r.indexOf(RP_ROUND_GROUP) === 0) return "G" + r.slice(RP_ROUND_GROUP.length);
+  return r ? r.slice(0,4) : "—";
+}
+
+/* the table. Robin+ hands over its own ranked rows — the ones that
+   decide the cut — so the board never re-implements the ordering;
+   anything else falls back to the plain per-tournament record. */
+function cupBoardTable(t, snap){
+  const qual = snap && snap.qual;
+  if(qual && qual.rows && qual.rows.length){
+    const drr     = rpShapeOf(snap.state) === "drr";
+    const each    = rpGamesEach(snap.state);
+    const spots   = qual.spots;
+    const bubble  = new Set(qual.bubble ? qual.bubble.tied : []);
+    const through = new Set(qual.qualified.concat((snap.resolved && snap.resolved.through) || []));
+    const settled = !qual.bubble || !!(snap.resolved && snap.resolved.done);
+
+    const body = qual.rows.map((r,i)=>{
+      let cls = "", badge = "";
+      if(!qual.complete){
+        cls = i < spots ? "in" : "out";                     // provisional line only
+      } else if(drr){
+        cls = "in"; badge = `<span class="cb-state seed">#${i+1}</span>`;
+      } else if(!settled && bubble.has(r.name) && !through.has(r.name)){
+        cls = "bubble"; badge = '<span class="cb-state bubble">playoff</span>';
+      } else if(through.has(r.name)){
+        cls = "in"; badge = '<span class="cb-state in">through</span>';
+      } else {
+        cls = "out"; badge = '<span class="cb-state out">out</span>';
+      }
+      const gd = r.gw - r.gl;
+      return `<tr class="${cls}${(!drr && i === spots-1) ? " cut" : ""}">
+        <td class="cb-pos">${i+1}</td>
+        <td class="cb-nm">${esc(r.name)}${badge}</td>
+        <td class="cb-num">${r.w}-${r.l}${r.d?"-"+r.d:""}</td>
+        <td class="cb-num">${r.played}/${each}</td>
+        <td class="cb-num">${gd>0?"+":""}${gd}</td>
+      </tr>`;
+    }).join("");
+
+    return `<table class="cb-table">
+      <tr><th></th><th>Player</th><th>W-L</th><th>Pld</th><th>Diff</th></tr>
+      ${body}</table>`;
+  }
+
+  const rows = tournStandings(t.id);
+  if(!rows.length) return "";
+  return `<table class="cb-table">
+    <tr><th></th><th>Player</th><th>W-L</th><th>Sets</th></tr>
+    ${rows.map((p,i)=>`<tr>
+      <td class="cb-pos">${i+1}</td>
+      <td class="cb-nm">${esc(p.name)}</td>
+      <td class="cb-num">${p.w}-${p.l}${p.d?"-"+p.d:""}</td>
+      <td class="cb-num">${p.setsW}-${p.setsL}</td>
+    </tr>`).join("")}</table>`;
+}
+
+/* the bracket, flattened to four lines — the full drawing lives on
+   the event page; this is only meant to say who is left */
+function cupBoardBracket(t, snap){
+  if(!snap || !snap.br) return "";
+  const br = snap.br;
+  const seedNo = n => { const i = br.seeds.indexOf(n); return i < 0 ? "" : "#"+(i+1); };
+
+  const tie = (g, label) => {
+    const slot = nm => {
+      if(!nm) return '<span class="cb-slot tbd">TBD</span>';
+      const cls = g.winner ? (g.winner === nm ? "win" : "lose") : "";
+      return `<span class="cb-slot ${cls}"><i>${seedNo(nm)}</i>${esc(nm)}</span>`;
+    };
+    const live = !g.m && g.p1 && g.p2;
+    return `<div class="cb-tie${g.m ? " done" : (live ? " live" : "")}">
+      <span class="cb-tie-l">${label}</span>
+      <div class="cb-tie-slots">${slot(g.p1)}${slot(g.p2)}</div>
+      ${g.m && g.m.sets ? `<span class="cb-tie-s">${esc(rpSetsFor(g.m, g.p1))}</span>` : ""}
+    </div>`;
+  };
+
+  return `<div class="cb-bracket">
+    ${tie(br.semis[0], "SF1")}${tie(br.semis[1], "SF2")}${tie(br.final, "Final")}
+    ${snap.state && snap.state.bronze ? tie(br.bronze, "3rd") : ""}
+  </div>`;
+}
+
+/* what has been played, newest first — the winner leads the line and
+   the score follows in that order, same as everywhere else */
+function cupBoardResults(t){
+  const games = tournGames(t.id).slice().reverse().slice(0, CUP_BOARD_RESULTS);
+  if(!games.length) return "";
+  return games.map(m=>{
+    const o = Number(m.outcome);
+    const leads = o === 0 ? m.p2 : m.p1;
+    const line = o === 0.5
+      ? `<b>${esc(m.p1)}</b> <span class="vs">drew</span> <b>${esc(m.p2)}</b>`
+      : `<b>${esc(o===1 ? m.p1 : m.p2)}</b> <span class="vs">beat</span> ${esc(o===1 ? m.p2 : m.p1)}`;
+    const sets = m.sets ? esc(rpSetsFor(m, leads)) : "";
+    return `<div class="cb-res">
+      <span class="cb-res-n">${esc(cupRoundLabel(m.round))}</span>
+      <div class="cb-res-main">
+        <div class="cb-res-line">${line}</div>
+        <div class="cb-res-meta">${sets ? sets + " · " : ""}${when(m.created_at)}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function cupBoardHtml(t){
+  if(!t) return "";
+  /* before the first ball there is nothing to report and the marquee
+     already carries the countdown — the board stays out of the way */
+  if(cupPhase(t) === "pre") return "";
+
+  let snap = null;
+  if(t.format === "robin2"){ try{ snap = rpSnapshot(t); }catch(e){ snap = null; } }
+
+  const games  = tournGames(t.id);
+  const table  = cupBoardTable(t, snap);
+  if(!games.length && !table) return "";
+
+  const stage  = snap ? snap.stage : (t.status === "completed" ? "done" : null);
+  const champ  = (snap && snap.br && snap.br.final.winner) || (t.status === "completed" ? t.champion : null);
+  const total  = snap && snap.state && snap.state.order ? snap.state.order.length : 0;
+  const played = snap && snap.state && snap.state.order
+    ? snap.state.order.filter(fx => rpGame(t.id, fx.round)).length : games.length;
+
+  const bits = [];
+  if(stage && CUP_BOARD_STAGE[stage]) bits.push(CUP_BOARD_STAGE[stage]);
+  bits.push(total ? `${played}/${total} group games` : `${games.length} game${games.length!==1?"s":""} played`);
+
+  const bracket = cupBoardBracket(t, snap);
+  const results = cupBoardResults(t);
+
+  return `<div class="cupboard"${stage?` data-stage="${stage}"`:""}>
+    <div class="cupboard-head">
+      <span class="cupboard-tag"><i></i>${champ ? "Final result" : "Live results"}</span>
+      <span class="cupboard-sub">${esc(bits.join(" · "))}</span>
+      <button class="cupboard-more" onclick="openCupEvent()">Full event<span>&rsaquo;</span></button>
+    </div>
+
+    ${champ ? `<div class="cb-champ"><span class="cb-champ-t">Champion</span>
+      <span class="cb-champ-n">🏆 ${esc(champ)}</span></div>` : ""}
+
+    <div class="cupboard-grid">
+      ${table ? `<section class="cupboard-col">
+        <div class="cb-h">${snap ? (rpShapeOf(snap.state) === "drr" ? "Group table" : "The ring") : "Standings"}</div>
+        ${table}
+      </section>` : ""}
+      <section class="cupboard-col">
+        ${bracket ? `<div class="cb-h">Bracket</div>${bracket}` : ""}
+        ${results ? `<div class="cb-h"${bracket?' style="margin-top:16px"':""}>Latest results</div>${results}` : ""}
+        ${!bracket && !results ? '<div class="cb-empty">No games on record yet.</div>' : ""}
+      </section>
+    </div>
+  </div>`;
+}
+
+/* the board rides the marquee's lifecycle exactly — same skin gate,
+   same render pass, so the two can never be on screen apart */
+function renderCupBoard(t){
+  const mounts = document.querySelectorAll(".cup-board-mount");
+  if(!mounts.length) return;
+  const html = cupSkinOn() ? cupBoardHtml(t) : "";
+  mounts.forEach(m=>{ m.innerHTML = html; });
+}
+
 let cupClock = null, cupLastPhase = null;
 
 function renderCupMarquee(){
@@ -17563,6 +17988,7 @@ function renderCupMarquee(){
   /* off-skin the whole thing evaporates — no cup, no promotion, no markup */
   if(!cupSkinOn()){
     mounts.forEach(m=>{ m.innerHTML = ""; });
+    renderCupBoard(null);
     const sheetLine = $("msCupLine"); if(sheetLine) sheetLine.textContent = "";
     return;
   }
@@ -17571,6 +17997,8 @@ function renderCupMarquee(){
   mounts.forEach(m=>{
     m.innerHTML = cupMarqueeHtml(t, m.getAttribute("data-cup-mount") === "mini" ? "mini" : "full");
   });
+  /* the results ride along on the same pass — see THE RESULTS BOARD */
+  renderCupBoard(t);
   const sheetLine = $("msCupLine");
   if(sheetLine){
     sheetLine.textContent = cupLastPhase === "pre"
