@@ -8,7 +8,7 @@
  * Bump VERSION on deploys that change what's precached; it's what forces old
  * caches to be dropped on activate.
  */
-const VERSION = "2026-08-19c";
+const VERSION = "2026-08-24a";
 const CACHE = `fgta-shell-${VERSION}`;
 const SHELL_URLS = [
   "/",
@@ -39,7 +39,17 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // cross-origin (Supabase, fonts, YouTube, API) - not our job
+  if (url.origin !== self.location.origin) return; // cross-origin (Supabase, fonts, YouTube) - not our job
+
+  /* The Netlify functions are live answers, not shell assets, and they were
+     landing in the shell cache: an /api/youtube response sat there next to
+     the icons, matchable by the cache-first branch below and never dropped
+     until the next VERSION bump. "What is live on the channel right now" is
+     the one answer that must never come out of a cache the app cannot see
+     the age of. Let it go straight to the network, where the function's own
+     cache headers, its stale-answer fallback and the CDN already do the
+     right thing. */
+  if (url.pathname.startsWith("/api/")) return;
 
   const isNavigation = req.mode === "navigate" || req.destination === "document";
 

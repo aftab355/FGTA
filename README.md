@@ -32,16 +32,37 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
   - Live celebrations: 8-8 in a game triggers a full-screen rainbow/confetti overlay; a game win shows a gold banner with the game number; a set win shows a flame overlay.
   - **Submit toward**: a tracked game files to the ladder by default, but a "Submit toward" picker on both the setup screen and the wrap-up lets the ref file it under any unfinished event instead — the FF Cup leads the list while it's on. Picking an event sets `matches.tournament_id`, the same field the admin tournament screens write, so the event page and the draw pick the game up with nothing new downstream. Whether the game *also* moves Elo is the event's own `counts_elo` flag rather than a second switch, so the two can never disagree: an exhibition cup files the result and leaves ratings alone. When the two players are an unplayed fixture in that event's draw, the round is attached too and the result slots straight into the bracket on approval. The choice is remembered between matches (a ref working a cup reffs the whole cup) and frozen onto the match at start, so resuming a draft can't re-file it under a target picked for a later game.
   - "Ref mode" pill badge next to the section title.
-  - Built-in livestream panel: the match is broadcast from **OBS to YouTube
-    Live**, and the app embeds the resulting stream (YouTube IFrame API) with
-    the FGTA layer wrapped around it — live chat, ref-mode scoring from any
-    device, a live-match directory, and fullscreen with chat/ref drawers over
-    the picture. Any number of viewers, no relay, and the VOD stays on
-    YouTube for free once the match ends.
-    - "Set up a broadcast" is a four-step checklist, not a button: it mints a
-      session code, links the YouTube video, and hands over the OBS settings.
-      Nothing about the stream itself is controlled from the browser — camera,
-      mic, framing, zoom and filters are all OBS's job now.
+  - Built-in livestream panel: the match is broadcast from **a phone streaming
+    app (Larix, Streamlabs, Prism) or OBS to YouTube Live**, and the app embeds
+    the resulting stream (YouTube IFrame API) with the FGTA layer wrapped
+    around it — live chat, ref-mode scoring from any device, a live-match
+    directory, and fullscreen with chat/ref drawers over the picture. Any
+    number of viewers, no relay, and the VOD stays on YouTube for free once
+    the match ends.
+    - **Nothing has to be set up to go live.** Point the phone app at YouTube
+      and the site finds the broadcast on its own within a poll: a red **LIVE
+      NOW** strip appears at the top of every view (`.live-mount`, rendered by
+      `renderLiveMarquee()`), one tap from the picture, with no scoring, no
+      session code and nobody's phone that has to stay on the page. The poll
+      runs from wherever you are in the app rather than only the Point
+      Tracker, and costs no extra quota — the answer is cached in the function
+      and again at the CDN.
+    - "Set up a broadcast" is the checklist for a *scored* stream: it mints a
+      session code, hands over the app/OBS settings, and then **links itself**
+      to the broadcast YouTube publishes — deliberately only one that started
+      after the panel was opened, that nobody else is announcing, and that is
+      the only candidate; anything else is a tap or a pasted link, and a
+      deliberate unlink is never overruled. Nothing about the stream itself is
+      controlled from the browser — camera, mic, framing, zoom and filters are
+      all the streaming app's job now.
+    - **Three ways the video survives**, described in full in
+      `docs/youtube-live.md`: YouTube's own VOD (checked for real when the
+      broadcast is closed); a `stream_log` table every client writes to, so a
+      match stays findable after `/api/youtube`'s 25-upload window has moved
+      on and so unlisted streams are recorded at all (`docs/streams.sql`,
+      entirely optional — without it the app just has a shorter memory); and
+      the local recording the streaming app makes on the phone while it
+      streams, which is the copy that survives the upload dropping.
     - **The scoreboard overlay** (`overlay.html?code=XXXXX`) is an OBS Browser
       Source: a transparent page rendering the same score bug the old stream
       composited on-device, driven live off the ref's taps over Supabase
@@ -54,7 +75,12 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
       it.
     - `/api/youtube` (a Netlify function holding the API key) answers "what is
       live on the channel right now", cached and quota-conscious; see
-      `docs/youtube-live.md` for the full setup and the quota arithmetic.
+      `docs/youtube-live.md` for the full setup and the quota arithmetic. When
+      Google doesn't answer at all — quota gone, a 500, a DNS wobble — it
+      serves the last answer it actually confirmed (up to six hours) marked as
+      such, retrying a transient 5xx once first, so the listing doesn't empty
+      out mid-match; the client backs off its polling on repeated failures and
+      re-asks the moment the tab comes back to the foreground.
   - Live score "bug" overlay and a Match Point tension banner when the score is close.
 - **Archive**: past-match history, editable "fix a game" flow that lets you flip a game's recorded winner if the point math still supports it, CSV export. Each match card also has **AI commentary** and **AI roast** buttons, backed by `/api/ai` (a Netlify function holding the Anthropic key — same pattern as `/api/youtube`); needs `ANTHROPIC_API_KEY` set on the deploy, and says so plainly instead of looking broken if it isn't.
   - **Rally reel** — any match scored point-by-point can be played back with
@@ -245,7 +271,8 @@ No custom illustrations or photography — avatars are generated from initials (
 - overlay.html — the OBS Browser Source that burns the live scoreboard into the broadcast. Standalone by design: it loads nothing from index.html, so an unrelated change to the app can never break the graphic that is going out live.
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
-- docs/youtube-live.md — how to set streaming up, once for the league and once per match.
+- docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
+- docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
 - docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.

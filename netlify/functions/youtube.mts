@@ -33,9 +33,17 @@ const API = "https://www.googleapis.com/youtube/v3";
 
 const LIVE_TTL_MS = 45_000;      // matches the client's poll interval
 const ARCHIVE_TTL_MS = 600_000;  // finished broadcasts don't move
+const STALE_MAX_MS = 6 * 3_600_000;  // how long a last-good answer is still worth serving
 
 type CacheEntry = { at: number; body: unknown };
 const cache = new Map<string, CacheEntry>();
+/* The last answer that actually came back from YouTube, kept far longer than
+   the fresh cache. Quota running out, a 500 from Google or a DNS blip used to
+   turn "who is live" into an error, i.e. an empty panel in the middle of a
+   match. A six-hour-old answer that says "this video is live" is a better
+   thing to show than nothing at all — it is labelled `stale` so the app can
+   say when it was last confirmed. */
+const lastGood = new Map<string, CacheEntry>();
 let uploadsPlaylistId: string | null = null;
 let channelTitle = "";
 
@@ -43,6 +51,26 @@ function cached(key: string, ttl: number): unknown | null {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < ttl) return hit.body;
   return null;
+}
+
+/** One place to write both caches, so nothing is ever fresh but unremembered. */
+function remember(key: string, body: unknown) {
+  const entry = { at: Date.now(), body };
+  cache.set(key, entry);
+  lastGood.set(key, entry);
+}
+
+/** The last confirmed answer for this key, if it is not yet ancient. */
+function stale(key: string, reason: string, detail: string) {
+  const hit = lastGood.get(key);
+  if (!hit || Date.now() - hit.at > STALE_MAX_MS) return null;
+  return {
+    ...(hit.body as Record<string, unknown>),
+    stale: true,
+    staleSince: hit.at,
+    staleReason: reason || "upstream",
+    staleDetail: detail,
+  };
 }
 
 function json(body: unknown, maxAge: number) {
@@ -56,9 +84,25 @@ function json(body: unknown, maxAge: number) {
   });
 }
 
+/* A single retry, and only for the failures a retry can actually fix: a
+   dropped connection or one of Google's own 5xx. A 403 (quota, bad key) is
+   the same answer twice, and retrying it just spends the allowance faster. */
+async function fetchOnce(url: string) {
+  try {
+    return await fetch(url);
+  } catch (e) {
+    return null;
+  }
+}
 async function api(path: string, params: Record<string, string>, key: string) {
   const qs = new URLSearchParams({ ...params, key });
-  const res = await fetch(`${API}/${path}?${qs}`);
+  const url = `${API}/${path}?${qs}`;
+  let res = await fetchOnce(url);
+  if (!res || res.status >= 500) {
+    await new Promise((r) => setTimeout(r, 400));
+    res = (await fetchOnce(url)) || res;
+  }
+  if (!res) throw Object.assign(new Error(`youtube ${path} unreachable`), { reason: "network" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let reason = "";
@@ -152,7 +196,7 @@ export default async (req: Request) => {
       if (hit) return json(hit, 30);
       const video = await oneVideo(id, key);
       const body = { video, channelId, channelTitle, updatedAt: Date.now() };
-      cache.set("video:" + id, { at: Date.now(), body });
+      remember("video:" + id, body);
       return json(body, 30);
     }
 
@@ -172,7 +216,7 @@ export default async (req: Request) => {
         .sort((a, b) => String(b.endedAt).localeCompare(String(a.endedAt)))
         .slice(0, 12);
       const body = { archive, channelId, channelTitle, updatedAt: Date.now() };
-      cache.set("archive", { at: Date.now(), body });
+      remember("archive", body);
       return json(body, 300);
     }
 
@@ -190,17 +234,24 @@ export default async (req: Request) => {
       channelTitle,
       updatedAt: Date.now(),
     };
-    cache.set("live", { at: Date.now(), body });
+    remember("live", body);
     return json(body, 30);
   } catch (e: any) {
     // quotaExceeded is the one worth naming: it is temporary, it resets at
     // midnight Pacific, and the app says so instead of "couldn't reach YouTube".
     const reason = e?.reason || "";
     const quota = reason === "quotaExceeded" || reason === "rateLimitExceeded";
-    return json(
-      { error: quota ? "quota" : "upstream", reason, detail: String(e?.message || e) },
-      quota ? 300 : 15,
-    );
+    const detail = String(e?.message || e);
+    // Whatever went wrong upstream, an answer this instance has already
+    // confirmed beats no answer — a match that is on the air stays findable
+    // through a quota reset or a Google wobble.
+    const key =
+      action === "video" ? "video:" + (url.searchParams.get("id") || "").trim()
+      : action === "archive" ? "archive"
+      : "live";
+    const old = stale(key, quota ? "quota" : reason, detail);
+    if (old) return json(old, 30);
+    return json({ error: quota ? "quota" : "upstream", reason, detail }, quota ? 300 : 15);
   }
 };
 
