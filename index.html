@@ -3393,6 +3393,26 @@
   .bcast-queue-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;
     border-top:1px solid var(--line-soft);color:var(--muted);cursor:pointer}
   .bcast-queue-row:hover{color:var(--ink)}
+  /* ---- LIVE NOW strip -------------------------------------------------
+     The same furniture as the upcoming-face-off banner, in broadcast red
+     rather than ball yellow, mounted at the top of every view. It only
+     exists while something is actually on air, so it never occupies space
+     on an ordinary day. */
+  .live-marquee{margin-top:18px}
+  .live-marquee:hover{border-color:color-mix(in srgb, var(--danger) 45%, var(--line))}
+  .live-mq-title{flex:1;min-width:0;letter-spacing:.6px;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
+  @media(max-width:560px){
+    .live-marquee{margin-top:12px}
+    .live-marquee .bcast-strip{gap:9px;padding:11px 14px}
+    .live-mq-title{font-size:11px;letter-spacing:.4px}
+    /* the hero's meta is decoration and hides on a phone; this one is the
+       tap target that says what the strip does, so it stays */
+    .live-marquee .bcast-meta{display:inline-flex;font-size:11px;padding:5px 11px}
+  }
+  /* on a phone the pill and the match name are fighting over the same
+     inch — the name wins, and the viewer count is a tap away anyway */
+  @media(max-width:560px){ .live-mq-count{display:none} }
   .sched-count-big{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:26px;letter-spacing:.5px;
     text-align:center;padding:16px;margin:16px 0;border-radius:var(--r-md);
     border:1px solid var(--line);color:var(--accent);background:var(--panel-2)}
@@ -6519,6 +6539,7 @@
   <div id="view-feed" style="display:none">
     <!-- the cup outranks the timeline: nothing renders above this while the event is on -->
     <div class="cup-mount" data-cup-mount="full"></div>
+    <div class="live-mount"></div>
     <div id="otdBox" style="display:none"></div>
     <div id="tickerWrap" class="ticker-wrap" style="display:none">
       <span class="ticker-live">● LIVE</span>
@@ -6622,6 +6643,7 @@
   <!-- ===== FF CUP MARQUEE — sits above the broadcast hero, i.e. above
        everything else on the landing page, for the length of the event ===== -->
   <div class="cup-mount" data-cup-mount="full"></div>
+  <div class="live-mount"></div>
 
   <!-- ===== UPCOMING MATCH BROADCAST (compact, above the hero) ===== -->
   <div id="upcomingBcast"></div>
@@ -6905,6 +6927,7 @@
   <!-- ===== MATCHES VIEW ===== -->
   <div id="view-matches" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
     <section>
       <div class="sec-label">All matches <span class="count-pill" id="allCount">0</span></div>
       <div class="match-filter">
@@ -6962,6 +6985,7 @@
   <!-- ===== PREDICT: FORECAST SUB-VIEW ===== -->
   <div id="view-predict-forecast" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
 
     <section>
       <div class="sec-label">Hypothetical ladder <span class="pred-tag">What-if</span></div>
@@ -7360,6 +7384,7 @@
   <!-- ===== PRO VIEW ===== -->
   <div id="view-pro" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
     <div id="proBody"></div>
   </div><!-- /view-pro -->
 
@@ -7417,6 +7442,7 @@
   <!-- ===== EVENTS VIEW ===== -->
   <div id="view-events" style="display:none">
     <div class="cup-mount" data-cup-mount="full"></div>
+    <div class="live-mount"></div>
     <section id="newTournSec" style="display:none">
       <div class="sec-label">New tournament</div>
       <div class="panel">
@@ -7456,6 +7482,7 @@
   <!-- ===== DOUBLES VIEW ===== -->
   <div id="view-doubles" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
     <section>
       <div class="sec-label">Report a doubles match</div>
       <div class="panel">
@@ -7488,6 +7515,7 @@
   <!-- ===== TRAINING VIEW ===== -->
   <div id="view-training" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
     <section>
       <div class="sec-label">Log a casual session</div>
       <div class="panel">
@@ -7542,6 +7570,7 @@
   <!-- ===== COURT VIEW ===== -->
   <div id="view-court" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
     <section style="margin-top:24px">
       <div class="sec-label">Court status <span class="count-pill" id="ctFresh">—</span></div>
       <div id="ctHero"></div>
@@ -11472,7 +11501,9 @@ window.ptCopy=ptCopy;
    spending the league's daily quota.
    ============================================================ */
 const PT_LIVE_POLL_MS=45000;
-let PTLive={live:[], upcoming:[], archive:null, channelId:'', channelTitle:'', error:null, detail:'', at:0, loading:false};
+const PT_LIVE_POLL_MAX_MS=600000;   // the slowest this ever backs off to
+let PTLive={live:[], upcoming:[], archive:null, channelId:'', channelTitle:'', error:null, detail:'', at:0, loading:false,
+            stale:false, staleSince:0, fails:0, wait:PT_LIVE_POLL_MS};
 let ptLivePollTimer=null;
 
 async function ptLiveApi(params){
@@ -11481,11 +11512,23 @@ async function ptLiveApi(params){
   if(!res.ok) throw new Error('api '+res.status);
   return res.json();
 }
+/* How long to wait before the next attempt. Steady state is the poll
+   interval; a run of failures backs off geometrically so a deploy with no
+   API key, or an exhausted quota, isn't asked the same question every 45
+   seconds all day. A "not configured" answer will not change without
+   somebody editing Netlify, so it waits the longest. */
+function ptLiveBackoff(errored){
+  if(!errored){ PTLive.fails=0; PTLive.wait=PT_LIVE_POLL_MS; return; }
+  PTLive.fails++;
+  PTLive.wait = PTLive.error==='not_configured'
+    ? PT_LIVE_POLL_MAX_MS
+    : Math.min(PT_LIVE_POLL_MAX_MS, PT_LIVE_POLL_MS*Math.pow(2, Math.min(PTLive.fails,4)));
+}
 /* force=true is a user tapping "refresh" — it bypasses the local throttle but
    not the server/CDN cache, which is the point: a rescan costs nothing. */
 async function ptLiveRefresh(force){
   if(PTLive.loading) return;
-  if(!force && Date.now()-PTLive.at < PT_LIVE_POLL_MS-2000) return;
+  if(!force && Date.now()-PTLive.at < (PTLive.wait||PT_LIVE_POLL_MS)-2000) return;
   PTLive.loading=true;
   try{
     const d=await ptLiveApi({action:'live'});
@@ -11494,6 +11537,7 @@ async function ptLiveRefresh(force){
       if(PTLive.error!==d.error) ptLogDiag('api','youtube lookup: '+d.error+(d.detail?' — '+d.detail:''));
       PTLive.error=d.error; PTLive.detail=d.detail||'';
       PTLive.live=[]; PTLive.upcoming=[];
+      ptLiveBackoff(true);
     } else {
       if(PTLive.error) ptLogDiag('fix','youtube lookup recovered');
       PTLive.error=null; PTLive.detail='';
@@ -11502,12 +11546,24 @@ async function ptLiveRefresh(force){
       PTLive.upcoming=Array.isArray(d.upcoming)?d.upcoming:[];
       PTLive.channelId=d.channelId||PTLive.channelId;
       PTLive.channelTitle=d.channelTitle||PTLive.channelTitle;
+      /* The function serves its last confirmed answer when YouTube itself is
+         unreachable (see netlify/functions/youtube.mts). That is data, not an
+         error — it just has a date on it, and the panel says so. */
+      const wasStale=PTLive.stale;
+      PTLive.stale=!!d.stale; PTLive.staleSince=d.staleSince||0;
+      if(PTLive.stale && !wasStale) ptLogDiag('yt','showing YouTube\'s last confirmed answer ('+(d.staleReason||'upstream')+')');
+      if(!PTLive.stale && wasStale) ptLogDiag('fix','youtube answering live again');
+      ptLiveBackoff(false);
       const nowLive=PTLive.live.map(v=>v.id).join(',');
       if(nowLive!==wasLive) ptLogDiag('yt','live now: '+(nowLive||'nothing'));
+      /* Every live stream anyone's app sees gets written to the league's own
+         record of it — the backup index, see ptStreamLog below. */
+      PTLive.live.forEach(v=>ptStreamLogSee(v));
     }
   }catch(e){
     PTLive.at=Date.now();
     PTLive.error='unreachable'; PTLive.detail=String(e.message||e);
+    ptLiveBackoff(true);
   }finally{
     PTLive.loading=false;
     ptOnLiveData();
@@ -11523,6 +11579,7 @@ window.ptRescanLive=ptRescanLive;
    and a host waiting for their own stream to appear gets picked up. */
 function ptOnLiveData(){
   const S=PTStream;
+  if(S && S.role==='host' && !S.videoId) ptAutoLink(S);
   if(S && S.videoId){
     const hit=(PTLive.live||[]).find(v=>v.id===S.videoId);
     if(hit){
@@ -11534,19 +11591,58 @@ function ptOnLiveData(){
          window is how a host who did everything right gets told it failed. */
       S.ytLive=false;
       ptLogDiag('yt','youtube no longer lists '+S.videoId+' as live');
+      if(S.role==='host') ptStreamLogClose(S.videoId, S.code);
     }
   }
+  renderLiveMarquee();
   renderPTStream();
 }
+/* ---- the step that used to be a chore: linking the video --------------
+   With a reusable stream key, YouTube invents a new broadcast the moment a
+   phone starts sending it video, and this is the app noticing that happen.
+   A candidate has to be unambiguous before it is taken automatically:
+
+     · it started after this broadcast panel was opened (with ten minutes of
+       slack, because most people start the camera app first and open the
+       site while it warms up),
+     · nobody else's app is announcing it in the directory — that would be
+       another court's match, already claimed,
+     · and there is exactly one of them. Two at once is a guess, and a wrong
+       guess puts somebody else's court on your scoreboard, so the panel
+       falls back to the tap-to-pick list it has always had.
+
+   Linking by hand still works, and unlinking turns this off for the rest of
+   the session so a deliberate choice is never overruled a poll later. */
+function ptAutoLink(S){
+  if(!S || S.autoLinkOff || S.videoId) return;
+  const claimed=new Set(ptDirEntries().map(e=>e.videoId).filter(Boolean));
+  const since=(S.liveSince||Date.now())-600000;
+  const mine=(PTLive.live||[]).filter(v=>{
+    if(claimed.has(v.id)) return false;
+    const t=Date.parse(v.startedAt||'');
+    return isFinite(t) && t>=since;
+  });
+  if(mine.length!==1) return;
+  ptLinkStream(mine[0].id, true);
+}
+/* Polled from wherever you are in the app, not just the Point Tracker: the
+   whole promise of "start your phone app and it shows up on the website" is
+   that the site knows something is on air without anyone opening the stream
+   panel first. It costs no extra quota — the answer is cached in the
+   function and again at the CDN, so a hundred pollers ask YouTube as often
+   as one does — and it still stops dead when the tab isn't visible, so a
+   phone in a pocket is asking nothing. */
 function ptLivePollTick(){
-  const trackerOpen=(()=>{ const el=document.getElementById('view-tracker'); return !!el && el.style.display!=='none'; })();
   if(document.visibilityState!=='visible') return;
-  if(!trackerOpen && !PTStream) return;
   ptLiveRefresh(false);
 }
 function ptLivePollStart(){
   if(ptLivePollTimer) return;
   ptLivePollTimer=setInterval(ptLivePollTick, 10000);   // the throttle inside decides when to actually fetch
+  /* Nothing is polled while the tab is hidden, so the first thing to do on
+     coming back is ask — otherwise a phone unlocked courtside shows what was
+     live before it went in the pocket for up to a poll. */
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') ptLiveRefresh(true); });
   ptLivePollTick();
 }
 window.ptLivePollStart=ptLivePollStart;
@@ -11554,14 +11650,25 @@ async function ptLoadArchive(){
   if(PTLive.archive) return;
   PTLive.archive='loading';
   renderPTStream();
+  let fromYouTube=[];
   try{
     const d=await ptLiveApi({action:'archive'});
-    PTLive.archive=(d && Array.isArray(d.archive))?d.archive:[];
+    fromYouTube=(d && Array.isArray(d.archive))?d.archive:[];
     if(d && d.error) ptLogDiag('api','archive lookup: '+d.error);
   }catch(e){
-    PTLive.archive=[];
     ptLogDiag('error','archive lookup failed: '+(e.message||e));
   }
+  /* YouTube only ever answers for the last two dozen uploads on one public
+     channel. The league's own record answers for everything it has ever seen
+     go out, unlisted streams included, and it is still there when the API
+     key isn't. Merge them, YouTube's copy winning where both know a video. */
+  const backup=await ptStreamLogList();
+  const byId=new Map();
+  backup.forEach(v=>byId.set(v.id,v));
+  fromYouTube.forEach(v=>byId.set(v.id, {...(byId.get(v.id)||{}), ...v, listed:true}));
+  PTLive.archive=[...byId.values()]
+    .sort((a,b)=>String(b.endedAt||b.startedAt||'').localeCompare(String(a.endedAt||a.startedAt||'')))
+    .slice(0,18);
   renderPTStream();
 }
 function ptToggleArchive(){
@@ -11572,6 +11679,118 @@ function ptToggleArchive(){
   renderPTStream();
 }
 window.ptToggleArchive=ptToggleArchive;
+
+/* ============================================================
+   THE BACKUP RECORD — the league's own index of every broadcast.
+
+   YouTube keeps the video; this keeps the knowledge that the video exists.
+   Those are different things, and the second one turned out to be the
+   fragile one. `/api/youtube` can only see the most recent couple of dozen
+   uploads on one public channel, so an older match falls off the end of
+   "past broadcasts" and is effectively lost even though the recording is
+   sitting on YouTube untouched. An unlisted stream is never in that list at
+   all. And a missing API key, or a spent quota, takes the whole listing down
+   with it.
+
+   So every app that sees a stream — the host's, and every viewer's — writes
+   a row for it. One table, no video data, nothing to upload: the id, what it
+   was called, when it started and when it stopped. Past broadcasts then
+   reads both and merges.
+
+   It is entirely optional. If `stream_log` doesn't exist, or the project's
+   policies don't allow the write, the first attempt says so once in the
+   diagnostics and nothing else in the app changes — everything still works
+   exactly as it did, just with the shorter memory. docs/streams.sql creates
+   it; docs/youtube-live.md explains why you'd want it.
+   ============================================================ */
+const PT_LOG_TABLE="stream_log";
+const PT_LOG_REWRITE_MS=300000;      // one row per video per five minutes is plenty
+let ptLogWrites=new Map();           // videoId -> when we last wrote it
+let ptLogOff=false;                  // table missing or write refused: stop asking
+
+function ptLogUnavailable(error){
+  /* 42P01 is "relation does not exist" — the migration hasn't been run. A
+     policy refusal (401/403/42501) is the other expected shape. Both mean
+     "this deploy doesn't have the backup record", which is a supported way
+     to run the site, not a fault to keep retrying. */
+  const msg=String((error&&(error.message||error.details))||error||'');
+  const code=String((error&&error.code)||'');
+  return code==='42P01' || code==='42501' || code==='PGRST205' ||
+         /does not exist|schema cache|permission denied|row-level security/i.test(msg);
+}
+async function ptStreamLogUpsert(row){
+  if(ptLogOff || !sb || !row || !row.video_id) return false;
+  try{
+    const {error}=await sb.from(PT_LOG_TABLE).upsert(row,{onConflict:"video_id"});
+    if(error){
+      if(ptLogUnavailable(error)){
+        ptLogOff=true;
+        ptLogDiag('api','no stream_log table on this project — past broadcasts will only show what YouTube still lists (docs/streams.sql)');
+      } else ptLogDiag('error','stream_log write failed: '+(error.message||error));
+      return false;
+    }
+    return true;
+  }catch(e){ ptLogDiag('error','stream_log write failed: '+(e.message||e)); return false; }
+}
+/* Called for every live video anyone's app sees, so the record does not
+   depend on the host's phone being the one with the page open. */
+function ptStreamLogSee(v, code){
+  if(!v || !v.id || ptLogOff) return;
+  const last=ptLogWrites.get(v.id)||0;
+  if(Date.now()-last < PT_LOG_REWRITE_MS) return;
+  ptLogWrites.set(v.id, Date.now());
+  const row={video_id:v.id, seen_at:new Date().toISOString()};
+  if(v.title) row.title=v.title;
+  if(v.thumb) row.thumb=v.thumb;
+  if(v.startedAt) row.started_at=v.startedAt;
+  if(code) row.code=code;
+  ptStreamLogUpsert(row);
+}
+/* When a broadcast ends, confirm with YouTube that the recording is really
+   there and write that down. "The VOD exists" is the only backup claim worth
+   making, and this is the moment to check it — not weeks later when somebody
+   goes looking for a match nobody kept. */
+async function ptStreamLogClose(videoId, code){
+  if(!videoId) return null;
+  let video=null;
+  try{
+    const d=await ptLiveApi({action:'video', id:videoId});
+    video=(d && d.video) || null;
+  }catch(e){ /* the record is still worth writing without it */ }
+  const row={video_id:videoId, seen_at:new Date().toISOString()};
+  if(code) row.code=code;
+  if(video){
+    if(video.title) row.title=video.title;
+    if(video.thumb) row.thumb=video.thumb;
+    if(video.startedAt) row.started_at=video.startedAt;
+    row.ended_at=video.endedAt||new Date().toISOString();
+  } else row.ended_at=new Date().toISOString();
+  ptLogWrites.set(videoId, Date.now());
+  await ptStreamLogUpsert(row);
+  return video;
+}
+/* Rows shaped like the API's own, so past broadcasts can merge the two
+   without caring which side an entry came from. */
+async function ptStreamLogList(){
+  if(ptLogOff || !sb) return [];
+  try{
+    const {data,error}=await sb.from(PT_LOG_TABLE).select("*")
+      .order("started_at",{ascending:false,nullsFirst:false}).limit(30);
+    if(error){
+      if(ptLogUnavailable(error)) ptLogOff=true;
+      return [];
+    }
+    return (data||[]).filter(r=>r && r.video_id).map(r=>({
+      id:r.video_id,
+      title:r.title||'Match',
+      thumb:r.thumb||'',
+      code:r.code||'',
+      startedAt:r.started_at||null,
+      endedAt:r.ended_at||null,
+      backup:true
+    }));
+  }catch(e){ return []; }
+}
 
 /* ============================================================
    THE PLAYER — YouTube's IFrame API rather than a bare <iframe>.
@@ -11735,7 +11954,7 @@ function ptDirInit(){
   if(ptDirChan || !sb || !sb.channel) return;
   try{
     ptDirChan=sb.channel("ptstream_directory",{config:{presence:{key:ptRandId()}}});
-    ptDirChan.on("presence",{event:"sync"}, ()=>{ renderPTStream(); });
+    ptDirChan.on("presence",{event:"sync"}, ()=>{ renderLiveMarquee(); renderPTStream(); });
     ptDirChan.subscribe();
   }catch(e){}
 }
@@ -11794,6 +12013,68 @@ function ptLiveCards(){
   });
   return cards.filter(c=>!PTStream || c.videoId!==PTStream.videoId);
 }
+
+/* ============================================================
+   THE LIVE MARQUEE — "somebody is on court right now", everywhere.
+
+   Discovery used to live entirely inside the Point Tracker's stream panel,
+   which meant the answer to "is anything on?" was three taps deep and only
+   visible to somebody who already knew to look. That is the wrong shape for
+   a stream that nobody has to set up: you point a phone app at YouTube, and
+   the website should say so on the page anyone opens first.
+
+   So the same list the panel draws is mirrored into a strip at the top of
+   every view — one tap to the picture, and nothing about scoring involved.
+   It renders from the poll, so it appears on its own within a poll of the
+   first frames and disappears the same way. While you are already watching
+   or hosting, it stays out of the way: the panel is the better place to be.
+   ============================================================ */
+function ptOpenLive(id){
+  const vid=ytSafeId(id);
+  if(!vid) return;
+  showSub('matches','tracker');
+  /* showView runs a 300ms wipe before the view is actually swapped in, so
+     the stream is opened on the other side of it (same as openCupEvent). */
+  setTimeout(()=>{
+    try{ ptWatch(vid); }catch(e){}
+    setTimeout(()=>{ const el=document.getElementById('ptStreamBox'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 260);
+  }, 340);
+}
+window.ptOpenLive=ptOpenLive;
+/* The strip is a div rather than a button so the extra courts can be rows
+   inside it, which means keyboard activation has to be wired by hand. */
+function ptMarqueeKey(e, id){
+  if(e.key==='Enter' || e.key===' ' || e.key==='Spacebar'){ e.preventDefault(); ptOpenLive(id); }
+}
+window.ptMarqueeKey=ptMarqueeKey;
+function ptLiveMarqueeHtml(cards){
+  const head=cards[0];
+  const rest=cards.slice(1,4);
+  const meta=head.viewers!=null
+    ? `▶ watch<span class="live-mq-count"> · ${esc(ptViewersLabel(head.viewers))}</span>`
+    : '▶ watch';
+  return `<div class="bcast bcast-mini live-marquee" onclick="ptOpenLive('${esc(head.videoId)}')" onkeydown="ptMarqueeKey(event,'${esc(head.videoId)}')" role="button" tabindex="0" aria-label="Watch ${esc(head.title)}">
+      <div class="bcast-strip">
+        <span class="bcast-live"><span class="bcast-dot"></span>LIVE NOW</span>
+        <span class="bcast-title live-mq-title">${esc(head.title)}</span>
+        <span class="bcast-meta">${meta}</span>
+      </div>
+      ${rest.length?`<div class="bcast-queue">${rest.map(c=>`
+        <div class="bcast-queue-row" role="button" tabindex="0" onclick="event.stopPropagation();ptOpenLive('${esc(c.videoId)}')" onkeydown="event.stopPropagation();ptMarqueeKey(event,'${esc(c.videoId)}')">
+          <span>▶ ${esc(c.title)}</span><span>${c.viewers!=null?esc(ptViewersLabel(c.viewers)):'live'}</span>
+        </div>`).join('')}</div>`:''}
+    </div>`;
+}
+function renderLiveMarquee(){
+  const mounts=document.querySelectorAll('.live-mount');
+  if(!mounts.length) return;
+  /* Already in the stream panel — hosting or watching — so a banner pointing
+     at the thing on the screen would only be noise. */
+  const cards=PTStream ? [] : ptLiveCards();
+  const html=cards.length ? ptLiveMarqueeHtml(cards) : '';
+  mounts.forEach(m=>{ if(m.innerHTML!==html) m.innerHTML=html; });
+}
+window.renderLiveMarquee=renderLiveMarquee;
 
 /* ============================================================
    THE REALTIME CHANNEL — chat, ref taps, and the score mirror.
@@ -12074,12 +12355,17 @@ function ptArchiveHtml(){
   let body;
   if(list==='loading' || list==null) body=`<div class="pw-legend">looking…</div>`;
   else if(!list.length) body=`<div class="pw-legend">Nothing finished yet. Every broadcast lands here on its own once it ends — YouTube keeps them, so there is nothing to save or upload.</div>`;
-  else body=`<div class="pt-live-now-grid">${list.map(v=>`
-      <button class="pt-live-now-card" onclick="ptWatch('${esc(v.id)}')" aria-label="Watch back ${esc(v.title)}">
+  else body=`<div class="pt-live-now-grid">${list.map(v=>{
+      const when=v.endedAt||v.startedAt;
+      /* An entry the API no longer lists comes from the league's own record
+         of what went out (see THE BACKUP RECORD). The video is still on
+         YouTube — it is only the listing that has moved on. */
+      const from=(v.backup && !v.listed) ? ' · from the league\'s record' : '';
+      return `<button class="pt-live-now-card" onclick="ptWatch('${esc(v.id)}')" aria-label="Watch back ${esc(v.title)}">
         ${v.thumb?`<span class="pt-live-thumb" style="background-image:url('${esc(v.thumb)}')"></span>`:`<span class="pt-live-thumb pt-live-thumb-none">▶</span>`}
         <span class="pt-live-now-label">${esc(v.title)}</span>
-        <span class="pt-live-now-code">${v.endedAt?esc(new Date(v.endedAt).toLocaleDateString()):''}</span>
-      </button>`).join('')}</div>`;
+        <span class="pt-live-now-code">${when?esc(new Date(when).toLocaleDateString()):''}${from}</span>
+      </button>`;}).join('')}</div>`;
   return `<div class="pt-conn-row"><button class="pt-conn-link" onclick="ptToggleArchive()">📼 past broadcasts · hide</button></div>
     <div class="pt-arch">${body}</div>`;
 }
@@ -12087,6 +12373,10 @@ function ptArchiveHtml(){
    still leaves a way through — pasting a link never needs the API at all —
    because "the key isn't set up yet" must not mean "you cannot watch". */
 function ptApiNoticeHtml(){
+  if(!PTLive.error && PTLive.stale){
+    const when=PTLive.staleSince?new Date(PTLive.staleSince).toLocaleTimeString():'a while ago';
+    return `<div class="pt-api-note">YouTube isn't answering right now, so this is what it last confirmed at <b>${esc(when)}</b>. Watching and pasting a link both still work.</div>`;
+  }
   if(!PTLive.error) return '';
   const msg = PTLive.error==='not_configured'
       ? `Automatic "what's live" lookup isn't set up on this deploy yet — see <b>docs/youtube-live.md</b>. Pasting a YouTube link below still works.`
@@ -12180,7 +12470,7 @@ function renderPTStream(){
       <div class="pt-stream-panel pt-stream-landing">
         <div class="pt-landing-hero">
           <div class="pt-landing-title">📡 Courtside, live</div>
-          <div class="pt-landing-sub">Broadcast from your phone or a laptop to YouTube — any number of people can watch, from any network, and the whole match stays up afterwards on its own. Chat, the ref deck and the score bug all still live here.</div>
+          <div class="pt-landing-sub">Point a streaming app on your phone at YouTube and the site finds it by itself — it appears here, and as a <b>live now</b> strip on every other screen, within about half a minute. Any number of people can watch, from any network; nobody has to be scoring, and the whole match stays up afterwards on its own. Chat, the ref deck and the score bug are all here if you want them.</div>
         </div>
         ${ptApiNoticeHtml()}
         ${liveNowHtml}
@@ -12396,14 +12686,25 @@ function ptObsPanelHtml(S, detected){
     ${step3}
 
     <div class="pt-obs-step">
-      <b>4 · At the court: ${step4Verb}, then link it here</b>
-      <div class="pw-legend">This is the actual match-day routine — nothing above, just this. With a reusable key, YouTube creates a new broadcast automatically the moment your ${phone?'phone':'laptop'} starts sending video; there is no Studio page to visit. Wait ~20–30s and it should appear below, already labelled — tap it. If it hasn't shown up yet, the YouTube app on your phone (not Studio) has it at the top of your channel the same way; copy that link in instead. This paste is the one thing that's genuinely different every match: YouTube hands out a new video per broadcast and there's no way around that.</div>
+      <b>4 · At the court: ${step4Verb}</b>
+      <div class="pw-legend">That is the whole match-day routine — nothing above it, and nothing after it. With a reusable key, YouTube creates a new broadcast the moment your ${phone?'phone':'laptop'} starts sending video, and this page picks it up on its own within about half a minute: it links itself, and everyone else's app shows a <b>live now</b> strip at the top of every screen. Nothing to paste, nothing to score, nobody's phone that has to stay open.</div>
+      <div class="pw-legend">${S.videoId
+        ? `✅ Linked to <b>${esc(S.videoId)}</b>${S.ytLive?' — on air':''} · <button class="pt-conn-link" onclick="ptUnlinkStream()">change</button>`
+        : `⏳ Waiting for a new broadcast to appear on the channel. It only auto-links one that started since this panel was opened and that nobody else has claimed — for anything else (an unlisted stream, a second court, a stream that was already running) tap it below or paste its link.`}</div>
       ${detectedHtml}
       <div class="pt-stream-row">
         <input id="ptLinkInput" class="pt-link-input" placeholder="https://youtube.com/watch?v=…" autocomplete="off" spellcheck="false" onkeydown="ptLinkKey(event)">
         <button class="mini pt-watch-cta" onclick="ptLinkStream()">link</button>
       </div>
-      ${S.videoId?`<div class="pw-legend">Linked to <b>${esc(S.videoId)}</b> — <button class="pt-conn-link" onclick="ptUnlinkStream()">change</button></div>`:''}
+    </div>
+
+    <div class="pt-obs-step">
+      <b>5 · Keep a second copy</b> <span class="pt-obs-once">worth doing every time</span>
+      <div class="pw-legend">Two things have to fail before a match is lost, so make sure there are two. <b>YouTube keeps the recording</b> by itself — every finished broadcast turns into a VOD, which is what <b>📼 past broadcasts</b> lists, and this app writes down every stream it ever sees so an old one stays findable long after YouTube stops listing it.</div>
+      <div class="pw-legend">${phone
+        ? `The copy that survives a dropped upload is the one on the phone: in <b>Larix → settings → Record</b>, turn on recording to the device — it films locally <i>while</i> it streams, so a lost signal costs you the live picture and nothing else. (The YouTube app's own "Go live" cannot do this; Larix, Streamlabs and Prism can.) Check you have the storage for it: about 2GB an hour at 1080p.`
+        : `In OBS, turn on <b>Settings → Output → Recording</b> (or hit <b>Start Recording</b> alongside Start Streaming) so the match is written to the laptop's disk as well as sent to YouTube. A dropped upload then costs the live picture and nothing else.`}</div>
+      ${S.videoId?`<div class="pw-legend">When you end the broadcast, this panel checks that YouTube really has the recording and says so — if it doesn't, the local copy is the one that matters.</div>`:''}
     </div>
 
     <div class="pw-legend pt-obs-foot">Full walk-through: <b>docs/youtube-live.md</b>.</div>
@@ -12485,6 +12786,7 @@ function ptStartBroadcast(){
   ptDirAnnounce();
   ptRequestWakeLock();
   ptLiveRefresh(true);
+  renderLiveMarquee();
   renderPTStream();
   ptSyncCompactChrome();
   ptLogDiag('yt','broadcast session '+code+' opened');
@@ -12528,7 +12830,7 @@ function ptToggleCodeEdit(){
   renderPTStream();
 }
 window.ptToggleCodeEdit=ptToggleCodeEdit;
-function ptLinkStream(idArg){
+function ptLinkStream(idArg, auto){
   const S=PTStream;
   if(!S || S.role!=='host') return;
   const raw = idArg || (document.getElementById('ptLinkInput')||{}).value || '';
@@ -12544,9 +12846,12 @@ function ptLinkStream(idArg){
   ptDestroyPlayer();             // a shape change is coming; don't leave the old one orphaned
   ptAnnounceToChannel();
   ptDirAnnounce();
-  ptLogDiag('yt','broadcast '+S.code+' linked to '+id);
+  ptLogDiag('yt','broadcast '+S.code+(auto?' auto-linked to ':' linked to ')+id);
+  ptStreamLogSee({id, title:S.title||'', startedAt:hit?hit.startedAt:null, thumb:hit?hit.thumb:''}, S.code);
   renderPTStream();
-  toast("Linked — everyone's app will pick this up");
+  renderLiveMarquee();
+  toast(auto ? "You're on air — the site found your stream on its own"
+             : "Linked — everyone's app will pick this up");
 }
 window.ptLinkStream=ptLinkStream;
 function ptLinkKey(e){ if(e.key==='Enter'){ e.preventDefault(); ptLinkStream(); } }
@@ -12555,6 +12860,9 @@ function ptUnlinkStream(){
   const S=PTStream;
   if(!S || S.role!=='host') return;
   ptDestroyPlayer();
+  /* Unlinking is a deliberate act — the auto-linker must not immediately put
+     back the video it was just told to let go of. */
+  S.autoLinkOff=true;
   S.videoId=null; S.ytLive=false; S.viewers=null; S.playerError=null;
   ptDirAnnounce();
   renderPTStream();
@@ -12570,10 +12878,19 @@ function ptEndBroadcast(){
   if(S.channel){ try{ S.channel.unsubscribe(); }catch(e){} }
   ptDirWithdraw();
   ptReleaseWakeLock();
+  /* Close the league's own record of this broadcast, and say out loud whether
+     YouTube's copy is really there. If it isn't, the recording on the phone
+     is the only one — which is exactly when somebody needs to be told. */
+  const closingId=S.videoId, closingCode=S.code;
   PTStream=null;
+  renderLiveMarquee();
   renderPTStream();
   ptSyncCompactChrome();
   toast("Broadcast panel closed — stop the stream in your streaming app too");
+  if(closingId) ptStreamLogClose(closingId, closingCode).then(video=>{
+    if(video && video.endedAt) toast("📼 YouTube has kept the recording of "+closingId);
+    else if(video) toast("Still on air on YouTube — stop it in your streaming app to save the recording",true);
+  });
 }
 window.ptEndBroadcast=ptEndBroadcast;
 
@@ -12612,6 +12929,7 @@ async function ptWatch(target){
     viewers:known?known.viewers:null, ytLive:true, archive:false, liveSince:Date.now()};
   ptJoinChannel(code, false);
   ptRequestWakeLock();
+  renderLiveMarquee();
   renderPTStream();
   ptSyncCompactChrome();
   ptLogDiag('yt','watching '+videoId+' (code '+code+')');
@@ -12626,6 +12944,9 @@ async function ptWatch(target){
       PTStream.viewers=d.video.viewers;
       PTStream.ytLive = d.video.state==='live';
       PTStream.archive = !!d.video.endedAt;
+      /* A link somebody pasted is often the only way an unlisted stream is
+         ever seen by the site at all — write it down while we have it. */
+      ptStreamLogSee({id:videoId, title:d.video.title, thumb:d.video.thumb, startedAt:d.video.startedAt}, code);
       renderPTStream();
     }
   }catch(e){ /* the player is the real test; this is only the label */ }
@@ -12640,6 +12961,7 @@ function ptStopWatching(quiet){
   if(S.channel){ try{ S.channel.unsubscribe(); }catch(e){} }
   ptReleaseWakeLock();
   PTStream=null;
+  renderLiveMarquee();
   if(!quiet){
     renderPTStream();
     ptSyncCompactChrome();
@@ -13793,6 +14115,7 @@ function _showViewCore(v){
   /* the marquee mounts sit inside the views, so a view that has just been
      shown needs it filled in — this is what keeps the cup on every screen */
   renderCupMarquee();
+  try{ renderLiveMarquee(); }catch(e){}
   moveTabIndicator();
   window.scrollTo({top:0,behavior:"smooth"});
 }

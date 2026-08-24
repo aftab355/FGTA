@@ -98,16 +98,44 @@ most people are actually holding at a court, with OBS's equivalents alongside.
 
 Assuming the one-time setup below is done:
 
-1. App → Matches → Point Tracker → **Set up a broadcast**.
-2. **Larix → tap the broadcast button.** (OBS → Start Streaming.)
-3. Wait ~20–30s. The app auto-detects the new broadcast and shows it as a
-   tappable card in step 4 of the panel — tap it. (If it hasn't shown up yet,
-   the regular **YouTube app** on your phone — not Studio — has it at the top
-   of your channel; copy that link in instead.)
-4. Score.
+1. **Larix → tap the broadcast button.** (OBS → Start Streaming.)
+2. That's it.
+
+Within about half a minute the site has found the stream by itself and every
+screen in the app carries a red **LIVE NOW** strip at the top; tapping it
+opens the picture. Nobody has to be scoring, nobody's phone has to stay on
+the site, and there is nothing to paste anywhere.
+
+If you *are* scoring, open **Matches → Point Tracker → Set up a broadcast**
+as well: it mints the session code the chat, the ref deck and the OBS overlay
+all key off, and it links itself to your stream as soon as YouTube publishes
+it — the step that used to mean pasting a link every match.
 
 No Studio, no typing a stream key, no reconfiguring anything. That's only
 true because of the setup below — do that first, once, not at the court.
+
+### How the site finds it
+
+`/api/youtube` is asked every 45 seconds by every open copy of the app —
+whichever screen it happens to be on, not just the Point Tracker — and the
+answer is cached in the function and again at the CDN, so a hundred people
+watching costs the same quota as one. Anything the channel says is live shows
+up in three places: the **LIVE NOW** strip on every view, the "live now" cards
+on the stream panel's landing screen, and, for a host with the broadcast panel
+open, the auto-link.
+
+**The auto-link is deliberately narrow.** A broadcast is taken automatically
+only if it started after you opened the panel (with ten minutes of slack, for
+starting the camera app first), nobody else's app is already announcing it,
+and it is the only candidate. Two courts going live at once means two
+candidates, so the panel falls back to the tap-to-pick list rather than
+guessing which one is yours. Unlinking is remembered for the rest of the
+session — the poll will not put back a video you deliberately let go of.
+
+Two things still need a pasted link, and always will: an **unlisted** stream
+(YouTube keeps those out of the channel listing the API can see — that is what
+unlisted means) and a stream that was already running before you opened the
+panel.
 
 ### 2.0 One-time setup — do this before match day
 
@@ -163,10 +191,16 @@ the same device.
 ### Visibility, every match
 
 **Public** or **Unlisted**, set once inside your persistent stream's default
-settings so you don't have to think about it per match. Unlisted streams are
-never auto-discovered outside the app — the link paste in step 3 of the
-routine above is the only way anyone finds one, which is also exactly why
-that step can't be automated away.
+settings so you don't have to think about it per match.
+
+This is the one setting that decides whether the site can find a stream on
+its own. **Public** is what makes the whole "just start the app" routine
+work: the stream is in the channel's own listing, which is what
+`/api/youtube` reads. **Unlisted** streams are in nobody's listing — that is
+what unlisted means — so they are never auto-discovered, never carry a LIVE
+NOW strip, and never auto-link. Somebody has to paste the link, and that is
+not a limitation anyone can code around. If you want the app to do the work,
+stream public.
 
 ### Scoring
 
@@ -183,8 +217,79 @@ so there is no way for two people scoring to fork it.
 
 Stop the stream in whatever's sending it — Larix's broadcast button again,
 or OBS. Closing the app's panel does not stop YouTube; it never had control
-of it. A minute or so later the finished broadcast appears under *past
-broadcasts* on the stream panel, and stays there.
+of it, which is why closing it says so and then checks whether YouTube
+actually has the finished recording. A minute or so later the broadcast
+appears under *past broadcasts* on the stream panel, and stays there — see
+[Keeping the video](#keeping-the-video) for what "stays" rests on.
+
+---
+
+## Keeping the video
+
+Three layers, and they fail in different ways on purpose. Two of them are
+already on; the third takes one switch in your streaming app and is the one
+that matters when the internet lets you down.
+
+**1 · YouTube keeps the recording.** Every finished broadcast becomes a VOD
+on the channel, at full quality, for free, immediately. Nothing to save,
+upload or remember. When you close the broadcast panel the app checks that
+the VOD is really there and says so — and if the stream is somehow still on
+air, it tells you that instead, because a broadcast nobody stopped is a
+recording nobody has yet.
+
+**2 · The league keeps the knowledge of it.** `/api/youtube` can only see the
+last couple of dozen uploads on one public channel, so an older match falls
+off *past broadcasts* while the recording itself sits on YouTube untouched —
+and an unlisted stream was never in that listing at all. So every app that
+sees a stream writes a row to a `stream_log` table: the id, the title, when it
+started, when it ended. Not just the host's — every viewer's, which is how an
+unlisted stream gets recorded at all: the first person to open it in the app
+writes it down. *Past broadcasts* reads YouTube and the table and merges them,
+marking anything the API no longer lists as coming *from the league's record*.
+
+Run [`streams.sql`](streams.sql) once to create the table. Skipping it is a
+supported way to run the site — the app notes in its diagnostics (🩺) that
+there is no stream log on this project and carries on with the shorter
+memory. Nothing else changes.
+
+**3 · Your phone keeps a copy.** This is the layer that survives the thing
+that actually goes wrong at a public court: the upload dropping. A phone
+streaming app can record to the device *while* it streams, so a lost signal
+costs you the live picture and nothing else.
+
+- **Larix**: settings → **Record**, on. Roughly 2GB an hour at 1080p — check
+  you have the space before a long match, not after it.
+- **Streamlabs / Prism**: the same switch, under recording.
+- **The YouTube app's own "Go live"**: cannot do this. If you stream that way,
+  layer 1 is your only copy.
+- **OBS**: **Settings → Output → Recording**, or just hit *Start Recording*
+  alongside *Start Streaming*.
+
+The site never asks for that file and has nowhere to put it. It is the copy
+you keep in case YouTube's isn't there — and if you later want the match cut
+down to just the rallies, the [rally reel](rally-reel.md) works off the
+YouTube VOD, not off it.
+
+---
+
+## When YouTube itself is having a bad day
+
+`/api/youtube` answers from its own memory when Google doesn't answer at all.
+A quota exhausted at 4pm, a 500 from the API, a DNS wobble — instead of the
+listing emptying out mid-match, the function serves the last answer it
+actually confirmed (up to six hours old) and marks it; the app then says
+"YouTube isn't answering right now, so this is what it last confirmed at
+4:12pm" rather than pretending nothing is on. A transient 5xx is retried once
+before that. Past six hours it stops guessing and says so.
+
+The polling backs off when it keeps failing — up to ten minutes between
+attempts, and straight to ten minutes for a deploy with no API key at all,
+since that answer will not change until somebody edits Netlify. It stops
+entirely while the tab is in the background, and asks again the moment you
+come back to it.
+
+Pasting a link never goes through any of this, which is why it is always the
+fallback that works.
 
 ---
 
@@ -246,8 +351,15 @@ same URL and key from step 2.0b: *Streamlabs*, *Prism Live Studio*, and
 others.
 
 **The YouTube app's own "Go live"** also works and is the simplest option of
-all, but it needs 50+ subscribers on the channel to unlock, and gives no way
-to add a scoreboard overlay even on a laptop.
+all, but it needs 50+ subscribers on the channel to unlock, gives no way to
+add a scoreboard overlay even on a laptop, and cannot keep a copy on the
+phone while it streams — see [Keeping the video](#keeping-the-video).
+
+On a **Samsung** (or any Android), Larix, Streamlabs and Prism all install
+from Google Play and all behave identically as far as this site is concerned:
+they push RTMP to YouTube, YouTube publishes a broadcast, the site finds it.
+Nothing about the app you pick reaches the website, so pick on whether it
+records locally and how its camera controls feel.
 
 ---
 
@@ -262,6 +374,24 @@ regardless.
 Either it is unlisted (expected — paste the link), or YouTube's own listing
 is lagging, which it does for up to a minute after a stream starts. Tap
 *check now*.
+
+**The broadcast panel didn't link itself.**
+It only takes a stream that started after the panel was opened, that nobody
+else is announcing, and that is the only candidate — see [How the site finds
+it](#how-the-site-finds-it). Anything else is a tap on the card below step 4,
+or a pasted link. Both do exactly what the auto-link would have done.
+
+**The LIVE NOW strip is showing something that has finished.**
+It follows YouTube's own listing, which lags the end of a stream by a minute
+or so, and a remembered answer during an outage can be older than that (it
+says when it was last confirmed). Tapping it still works — the player will say
+the broadcast has ended.
+
+**"Past broadcasts" is missing an old match.**
+The recording is still on YouTube; it is the listing that has moved on. That
+is what the stream log is for — run [`streams.sql`](streams.sql) and every
+match from then on stays listed. The 🩺 diagnostics say whether this deploy
+has the table.
 
 **"Embedding is turned off for this video".**
 YouTube Studio → the video → *Advanced settings* → allow embedding. Some
