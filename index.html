@@ -2532,7 +2532,7 @@
 
   /* WHERE THIS GAME GETS FILED — the ladder, or an event.
      It is the only control on this screen that changes what the result
-     *means* (an event with counts_elo off never touches a rating), so it
+     *means* (an exhibition event never touches a rating), so it
      reads as a labelled row with the consequence spelled out underneath
      rather than one more mini button in the row of them. */
   .pt-target{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -6366,7 +6366,7 @@
     .tb-ico{width:36px;height:36px;font-size:15px}
   }
   @media(max-width:560px){
-    /* "live · K=32 · start 100" is the widest thing in the bar and the
+    /* "live · K=32 · start 500" is the widest thing in the bar and the
        least load-bearing — the same numbers are in Help. Dropping it is
        what buys the room for the action buttons. */
     .tb-live{display:none}
@@ -7835,7 +7835,12 @@ function setDivisor(v){
   DIVISOR=Number(v);
   try{ localStorage.setItem("fgta_divisor",String(v)); }catch(e){}
 }
-const START   = 100;  // every new player starts here
+/* Every new player starts here. It is a pure origin — Elo is zero-sum,
+   so moving it shifts the whole ladder by the same amount and changes no
+   gap, no win probability and no ordering. It was 100, which put a player
+   two bad months from a negative rating and made every ratings chart run
+   against a floor that means nothing. 500 buys that headroom back. */
+const START   = 500;
 /* ============================================================ */
 
 const configured = SUPABASE_URL.startsWith("http") && !SUPABASE_KEY.startsWith("YOUR_");
@@ -8083,11 +8088,51 @@ const ATTRS = [["speed","Speed"],["forehand","Forehand"],["backhand","Backhand"]
 let openMatchId = null;
 let openScheduledMatchId = null; // scheduled_matches.id currently shown in the modal, or null
 
+/* ============================================================
+   WHAT AN EVENT DOES TO THE LADDER
+
+   An ordinary event answers this with its own counts_elo flag,
+   set when the admin created it.
+
+   The FF Cup does not. It is the season's tournament — the best
+   games anyone plays all year, reffed properly, with the whole
+   field in it — and running it as an exhibition made the ladder
+   during the cup a record of everything *except* the cup: a
+   player could win it outright and end the month exactly where
+   they started. So the cup counts, whatever its row says. The
+   Robin+ format it runs under still defaults to exhibition (that
+   default is what the flag was set to the day the row was made),
+   and this is the deliberate exception to it.
+
+   Identity is the cup's *name*, never cupTournament() — that
+   falls back to "the newest unfinished event" for the marquee,
+   which is the right answer for promotion and completely the
+   wrong one here: it would quietly drag every other exhibition
+   onto the ladder with it.
+
+   One function, so the engine, the badge on the marquee and the
+   note under the ref's submit picker can never disagree about
+   what a result is going to mean.
+   ============================================================ */
+function isCupEvent(t){
+  /* CUP_NAME_RX belongs to the cup's own block further down this script.
+     The guard keeps this callable from anywhere, including before that
+     block has been evaluated. */
+  try{ return !!(t && CUP_NAME_RX.test(t.name || "")); }
+  catch(e){ return false; }
+}
+
+/* does this event feed the Elo ladder? */
+function tournamentCountsElo(t){
+  if(!t) return true;              // no event = a plain ladder game
+  if(isCupEvent(t)) return true;   // the cup is rated, always
+  return t.counts_elo !== false;
+}
+
 /* does this match count toward the Elo ladder? */
 function countsForElo(m){
   if(!m.tournament_id) return true;
-  const t = tournaments.find(t=>t.id===m.tournament_id);
-  return !t || t.counts_elo !== false;
+  return tournamentCountsElo(tournaments.find(t=>t.id===m.tournament_id));
 }
 
 const $ = id => document.getElementById(id);
@@ -9163,8 +9208,9 @@ function ptRalliesPayload(){
    hasn't finished. Picking an event sets matches.tournament_id, which
    is the same field the admin tournament screens write — nothing new
    downstream, the event page and the draw pick the game up on their
-   own. Whether it *also* moves Elo is then the event's own counts_elo
-   flag (see countsForElo), not a second switch here: one event, one
+   own. Whether it *also* moves Elo is then the event's own answer
+   (see tournamentCountsElo — its counts_elo flag, except for the cup,
+   which is always rated), not a second switch here: one event, one
    answer, and no way for the two to disagree.
 
    The choice is remembered in localStorage between matches, because a
@@ -9288,9 +9334,9 @@ function ptTargetPickerHTML(){
     if(cur !== "ladder" && events.length === 0)
       note += ` <span class="pt-target-noelo">No event is open to file under right now.</span>`;
   } else {
-    const elo = t.counts_elo === false
-      ? `<b class="pt-target-noelo">does not touch Elo</b>`
-      : `<b class="pt-target-elo">also moves Elo</b>`;
+    const elo = tournamentCountsElo(t)
+      ? `<b class="pt-target-elo">also moves Elo</b>`
+      : `<b class="pt-target-noelo">does not touch Elo</b>`;
     const round = (PT && PT.a && PT.b) ? eventRoundFor(t, PT.a, PT.b) : null;
     note = `Files under <b>${esc(t.name)}</b> — ${elo}.`;
     if(round) note += ` Slots into <b>${esc(roundLabel(round))}</b> in the draw.`;
@@ -17434,7 +17480,9 @@ function renderRobinPlus(t){
         <div class="pred-hint"><b>Robin+</b> — a group stage that earns the bracket, then semis and a final.
         With five or more, everyone plays two group games and the top 4 qualify (level on the line? settled in a 1v1,
         not on a tiebreak column). With four, nobody can be cut, so the group turns into everyone-plays-everyone-twice
-        and the table seeds the bracket instead. Exhibition by default: nothing here moves the ladder.</div>
+        and the table seeds the bracket instead. ${tournamentCountsElo(t)
+          ? 'Every game here <b>counts toward the ladder</b>.'
+          : 'Exhibition by default: nothing here moves the ladder.'}</div>
       </div>
       ${rpRosterPanel(t, state)}
       ${localOnly}`;
@@ -17962,7 +18010,7 @@ function cupMarqueeHtml(t, variant){
   if(t){
     const played = tournGames(t.id).length;
     if(played) facts.push(`<span class="cup-fact"><b>${played}</b> played</span>`);
-    facts.push(`<span class="cup-fact">${esc(t.counts_elo===false?"Exhibition":"Counts for Elo")}</span>`);
+    facts.push(`<span class="cup-fact">${esc(tournamentCountsElo(t)?"Counts for Elo":"Exhibition")}</span>`);
   }
 
   return `<div class="cupmark" ${attrs}>
@@ -18077,7 +18125,7 @@ function renderTournaments(){
     return `<div class="pend clickable${upcoming?' promo':''}" onclick="openTournament(${t.id})"><div>
       <div class="pend-info"><b>${esc(t.name)}</b>
         <span class="sets-tag">${tournFormatTag(t)}</span>
-        ${t.counts_elo===false?'<span class="sets-tag">exhibition</span>':''}
+        ${tournamentCountsElo(t)?'':'<span class="sets-tag">exhibition</span>'}
         ${statusBadge}
       </div>
       <div class="pend-meta">${n} game${n!==1?'s':''} · ${when(t.created_at)}</div></div>
@@ -18122,7 +18170,7 @@ function renderTournamentDetail(id){
     box.innerHTML = `
       <div class="sec-label" style="margin-top:26px">${esc(t.name)} <span class="tag p">upcoming</span></div>
       <div class="panel promo-panel">
-        <div class="pred-hint">${tournFormatLabel(t)} · ${t.counts_elo===false?'exhibition (no Elo effect)':'games count toward the ladder'}</div>
+        <div class="pred-hint">${tournFormatLabel(t)} · ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'}</div>
         <div class="promo-countdown">Starts ${tournStartLabel(t)}</div>
         <div class="pred-hint">${t.format==='robin2'
           ? 'Everyone plays two group games, the top 4 qualify, then semis into a final. A tied qualification line is settled in a 1v1. Build the field now \u2014 the draw is made when you\u2019re ready.'
@@ -18142,7 +18190,7 @@ function renderTournamentDetail(id){
         ${t.status==='completed'?`<span class="pred-tag">\ud83c\udfc6 ${esc(t.champion||'')}</span>`:''}
       </div>
       <div class="panel" style="margin-bottom:14px">
-        <div class="pred-hint">${tournFormatLabel(t)} \u00b7 ${t.counts_elo===false?'exhibition (no Elo effect)':'games count toward the ladder'} \u00b7 ${t.status}</div>
+        <div class="pred-hint">${tournFormatLabel(t)} \u00b7 ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'} \u00b7 ${t.status}</div>
       </div>
       ${renderRobinPlus(t)}
       ${isAdmin && t.status!=='completed' && games.length===0 ? tournEditControls(t) : ''}`;
@@ -18154,7 +18202,7 @@ function renderTournamentDetail(id){
       ${t.status==='completed'?`<span class="pred-tag">🏆 ${esc(t.champion||'')}</span>`:''}
     </div>
     <div class="panel">
-      <div class="pred-hint">${tournFormatLabel(t)} · ${t.counts_elo===false?'exhibition (no Elo effect)':'games count toward the ladder'} · ${t.status}</div>
+      <div class="pred-hint">${tournFormatLabel(t)} · ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'} · ${t.status}</div>
     </div>
     ${t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
     <div class="panel" style="margin-top:14px">
@@ -21770,8 +21818,9 @@ function bradleyTerry(){
     pi=next;
     if(maxChange<1e-9) break;
   }
-  // map strength to an Elo-like scale for readability: R = 400*log10(pi) + 100
-  const rows=names.map(n=>({name:n, pi:pi[n], btElo:Math.round(400*Math.log10(pi[n])+100)}));
+  // map strength to an Elo-like scale for readability: R = 400*log10(pi) + START,
+  // anchored on the ladder's own baseline so the two columns are comparable
+  const rows=names.map(n=>({name:n, pi:pi[n], btElo:Math.round(400*Math.log10(pi[n])+START)}));
   rows.sort((a,b)=>b.pi-a.pi);
   return rows;
 }
@@ -24605,7 +24654,7 @@ const FFIntro = (function(){
     const q0 = pr(C,x0,y+h,z), q1 = pr(C,x1,y+h,z), q3 = pr(C,x0,y,z);
     if(!q0||!q1||!q3) return;
     poly(ctx, [q0,q1,pr(C,x1,y,z),q3], rgb(mix([10,3,20],FOGC,fogAt(d)), 0.96));
-    const msg = "  LIVE · K=32 · START 100 · FGTA CHAMPIONSHIP LADDER · " + film.stage.toUpperCase() + " · ";
+    const msg = "  LIVE · K=" + K + " · START " + START + " · FGTA CHAMPIONSHIP LADDER · " + film.stage.toUpperCase() + " · ";
     onQuad(ctx, q0, q1, q3, 300, 26, cx=>{
       cx.save();
       cx.beginPath(); cx.rect(0,0,300,26); cx.clip();
@@ -25587,7 +25636,7 @@ function ffPlayerCard(name, tid, seedLine){
     name,
     initials: initials(name),
     color: playerColor(name),
-    rating: Math.round(st ? st.rating : (typeof START === "number" ? START : 100)),
+    rating: Math.round(st ? st.rating : (typeof START === "number" ? START : 500)),
     record: own ? `${own.w}-${own.l}${own.d?"-"+own.d:""}` : "0-0",
     form: recent,
     seedLine: seedLine || "in the field"
