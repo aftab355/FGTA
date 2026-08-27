@@ -125,6 +125,14 @@ Overview / Rating models / Validation / Story & records subtabs — 18 advanced 
 ### 6. Court
 Live local weather (Open-Meteo, Toronto) driving ambient theming: background tint + a subtle canvas particle overlay (rain streaks, snow, fog, twinkling stars) behind the app, gated off on mobile for performance.
 
+Below the home court's busyness chart sits **Other courts in the city** — every one of Toronto's 173 tennis locations, each timed from the clubhouse at 47 Thorncliffe Park Dr. A row carries the site (court count, lights, winter play, club operator if any, address) on the left, its transit and drive times in the mono face on the right, and two Google Maps links that recompute both routes live with current traffic. Filter chips cut the list to the shortlist worth travelling to (public · lit · 3+ courts, 37 sites), lit courts, winter play, or club-operated courts; a sort control switches between transit time, drive time, and court count; the search box reaches past the active filter so a park you can picture never comes back empty. Our own court is flagged in the list and matched by street address.
+
+The data is embedded in the page (`NEARBY` in the Court section of the script) — no request, no key. Sources and their limits:
+
+- **Courts** — City of Toronto Open Data, *Tennis Courts Facilities* (Parks, Forestry & Recreation asset register), pulled 2026-08-27. `Lights = Yes` means lights are installed; it does not promise they are on, free, or scheduled. Coordinates are one point per park, usually the centroid rather than the court gate, so allow a couple of minutes of walk error.
+- **Drive times** — free-flow OSRM routing on the OpenStreetMap road network. No traffic model, so anything over ~15 minutes is a best case, not an expected time.
+- **Transit times** — live TTC + GO GTFS through Transitous (MOTIS), baselined on a Saturday 10:00 a.m. departure, door-to-door including walking and waiting. Only computed for the sites worth travelling to (the shortlist plus club courts inside a 12-minute drive); everywhere else shows an em dash and sinks to the bottom of a transit sort.
+
 ### 7. Events
 Tournament creation (admin) and bracket/format display; round-robin, knockout, hybrid and **Robin+** supported. Upcoming tournaments show a countdown; admins can go live, edit schedule, or delete a tournament.
 
