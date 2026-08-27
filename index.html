@@ -3688,6 +3688,101 @@
     .ct-btn{min-width:100%}
   }
 
+
+  /* ===== NEARBY COURTS (city-wide court finder, Court tab) =====
+     A row is a whole site: what's there on the left, how long it takes to
+     get there on the right, and the two live map links on the end. The two
+     travel numbers are the point of the table, so they get the mono face and
+     the most weight; everything else stays quiet around them. */
+  .cn-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .cn-chips{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+  .cn-chip{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+    border-radius:var(--r-pill);padding:8px 14px;cursor:pointer;transition:.2s cubic-bezier(.16,1,.3,1);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;
+  }
+  .cn-chip:hover{color:var(--ink);border-color:var(--dim)}
+  .cn-chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:700}
+  /* the app sets input,select{width:100%} globally — these two sit in a chip
+     row and size to their own content instead */
+  .cn-search{
+    flex:0 1 220px;width:auto;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:var(--r-pill);padding:9px 15px;font-size:13.5px;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif;
+  }
+  .cn-search:focus{outline:none;border-color:var(--accent)}
+  .cn-search::placeholder{color:var(--dim)}
+  .cn-sel{
+    width:auto;flex:0 0 auto;margin-left:8px;background:transparent;border:1px dashed var(--line);color:var(--muted);
+    border-radius:var(--r-pill);padding:8px 14px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;text-transform:uppercase;
+    -webkit-appearance:none;appearance:none;
+  }
+  .cn-sel:focus{outline:none;border-color:var(--accent)}
+  .cn-sel option{background:var(--panel);color:var(--ink);text-transform:none;letter-spacing:0}
+
+  .cn-list{display:flex;flex-direction:column;gap:8px}
+  .cn-row{
+    display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:16px;
+    border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);
+    padding:13px 16px;transition:.15s;
+  }
+  .cn-row:hover{border-color:var(--accent-dim)}
+  .cn-row.home{border-color:var(--accent);background:var(--accent-dim)}
+  .cn-name{font-size:15px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .cn-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+    border-radius:var(--r-pill);padding:3px 8px;border:1px solid var(--line);color:var(--dim);
+  }
+  .cn-tag.home{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+  .cn-tag.lit{color:var(--ball);border-color:var(--ball-glow)}
+  .cn-tag.winter{color:var(--court);border-color:var(--court)}
+  .cn-tag.club{color:var(--muted)}
+  .cn-meta{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);
+    margin-top:5px;line-height:1.6;
+  }
+  .cn-meta b{color:var(--muted);font-weight:500}
+
+  .cn-times{display:flex;gap:14px}
+  .cn-t{text-align:right;min-width:56px}
+  .cn-t b{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;
+    color:var(--ink);line-height:1.15;
+  }
+  .cn-t.none b{color:var(--dim);font-size:15px}
+  .cn-t i{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-style:normal;
+    letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin-top:3px;
+  }
+  .cn-t.fast b{color:var(--accent)}
+
+  .cn-go{display:flex;gap:6px}
+  .cn-go a{
+    display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-sm);
+    border:1px solid var(--line);background:var(--panel-2);text-decoration:none;font-size:15px;transition:.15s;
+  }
+  .cn-go a:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .cn-empty{
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim);
+    text-align:center;padding:26px 10px;border:1.5px dashed var(--line);border-radius:var(--r-md);
+  }
+  .cn-more{
+    width:100%;margin-top:10px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+    border-radius:var(--r-pill);padding:11px 16px;cursor:pointer;transition:.15s;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  }
+  .cn-more:hover{color:var(--ink);border-color:var(--dim)}
+
+  @media(max-width:640px){
+    /* the phone drops the row to two lines: the site, then its times and
+       links sharing one baseline underneath */
+    .cn-row{grid-template-columns:1fr auto;gap:12px}
+    .cn-main{grid-column:1/-1}
+    .cn-times{gap:18px}
+    .cn-search{flex:1 1 100%;font-size:16px}  /* 16px stops iOS zoom-on-focus */
+  }
+
   /* ===== ANIMATION SYSTEM ===== */
   /* Motion language: calm / gentle / product-page. Entrances use
      cubic-bezier(.16,1,.3,1) (soft decelerate, no overshoot). General state
@@ -7591,6 +7686,19 @@
       <div class="sec-label">Quietest windows</div>
       <div class="ct-slots" id="ctSlots"></div>
       <div class="ct-note" id="ctSlotNote"></div>
+    </section>
+
+    <!-- every other place in the city you could play, timed from the clubhouse -->
+    <section style="margin-top:24px">
+      <div class="sec-label">Other courts in the city <span class="count-pill" id="cnCount">—</span></div>
+      <div class="cn-controls">
+        <div class="cn-chips" id="cnChips"></div>
+        <input class="cn-search" id="cnSearch" type="search" placeholder="Search a park or street…"
+               oninput="nearbySearch(this.value)" autocomplete="off">
+      </div>
+      <div class="cn-list" id="cnList"></div>
+      <button class="cn-more" id="cnMore" style="display:none" onclick="nearbyShowAll()"></button>
+      <div class="ct-note" id="cnNote"></div>
     </section>
   </div><!-- /view-court -->
 
@@ -14053,7 +14161,7 @@ function renderForView(id){
   else if(id==="pro") renderPro();
   else if(id==="analytics-ratings") renderAnalyticsRatings();
   else if(id==="analytics-validation") renderAnalyticsValidation();
-  else if(id==="court") renderCourt();
+  else if(id==="court"){ renderCourt(); renderNearby(); }
   else if(id==="dms"){ renderDMs(); markDMsSeen(); updateDMBadge(); }
 }
 
@@ -22810,6 +22918,329 @@ function renderCourtSlots(graph, todayI, nowH){
 setInterval(()=>{
   if(activeView === "court" && document.visibilityState === "visible" && COURT.api) fetchCourt(false);
 }, 5*60*1000);
+
+/* ---------------------------------------------------------------------------
+   Nearby courts — every tennis site in Toronto, timed from the clubhouse.
+
+   Source: City of Toronto Open Data, "Tennis Courts Facilities" (Parks,
+   Forestry & Recreation asset register), 173 locations, pulled 2026-08-27.
+   Drive times are free-flow OSRM times on the OpenStreetMap road network —
+   no traffic model, so treat anything over ~15 min as a best case. Transit
+   times come from live TTC + GO GTFS through Transitous (MOTIS), baselined
+   on a Saturday 10:00 a.m. departure, door-to-door including walking and
+   waiting; they were only computed for the sites worth travelling to (the
+   public/lit/3+ shortlist plus the club courts inside a 12-minute drive),
+   so a 0 in that column means "not computed", not "unreachable".
+   Coordinates are one point per park — usually the centroid, not the court
+   gate — so expect a couple of minutes of walk error either way. Lights =
+   installed; it does not promise they are on, free, or scheduled.
+
+   Columns: name, courts, lit, access (0 public / 1 club / 2 unspecified),
+   club operator, winter play, drive min, drive km, transit min, transfers,
+   walk-in-transit min, TTC route, address, lat, lon.
+   Ordered by drive time, nearest first.                                    */
+const NEARBY_ORIGIN = "47 Thorncliffe Park Dr, Toronto, ON M4H 1J6";
+const NEARBY = [
+["Leaside Park",6,1,1,"Thorncliffe Park Tennis Club",0,1.7,0.6,14,0,12,"Bus 72","5 Leaside Park Dr",43.702196,-79.350098],
+["Angela James Arena & Tennis Courts",4,1,0,"",0,4.5,2.3,16,1,9,"Bus 72 > Bus 100","165 Grenoble Dr",43.713148,-79.327635],
+["Trace Manes Park",6,1,1,"Leaside Tennis Club",0,5.1,2.5,25,0,16,"Bus 156","110 Rumsey Rd",43.70557,-79.36745],
+["Howard Talbot Park",2,0,0,"",0,6.9,3.8,0,0,0,"","635 Eglinton Ave E",43.710604,-79.373753],
+["Bennington Heights Park",2,1,1,"Bennington Heights Tennis Club",0,6.9,3.3,31,0,12,"Bus 88","465 Heath St E",43.695005,-79.369566],
+["Cosburn Park",5,1,1,"",0,7.2,3.7,31,1,14,"Bus 72 > Bus 87","115 Roosevelt Rd",43.692947,-79.330279],
+["Moorevale Park",5,1,1,"Moore Park Tennis Club",0,7.8,3.9,30,0,8,"Bus 88","175 Moore Ave",43.693504,-79.382252],
+["Withrow Park and Clubhouse",2,0,0,"",1,8.9,4.5,0,0,0,"","725 Logan Ave",43.674432,-79.346933],
+["June Rowlands Park",6,1,1,"Davisville Tennis Club",0,9.1,4.3,43,1,11,"Bus 88 > Bus 74","220 Davisville Ave",43.700694,-79.38853],
+["Oriole Park - Toronto",2,0,0,"",1,11.2,5.4,0,0,0,"","201 Oriole Pkwy",43.697246,-79.400238],
+["Sweeney Park",3,1,0,"",0,11.3,6.5,47,2,23,"Bus 88 > Bus 25 > Bus 54","110 Sweeney Dr",43.736213,-79.316012],
+["Topham Park",2,1,0,"",1,11.5,6,0,0,0,"","181 Westview Blvd.",43.710023,-79.306517],
+["Bond Park",6,1,1,"Nyta Winter Tennis Club,The Don Mills Tennis Club",0,11.6,6.4,48,2,23,"Bus 88 > Bus 25 > Bus 25","120 Bond Ave",43.746415,-79.35125],
+["Wanless Park",5,1,1,"Wanless Park Tennis Club",0,11.7,6.9,51,2,14,"Bus 88 > Bus 25 > Bus 162","250 Wanless Ave",43.728932,-79.392057],
+["Jimmie Simpson Park",2,0,0,"",1,11.8,6.2,0,0,0,"","870 Queen St E",43.661174,-79.344742],
+["Eglinton Park",2,1,0,"",0,11.8,6.5,0,0,0,"","200 Eglinton Ave W",43.707455,-79.405329],
+["Broadlands Park",4,1,1,"O'Connor Hills Tennis Club",0,11.8,7.3,39,1,15,"Bus 72 > Bus 191","19 Castlegrove Blvd",43.745913,-79.321292],
+["Rosedale Park",8,0,1,"The Rosedale Tennis Club",0,12.4,6.3,0,0,0,"","20 Scholfield Ave",43.682779,-79.378931],
+["Fairmount Park",4,1,0,"",1,12.5,6.3,40,2,21,"Bus 72 > Subway 2 > Bus 22","1725 Gerrard St E",43.675893,-79.315725],
+["Jonathan Ashbridge Park",2,0,0,"",1,12.7,6.8,0,0,0,"","1515 Queen St E",43.664699,-79.319931],
+["Riverdale Park East",7,0,0,"",1,12.7,6,0,0,0,"","550 Broadview Ave",43.67005,-79.355741],
+["Banbury Park",4,1,1,"Banbury Tennis Club",0,12.7,7.2,0,0,0,"","120 Banbury Rd",43.742774,-79.369873],
+["Lawrence Park Ravine",3,1,1,"Lawrence Park Tennis Club",0,13,7.1,0,0,0,"","51 Alexander Muir Rd.",43.722206,-79.399972],
+["Graydon Hall Park",3,1,0,"",0,13,9.1,39,1,16,"Bus 88 > Bus 25","215 Graydon Hall Dr",43.762956,-79.342043],
+["Moss Park",1,1,0,"",0,13.1,10.5,0,0,0,"","150 Sherbourne St",43.655068,-79.371076],
+["Norwood Park",5,0,0,"",1,13.2,7.4,0,0,0,"","16 Norwood Rd",43.682309,-79.303754],
+["Fenside Park",4,1,0,"",1,13.3,9.1,54,2,24,"Bus 88 > Bus 25 > Bus 95","30 Slidell Cres",43.764896,-79.327222],
+["Havenbrook Park",4,1,1,"Henry Farm Tennis Club",0,13.3,10.9,0,0,0,"","15 Havenbrook Blvd.",43.767712,-79.356629],
+["Coleman Park",2,0,0,"",0,13.4,7.2,0,0,0,"","19 Coleman Ave",43.689399,-79.299813],
+["Ramsden Park",12,0,0,"",1,13.4,6.9,0,0,0,"","1020 Yonge St",43.676416,-79.393015],
+["Roywood Park",4,1,0,"",1,13.5,10.8,48,2,18,"Bus 88 > Bus 25 > Bus 95","2 Roywood Dr",43.764546,-79.320796],
+["Cassandra Park",4,1,1,"Parkway Valley Tennis Club",0,13.7,9,0,0,0,"","230 Cassandra Blvd",43.75477,-79.318375],
+["Lytton Park",3,1,1,"Lytton Park",0,13.8,7.6,0,0,0,"","200 Lytton Blvd",43.714921,-79.410823],
+["Sir Winston Churchill Park",7,1,1,"Sir Winston Churchill Tennis Club",0,13.8,7,0,0,0,"","301 St. Clair Ave W",43.682881,-79.408861],
+["Three Valleys Park",2,1,1,"Parkway Valley Tennis Club",0,13.9,9.7,0,0,0,"","82 Three Valleys Dr",43.750597,-79.339444],
+["Kirkwood Park",4,1,0,"",1,14.2,8.4,43,1,14,"Bus 72 > Bus 51","25 Kirkwood Rd.",43.755614,-79.361675],
+["Maryland Park",4,1,1,"Dentonia Park Tennis Club",1,14.3,7.7,0,0,0,"","19 Maryland Blvd",43.691845,-79.295201],
+["Maryvale Park",3,1,1,"Maryvale Tennis Club",1,14.5,9.2,0,0,0,"","5 Trestleside Grv",43.753081,-79.306528],
+["Beaches Park",10,1,1,"Kew Gardens Tennis Club",0,14.6,8.7,0,0,0,"","2075 Queen St E",43.66613,-79.298509],
+["Shawnee Park",4,0,0,"",1,15.6,12.9,0,0,0,"","81 Shawnee Cir",43.797043,-79.338351],
+["York Mills Valley Park",5,1,1,"Valley Tennis Club",0,15.6,9.4,0,0,0,"","3865 Yonge St",43.740483,-79.405313],
+["Wishing Well Park",3,1,1,"Wishing Well Tennis Club",0,15.7,11.8,0,0,0,"","1700 Pharmacy Ave",43.769868,-79.31662],
+["McGregor Park",2,0,0,"",1,15.7,10.3,0,0,0,"","2231 Lawrence Ave E",43.747302,-79.280559],
+["Clydesdale Park",4,1,1,"Pleasantview Tennis Club",0,15.7,12.5,0,0,0,"","116 Clydesdale Dr",43.783223,-79.329425],
+["Seneca Hill Park",4,1,1,"Seneca Hill Tennis Club",0,15.7,13.2,0,0,0,"","620 Seneca Hill Dr",43.791505,-79.351732],
+["Bridlewood Park",3,1,1,"Bridlewood Tennis Club",0,15.9,12.6,0,0,0,"","445 Huntingwood Dr",43.782918,-79.31624],
+["Prairie Drive Park",3,1,0,"",0,16.2,8.5,39,1,18,"Bus 72 > Subway 2","101 Pharmacy Ave",43.697114,-79.284118],
+["Hillcrest Park",4,1,1,"Wychwood Tennis Club",1,16.3,8.7,0,0,0,"","950 Davenport Rd",43.675984,-79.424526],
+["Dunlace Park",3,1,1,"Dunlace Tennis Club",0,16.4,9.5,0,0,0,"","28 Dunlace Dr",43.762755,-79.368497],
+["Tournament Park",4,1,1,"Tournament Park Tennis Club",0,16.4,10,0,0,0,"","40 Tournament Dr",43.751534,-79.399698],
+["Mcnicoll Park",3,1,0,"",0,16.7,13.9,47,1,9,"Bus 88 > Bus 25","215 Mcnicoll Ave",43.79861,-79.353286],
+["Clairlea Park",2,0,0,"",0,16.8,8.1,0,0,0,"","45 Fairfax Cres",43.714297,-79.287678],
+["Bellbury Park",5,1,1,"Bellbury Tennis Club",0,16.9,13.1,0,0,0,"","55 Van Horne Ave.",43.783668,-79.361303],
+["Oriole Park - North York",4,1,1,"Oriole Park - North York",0,17,13.2,0,0,0,"","2955 Don Mills Rd",43.781491,-79.351007],
+["Cedarvale Park",4,1,0,"",0,17,8,62,3,22,"Bus 72 > Subway 2 > Bus 7 > Bus 90","443 Arlington Ave",43.692043,-79.429346],
+["Hawksbury Park",6,1,1,"Bayview Village Tennis Club",0,17.1,14.4,0,0,0,"","1 A Hawksbury Dr",43.770858,-79.383062],
+["Bayview Village Park",3,0,0,"",0,17.2,14.4,0,0,0,"","2945 Bayview Ave",43.773025,-79.387263],
+["Viewmount Park",4,1,1,"Viewmount Park Tennis Club",0,17.6,9.7,0,0,0,"","169 Viewmount Ave",43.707029,-79.437459],
+["Stanley Park South - Toronto",2,0,0,"",0,18,15.5,0,0,0,"","700 Wellington St W",43.641911,-79.408935],
+["Glendora Park",2,1,0,"",1,18.3,15,0,0,0,"","201 Glendora Ave",43.761528,-79.399925],
+["Cliffwood Park",3,0,0,"",0,18.4,16,0,0,0,"","280 Cliffwood Rd",43.808416,-79.355089],
+["Lakeshore Boulevard Parklands",4,0,0,"",1,18.5,17.9,0,0,0,"","1389 Lake Shore Blvd W",43.634823,-79.442602],
+["Thomson Memorial Park",3,1,1,"Thomson Park Tennis Club",0,18.8,12.8,0,0,0,"","1005 Brimley Rd",43.757579,-79.253371],
+["McDairmid Woods Park",3,1,0,"",1,18.8,16.9,70,2,22,"Bus 72 > Subway 2 > Bus 57","51 Rubic Cres",43.779856,-79.267608],
+["Stephen Leacock Park",4,1,1,"Stephen Leacock Tennis Club",0,18.8,14.6,0,0,0,"","2530 Birchmount Rd",43.787216,-79.302486],
+["Cresthaven Park",4,1,1,"Hillcrest Tennis Club",0,19,14.8,0,0,0,"","37 Cresthaven Dr",43.798988,-79.36326],
+["Agincourt Park",4,1,1,"Agincourt Tennis Club",0,19.1,15.8,0,0,0,"","27 Glen Watford Dr",43.78826,-79.274918],
+["Earlscourt Park",1,1,0,"",0,19.1,10.7,0,0,0,"","1200 Lansdowne Ave",43.673623,-79.451504],
+["Willowdale Park",4,1,1,"North York Tennis Club",0,19.3,15.6,0,0,0,"","75 Hollywood Ave",43.766386,-79.407279],
+["Cummer Park",4,1,0,"",1,19.7,15.7,58,4,17,"Bus 88 > Bus 25 > Subway 4 > Bus 185 > Bus 151","823 Cummer Ave",43.799635,-79.371807],
+["North Bendale Park",3,1,1,"North Bendale Tennis Club",0,19.8,17.4,0,0,0,"","40 Erinlea Cres",43.769708,-79.244795],
+["Dovercourt Park",2,0,0,"",1,19.9,10.8,0,0,0,"","155 Bartlett Ave",43.665215,-79.433535],
+["Alamosa Park",3,0,1,"Bridlebrook Tennis Club",0,20.1,15.7,0,0,0,"","111 Alamosa Dr",43.781088,-79.369558],
+["Confederation Park",3,1,1,"Centennial Tennis Club",0,20.4,18.7,0,0,0,"","250 Dolly Varden Blvd",43.77392,-79.236147],
+["Ruddington Park",3,1,0,"",0,20.5,16.9,67,2,14,"Bus 88 > Bus 25 > Bus 42","75 Ruddington Dr",43.792289,-79.389243],
+["Baycrest Park",2,1,0,"",1,20.6,12.1,0,0,0,"","160 Neptune Dr",43.727177,-79.445313],
+["Trinity Bellwoods Park",8,0,0,"",1,20.6,17,0,0,0,"","790 Queen St W",43.647793,-79.414304],
+["Bestview Park",3,1,0,"",1,20.6,17.4,66,1,23,"Bus 925 > Bus 53","115 Bestview Dr",43.802587,-79.383612],
+["Seven Oaks Park",3,1,1,"Seven Oaks Tennis Club",0,21,20.2,0,0,0,"","372 Military Trl",43.788251,-79.210584],
+["L'Amoreaux Tennis Centre",5,1,1,"Scarborough Winter Tennis Club",0,21.1,16.4,0,0,0,"","300 Silver Springs Blvd",43.805449,-79.305027],
+["Symington Avenue Playground",2,0,0,"",1,21.3,11.8,0,0,0,"","431 Perth Ave",43.666706,-79.452286],
+["Tam Heather Country Club Grounds",4,1,1,"",0,21.4,21.2,0,0,0,"","50 Bonspiel Dr",43.791461,-79.197779],
+["Scarboro Crescent Park",4,1,1,"Scarborough Bluffs Tennis Club",1,21.6,14.4,0,0,0,"","61 Undercliff Dr",43.703806,-79.241818],
+["Botany Hill Park",4,1,1,"Botany Hill Park",0,21.6,19.9,0,0,0,"","277 Orton Park Rd",43.778101,-79.211504],
+["Sorauren Avenue Park",2,0,0,"",1,21.6,19.1,0,0,0,"","289 Sorauren Ave",43.648649,-79.443067],
+["Gwendolen Park",1,1,0,"",0,21.7,17.5,0,0,0,"","3 Gwendolen Cres",43.751319,-79.419987],
+["Gwendolen Park",3,1,1,"Gwendolen Tennis Club",0,21.7,17.5,0,0,0,"","3 Gwendolen Cres",43.751319,-79.419987],
+["Michael Mostyn Balmoral Park",3,1,0,"",0,21.9,14.8,72,3,24,"Bus 100 > Subway 2 > Subway 1 > Bus 104","170 Faywood Blvd",43.744863,-79.449886],
+["Elie Wiesel Park",3,1,0,"",1,22.2,13.6,68,3,16,"Bus 88 > Bus 25 > Tram 5 > Bus 7","30 Palm Dr",43.745716,-79.438093],
+["Eglinton Flats",13,1,0,"",0,22.2,14.4,61,3,13,"Bus 88 > Bus 25 > Tram 5 > Bus 32","101 Emmett Ave",43.684962,-79.499386],
+["Major Abbas Ali Park",3,1,1,"Major Abbas Ali Park",0,22.3,20.2,0,0,0,"","180 Mclevin Ave",43.804848,-79.230693],
+["Iroquois Park",3,0,1,"Iroquois Tennis Club",0,22.4,19.3,0,0,0,"","295 Chartland Blvd S",43.803748,-79.26732],
+["Wedgewood Park - North York",2,0,0,"",1,22.5,17.9,0,0,0,"","145 Wedgewood Dr",43.790511,-79.406311],
+["Ancaster Park",3,0,0,"",0,22.6,14.2,0,0,0,"","43 Ancaster Rd",43.733425,-79.465505],
+["Champlain Parkette",2,0,0,"",0,22.6,20.1,0,0,0,"","50 Champlain Blvd.",43.732136,-79.444269],
+["Malvern Park",3,1,0,"",1,22.8,21.6,86,2,25,"Bus 25 > Bus 95 > Bus 133","36 Sewells Rd",43.809194,-79.217175],
+["Lillian Park",3,1,1,"Newtonbrook Tennis Club",0,22.8,18.3,0,0,0,"","227 Otonabee Ave",43.797688,-79.40794],
+["Amesbury Park",2,0,0,"",1,22.8,14.3,0,0,0,"","151 Culford Rd",43.706186,-79.483422],
+["Rennie Park",4,1,1,"The Swansea Tennis Club",0,22.9,20.6,0,0,0,"","1 Rennie Terr",43.642587,-79.472249],
+["Runnymede Park",2,0,0,"",1,23.4,13.3,0,0,0,"","221 Ryding Ave",43.668291,-79.478552],
+["Hendon Park",4,1,0,"",0,24,18.4,62,3,20,"Bus 88 > Bus 25 > Subway 4 > Subway 1","50 Hendon Ave",43.781475,-79.420751],
+["Jeff Healey Park",2,1,0,"",1,24,23.5,0,0,0,"","1 Delroy Dr",43.630241,-79.494923],
+["North Park",2,0,0,"",0,24.1,15,0,0,0,"","587 Rustic Rd",43.716407,-79.473961],
+["Manchester Park",3,1,0,"",1,24.4,23.4,84,2,24,"Bus 72 > Subway 2 > Bus 76","75 Manchester St",43.619936,-79.4913],
+["Westmount Park",3,1,0,"",1,24.5,16.1,72,3,20,"Bus 88 > Bus 25 > Tram 5 > Bus 32","22 Arcade Dr",43.687306,-79.51881],
+["Elizabeth Simcoe Park",4,1,1,"Guildwood Tennis Club",0,24.6,15.3,0,0,0,"","180 Sylvan Ave",43.739443,-79.204749],
+["Queensway Park",2,0,0,"",0,24.8,25.5,0,0,0,"","8 Avon Park Dr",43.627262,-79.506404],
+["Goulding Park",3,0,0,"",1,24.9,19.4,0,0,0,"","80 Patricia Ave",43.790873,-79.422394],
+["Old Mill Site Park",4,1,1,"York Old Mill Tennis Club",0,25,22.8,0,0,0,"","5 Catherine St",43.650855,-79.490239],
+["Irving W. Chapley Park",2,1,0,"",1,25,17.2,0,0,0,"","205 Wilmington Ave",43.761777,-79.455222],
+["Scarlett Mills Park",4,1,1,"Edenbridge Tennis Club",0,25.1,16.4,0,0,0,"","235 Edenbridge Dr",43.675747,-79.510647],
+["Stanley Greene Park",2,1,2,"",0,25.5,17.8,0,0,0,"","55 Stanley Greene Blvd.",43.734496,-79.477337],
+["Mimico Memorial Park",3,1,1,"Mimico Tennis Club",0,25.5,24.1,0,0,0,"","75 Hillside Ave",43.609814,-79.493668],
+["Park Lawn Park",4,1,0,"",0,25.6,24.2,65,2,17,"Bus 72 > Subway 2 > Bus 66","330 Park Lawn Rd",43.639158,-79.495521],
+["Ourland Park",2,1,0,"",1,25.6,25.8,0,0,0,"","18 Ourland Ave",43.615552,-79.508695],
+["High Park",7,1,1,"Howard Park Tennis Club",1,25.7,20.7,69,2,25,"Bus 72 > Subway 2 > Bus 80","1873 Bloor St W",43.646802,-79.462835],
+["Maple Leaf Park",3,1,0,"",1,25.7,17.3,74,3,23,"Bus 72 > Tram 5 > Bus 41 > Bus 59","320 Culford Rd",43.715802,-79.493453],
+["High Park",7,1,0,"",1,25.7,20.7,69,2,25,"Bus 72 > Subway 2 > Bus 80","1873 Bloor St W",43.646802,-79.462835],
+["Antibes Community Centre",1,0,0,"",1,25.9,21.5,0,0,0,"","140 Antibes Dr",43.781138,-79.446996],
+["Buttonwood Park",3,1,0,"",0,25.9,16.7,71,3,19,"Bus 88 > Bus 25 > Tram 5 > Bus 32","30 Mulham Pl",43.682043,-79.520894],
+["Weston Lions Park",4,1,1,"York Weston Lions Tennis Club",0,26,16.8,0,0,0,"","2125 Lawrence Ave W",43.698558,-79.518098],
+["Heron Park",5,1,1,"Heron Park Tennis Club",0,26.3,24.5,0,0,0,"","292 Manse Rd",43.769284,-79.177299],
+["Grandravine Park",3,0,0,"",0,26.9,19,0,0,0,"","23 Grandravine Dr",43.751926,-79.491316],
+["Sunnylea Park",2,1,0,"",1,27.1,25.1,0,0,0,"","195 Prince Edward Dr S",43.641557,-79.501631],
+["Lambton - Kingsway Park",2,0,0,"",0,27.2,15.7,0,0,0,"","37 Marquis Ave",43.657583,-79.507806],
+["Strathburn Park",2,1,0,"",0,27.3,21.3,0,0,0,"","55 Strathburn Blvd",43.722141,-79.532791],
+["Lora Hill Park",2,1,1,"",1,27.4,26.7,0,0,0,"","36 Fernalroy Blvd",43.638334,-79.514829],
+["Moore Park - North York",3,0,0,"",0,27.4,20.6,0,0,0,"","110 Cactus Ave",43.791579,-79.435344],
+["Princess Anne Park",2,0,0,"",0,27.4,18.4,0,0,0,"","25 A Princess Margaret Blvd",43.673265,-79.539746],
+["Silver Creek Park",3,1,1,"Silver Creek Seniors Tennis Club",1,27.6,18.3,0,0,0,"","44 Strathdee Dr.",43.682701,-79.543404],
+["Chalkfarm Park",2,0,0,"",1,27.6,18.4,0,0,0,"","2230 Jane St",43.725124,-79.515305],
+["Westway Park",4,1,0,"",0,28,18.8,69,2,13,"Bus 72 > Subway 2 > Bus 37","175 The Westway",43.687769,-79.541522],
+["East Mall Park",3,1,0,"",1,28,30.5,73,2,13,"Bus 72 > Subway 2 > Bus 111","355 The East Mall",43.642408,-79.557312],
+["Pelmo Park",3,1,0,"",1,28,22.4,75,3,18,"Bus 72 > Tram 5 > Bus 41 > Bus 59","171 Pellatt Ave",43.713375,-79.517616],
+["Humber Valley Park",4,1,0,"",0,28.1,19,66,2,24,"Bus 100 > Subway 2 > Bus 48","54 Anglesey Blvd",43.664997,-79.525142],
+["Prince of Wales Park",4,1,0,"",0,28.1,25.6,85,3,20,"Bus 72 > Subway 2 > Bus 76 > Tram 507","1 Third St",43.598841,-79.498783],
+["Charlottetown Park",3,1,1,"Charlottetown Tennis Club",0,28.3,28,0,0,0,"","65 Charlottetown Blvd",43.781667,-79.140238],
+["Stanley Park",3,0,0,"",1,28.4,19.7,0,0,0,"","27 Stanley Rd.",43.741903,-79.515406],
+["Cloverdale Park",3,1,0,"",1,28.5,28.3,68,2,14,"Bus 72 > Subway 2 > Bus 111","85 Shaver Ave S",43.633848,-79.544552],
+["Rockford Park",2,0,0,"",0,28.5,22.6,0,0,0,"","70 Rockford Rd",43.786447,-79.453976],
+["Sir Adam Beck Park",2,1,0,"",0,28.7,29.1,0,0,0,"","55 Eltham Dr",43.602121,-79.547549],
+["Sentinel Park",2,0,0,"",1,28.9,20,0,0,0,"","295 Sentinel Rd",43.7552,-79.498552],
+["Laburnham Park",2,1,0,"",1,28.9,28.4,0,0,0,"","60 Laburnham Ave",43.600132,-79.528028],
+["Rotary Peace Park",2,0,0,"",1,29.1,28.2,0,0,0,"","25 Eleventh St",43.594763,-79.506869],
+["Fountainhead Park",3,1,1,"Fountainhead Community Tennis Club",0,29.2,19.6,0,0,0,"","445 Sentinel Rd",43.76196,-79.498978],
+["West Rouge Park",3,1,1,"West Rouge Tennis Club",0,29.4,27.7,0,0,0,"","270 Rouge Hills Dr",43.79159,-79.125464],
+["Dennis Flynn Park",3,1,0,"",0,29.5,31.8,75,2,19,"Bus 72 > Subway 2 > Bus 50","370 The West Mall",43.640711,-79.566087],
+["Kingsview Park",2,0,0,"",0,29.6,23.6,0,0,0,"","46 Kingsview Blvd",43.699167,-79.554343],
+["Tom Riley Park",3,1,1,"Central Tennis Club",1,29.8,28.5,0,0,0,"","4725 Dundas St. W",43.648457,-79.521779],
+["Westgrove Park",2,1,0,"",0,29.9,20.5,0,0,0,"","15 Redgrave Dr",43.681821,-79.567661],
+["Pine Point Park",4,1,1,"Pine Point Tennis Club",1,29.9,23.1,0,0,0,"","4 Conan Rd",43.716159,-79.544131],
+["Pine Point Park",2,1,0,"",1,29.9,23.1,0,0,0,"","4 Conan Rd",43.716159,-79.544131],
+["Martingrove Gardens Park",2,1,0,"",0,30.1,25,0,0,0,"","31 Lavington Dr",43.689166,-79.563337],
+["Summerlea Park",2,1,0,"",0,30.2,22.7,0,0,0,"","2 Arcot Blvd",43.730618,-79.548554],
+["Firgrove Park",3,0,0,"",1,30.4,24.3,0,0,0,"","254 Firgrove Cres",43.75063,-79.521598],
+["Glen Park",2,1,0,"",0,30.6,32,0,0,0,"","44 A Eastglen Cres",43.650823,-79.55288],
+["Rosethorn Park",3,1,1,"The Rosethorn Tennis Club",0,30.7,20.5,0,0,0,"","26 Remington Dr",43.658443,-79.539126],
+["Bloordale Park South",2,0,0,"",0,30.7,31.4,0,0,0,"","230 Renforth Dr",43.636722,-79.57025],
+["Wedgewood Park - Etobicoke",1,1,0,"",0,30.8,32.3,0,0,0,"","15 Swan Ave",43.644463,-79.547517],
+["Birch Park",2,1,0,"",1,31.2,29.5,0,0,0,"","75 Arcadian Cir",43.591681,-79.527419],
+["Lanyard Park",3,0,0,"",1,31.3,25.4,0,0,0,"","138 Lanyard Rd.",43.747516,-79.548674],
+["Albion Gardens Park",3,1,0,"",0,31.7,23.8,93,2,21,"Bus 72 > Subway 2 > Bus 37","41 Deanlea Crt",43.739644,-79.558917],
+["Gracedale Park",3,0,0,"",1,31.9,25.9,0,0,0,"","176 Gracedale Blvd",43.751942,-79.562177],
+["West Deane Park",4,1,1,"Martingrove Tennis Club",0,31.9,21.1,0,0,0,"","400 Martin Grove Road",43.663999,-79.563494],
+["Hullmar Park",3,1,0,"",1,32,25.7,88,3,24,"Bus 72 > Subway 2 > Subway 1 > Bus 935","97 Hullmar Dr",43.764939,-79.525419],
+["Mill Valley Park",2,0,0,"",0,32.2,33.3,0,0,0,"","412 Mill Rd",43.641805,-79.587818],
+["Millwood Park",3,1,0,"",0,32.2,32.1,74,2,14,"Bus 72 > Subway 2 > Bus 49","4370 Bloor St W",43.631764,-79.578437],
+["Sunnydale Acres Park",4,1,0,"",0,32.5,25.5,89,4,22,"Bus 72 > Subway 2 > Regional_Rail UP > Bus 52 > Bus 45","50 Amoro Dr",43.724097,-79.578525],
+["Beaumonde Heights Park",3,0,0,"",0,33,25,0,0,0,"","17 A Waltham Dr",43.740813,-79.574494],
+["Flagstaff Park",2,1,0,"",0,33.4,26.3,0,0,0,"","42 Mercury Rd",43.721174,-79.59064],
+["Indian Line Park",2,1,0,"",0,35.2,30.5,0,0,0,"","655 Humberwood Blvd",43.724969,-79.622462],
+["Gihon Spring Park",2,1,0,"",1,37.7,28,0,0,0,"","75 Gihon Spring Dr",43.754528,-79.594631],
+["Royal Crest Park",3,1,0,"",0,37.9,28.1,107,2,21,"Bus 72 > Subway 2 > Bus 927","50 Cabernet Cir",43.752791,-79.605292]
+].map(r=>({
+  name:r[0], courts:r[1], lit:!!r[2], access:r[3], club:r[4], winter:!!r[5],
+  driveMin:r[6], driveKm:r[7], transitMin:r[8]||null, transfers:r[9],
+  walk:r[10], route:r[11], addr:r[12], lat:r[13], lon:r[14]
+}));
+
+/* the home court is in this list under its asset-register name — match it by
+   street address so a rename on either side doesn't break the flag */
+const NEARBY_HOME = (COURT.address||"").split(",")[0].trim().toLowerCase();
+
+const NEARBY_FILTERS = [
+  { id:"short",  label:"Our shortlist", test:c=> c.access===0 && c.lit && c.courts>=3 },
+  { id:"lit",    label:"Lit",           test:c=> c.lit },
+  { id:"winter", label:"Winter play",   test:c=> c.winter },
+  { id:"club",   label:"Club courts",   test:c=> c.access===1 },
+  { id:"all",    label:"All 173",       test:c=> true }
+];
+const nearbyState = { filter:"short", sort:"transit", q:"", expanded:false };
+const NEARBY_PAGE = 12;   // how many rows before the "show all" button
+
+function nearbyLink(c, mode){
+  return "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(NEARBY_ORIGIN) +
+         "&destination=" + c.lat + "," + c.lon + "&travelmode=" + mode;
+}
+
+function nearbyRows(){
+  const f = NEARBY_FILTERS.find(f=>f.id===nearbyState.filter) || NEARBY_FILTERS[0];
+  const q = nearbyState.q.trim().toLowerCase();
+  let rows = NEARBY.filter(c=> f.test(c));
+  /* a search reaches past the active filter — typing a park name you can
+     picture and getting "no results" because it happens to be unlit is the
+     kind of dead end that makes people stop using a finder */
+  if(q) rows = NEARBY.filter(c=>
+    c.name.toLowerCase().includes(q) || c.addr.toLowerCase().includes(q) || c.club.toLowerCase().includes(q));
+
+  const by = nearbyState.sort;
+  rows.sort((a,b)=>{
+    if(by==="courts") return b.courts - a.courts || a.driveMin - b.driveMin;
+    if(by==="drive")  return a.driveMin - b.driveMin;
+    // transit: sites with no computed itinerary sink below the ones that have one
+    const ta = a.transitMin ?? 1e6, tb = b.transitMin ?? 1e6;
+    return ta - tb || a.driveMin - b.driveMin;
+  });
+  return rows;
+}
+
+function renderNearby(){
+  const list = $("cnList"); if(!list) return;
+
+  const chips = $("cnChips");
+  if(chips) chips.innerHTML = NEARBY_FILTERS.map(f=>{
+    const n = NEARBY.filter(c=>f.test(c)).length;
+    return `<button class="cn-chip${nearbyState.filter===f.id?" on":""}" onclick="nearbyFilter('${f.id}')">${esc(f.label)}${f.id==="all"?"":" "+n}</button>`;
+  }).join("") +
+    `<select class="cn-sel" id="cnSort" onchange="nearbySort(this.value)" aria-label="Sort courts">
+       <option value="transit"${nearbyState.sort==="transit"?" selected":""}>Sort · transit ▾</option>
+       <option value="drive"${nearbyState.sort==="drive"?" selected":""}>Sort · drive ▾</option>
+       <option value="courts"${nearbyState.sort==="courts"?" selected":""}>Sort · courts ▾</option>
+     </select>`;
+
+  const rows = nearbyRows();
+  $("cnCount").textContent = rows.length;
+
+  if(!rows.length){
+    list.innerHTML = `<div class="cn-empty">Nothing matches “${esc(nearbyState.q)}”.</div>`;
+    $("cnMore").style.display = "none";
+    $("cnNote").innerHTML = "";
+    return;
+  }
+
+  const shown = nearbyState.expanded ? rows : rows.slice(0, NEARBY_PAGE);
+  const fastest = rows[0];
+
+  list.innerHTML = shown.map(c=>{
+    const home = c.addr.toLowerCase() === NEARBY_HOME;
+    const tags = [
+      home ? `<span class="cn-tag home">our court</span>` : "",
+      c.lit ? `<span class="cn-tag lit">lit</span>` : "",
+      c.winter ? `<span class="cn-tag winter">winter</span>` : "",
+      c.access===1 ? `<span class="cn-tag club">${esc(c.club||"club")}</span>` : ""
+    ].join("");
+
+    const trip = c.transitMin
+      ? `${c.transfers===0?"direct":c.transfers+" transfer"+(c.transfers>1?"s":"")} · ${esc(c.route)} · ${c.walk} min walking`
+      : "transit not timed";
+
+    const isFastest = c===fastest;
+    const transit = c.transitMin
+      ? `<div class="cn-t${isFastest&&nearbyState.sort==="transit"?" fast":""}"><b>${c.transitMin}</b><i>transit</i></div>`
+      : `<div class="cn-t none"><b>—</b><i>transit</i></div>`;
+
+    return `<div class="cn-row${home?" home":""}">
+      <div class="cn-main">
+        <div class="cn-name">${esc(c.name)}${tags}</div>
+        <div class="cn-meta"><b>${c.courts} court${c.courts===1?"":"s"}</b> · ${esc(c.addr)}<br>${trip}</div>
+      </div>
+      <div class="cn-times">
+        ${transit}
+        <div class="cn-t${isFastest&&nearbyState.sort==="drive"?" fast":""}"><b>${c.driveMin}</b><i>drive · ${c.driveKm} km</i></div>
+      </div>
+      <div class="cn-go">
+        <a href="${nearbyLink(c,"driving")}" target="_blank" rel="noopener" title="Driving directions">🚗</a>
+        <a href="${nearbyLink(c,"transit")}" target="_blank" rel="noopener" title="Transit directions">🚌</a>
+      </div>
+    </div>`;
+  }).join("");
+
+  const more = $("cnMore");
+  if(rows.length > NEARBY_PAGE && !nearbyState.expanded){
+    more.style.display = "";
+    more.textContent = `Show all ${rows.length}`;
+  } else {
+    more.style.display = "none";
+  }
+
+  $("cnNote").innerHTML =
+    `Times are from ${esc(NEARBY_ORIGIN)}. Driving is free-flow — no traffic — so anything over 15 minutes
+     is a best case; transit is a Saturday 10 a.m. TTC itinerary, door to door. The 🚗 and 🚌 links recompute
+     both live, with current traffic. Court data: City of Toronto Open Data, Tennis Courts Facilities.`;
+}
+
+function nearbyFilter(id){ nearbyState.filter=id; nearbyState.q=""; const s=$("cnSearch"); if(s) s.value=""; nearbyState.expanded=false; renderNearby(); }
+function nearbySort(v){ nearbyState.sort=v; renderNearby(); }
+function nearbySearch(v){ nearbyState.q=v; nearbyState.expanded=false; renderNearby(); }
+function nearbyShowAll(){ nearbyState.expanded=true; renderNearby(); }
+window.renderNearby=renderNearby; window.nearbyFilter=nearbyFilter;
+window.nearbySort=nearbySort; window.nearbySearch=nearbySearch; window.nearbyShowAll=nearbyShowAll;
 
 /* ---------- admin toggle ---------- */
 function refreshAfterAdminChange(){
