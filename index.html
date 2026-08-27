@@ -8112,41 +8112,18 @@ let openScheduledMatchId = null; // scheduled_matches.id currently shown in the 
 /* ============================================================
    WHAT AN EVENT DOES TO THE LADDER
 
-   An ordinary event answers this with its own counts_elo flag,
-   set when the admin created it.
+   Every event answers this with its own counts_elo flag, set
+   when the admin created it — the cup included, which is why
+   the cup, running under Robin+ and so created as an exhibition,
+   leaves ratings alone.
 
-   The FF Cup does not. It is the season's tournament — the best
-   games anyone plays all year, reffed properly, with the whole
-   field in it — and running it as an exhibition made the ladder
-   during the cup a record of everything *except* the cup: a
-   player could win it outright and end the month exactly where
-   they started. So the cup counts, whatever its row says. The
-   Robin+ format it runs under still defaults to exhibition (that
-   default is what the flag was set to the day the row was made),
-   and this is the deliberate exception to it.
-
-   Identity is the cup's *name*, never cupTournament() — that
-   falls back to "the newest unfinished event" for the marquee,
-   which is the right answer for promotion and completely the
-   wrong one here: it would quietly drag every other exhibition
-   onto the ladder with it.
-
-   One function, so the engine, the badge on the marquee and the
-   note under the ref's submit picker can never disagree about
-   what a result is going to mean.
+   One function rather than the flag read in six places, so the
+   engine, the badge on the marquee, the event pages and the note
+   under the ref's submit picker can never disagree about what a
+   result is going to mean.
    ============================================================ */
-function isCupEvent(t){
-  /* CUP_NAME_RX belongs to the cup's own block further down this script.
-     The guard keeps this callable from anywhere, including before that
-     block has been evaluated. */
-  try{ return !!(t && CUP_NAME_RX.test(t.name || "")); }
-  catch(e){ return false; }
-}
-
-/* does this event feed the Elo ladder? */
 function tournamentCountsElo(t){
   if(!t) return true;              // no event = a plain ladder game
-  if(isCupEvent(t)) return true;   // the cup is rated, always
   return t.counts_elo !== false;
 }
 
@@ -9229,10 +9206,9 @@ function ptRalliesPayload(){
    hasn't finished. Picking an event sets matches.tournament_id, which
    is the same field the admin tournament screens write — nothing new
    downstream, the event page and the draw pick the game up on their
-   own. Whether it *also* moves Elo is then the event's own answer
-   (see tournamentCountsElo — its counts_elo flag, except for the cup,
-   which is always rated), not a second switch here: one event, one
-   answer, and no way for the two to disagree.
+   own. Whether it *also* moves Elo is then the event's own counts_elo
+   flag (see tournamentCountsElo), not a second switch here: one event,
+   one answer, and no way for the two to disagree.
 
    The choice is remembered in localStorage between matches, because a
    ref working a cup reffs the whole cup — having to re-pick the event
