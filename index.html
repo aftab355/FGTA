@@ -4053,6 +4053,27 @@
     color:var(--dim);margin:16px 0 9px;padding-top:12px;border-top:1px dashed var(--line)}
   .rp-leg-h:first-child{margin-top:2px;padding-top:0;border-top:none}
 
+  /* ---- shortening the return leg ---- */
+  .rp-trim-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:8px}
+  .rp-trim-opt.best{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow)}
+  .rp-trim-main{flex:1;min-width:0;font-size:13.5px;color:var(--ink)}
+  .rp-trim-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);
+    letter-spacing:.5px;margin-top:3px;line-height:1.5}
+  .rp-trim-go{flex:none;white-space:nowrap}
+  button.rp-trim-pin{cursor:pointer;font-family:inherit}
+  button.rp-trim-pin.on{border-color:var(--accent);color:var(--accent)}
+  button.rp-trim-pin.on .rp-chip-seed{color:var(--accent)}
+  button.rp-trim-pin[disabled]{cursor:default;opacity:.7}
+  @media(max-width:720px){
+    /* the option gets the width; the button drops under it rather than
+       squeezing two names into half a line. It stays compact — a panel
+       action like "put the return leg back" is the one that goes full
+       width, and these are per-option. */
+    .rp-trim-opt{flex-wrap:wrap}
+    .rp-trim-main{flex:1 1 100%}
+  }
+
   .rp-bracket{display:flex;gap:14px;align-items:stretch;margin-top:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
   .rp-round{flex:1 1 0;min-width:150px;display:flex;flex-direction:column}
   .rp-round-body{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
@@ -15916,6 +15937,11 @@ function renderHybridBracket(t, games){
    your place. There is nothing to draw (every pairing happens
    regardless), so rpSolveDrr() only solves the order of play.
 
+   Twelve games is a lot of days, though, and events run late. The
+   return leg can be shortened after the fact — see rpTrimOptions()
+   — which is the only thing in a four-player group that changes who
+   plays whom, and so the only thing that has to be chosen by hand.
+
    Below four there is no event: three players can't fill a bracket.
 
    Robin+ events are exhibition by default: they never touch Elo.
@@ -15941,7 +15967,9 @@ const RP_FILL_TARGET  = 4;         // how many the "top N" button pulls off the 
           player would still only get two games. Instead every pair
           plays twice — 12 games, six each — and the table seeds the
           bracket rather than trimming it. Losing a group game costs
-          you the #1 seed, not your place.
+          you the #1 seed, not your place. A drr that has run out of
+          days can have its return leg shortened; leg 1 never moves,
+          so every pairing has still been played at least once.
 
    Everything downstream (standings, deciders, the bracket, the
    champion) reads state.order, so it works the same either way.
@@ -16257,10 +16285,24 @@ function rpSolveDrr(players, seed, openers){
   const order = leg1.concat(leg2)
     .map((g,i)=>({p1:g.p1, p2:g.p2, leg:g.leg, round: RP_ROUND_GROUP + (i+1)}));
 
-  const qualities = order.map(g=>ctx.quality(g.p1,g.p2));
-  const avgQ = qualities.reduce((a,b)=>a+b,0)/order.length;
-  const minQ = Math.min(...qualities), maxQ = Math.max(...qualities);
+  return {cycle, order, seed, shape: "drr", legs: 2, metrics: rpDrrMetrics(order, players, ctx)};
+}
 
+/* ---------- reading a group schedule back ----------------------
+   The same handful of numbers describe a full double round robin
+   and a trimmed one, so they are read off the order of play rather
+   than asserted from the shape. Everything the "why" panel shows
+   comes from here, which is what lets a schedule be changed after
+   the fact and still explain itself honestly.
+   ---------------------------------------------------------------- */
+function rpDrrMetrics(order, players, ctx){
+  order = order || []; players = players || [];
+  const qualities = order.map(g=>ctx.quality(g.p1,g.p2));
+  const avgQ = qualities.length ? qualities.reduce((a,b)=>a+b,0)/qualities.length : 0;
+  const minQ = qualities.length ? Math.min(...qualities) : 0;
+  const maxQ = qualities.length ? Math.max(...qualities) : 0;
+
+  // rest: the fewest games anyone sits out between two of their own
   const seen = {}; let minRest = 99;
   order.forEach((g,i)=>{
     [g.p1,g.p2].forEach(p=>{
@@ -16269,19 +16311,44 @@ function rpSolveDrr(players, seed, openers){
     });
   });
 
+  // how many games each player got, and how often each pairing is on
+  // the sheet (NUL joins the names, as in rpContext — no name contains it)
+  const key = (a,b) => a < b ? a+"\u0000"+b : b+"\u0000"+a;
+  const counts = {}, meets = {};
+  players.forEach(p=>counts[p] = 0);
+  order.forEach(g=>{
+    counts[g.p1] = (counts[g.p1]||0) + 1;
+    counts[g.p2] = (counts[g.p2]||0) + 1;
+    const k = key(g.p1,g.p2);
+    (meets[k] || (meets[k] = {p1:g.p1, p2:g.p2, n:0})).n++;
+  });
+  const pairs = Object.keys(meets).map(k=>meets[k]);
+  const each  = players.map(p=>counts[p]||0);
+
+  /* draw spread — the number a trim can get wrong. A player's
+     baseline is the field without them; their tilt is how much
+     stronger (or weaker) the opponents they actually drew are than
+     that. A schedule where everyone meets everyone the same number
+     of times tilts nobody, so a full double round robin reads 0
+     however far apart the ratings are — and anything that reads
+     above 0 is the shortening handing someone a harder route. */
+  const mean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+  const tilts = players.map(p=>{
+    const mine = order.filter(g=>g.p1===p || g.p2===p).map(g=>ctx.rating(g.p1===p ? g.p2 : g.p1));
+    if(!mine.length) return 0;
+    return mean(mine) - mean(players.filter(q=>q!==p).map(q=>ctx.rating(q)));
+  });
+
   return {
-    cycle, order, seed, shape: "drr", legs: 2,
-    metrics: {
-      avgQuality: avgQ,
-      tightest: order[qualities.indexOf(maxQ)], tightestQ: maxQ,
-      loosest:  order[qualities.indexOf(minQ)], loosestQ: minQ,
-      freshPairs: pairs.filter(p=>!ctx.metCount(p.p1,p.p2)).length,
-      freshOf: pairs.length,
-      gamesEach: (n-1)*2,
-      minRest: minRest === 99 ? 0 : minRest,
-      sosSpread: 0,      // identical schedules, by construction
-      pairCount: pairs.length
-    }
+    avgQuality: avgQ,
+    tightest: order[qualities.indexOf(maxQ)], tightestQ: maxQ,
+    loosest:  order[qualities.indexOf(minQ)], loosestQ: minQ,
+    freshPairs: pairs.filter(x=>!ctx.metCount(x.p1,x.p2)).length,
+    freshOf: pairs.length,
+    gamesEach: each.length ? Math.max(...each) : 0,
+    minRest: minRest === 99 ? 0 : minRest,
+    sosSpread: tilts.length ? Math.max(...tilts) - Math.min(...tilts) : 0,
+    pairCount: pairs.length
   };
 }
 
@@ -16301,6 +16368,185 @@ function rpSolve(players, seed, openers){
     ? rpSolveDrr(players, seed, openers)
     : rpSolveRing(players, seed);
 }
+
+/* ============================================================
+   TRIMMING THE RETURN LEG
+
+   A four-player group is twelve games, and twelve games need
+   twelve days. When the event slips — and it does — the honest fix
+   is not to play three games in an afternoon, it is to play fewer
+   games. Leg 1 is where everyone meets everyone, so it is never
+   touched; leg 2 is a bonus round, and a bonus round can be short.
+
+   The one rule is that it has to stay a competition. Everyone must
+   come out of the shortening on the *same* number of return games,
+   or the table that seeds the bracket is comparing players who
+   played different amounts of tennis. That makes the surviving
+   return games a k-regular graph on the field: at four players,
+   two each is a four-cycle, which is the same as saying two of the
+   six return games come off and the two that go are a pair with no
+   player in common.
+
+   There are only a handful of ways to do that, so they are all
+   enumerated and scored rather than searched — and the admin picks,
+   because some of those games are already in the diary and the app
+   doesn't know which ones the players have their hearts set on.
+   ============================================================ */
+
+/* the fixtures of one leg, in playing order */
+function rpLeg(state, leg){
+  return (state && state.order || []).filter(fx => fx.leg === leg);
+}
+
+/* grp7 -> 7, so a restored fixture goes back where it came from */
+function rpRoundNo(round){
+  const m = /(\d+)$/.exec(String(round || ""));
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/* how many games of a leg each player is down for, as {max, min} */
+function rpLegLoad(state, leg){
+  const players = (state && state.roster) || [];
+  const deg = {}; players.forEach(p => deg[p] = 0);
+  rpLeg(state, leg).forEach(fx=>{ deg[fx.p1] = (deg[fx.p1]||0)+1; deg[fx.p2] = (deg[fx.p2]||0)+1; });
+  const vals = players.map(p => deg[p] || 0);
+  return {max: vals.length ? Math.max(...vals) : 0, min: vals.length ? Math.min(...vals) : 0};
+}
+
+/* the return games the trim may not take away: anything already on
+   record, plus whatever the admin has pinned. Keyed by round, because
+   that is what survives a re-render and what the dates are filed under. */
+function rpTrimLocked(t, state, pins){
+  const locked = {};
+  rpLeg(state, 2).forEach(fx=>{ if(rpGame(t.id, fx.round)) locked[fx.round] = "played"; });
+  (pins || []).forEach(r=>{ if(!locked[r]) locked[r] = "pinned"; });
+  return locked;
+}
+
+/* Scored the way a ring is scored, over the group as a whole — the
+   trim is a draw like any other, it just happens five games in. Leg 1
+   is the same in every candidate, so it cancels out; it is left in so
+   the numbers read as the schedule people will actually play. */
+function rpTrimCost(order, players, ctx, metrics){
+  let bal = 0, rep = 0;
+  order.forEach(g=>{
+    bal += Math.pow(1 - ctx.quality(g.p1,g.p2), 1.5);   // superlinear, as in rpCycleCost
+    rep += ctx.rematch(g.p1,g.p2);
+  });
+  const k = order.length || 1;
+  const fair = metrics.sosSpread / ctx.spread;
+  return {
+    total: RP_W.balance*(bal/k) + RP_W.freshness*(rep/k) + RP_W.fairness*fair,
+    balance: bal/k, freshness: rep/k, fairness: fair
+  };
+}
+
+/* Every way the return leg can come down to `each` games a player,
+   best first. Brute force over the subsets of leg 2 — at four players
+   that is 64 candidates, of which three survive the regularity test,
+   so there is nothing to be gained by being clever about it. */
+function rpTrimOptions(t, state, each, pins){
+  const players = (state && state.roster) || [];
+  const leg2 = rpLeg(state, 2);
+  if(!leg2.length || players.length < 2) return [];
+  if(leg2.length > 15) return [];                        // the ceiling on brute force; a drr never gets near it
+
+  const locked = rpTrimLocked(t, state, pins);
+  const ctx  = rpContext(players);
+  const leg1 = rpLeg(state, 1);
+  const out  = [];
+
+  for(let mask = 0; mask < (1 << leg2.length); mask++){
+    const keep = [], drop = [];
+    for(let i=0;i<leg2.length;i++) ((mask >> i) & 1 ? keep : drop).push(leg2[i]);
+    if(!drop.length) continue;                           // that is the schedule they already have
+    if(drop.some(fx => locked[fx.round])) continue;      // never drop a played or pinned game
+
+    const deg = {}; players.forEach(p => deg[p] = 0);
+    keep.forEach(fx=>{ deg[fx.p1]++; deg[fx.p2]++; });
+    if(players.some(p => deg[p] !== each)) continue;     // everyone on the same number, or it is not a trim
+
+    const order   = leg1.concat(keep);
+    const metrics = rpDrrMetrics(order, players, ctx);
+    out.push({keep, drop, order, metrics, cost: rpTrimCost(order, players, ctx, metrics)});
+  }
+  return out.sort((a,b)=> a.cost.total - b.cost.total);
+}
+
+/* ---------- trimming, and putting it back ----------------------
+   The round keys never move. grp9 is grp9 whether or not grp7 is
+   still on the sheet, so the results already recorded stay attached
+   to their fixtures and the days stay attached to their rounds —
+   only the display numbering (G7, G8...) closes up. What comes off
+   is remembered in state.trim, days included, so the return leg can
+   be put back exactly as it was.
+   ---------------------------------------------------------------- */
+async function rpTrimLeg2(tid, dropRounds){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const state = rpRead(t);
+  if(!state || rpShapeOf(state) !== "drr") return toast("Only a four-player group has a return leg", true);
+
+  const wanted = new Set(String(dropRounds || "").split(",").map(r=>r.trim()).filter(Boolean));
+  const order   = state.order || [];
+  const dropped = order.filter(fx => wanted.has(fx.round));
+  if(!dropped.length) return toast("Nothing to drop", true);
+  if(dropped.some(fx => fx.leg !== 2)) return toast("Leg 1 stays exactly as it is", true);
+  const already = dropped.find(fx => rpGame(tid, fx.round));
+  if(already) return toast(`${already.p1} vs ${already.p2} is already on record`, true);
+
+  const names = dropped.map(fx=>`${fx.p1} v ${fx.p2}`).join(" and ");
+  const kept  = order.filter(fx => !wanted.has(fx.round));
+  const load  = rpLegLoad({roster: state.roster, order: kept}, 2);
+  if(!confirm(`Drop ${names}? Leg 1 is untouched and everyone is left on ${load.max} return game${load.max===1?"":"s"}.`)) return;
+
+  // the days come off with the fixtures, and are remembered with them
+  const dates = Object.assign({}, state.dates || {});
+  const parked = {};
+  dropped.forEach(fx=>{ if(dates[fx.round]){ parked[fx.round] = dates[fx.round]; delete dates[fx.round]; } });
+
+  const prev = state.trim;
+  state.order   = kept;
+  state.dates   = dates;
+  state.metrics = rpDrrMetrics(kept, state.roster, rpContext(state.roster));
+  state.trim    = {
+    at: new Date().toISOString(),
+    dropped: ((prev && prev.dropped) || []).concat(
+      dropped.map(fx=>({round:fx.round, p1:fx.p1, p2:fx.p2, leg:fx.leg}))),
+    dates: Object.assign({}, prev && prev.dates, parked)
+  };
+
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  rpOpenFixture = null;
+  delete rpTrimPins[tid];
+  toast(res.local ? "Return leg trimmed ✓ (this device only)" : "Return leg trimmed ✓");
+  renderTournaments(); renderTournamentDetail(tid); renderCupMarquee();
+}
+window.rpTrimLeg2 = rpTrimLeg2;
+
+async function rpRestoreLeg2(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const state = rpRead(t);
+  const back = (state && state.trim && state.trim.dropped) || [];
+  if(!back.length) return toast("The return leg is already whole", true);
+  if(!confirm(`Put all ${back.length} return game${back.length===1?"":"s"} back on the sheet?`)) return;
+
+  state.order = (state.order || []).concat(
+      back.map(fx=>({p1:fx.p1, p2:fx.p2, leg:fx.leg, round:fx.round})))
+    .sort((a,b)=> rpRoundNo(a.round) - rpRoundNo(b.round));
+  state.dates   = Object.assign({}, state.dates, state.trim.dates || {});
+  state.metrics = rpDrrMetrics(state.order, state.roster, rpContext(state.roster));
+  delete state.trim;
+
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  rpOpenFixture = null;
+  toast(res.local ? "Return leg restored ✓ (this device only)" : "Return leg restored ✓");
+  renderTournaments(); renderTournamentDetail(tid); renderCupMarquee();
+}
+window.rpRestoreLeg2 = rpRestoreLeg2;
 
 /* ============================================================
    RESULTS, STANDINGS, QUALIFICATION
@@ -16377,9 +16623,10 @@ function rpGroupTable(t, state){
 }
 
 /* head-to-head between two group players: -1 a ahead, 1 b ahead, 0
-   nothing to separate them. They meet twice in a double round robin,
-   so it's the aggregate — a 1-1 split settles nothing and falls
-   through to the next criterion. */
+   nothing to separate them. They meet twice in a double round robin
+   (once, for a pair the shortened return leg dropped), so it's the
+   aggregate over however many games they had — a 1-1 split settles
+   nothing and falls through to the next criterion. */
 function rpH2H(t, state, a, b){
   let score = 0;
   (state.order||[]).forEach(f=>{
@@ -16804,6 +17051,8 @@ function rpTodaysFixture(t){
    ============================================================ */
 let rpOpenFixture = null;     // round key of the fixture whose report panel is open
 let rpDraftRoster = {};       // tid -> roster being edited before the first save
+let rpTrimPins = {};          // tid -> rounds the admin has pinned while deciding what to cut
+let rpTrimEach = {};          // tid -> return games a player being considered
 
 const rpJs = s => String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");   // safe inside an inline onclick
 
@@ -16875,8 +17124,10 @@ function rpRingSvg(t, state, snap){
 /* ---------- the four-player group, drawn ----------
    The ring's picture is a circle with the neighbours joined. This one
    is the complete graph — every line is a pairing, and each is walked
-   twice. A line fills in as its two games get played. Rotated 45° so
-   the four names sit on the diagonals and clear each other. */
+   twice, or once where the return leg has been shortened. A line fills
+   in as its games get played, and half-fills when a pair has one of two
+   done. Rotated 45° so the four names sit on the diagonals and clear
+   each other. */
 function rpDrrSvg(t, state, snap){
   const ring = state.cycle, n = ring.length;
   const cx = 165, cy = 152, R = 82, LR = 118;
@@ -16920,9 +17171,16 @@ function rpDrrSvg(t, state, snap){
   }).join("");
 
   const played = (state.order||[]).filter(fx=>rpGame(t.id, fx.round)).length;
-  return `<svg class="rp-circle" viewBox="0 0 330 300" role="img" aria-label="Group: every player plays every other player twice">
+  /* the caption reads the lines rather than assuming them: a trimmed
+     return leg leaves some pairs met twice and some only once */
+  const totals = Object.keys(meets).map(k=>meets[k].total);
+  const evenAll = totals.length && totals.every(v=>v === totals[0]);
+  const tail = evenAll
+    ? (totals[0] === 2 ? "every line twice" : totals[0] === 1 ? "every line once" : `every line ${totals[0]}×`)
+    : "return leg shortened · thin lines played once";
+  return `<svg class="rp-circle" viewBox="0 0 330 300" role="img" aria-label="Group: ${esc(tail)}">
     ${edges}${nodes}
-    <text class="rp-nsub" x="165" y="286" style="font-size:9px">${played} of ${(state.order||[]).length} group games played — every line twice</text>
+    <text class="rp-nsub" x="165" y="286" style="font-size:9px">${played} of ${(state.order||[]).length} group games played — ${tail}</text>
   </svg>`;
 }
 
@@ -17013,14 +17271,26 @@ function rpWhyPanel(state){
     ? `<div class="rp-metric"><div class="rp-metric-v">${m.gamesEach||0}</div><div class="rp-metric-l">games each</div></div>`
     : `<div class="rp-metric"><div class="rp-metric-v">±${Math.round(m.sosSpread)}</div><div class="rp-metric-l">draw spread</div></div>`;
 
+  const cut = !!(state.trim && (state.trim.dropped||[]).length);
   const body = drr ? `
+        ${cut ? `
+        There was no draw to make. Four players means every pairing happens twice whatever order we put them in,
+        so nobody could be handed an easier route — which is why the schedule below only ever solved the order of
+        play. Shortening the return leg is the one thing that does change who plays whom, so it is the one thing
+        here that had to be chosen rather than derived.` : `
         There is no draw to make. Four players means every pairing happens twice whatever order we put them in,
         so nobody can be handed an easier route — each player faces the same three opponents, the same number of
         times, and the lopsided-draw problem the five-player ring works hardest to avoid simply doesn't exist here.
-        What is left to decide is the order of play.
+        What is left to decide is the order of play.`}
         <br><br>
+        ${cut ? `
+        <b>Two legs, the second one shortened</b> — every pairing was played through once, then the return leg was cut
+        back so the event still fits its window. ${(state.trim.dropped||[]).map(fx=>`<b>${esc(fx.p1)} v ${esc(fx.p2)}</b>`).join(" and ")}
+        came off. Everyone is left on the same number of games, so the table still compares like with like — but the
+        pairs that survive into the return leg are played twice and the rest only once, which is what the draw spread
+        below now measures.` : `
         <b>Two legs</b> — the six pairings are played through once, then again with the sides swapped. A pair never
-        meets back to back, so the return game always has something behind it.
+        meets back to back, so the return game always has something behind it.`}
         <br><br>
         <b>Rest</b> — inside each leg the games are sequenced so nobody plays consecutively where the fixtures allow
         it (minimum rest here: <b>${m.minRest} game${m.minRest===1?"":"s"}</b>), with the closest matchup held back for last.
@@ -17034,7 +17304,13 @@ function rpWhyPanel(state){
         <b>Opening games</b> — ${state.openers.map(o=>`<b>${esc(o.p1)} vs ${esc(o.p2)}</b>`).join(" then ")}
         ${state.openers.length>1?"were":"was"} pinned by hand. Everything after ${state.openers.length>1?"them":"it"} is sequenced as above.` : ""}
         <br><br>
-        Re-drawing shuffles the order of play. It cannot change who plays whom, because everyone already plays everyone.
+        ${cut
+          ? `<b>Draw spread</b> — with a shortened return leg the games are no longer identical, so who you drew starts to
+             matter again: this schedule tilts the field by <b>±${Math.round(m.sosSpread)} rating points</b> against the
+             everyone-twice baseline. Putting the return leg back takes it to zero.
+             <br><br>
+             Re-drawing shuffles the order of play, and restores the full return leg.`
+          : `Re-drawing shuffles the order of play. It cannot change who plays whom, because everyone already plays everyone.`}
   ` : `
         Two games each means the group is a ring — sit everyone in a circle, each plays their two neighbours.
         There are (n−1)!/2 possible rings, so the draw is searched rather than picked: a rating-snaked seed plus 28
@@ -17187,12 +17463,137 @@ function rpCalSelect(tid, iso){
 }
 window.rpCalSelect = rpCalSelect;
 
+/* ---------- shortening the return leg ---------------------------
+   Admin-side, and it stays available after results are on record —
+   which is the whole point, because nobody shortens an event before
+   it has started. What it will not do is drop a game somebody has
+   already played, or leave two players on different numbers.
+   ---------------------------------------------------------------- */
+function rpTrimPins_(tid){ return rpTrimPins[tid] || []; }
+
+function rpTogglePin(tid, round){
+  if(!isAdmin) return;
+  const cur = rpTrimPins_(tid).slice();
+  const i = cur.indexOf(round);
+  if(i < 0) cur.push(round); else cur.splice(i, 1);
+  rpTrimPins[tid] = cur;
+  renderTournamentDetail(tid);
+}
+window.rpTogglePin = rpTogglePin;
+
+function rpSetTrimEach(tid, k){
+  if(!isAdmin) return;
+  rpTrimEach[tid] = k;
+  renderTournamentDetail(tid);
+}
+window.rpSetTrimEach = rpSetTrimEach;
+
+/* what a trimmed return leg reads as, for anyone looking at it later */
+function rpTrimStory(state){
+  const trim = state && state.trim;
+  const dropped = (trim && trim.dropped) || [];
+  if(!dropped.length) return "";
+  const list = dropped.map(fx=>`<b>${esc(fx.p1)} v ${esc(fx.p2)}</b>`).join(", ");
+  const each = rpLegLoad(state, 2).max;
+  return `The return leg was cut back to ${each} game${each===1?"":"s"} a player — ${list} came off the sheet.
+    Leg 1 stands exactly as it was played, everyone is still on the same number of games, and the table
+    still seeds all four into the bracket.`;
+}
+
+function rpTrimPanel(t, state){
+  if(rpShapeOf(state) !== "drr") return "";
+  const leg2 = rpLeg(state, 2);
+  const players = (state.roster || []).slice();
+  const trimmed = !!(state.trim && state.trim.dropped && state.trim.dropped.length);
+  if(!leg2.length && !trimmed) return "";
+
+  const now  = rpLegLoad(state, 2).max;
+  const head = `<div class="sec-label" style="margin-top:0">The return leg
+      <span class="count-pill">${leg2.length} game${leg2.length===1?"":"s"} · ${now} each</span></div>`;
+
+  if(!isAdmin){
+    return trimmed
+      ? `<div class="panel" style="margin-top:14px">${head}<div class="pred-hint">${rpTrimStory(state)}</div></div>`
+      : "";
+  }
+
+  const restore = trimmed
+    ? `<button class="btn ghost" style="margin:0;width:auto;flex:1 1 200px" onclick="rpRestoreLeg2(${t.id})">Put the return leg back</button>`
+    : "";
+
+  // nothing left to shorten: a leg of one game each is as short as it goes
+  if(now <= 1){
+    return `<div class="panel" style="margin-top:14px">${head}
+      <div class="pred-hint">${trimmed ? rpTrimStory(state) : ""}</div>
+      ${restore ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${restore}</div>` : ""}</div>`;
+  }
+
+  const targets = [];
+  for(let k = now - 1; k >= 1; k--) targets.push(k);
+  const want = targets.indexOf(rpTrimEach[t.id]) >= 0 ? rpTrimEach[t.id] : Math.min(2, now - 1);
+  const each = targets.indexOf(want) >= 0 ? want : targets[0];
+
+  const chips = targets.map(k=>
+    `<button type="button" class="rp-chip rp-trim-pin${k===each?" on":""}" onclick="rpSetTrimEach(${t.id},${k})"`
+    + `>${k} game${k===1?"":"s"} each</button>`).join("");
+
+  const locked = rpTrimLocked(t, state, rpTrimPins_(t.id));
+  const pins = leg2.map(fx=>{
+    const why = locked[fx.round], played = why === "played";
+    return `<button type="button" class="rp-chip rp-trim-pin${why?" on":" empty"}" `
+      + `${played ? "disabled" : `onclick="rpTogglePin(${t.id},'${rpJs(fx.round)}')"`} `
+      + `title="${played ? "already played — it stays whatever happens" : "keep this one whatever else goes"}">`
+      + `<span class="rp-chip-seed">${why?"✓":"+"}</span>${esc(fx.p1)} v ${esc(fx.p2)}`
+      + `${played?'<span class="rp-chip-seed">played</span>':""}</button>`;
+  }).join("");
+
+  const opts = rpTrimOptions(t, state, each, rpTrimPins_(t.id));
+  const body = opts.length ? opts.slice(0, 4).map((o,i)=>{
+    const drop = o.drop.map(fx=>`<b>${esc(fx.p1)} v ${esc(fx.p2)}</b>`).join(" and ");
+    const spread = Math.round(o.metrics.sosSpread);
+    return `<div class="rp-trim-opt${i===0?" best":""}">
+      <div class="rp-trim-main">Drop ${drop}
+        <div class="rp-trim-sub">${o.keep.length} return game${o.keep.length===1?"":"s"} left · closeness ${rpPct(o.metrics.avgQuality)}
+          · draw spread ${spread ? "±"+spread : "level"}${i===0?" · best on the numbers":""}</div>
+      </div>
+      <button class="btn ghost rp-trim-go" style="margin:0;width:auto;padding:9px 14px"
+        onclick="rpTrimLeg2(${t.id},'${rpJs(o.drop.map(fx=>fx.round).join(","))}')">Use this</button>
+    </div>`;
+  }).join("")
+  : `<div class="rp-warn">No way to get to ${each} game${each===1?"":"s"} each from here without dropping something that is
+     played or pinned. Unpin one, or pick a different number.</div>`;
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      ${head}
+      <div class="pred-hint">${trimmed
+        ? rpTrimStory(state)
+        : `Twelve games need twelve days. If the cup is running late, the return leg is the part that can give:
+           leg 1 is where everyone meets everyone and is never touched, but leg 2 can be shortened —
+           as long as <b>everyone comes out on the same number</b>, or the table is comparing players who
+           played different amounts of tennis.`}</div>
+
+      <label style="margin-top:12px;display:block">Shorten the return leg to</label>
+      <div class="rp-chips" style="margin-top:8px">${chips}</div>
+
+      <label>Keep these whatever happens <span style="opacity:.6;text-transform:none;letter-spacing:0">(tap to pin — played games are pinned already)</span></label>
+      <div class="rp-chips" style="margin-top:8px">${pins}</div>
+
+      <div class="rp-leg-h">The ways it can be cut</div>
+      ${body}
+      <div class="bracket-note">Every option leaves all ${players.length} players on ${each} return game${each===1?"":"s"}, so the group stays comparable.
+        Results and days already set stay with their fixtures — only what comes off the sheet loses its day.</div>
+      ${restore ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${restore}</div>` : ""}
+    </div>`;
+}
+
 function rpCalendarPanel(t){
   const fixtures = rpAllFixtures(t);
   if(!fixtures.length) return "";
   const dates  = rpDates(t);
   const days   = rpWindowDays(t);
   const today  = rpToday();
+  const daysLeft = days.filter(d => d >= today);   // what the event actually has left to play with
   const dated  = fixtures.filter(fx => dates[fx.round]);
   const undated= fixtures.filter(fx => !dates[fx.round]);
 
@@ -17316,9 +17717,12 @@ function rpCalendarPanel(t){
       ${isAdmin ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
           <button class="btn ghost" style="margin:0;width:auto;flex:1 1 180px" onclick="rpAutoSchedule(${t.id})">Spread across the window</button>
+          ${daysLeft.length && fixtures.some(fx=>!rpGame(t.id, fx.round))
+            ? `<button class="btn ghost" style="margin:0;width:auto;flex:1 1 180px" onclick="rpCatchUp(${t.id})">Catch up from today</button>` : ""}
           ${dated.length?`<button class="btn ghost" style="margin:0;width:auto;flex:0 1 170px;white-space:nowrap" onclick="rpClearDates(${t.id})">Clear the days</button>`:""}
         </div>
-        <div class="bracket-note">Spreading lays the draw out in playing order over ${days.length} day${days.length===1?"":"s"} of the cup window, games that are already dated included.</div>` : ""}
+        <div class="bracket-note">Spreading lays the whole draw out in playing order over ${days.length} day${days.length===1?"":"s"} of the cup window, games that are already dated included.
+          Catching up moves only the games still to play, over the ${daysLeft.length} day${daysLeft.length===1?"":"s"} left — what has been played keeps the day it was played on.</div>` : ""}
     </div>`;
 }
 
@@ -17367,7 +17771,8 @@ function rpStandingsPanel(t, state, snap){
   }).join("");
 
   const note = drr
-    ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. Order: wins → head-to-head over both meetings → game difference → games won → ladder rating.`
+    ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. Order: wins → head-to-head over ${
+        state.trim && (state.trim.dropped||[]).length ? "their meetings" : "both meetings"} → game difference → games won → ladder rating.`
     : `Dashed line is the cut — top ${spots} qualify. Order: wins → head-to-head → game difference → games won → strength of opposition → ladder rating.`;
 
   return `
@@ -17495,9 +17900,13 @@ function renderRobinPlus(t){
   const nextFx = (state.order||[]).find(fx=>!rpGame(t.id, fx.round));
   const order = state.order || [];
 
+  const trimmed = !!(state.trim && state.trim.dropped && state.trim.dropped.length);
+  const leg2Each = drr ? rpLegLoad(state, 2).max : 0;
   const fixtures = order.map((fx,i)=>{
+    const legName = fx.leg === 1 ? "first time round"
+      : trimmed ? `the return games, ${leg2Each} each` : "the return games";
     const head = (drr && fx.leg && (i === 0 || order[i-1].leg !== fx.leg))
-      ? `<div class="rp-leg-h">Leg ${fx.leg} — ${fx.leg === 1 ? "first time round" : "the return games"}</div>`
+      ? `<div class="rp-leg-h">Leg ${fx.leg} — ${legName}</div>`
       : "";
     return head + rpFixtureRow(t, fx, i, {ctx, upNext: nextFx && nextFx.round === fx.round});
   }).join("");
@@ -17507,7 +17916,9 @@ function renderRobinPlus(t){
     <div class="panel">
       <div class="sec-label" style="margin-top:0">${drr ? "The group" : "The ring"}</div>
       <div class="pred-hint">${drr
-        ? `Everyone plays everyone, twice — ${state.cycle.length} players, ${order.length} games, ${rpGamesEach(state)} each. Nobody goes out here; the table decides who gets the #1 seed and the easiest semi.`
+        ? `${trimmed ? "Everyone met everyone in leg 1, then a shortened return leg" : "Everyone plays everyone, twice"}
+           — ${state.cycle.length} players, ${order.length} games, ${rpGamesEach(state)} each. Nobody goes out here;
+           the table decides who gets the #1 seed and the easiest semi.`
         : `Each player plays the two people either side of them — ${state.cycle.length} players, ${order.length} games, two each.`}</div>
       ${drr ? rpDrrSvg(t, state, snap) : rpRingSvg(t, state, snap)}
       ${rpWhyPanel(state)}
@@ -17519,6 +17930,7 @@ function renderRobinPlus(t){
       ${fixtures}
     </div>
 
+    ${rpTrimPanel(t, state)}
     ${rpCalendarPanel(t)}
     ${rpStandingsPanel(t, state, snap)}
     ${rpPlayoffPanel(t, snap)}
@@ -17531,7 +17943,8 @@ function renderRobinPlus(t){
       </div>` : isAdmin ? `
       <div class="edit-sec">
         <div class="sec-label">Admin</div>
-        <div class="bracket-note">${played} game${played===1?" is":"s are"} on record, so the field is locked. Undo the results first if the draw has to change.</div>
+        <div class="bracket-note">${played} game${played===1?" is":"s are"} on record, so the field is locked. Undo the results first if the draw has to change.${
+          drr ? " The return leg can still be shortened without undoing anything — see <b>The return leg</b> above." : ""}</div>
       </div>` : ""}`;
 }
 
@@ -17685,6 +18098,33 @@ async function rpAutoSchedule(tid){
   if(res && !res.error) toast(res.local ? "Calendar set ✓ (this device only)" : "Calendar set ✓");
 }
 window.rpAutoSchedule = rpAutoSchedule;
+
+/* Spreading assumes an event that hasn't started. This is the one for
+   an event that has: only the games still to play are moved, and they
+   go over the days that are actually left — today to the end of the
+   window. Anything already on record keeps the day it was played on,
+   because that day is a fact rather than a plan. */
+async function rpCatchUp(tid){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const open = rpAllFixtures(t).filter(fx => !rpGame(t.id, fx.round));
+  if(!open.length) return toast("Every game has been played", true);
+  const today = rpToday();
+  const days  = rpWindowDays(t).filter(d => d >= today);
+  if(!days.length) return toast("The cup window has already closed — move its end date first", true);
+  if(!confirm(`Lay the ${open.length} game${open.length===1?"":"s"} still to play over the ${days.length} day${days.length===1?"":"s"} left? Games already on record keep their days.`)) return;
+
+  const dates = Object.assign({}, rpDates(t));
+  open.forEach((fx,i)=>{
+    // same even spread as the full lay-out, over what's left of the window
+    const at = open.length === 1 ? 0
+      : Math.round(i * (days.length - 1) / (open.length - 1));
+    dates[fx.round] = days[Math.min(days.length-1, Math.max(0, at))];
+  });
+  const res = await rpSaveDates(t, dates);
+  if(res && !res.error) toast(res.local ? "Caught up ✓ (this device only)" : "Caught up ✓");
+}
+window.rpCatchUp = rpCatchUp;
 
 async function rpClearDates(tid){
   if(!isAdmin) return toast("Admin only", true);
