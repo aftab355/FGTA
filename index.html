@@ -3721,6 +3721,58 @@
   .cn-sel:focus{outline:none;border-color:var(--accent)}
   .cn-sel option{background:var(--panel);color:var(--ink);text-transform:none;letter-spacing:0}
 
+  /* second control row: where you're measuring from, and the lights toggle.
+     Both change every number in the table, so they sit above the list rather
+     than inside the chip row — you should never have to hunt for the reason
+     a court moved. */
+  .cn-controls-2{gap:8px}
+  .cn-seg{display:inline-flex;align-items:center;gap:6px}
+  .cn-seg-label{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.9px;
+    text-transform:uppercase;color:var(--dim);
+  }
+  .cn-seg-box{
+    display:inline-flex;border:1px solid var(--line);border-radius:var(--r-pill);
+    background:var(--panel-2);overflow:hidden;
+  }
+  .cn-seg-box button{
+    background:transparent;border:0;border-right:1px solid var(--line);color:var(--muted);
+    padding:8px 13px;cursor:pointer;transition:.18s cubic-bezier(.16,1,.3,1);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;text-transform:uppercase;
+  }
+  .cn-seg-box button:last-child{border-right:0}
+  .cn-seg-box button:hover{color:var(--ink)}
+  .cn-seg-box button.on{background:var(--accent);color:var(--bg);font-weight:700}
+  .cn-seg-box button i{font-style:normal;opacity:.65;margin-left:5px;font-size:10px}
+
+  .cn-geo{
+    background:var(--panel-2);border:1px dashed var(--line);color:var(--muted);
+    border-radius:var(--r-pill);padding:8px 14px;cursor:pointer;transition:.18s cubic-bezier(.16,1,.3,1);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;
+  }
+  .cn-geo:hover{color:var(--ink);border-color:var(--dim)}
+  .cn-geo.on{
+    border-style:solid;border-color:var(--accent);background:var(--accent-dim);color:var(--ink);font-weight:700;
+  }
+  .cn-geo.busy{opacity:.7;cursor:progress}
+  .cn-geo.err{border-color:color-mix(in srgb,var(--danger) 60%,var(--line));color:var(--danger)}
+  .cn-origin{
+    /* one flowing sentence, not a flex row — the <b> and the reset button are
+       part of the line, and flex items would break each onto its own */
+    flex:1 1 100%;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.65;
+    color:var(--dim);
+  }
+  .cn-origin b{color:var(--muted);font-weight:600}
+  .cn-reset{
+    display:inline;width:auto;background:none;border:0;padding:0;cursor:pointer;color:var(--accent);
+    font-family:inherit;font-size:inherit;text-decoration:underline;text-underline-offset:2px;
+  }
+  .cn-reset:hover{color:var(--ink)}
+  /* a scaled number is not a measured one — it says so, quietly */
+  .cn-t.est b{color:var(--muted)}
+  .cn-t .cn-approx{opacity:.5;font-weight:400}
+  .cn-away{color:var(--accent)}
+
   .cn-list{display:flex;flex-direction:column;gap:8px}
   .cn-row{
     display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:16px;
@@ -7716,6 +7768,14 @@
         <div class="cn-chips" id="cnChips"></div>
         <input class="cn-search" id="cnSearch" type="search" placeholder="Search a park or street…"
                oninput="nearbySearch(this.value)" autocomplete="off">
+      </div>
+      <div class="cn-controls cn-controls-2">
+        <div class="cn-seg">
+          <span class="cn-seg-label">Lights</span>
+          <div class="cn-seg-box" id="cnLights" role="group" aria-label="Court lighting"></div>
+        </div>
+        <button class="cn-geo" id="cnGeo" onclick="nearbyUseMyLocation()">📍 Use my location</button>
+        <div class="cn-origin" id="cnOrigin"></div>
       </div>
       <div class="cn-list" id="cnList"></div>
       <button class="cn-more" id="cnMore" style="display:none" onclick="nearbyShowAll()"></button>
@@ -23589,61 +23649,241 @@ const NEARBY = [
    street address so a rename on either side doesn't break the flag */
 const NEARBY_HOME = (COURT.address||"").split(",")[0].trim().toLowerCase();
 
+/* ---- where the table is measured from -------------------------------------
+   Every drive and transit number in NEARBY was computed door-to-door from the
+   clubhouse. That is the right default — it's where the ladder plays from —
+   but it is the wrong answer for somebody standing somewhere else in the
+   city, so the finder can re-anchor on the phone's own GPS fix and re-rank
+   the whole list around it.
+
+   Re-anchoring cannot re-run a routing engine in the browser, so it does the
+   next honest thing: it re-measures straight-line distance from the new
+   origin and re-scales each site's recorded numbers through a model fitted
+   to the table itself. Those numbers are shown with a ≈ and the row's map
+   links still recompute the real thing, live, from wherever you are. */
+const NEARBY_ORIGIN_LL = { lat:43.70455, lon:-79.34565 };  // 47 Thorncliffe Park Dr
+
+function nearbyCrowKm(aLat, aLon, bLat, bLon){
+  const R = 6371, rad = Math.PI/180;
+  const dLat = (bLat-aLat)*rad, dLon = (bLon-aLon)*rad;
+  const h = Math.sin(dLat/2)**2 +
+            Math.cos(aLat*rad)*Math.cos(bLat*rad)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/* Two things fitted from the rows we already have real numbers for: how much
+   longer the road is than the crow flies in this city, and the minutes-per-km
+   curve. That curve is deliberately not a straight line — a straight line
+   fitted across 173 sites is dominated by the long hauls and comes back with
+   a ~7-minute intercept, which would tell somebody standing across the street
+   from a park that it's an eight-minute drive. The city's own numbers follow
+   a power law (0.6 km → 1.7 min, 28 km → 38 min), so fit that instead: least
+   squares in log space, which stays honest at both ends. */
+const NEARBY_FIT = (()=>{
+  const detours = [];
+  let n=0, sx=0, sy=0, sxx=0, sxy=0;
+  NEARBY.forEach(c=>{
+    const crow = nearbyCrowKm(NEARBY_ORIGIN_LL.lat, NEARBY_ORIGIN_LL.lon, c.lat, c.lon);
+    if(crow > 0.5 && c.driveKm > 0) detours.push(c.driveKm/crow);
+    if(c.driveKm > 0.2 && c.driveMin > 0){
+      const x = Math.log(c.driveKm), y = Math.log(c.driveMin);
+      n++; sx+=x; sy+=y; sxx+=x*x; sxy+=x*y;
+    }
+  });
+  detours.sort((a,b)=>a-b);
+  const den = n*sxx - sx*sx;
+  const pow = den ? (n*sxy - sx*sy)/den : 0.81;
+  return {
+    detour:  detours.length ? detours[Math.floor(detours.length/2)] : 1.45,
+    pow,
+    minAt1km: n ? Math.exp((sy - pow*sx)/n) : 2.5
+  };
+})();
+
+function nearbyDriveMin(km){
+  return Math.max(1, Math.round(NEARBY_FIT.minAt1km * Math.pow(Math.max(km, 0.1), NEARBY_FIT.pow)));
+}
+
+/* a fix older than this is somewhere you used to be, not somewhere you are */
+const NEARBY_GEO_KEY = "fgta_nearby_origin";
+const NEARBY_GEO_MAX_AGE = 12*60*60*1000;
+
+function nearbyLoadOrigin(){
+  try{
+    const o = JSON.parse(localStorage.getItem(NEARBY_GEO_KEY) || "null");
+    if(o && typeof o.lat === "number" && typeof o.lon === "number" &&
+       Date.now() - (o.at||0) < NEARBY_GEO_MAX_AGE) return o;
+  }catch(e){}
+  return null;
+}
+
 const NEARBY_FILTERS = [
-  { id:"short",  label:"Our shortlist", test:c=> c.access===0 && c.lit && c.courts>=3 },
-  { id:"lit",    label:"Lit",           test:c=> c.lit },
+  { id:"short",  label:"Our shortlist", test:c=> c.access===0 && c.courts>=3 },
   { id:"winter", label:"Winter play",   test:c=> c.winter },
   { id:"club",   label:"Club courts",   test:c=> c.access===1 },
-  { id:"all",    label:"All 173",       test:c=> true }
+  { id:"all",    label:"All",           test:c=> true }
 ];
-const nearbyState = { filter:"short", sort:"transit", q:"", expanded:false };
+/* lighting is its own axis rather than a fifth chip: it crosses every filter
+   ("the public 3+ courts, but only the unlit ones") and defaulting it to LIT
+   keeps the shortlist meaning exactly what it meant before */
+const NEARBY_LIGHTS = [
+  { id:"any",   label:"Any",   test:c=> true },
+  { id:"lit",   label:"Lit",   test:c=> c.lit },
+  { id:"unlit", label:"Unlit", test:c=> !c.lit }
+];
+const nearbyState = {
+  filter:"short", lights:"lit", sort:"transit", q:"", expanded:false,
+  origin:nearbyLoadOrigin(), geo:""
+};
 const NEARBY_PAGE = 12;   // how many rows before the "show all" button
 
+function nearbyLightTest(c){
+  const l = NEARBY_LIGHTS.find(l=>l.id===nearbyState.lights) || NEARBY_LIGHTS[0];
+  return l.test(c);
+}
+
+function nearbyOriginParam(){
+  const o = nearbyState.origin;
+  return o ? (o.lat + "," + o.lon) : NEARBY_ORIGIN;
+}
+
 function nearbyLink(c, mode){
-  return "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(NEARBY_ORIGIN) +
+  return "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(nearbyOriginParam()) +
          "&destination=" + c.lat + "," + c.lon + "&travelmode=" + mode;
 }
 
+/* the trip to one site from whichever origin is active. From the clubhouse
+   these are the measured numbers, untouched; from a GPS fix they are the
+   fitted ones, flagged est so the UI can mark them. */
+function nearbyOriginIsHome(){
+  const o = nearbyState.origin;
+  return !!o && nearbyCrowKm(o.lat, o.lon, NEARBY_ORIGIN_LL.lat, NEARBY_ORIGIN_LL.lon) < 0.3;
+}
+
+function nearbyTrip(c){
+  const o = nearbyState.origin;
+  /* standing at the clubhouse: the measured itineraries are better than any
+     estimate of themselves, so don't overwrite them with one */
+  if(!o || nearbyOriginIsHome()) return {
+    km:c.driveKm, driveMin:c.driveMin, transitMin:c.transitMin, est:false,
+    crow: nearbyCrowKm(NEARBY_ORIGIN_LL.lat, NEARBY_ORIGIN_LL.lon, c.lat, c.lon)
+  };
+  const crow  = nearbyCrowKm(o.lat, o.lon, c.lat, c.lon);
+  const km    = Math.round(crow * NEARBY_FIT.detour * 10)/10;
+  const drive = nearbyDriveMin(km);
+  /* scale each site's own itinerary rather than fitting one line through all
+     of them: a 23-minute walk from the nearest bus is a property of the park,
+     and it survives you moving across town */
+  const transit = (c.transitMin && c.driveMin > 0)
+    ? Math.max(drive, Math.round(c.transitMin * (drive/c.driveMin)))
+    : null;
+  return { km, driveMin:drive, transitMin:transit, crow, est:true };
+}
+
+/* rows come back paired with their trip so sorting and rendering agree */
 function nearbyRows(){
   const f = NEARBY_FILTERS.find(f=>f.id===nearbyState.filter) || NEARBY_FILTERS[0];
   const q = nearbyState.q.trim().toLowerCase();
-  let rows = NEARBY.filter(c=> f.test(c));
   /* a search reaches past the active filter — typing a park name you can
-     picture and getting "no results" because it happens to be unlit is the
-     kind of dead end that makes people stop using a finder */
-  if(q) rows = NEARBY.filter(c=>
-    c.name.toLowerCase().includes(q) || c.addr.toLowerCase().includes(q) || c.club.toLowerCase().includes(q));
+     picture and getting "no results" because it happens to be a club court is
+     the kind of dead end that makes people stop using a finder. The lights
+     toggle is the one thing it still respects: that switch is right there on
+     screen showing its own state, so an empty result reads as the toggle
+     rather than as a bug (and the empty state offers to clear it). */
+  let rows = q
+    ? NEARBY.filter(c=> c.name.toLowerCase().includes(q) || c.addr.toLowerCase().includes(q) || c.club.toLowerCase().includes(q))
+    : NEARBY.filter(f.test);
+  rows = rows.filter(nearbyLightTest).map(c=>({ c, t:nearbyTrip(c) }));
 
   const by = nearbyState.sort;
-  rows.sort((a,b)=>{
-    if(by==="courts") return b.courts - a.courts || a.driveMin - b.driveMin;
-    if(by==="drive")  return a.driveMin - b.driveMin;
+  rows.sort((A,B)=>{
+    const a=A.c, b=B.c, ta=A.t, tb=B.t;
+    if(by==="courts")   return b.courts - a.courts || ta.driveMin - tb.driveMin;
+    if(by==="drive")    return ta.driveMin - tb.driveMin;
+    if(by==="distance") return ta.crow - tb.crow;
     // transit: sites with no computed itinerary sink below the ones that have one
-    const ta = a.transitMin ?? 1e6, tb = b.transitMin ?? 1e6;
-    return ta - tb || a.driveMin - b.driveMin;
+    return (ta.transitMin ?? 1e6) - (tb.transitMin ?? 1e6) || ta.driveMin - tb.driveMin;
   });
   return rows;
+}
+
+function nearbyOriginAge(o){
+  const mins = Math.round((Date.now() - (o.at||Date.now()))/60000);
+  if(mins < 1)  return "just now";
+  if(mins < 60) return mins + " min ago";
+  return Math.round(mins/60) + "h ago";
+}
+
+function renderNearbyControls(){
+  const f = NEARBY_FILTERS.find(f=>f.id===nearbyState.filter) || NEARBY_FILTERS[0];
+
+  const chips = $("cnChips");
+  if(chips) chips.innerHTML = NEARBY_FILTERS.map(x=>{
+    const n = NEARBY.filter(c=> x.test(c) && nearbyLightTest(c)).length;
+    return `<button class="cn-chip${nearbyState.filter===x.id?" on":""}" onclick="nearbyFilter('${x.id}')">${esc(x.label)} ${n}</button>`;
+  }).join("") +
+    `<select class="cn-sel" id="cnSort" onchange="nearbySort(this.value)" aria-label="Sort courts">
+       <option value="transit"${nearbyState.sort==="transit"?" selected":""}>Sort · transit ▾</option>
+       <option value="drive"${nearbyState.sort==="drive"?" selected":""}>Sort · drive ▾</option>
+       <option value="distance"${nearbyState.sort==="distance"?" selected":""}>Sort · closest ▾</option>
+       <option value="courts"${nearbyState.sort==="courts"?" selected":""}>Sort · courts ▾</option>
+     </select>`;
+
+  const lights = $("cnLights");
+  if(lights) lights.innerHTML = NEARBY_LIGHTS.map(l=>{
+    const n = NEARBY.filter(c=> f.test(c) && l.test(c)).length;
+    return `<button class="${nearbyState.lights===l.id?"on":""}" aria-pressed="${nearbyState.lights===l.id}"
+             onclick="nearbyLights('${l.id}')">${esc(l.label)}<i>${n}</i></button>`;
+  }).join("");
+
+  const btn = $("cnGeo"), note = $("cnOrigin");
+  if(btn){
+    const busy = nearbyState.geo === "locating";
+    const err  = nearbyState.geo === "denied" || nearbyState.geo === "failed" || nearbyState.geo === "unsupported";
+    btn.className = "cn-geo" + (nearbyState.origin ? " on" : "") + (busy ? " busy" : "") + (err ? " err" : "");
+    btn.disabled  = busy;
+    btn.textContent = busy ? "📍 Locating…"
+                    : nearbyState.origin ? "📍 Update my location"
+                    : "📍 Use my location";
+  }
+  if(note){
+    if(nearbyState.geo === "locating"){
+      note.innerHTML = `Asking your device for a precise fix…`;
+    } else if(nearbyState.geo === "denied"){
+      note.innerHTML = `Location permission is off, so distances stay measured from the clubhouse.
+        Turn it back on for this site in your browser's address-bar settings, then tap again.`;
+    } else if(nearbyState.geo === "unsupported"){
+      note.innerHTML = `This browser doesn't offer location, so distances stay measured from the clubhouse.`;
+    } else if(nearbyState.geo === "failed"){
+      note.innerHTML = `Couldn't get a fix — indoors and away from a window is the usual reason. Distances
+        stay measured from the clubhouse.`;
+    } else if(nearbyState.origin){
+      const o = nearbyState.origin;
+      note.innerHTML = `Measured from <b>your location</b> — ${o.acc ? "±"+o.acc+" m, " : ""}${nearbyOriginAge(o)}. ` +
+        (nearbyOriginIsHome()
+          ? `You're at the clubhouse, so these are its own measured times. `
+          : `Every ≈ time below is scaled to it. `) +
+        `<button class="cn-reset" onclick="nearbyClearLocation()">back to the clubhouse</button>`;
+    } else {
+      note.innerHTML = `Measured from <b>${esc(NEARBY_ORIGIN.split(",")[0])}</b> — the clubhouse.`;
+    }
+  }
 }
 
 function renderNearby(){
   const list = $("cnList"); if(!list) return;
 
-  const chips = $("cnChips");
-  if(chips) chips.innerHTML = NEARBY_FILTERS.map(f=>{
-    const n = NEARBY.filter(c=>f.test(c)).length;
-    return `<button class="cn-chip${nearbyState.filter===f.id?" on":""}" onclick="nearbyFilter('${f.id}')">${esc(f.label)}${f.id==="all"?"":" "+n}</button>`;
-  }).join("") +
-    `<select class="cn-sel" id="cnSort" onchange="nearbySort(this.value)" aria-label="Sort courts">
-       <option value="transit"${nearbyState.sort==="transit"?" selected":""}>Sort · transit ▾</option>
-       <option value="drive"${nearbyState.sort==="drive"?" selected":""}>Sort · drive ▾</option>
-       <option value="courts"${nearbyState.sort==="courts"?" selected":""}>Sort · courts ▾</option>
-     </select>`;
+  nearbyAutoLocate();
+  renderNearbyControls();
 
   const rows = nearbyRows();
   $("cnCount").textContent = rows.length;
 
   if(!rows.length){
-    list.innerHTML = `<div class="cn-empty">Nothing matches “${esc(nearbyState.q)}”.</div>`;
+    const lit = nearbyState.lights !== "any"
+      ? ` <button class="cn-reset" onclick="nearbyLights('any')">Show ${nearbyState.lights==="lit"?"unlit courts too":"lit courts too"}</button>`
+      : "";
+    list.innerHTML = `<div class="cn-empty">Nothing ${nearbyState.lights==="any"?"":nearbyState.lights+" "}matches${nearbyState.q?` “${esc(nearbyState.q)}”`:""}.${lit}</div>`;
     $("cnMore").style.display = "none";
     $("cnNote").innerHTML = "";
     return;
@@ -23651,8 +23891,11 @@ function renderNearby(){
 
   const shown = nearbyState.expanded ? rows : rows.slice(0, NEARBY_PAGE);
   const fastest = rows[0];
+  const est = !!nearbyState.origin && !nearbyOriginIsHome();
+  const approx = est ? `<span class="cn-approx">≈</span>` : "";
 
-  list.innerHTML = shown.map(c=>{
+  list.innerHTML = shown.map(r=>{
+    const c = r.c, t = r.t;
     const home = c.addr.toLowerCase() === NEARBY_HOME;
     const tags = [
       home ? `<span class="cn-tag home">our court</span>` : "",
@@ -23661,23 +23904,27 @@ function renderNearby(){
       c.access===1 ? `<span class="cn-tag club">${esc(c.club||"club")}</span>` : ""
     ].join("");
 
-    const trip = c.transitMin
+    const trip = t.transitMin
       ? `${c.transfers===0?"direct":c.transfers+" transfer"+(c.transfers>1?"s":"")} · ${esc(c.route)} · ${c.walk} min walking`
       : "transit not timed";
 
-    const isFastest = c===fastest;
-    const transit = c.transitMin
-      ? `<div class="cn-t${isFastest&&nearbyState.sort==="transit"?" fast":""}"><b>${c.transitMin}</b><i>transit</i></div>`
+    const away = est
+      ? ` · <span class="cn-away">${t.crow < 1 ? Math.round(t.crow*1000)+" m" : t.crow.toFixed(1)+" km"} away</span>`
+      : "";
+
+    const isFastest = r===fastest;
+    const transit = t.transitMin
+      ? `<div class="cn-t${est?" est":""}${isFastest&&nearbyState.sort==="transit"?" fast":""}"><b>${approx}${t.transitMin}</b><i>transit</i></div>`
       : `<div class="cn-t none"><b>—</b><i>transit</i></div>`;
 
     return `<div class="cn-row${home?" home":""}">
       <div class="cn-main">
         <div class="cn-name">${esc(c.name)}${tags}</div>
-        <div class="cn-meta"><b>${c.courts} court${c.courts===1?"":"s"}</b> · ${esc(c.addr)}<br>${trip}</div>
+        <div class="cn-meta"><b>${c.courts} court${c.courts===1?"":"s"}</b> · ${esc(c.addr)}${away}<br>${trip}</div>
       </div>
       <div class="cn-times">
         ${transit}
-        <div class="cn-t${isFastest&&nearbyState.sort==="drive"?" fast":""}"><b>${c.driveMin}</b><i>drive · ${c.driveKm} km</i></div>
+        <div class="cn-t${est?" est":""}${isFastest&&(nearbyState.sort==="drive"||nearbyState.sort==="distance")?" fast":""}"><b>${approx}${t.driveMin}</b><i>drive · ${t.km} km</i></div>
       </div>
       <div class="cn-go">
         <a href="${nearbyLink(c,"driving")}" target="_blank" rel="noopener" title="Driving directions">🚗</a>
@@ -23694,18 +23941,80 @@ function renderNearby(){
     more.style.display = "none";
   }
 
-  $("cnNote").innerHTML =
-    `Times are from ${esc(NEARBY_ORIGIN)}. Driving is free-flow — no traffic — so anything over 15 minutes
-     is a best case; transit is a Saturday 10 a.m. TTC itinerary, door to door. The 🚗 and 🚌 links recompute
-     both live, with current traffic. Court data: City of Toronto Open Data, Tennis Courts Facilities.`;
+  $("cnNote").innerHTML = est
+    ? `Times are scaled from your GPS fix — straight-line distance to each site put through the road
+       detour and drive-speed this table's own measured trips imply, and each site's recorded TTC
+       itinerary shifted by the same ratio. Treat every ≈ as a ballpark and the ordering as the point;
+       the 🚗 and 🚌 links recompute the real route from where you are, live.
+       Court data: City of Toronto Open Data, Tennis Courts Facilities.`
+    : `Times are from ${esc(NEARBY_ORIGIN)}. Driving is free-flow — no traffic — so anything over 15 minutes
+       is a best case; transit is a Saturday 10 a.m. TTC itinerary, door to door. The 🚗 and 🚌 links recompute
+       both live, with current traffic. Court data: City of Toronto Open Data, Tennis Courts Facilities.`;
+}
+
+/* ---- location ---- */
+function nearbyUseMyLocation(){
+  if(!navigator.geolocation){ nearbyState.geo="unsupported"; renderNearby(); return; }
+  nearbyState.geo = "locating";
+  renderNearbyControls();
+  navigator.geolocation.getCurrentPosition(pos=>{
+    nearbyApplyFix(pos);
+  }, err=>{
+    nearbyState.geo = (err && err.code === 1) ? "denied" : "failed";
+    renderNearby();
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+}
+
+function nearbyApplyFix(pos){
+  const o = {
+    lat: +pos.coords.latitude.toFixed(6),
+    lon: +pos.coords.longitude.toFixed(6),
+    acc: Math.round(pos.coords.accuracy || 0),
+    at:  Date.now()
+  };
+  const first = !nearbyState.origin;
+  nearbyState.origin = o;
+  nearbyState.geo = "";
+  nearbyState.expanded = false;
+  /* the point of setting a location is "what is near me" — so the first fix
+     re-sorts to closest, and any sort you pick afterwards is left alone */
+  if(first && nearbyState.sort === "transit") nearbyState.sort = "distance";
+  try{ localStorage.setItem(NEARBY_GEO_KEY, JSON.stringify(o)); }catch(e){}
+  renderNearby();
+}
+
+function nearbyClearLocation(){
+  nearbyState.origin = null;
+  nearbyState.geo = "";
+  if(nearbyState.sort === "distance") nearbyState.sort = "transit";
+  try{ localStorage.removeItem(NEARBY_GEO_KEY); }catch(e){}
+  renderNearby();
+}
+
+/* If the permission is already granted, a stale stored fix is worse than a
+   fresh one and there is no prompt to spend — refresh it quietly, once per
+   page load. Anything else waits for the button. */
+let nearbyAutoTried = false;
+function nearbyAutoLocate(){
+  if(nearbyAutoTried || !navigator.geolocation || !navigator.permissions) return;
+  nearbyAutoTried = true;
+  try{
+    navigator.permissions.query({name:"geolocation"}).then(p=>{
+      if(p.state !== "granted") return;
+      navigator.geolocation.getCurrentPosition(nearbyApplyFix, ()=>{},
+        { enableHighAccuracy:true, timeout:15000, maximumAge:60000 });
+    }).catch(()=>{});
+  }catch(e){}
 }
 
 function nearbyFilter(id){ nearbyState.filter=id; nearbyState.q=""; const s=$("cnSearch"); if(s) s.value=""; nearbyState.expanded=false; renderNearby(); }
+function nearbyLights(v){ nearbyState.lights=v; nearbyState.expanded=false; renderNearby(); }
 function nearbySort(v){ nearbyState.sort=v; renderNearby(); }
 function nearbySearch(v){ nearbyState.q=v; nearbyState.expanded=false; renderNearby(); }
 function nearbyShowAll(){ nearbyState.expanded=true; renderNearby(); }
-window.renderNearby=renderNearby; window.nearbyFilter=nearbyFilter;
+window.renderNearby=renderNearby; window.nearbyFilter=nearbyFilter; window.nearbyLights=nearbyLights;
 window.nearbySort=nearbySort; window.nearbySearch=nearbySearch; window.nearbyShowAll=nearbyShowAll;
+window.nearbyUseMyLocation=nearbyUseMyLocation; window.nearbyClearLocation=nearbyClearLocation;
 
 /* ---------- admin toggle ---------- */
 function refreshAfterAdminChange(){
