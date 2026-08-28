@@ -16628,7 +16628,18 @@ function rpSetsFor(m, first){
   return rpRowFlipped(m, first) ? rpFlipSets(m.sets) : m.sets;
 }
 
-/* group table — wins first, then the games you actually won */
+/* ---------- what a result is worth --------------------------------
+   A group game can be drawn, so "wins" is not the record and never
+   was the order. A draw is half a win — not nothing, which is what
+   ranking on wins alone quietly made it: level with a loss. Both the
+   number shown and the number sorted on come from here, so the table
+   cannot say one thing and order itself by another. ---------------- */
+function rpPoints(r){ return (r.w||0) + (r.d||0)*0.5; }
+/* always all three numbers. A drawn game hidden behind a "-0" the row
+   next to it doesn't have is a draw that reads as a loss. */
+function rpRecord(r){ return r ? `${r.w||0}-${r.l||0}-${r.d||0}` : "0-0-0"; }
+
+/* group table — points first, then the games you actually won */
 function rpGroupTable(t, state){
   const rows = {};
   state.roster.forEach(n => rows[n] = {name:n, w:0, l:0, d:0, gw:0, gl:0, played:0, opponents:[]});
@@ -16652,9 +16663,10 @@ function rpGroupTable(t, state){
     }
   });
   const list = Object.values(rows);
-  // strength of schedule: how many games your two opponents won
+  list.forEach(r => r.pts = rpPoints(r));
+  // strength of schedule: what your opponents have taken off the group
   const byName = {}; list.forEach(r => byName[r.name] = r);
-  list.forEach(r => r.sos = r.opponents.reduce((s,o)=> s + (byName[o] ? byName[o].w : 0), 0));
+  list.forEach(r => r.sos = r.opponents.reduce((s,o)=> s + (byName[o] ? byName[o].pts : 0), 0));
   return list;
 }
 
@@ -16677,7 +16689,7 @@ function rpH2H(t, state, a, b){
    set the seeding (they never decide who qualifies; a decider does) */
 function rpRankRows(t, state, rows, ctx){
   return rows.slice().sort((x,y)=>
-    (y.w - x.w) ||
+    (y.pts - x.pts) ||
     rpH2H(t, state, x.name, y.name) ||
     ((y.gw - y.gl) - (x.gw - x.gl)) ||
     (y.gw - x.gw) ||
@@ -16714,7 +16726,7 @@ function rpQualification(t, state){
   }
 
   // blocks of rows that results alone cannot separate
-  const hardKey = r => r.w + "|" + (r.gw - r.gl);
+  const hardKey = r => r.pts + "|" + (r.gw - r.gl);
   const blocks = [];
   rows.forEach(r=>{
     const last = blocks[blocks.length-1];
@@ -16749,7 +16761,7 @@ function rpQualification(t, state){
 function rpSplitOnH2H(t, state, block, left){
   if(block.length < 2) return null;
   const mini = {};
-  block.forEach(r => mini[r.name] = {name:r.name, w:0, gd:0});
+  block.forEach(r => mini[r.name] = {name:r.name, pts:0, gd:0});
   let played = 0;
   (state.order||[]).forEach(fx=>{
     if(!mini[fx.p1] || !mini[fx.p2]) return;
@@ -16758,8 +16770,9 @@ function rpSplitOnH2H(t, state, block, left){
     played++;
     const flipped = rpRowFlipped(m, fx.p1);
     const o = Number(m.outcome);
-    if(flipped ? o === 0 : o === 1) mini[fx.p1].w++;
-    else if(flipped ? o === 1 : o === 0) mini[fx.p2].w++;
+    if(flipped ? o === 0 : o === 1) mini[fx.p1].pts += 1;
+    else if(flipped ? o === 1 : o === 0) mini[fx.p2].pts += 1;
+    else { mini[fx.p1].pts += 0.5; mini[fx.p2].pts += 0.5; }
     if(m.sets){
       const s = rpParseScore(m.sets);
       const a = flipped ? s.b : s.a, b = flipped ? s.a : s.b;
@@ -16767,10 +16780,10 @@ function rpSplitOnH2H(t, state, block, left){
     }
   });
   if(!played) return null;
-  const order = block.map(r=>mini[r.name]).sort((x,y)=> (y.w - x.w) || (y.gd - x.gd));
+  const order = block.map(r=>mini[r.name]).sort((x,y)=> (y.pts - x.pts) || (y.gd - x.gd));
   const above = order[left-1], below = order[left];
   if(!above || !below) return null;
-  if(above.w === below.w && above.gd === below.gd) return null;   // still level at the line
+  if(above.pts === below.pts && above.gd === below.gd) return null;   // still level at the line
   return order.map(o=>o.name);
 }
 
@@ -16850,16 +16863,18 @@ function rpPlayoffResolve(t, plan){
   if(plan.kind === "ring"){
     const played = plan.rounds[0].map(g=>({g, m: rpGame(t.id, g.round)}));
     if(played.some(p=>!p.m)) return {through: [], pending: plan.rounds[0].filter(g=>!rpGame(t.id,g.round)), done:false};
-    const tally = {}; plan.tied.forEach(n=>tally[n]={name:n,w:0,gd:0});
+    const tally = {}; plan.tied.forEach(n=>tally[n]={name:n,pts:0,gd:0});
     played.forEach(({g,m})=>{
       const o = Number(m.outcome);
       const w = o===1 ? m.p1 : o===0 ? m.p2 : null;
-      if(w && tally[w]) tally[w].w++;
+      if(w){ if(tally[w]) tally[w].pts += 1; }
+      else { if(tally[m.p1]) tally[m.p1].pts += 0.5;
+             if(tally[m.p2]) tally[m.p2].pts += 0.5; }
       if(m.sets){ const s = rpParseScore(m.sets);
         if(tally[m.p1]) tally[m.p1].gd += s.a - s.b;
         if(tally[m.p2]) tally[m.p2].gd += s.b - s.a; }
     });
-    const order = Object.values(tally).sort((a,b)=>(b.w-a.w)||(b.gd-a.gd));
+    const order = Object.values(tally).sort((a,b)=>(b.pts-a.pts)||(b.gd-a.gd));
     return {through: order.slice(0, plan.spots).map(o=>o.name), pending:null, done:true};
   }
 
@@ -17141,7 +17156,7 @@ function rpRingSvg(t, state, snap){
 
   const nodes = cycle.map((p,i)=>{
     const P = pos(i), r = table[p];
-    const rec = r ? `${r.w}-${r.l}${r.d?"-"+r.d:""}` : "0-0";
+    const rec = rpRecord(r);
     const below = P.ly > cy;
     return `<g>
       <circle class="rp-node${qualified.has(p)?" qual":""}" cx="${P.x.toFixed(1)}" cy="${P.y.toFixed(1)}" r="15"></circle>
@@ -17197,7 +17212,7 @@ function rpDrrSvg(t, state, snap){
 
   const nodes = ring.map((p,i)=>{
     const P = pos(i), r = table[p];
-    const rec = r ? `${r.w}-${r.l}${r.d?"-"+r.d:""}` : "0-0";
+    const rec = rpRecord(r);
     const below = P.ly > cy;
     return `<g>
       <circle class="rp-node qual" cx="${P.x.toFixed(1)}" cy="${P.y.toFixed(1)}" r="16"></circle>
@@ -17799,24 +17814,25 @@ function rpStandingsPanel(t, state, snap){
     return `<tr class="${cls}${(!drr && i===spots-1)?" cut":""}">
       <td class="rp-pos">${i+1}</td>
       <td class="rp-nm">${esc(r.name)}${badge}</td>
-      <td class="rp-num">${r.w}-${r.l}${r.d?"-"+r.d:""}</td>
+      <td class="rp-num">${rpRecord(r)}</td>
       <td class="rp-num">${r.played}/${each}</td>
       <td class="rp-num">${gd>0?"+":""}${gd}</td>
       <td class="rp-num">${drr ? r.gw : r.sos}</td>
     </tr>`;
   }).join("");
 
+  const pointsNote = "Points order the table — a win is 1, a draw is ½, so a drawn game is never worth the same as a lost one.";
   const note = drr
-    ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. Order: wins → head-to-head over ${
+    ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. ${pointsNote} Then head-to-head over ${
         state.trim && (state.trim.dropped||[]).length ? "their meetings" : "both meetings"} → game difference → games won → ladder rating.`
-    : `Dashed line is the cut — top ${spots} qualify. Order: wins → head-to-head → game difference → games won → strength of opposition → ladder rating.`;
+    : `Dashed line is the cut — top ${spots} qualify. ${pointsNote} Then head-to-head → game difference → games won → strength of opposition → ladder rating.`;
 
   return `
     <div class="panel" style="margin-top:14px">
       <div class="sec-label" style="margin-top:0">Group standings</div>
       <table class="rp-table">
-        <tr><th></th><th>Player</th><th style="text-align:right">W-L</th><th style="text-align:right">Played</th>
-            <th style="text-align:right">Diff</th><th style="text-align:right">${drr ? "Games" : "Opp W"}</th></tr>
+        <tr><th></th><th>Player</th><th style="text-align:right">W-L-D</th><th style="text-align:right">Played</th>
+            <th style="text-align:right">Diff</th><th style="text-align:right">${drr ? "Games" : "Opp pts"}</th></tr>
         ${body}
       </table>
       <div class="bracket-note">${note}${qual.note?" "+esc(qual.note):""}</div>
@@ -26362,7 +26378,7 @@ function ffPlayerCard(name, tid, seedLine){
     initials: initials(name),
     color: playerColor(name),
     rating: Math.round(st ? st.rating : (typeof START === "number" ? START : 500)),
-    record: own ? `${own.w}-${own.l}${own.d?"-"+own.d:""}` : "0-0",
+    record: rpRecord(own),
     form: recent,
     seedLine: seedLine || "in the field"
   };
