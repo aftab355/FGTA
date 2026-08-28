@@ -225,6 +225,33 @@
   }
   .ac-item:hover,.ac-item.hi{background:var(--panel-2);color:var(--accent)}
 
+  /* On touch the name fields are a picker first and a text box second, so
+     the menu carries its own little header: the list is what you came for,
+     and this is the way back to the keyboard when a new name has to be
+     typed. Desktop never renders it. */
+  .ac-head{
+    position:sticky;top:-6px;z-index:1;display:flex;align-items:center;gap:10px;
+    justify-content:space-between;background:var(--panel);
+    margin:-6px -6px 5px;padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  .ac-head-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.7px;
+    text-transform:uppercase;color:var(--dim);white-space:nowrap;
+  }
+  .ac-kb{
+    flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+    border-radius:8px;padding:6px 10px;line-height:1;transition:.12s;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.7px;text-transform:uppercase;
+  }
+  .ac-kb:hover,.ac-kb:active{color:var(--accent);border-color:var(--accent)}
+  .ac-kb svg{width:15px;height:11px;display:block}
+  .ac-empty{
+    padding:10px 13px;font-size:12px;color:var(--dim);
+    font-family:'JetBrains Mono',monospace;line-height:1.5;
+  }
+  input[data-ac="players"][readonly]{cursor:pointer}
+
   /* ===== SET SCORE BUILDER (Report a game) ===== */
   .ss-builder{display:flex;flex-direction:column;gap:12px}
   .ss-row{display:grid;grid-template-columns:44px 48px auto 48px 1fr 1fr;gap:10px;align-items:center}
@@ -24535,6 +24562,52 @@ ssRefreshLabels();
 try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo default with the selected format
 (function(){
   let menu=null, activeInput=null, hiIndex=-1;
+
+  /* On a phone the ladder is five regulars, so a name field is a picker
+     first and a text box second — and having the on-screen keyboard leap
+     up on every tap buries the very list you opened the field for. So on
+     touch the field is held readonly: the tap opens the menu and does
+     nothing else, and the ⌨ button in the menu header hands the keyboard
+     over on the rarer occasion that a genuinely new name has to be typed.
+     Desktop is untouched — type-to-filter as before. */
+  const AC_TOUCH = window.matchMedia("(max-width:760px)").matches || (navigator.maxTouchPoints||0)>1;
+  const AC_SEL = 'input[data-ac="players"]';
+  let typingInput=null;   // the one field currently allowed to raise the keyboard
+  let refocusing=false;   // guards the blur/focus hop that raises it
+
+  const KB_ICON = '<svg viewBox="0 0 20 14" aria-hidden="true">'
+    + '<rect x=".75" y=".75" width="18.5" height="12.5" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M4 5h1M7 5h1M10 5h1M13 5h1M16 5h.5M4 8h1M7 8h1M10 8h1M13 8h1M16 8h.5M6.5 10.8h7" '
+    + 'stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+
+  function isAcInput(el){ return !!(el && el.matches && el.matches(AC_SEL)); }
+  /* readonly is what actually keeps the keyboard down: it has to be set
+     before the tap lands focus, hence the capture-phase pointerdown below. */
+  function lock(input){
+    if(!AC_TOUCH || !input) return;
+    if(input===typingInput && document.activeElement===input) return;  // mid-typing, leave it be
+    if(typingInput && typingInput!==input) relock(typingInput);
+    if(!input.readOnly){ input.readOnly=true; input.dataset.acLocked="1"; }
+  }
+  function relock(input){
+    if(!input) return;
+    if(input.dataset.acLocked==="1") input.readOnly=true;
+    if(typingInput===input) typingInput=null;
+  }
+  function goTyping(input){
+    if(!input) return;
+    typingInput=input;
+    input.readOnly=false;
+    // the blur/focus hop, inside the tap's own gesture, is what makes the
+    // browser reconsider the now-editable field and raise the keyboard
+    refocusing=true;
+    try{ input.blur(); }catch(e){}
+    try{ input.focus(); }catch(e){}
+    try{ const n=input.value.length; input.setSelectionRange(n,n); }catch(e){}
+    refocusing=false;
+    showMenu(input);
+  }
+
   function getPlayers(){
     const dl = document.getElementById("players");
     return dl ? Array.from(dl.options).map(o=>o.value).filter(Boolean) : [];
@@ -24545,12 +24618,18 @@ try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo defaul
     menu.className = "ac-menu";
     document.body.appendChild(menu);
     menu.addEventListener("mousedown", e=>{
+      if(e.target.closest(".ac-kb")){ e.preventDefault(); goTyping(activeInput); return; }
       const item = e.target.closest(".ac-item");
       if(!item) return;
       e.preventDefault();
       selectValue(item.textContent);
     });
     return menu;
+  }
+  function headHTML(){
+    return '<div class="ac-head"><span class="ac-head-lbl">Tap a name</span>'
+      + '<button type="button" class="ac-kb" title="Type a new name" aria-label="Type a new name">'
+      + KB_ICON + '<span>Type</span></button></div>';
   }
   function selectValue(v){
     if(!activeInput) return;
@@ -24569,16 +24648,28 @@ try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo defaul
     const q = input.value.trim().toLowerCase();
     const players = getPlayers();
     const matches = q ? players.filter(p=>p.toLowerCase().includes(q)) : players;
-    if(!matches.length){ hideMenu(); return; }
+    // the header stays out of the way once the field is typing — but while
+    // it is locked the menu opens even on no matches, or there'd be no way
+    // through to the keyboard
+    const withHead = AC_TOUCH && input!==typingInput;
+    if(!matches.length && !withHead){ hideMenu(); return; }
     ensureMenu();
-    menu.innerHTML = matches.slice(0,50).map(p=>`<div class="ac-item">${esc(p)}</div>`).join("");
+    menu.innerHTML = (withHead ? headHTML() : "")
+      + (matches.length
+          ? matches.slice(0,50).map(p=>`<div class="ac-item">${esc(p)}</div>`).join("")
+          : '<div class="ac-empty">No one by that name yet — hit Type to add a new player.</div>');
     activeInput = input; hiIndex=-1;
     positionMenu(input);
     menu.classList.add("show");
   }
   function updateHi(items){ items.forEach((it,i)=>it.classList.toggle("hi", i===hiIndex)); if(items[hiIndex]) items[hiIndex].scrollIntoView({block:"nearest"}); }
-  document.addEventListener("focusin", e=>{ if(e.target.matches && e.target.matches('input[data-ac="players"]')) showMenu(e.target); });
-  document.addEventListener("input", e=>{ if(e.target.matches && e.target.matches('input[data-ac="players"]')) showMenu(e.target); });
+  document.addEventListener("pointerdown", e=>{
+    const inp = e.target && e.target.closest ? e.target.closest(AC_SEL) : null;
+    if(inp) lock(inp);
+  }, true);
+  document.addEventListener("focusin", e=>{ if(!refocusing && isAcInput(e.target)){ lock(e.target); showMenu(e.target); } });
+  document.addEventListener("focusout", e=>{ if(!refocusing && isAcInput(e.target)) relock(e.target); });
+  document.addEventListener("input", e=>{ if(isAcInput(e.target)) showMenu(e.target); });
   document.addEventListener("keydown", e=>{
     if(!activeInput || !menu || !menu.classList.contains("show")) return;
     const items = Array.from(menu.querySelectorAll(".ac-item"));
