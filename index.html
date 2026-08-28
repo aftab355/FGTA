@@ -4083,8 +4083,23 @@
 
   .rp-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
   .rp-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
-    color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+    color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   .rp-table td{padding:9px 8px;border-bottom:1px solid var(--line-soft)}
+  /* a record is one value: "2-0-1" must never wrap to "2-\nO-\n1" */
+  .rp-table th,.rp-table .rp-num{white-space:nowrap}
+  /* the name column is the one that can give — everything else is a number */
+  .rp-table .rp-nm{word-break:break-word}
+  @media(max-width:430px){
+    .rp-table{font-size:12px}
+    .rp-table th{letter-spacing:.6px;padding:6px 4px}
+    .rp-table td{padding:9px 4px}
+    .rp-table .rp-pos{width:18px}
+  }
+  /* seven columns do not fit a narrow phone. The last one is the
+     fourth-level tiebreak (games won / opponents' points) — the first
+     thing that can go, and the only one whose absence changes nothing
+     a reader is looking for. */
+  @media(max-width:400px){ .rp-table .rp-col-extra{display:none} }
   .rp-table tr.cut td{border-bottom:2px dashed var(--ball)}
   .rp-table .rp-pos{font-family:'JetBrains Mono',monospace;color:var(--dim);width:26px}
   .rp-table .rp-nm{font-weight:600;color:var(--ink)}
@@ -16635,6 +16650,15 @@ function rpSetsFor(m, first){
    number shown and the number sorted on come from here, so the table
    cannot say one thing and order itself by another. ---------------- */
 function rpPoints(r){ return (r.w||0) + (r.d||0)*0.5; }
+/* what those points are worth on a table where the rows have not played
+   the same number of games. Mid-group they never have — someone is
+   always a game ahead — and ordering on the total alone ranks whoever
+   has played most, which is how an unbeaten 2-0-1 ends up below a 3-1.
+   The share of the points actually on offer is the honest comparison,
+   and once every row has played the same number of games it orders
+   them exactly as the totals do. A row with no games yet has no share
+   to report — it sits below anyone who has started. */
+function rpRate(r){ return r.played ? rpPoints(r) / r.played : -1; }
 /* always all three numbers. A drawn game hidden behind a "-0" the row
    next to it doesn't have is a draw that reads as a loss. */
 function rpRecord(r){ return r ? `${r.w||0}-${r.l||0}-${r.d||0}` : "0-0-0"; }
@@ -16663,7 +16687,7 @@ function rpGroupTable(t, state){
     }
   });
   const list = Object.values(rows);
-  list.forEach(r => r.pts = rpPoints(r));
+  list.forEach(r => { r.pts = rpPoints(r); r.rate = rpRate(r); });
   // strength of schedule: what your opponents have taken off the group
   const byName = {}; list.forEach(r => byName[r.name] = r);
   list.forEach(r => r.sos = r.opponents.reduce((s,o)=> s + (byName[o] ? byName[o].pts : 0), 0));
@@ -16689,7 +16713,7 @@ function rpH2H(t, state, a, b){
    set the seeding (they never decide who qualifies; a decider does) */
 function rpRankRows(t, state, rows, ctx){
   return rows.slice().sort((x,y)=>
-    (y.pts - x.pts) ||
+    (y.rate - x.rate) ||
     rpH2H(t, state, x.name, y.name) ||
     ((y.gw - y.gl) - (x.gw - x.gl)) ||
     (y.gw - x.gw) ||
@@ -17816,12 +17840,15 @@ function rpStandingsPanel(t, state, snap){
       <td class="rp-nm">${esc(r.name)}${badge}</td>
       <td class="rp-num">${rpRecord(r)}</td>
       <td class="rp-num">${r.played}/${each}</td>
+      <td class="rp-num">${r.played ? Math.round(r.rate*100)+"%" : "—"}</td>
       <td class="rp-num">${gd>0?"+":""}${gd}</td>
-      <td class="rp-num">${drr ? r.gw : r.sos}</td>
+      <td class="rp-num rp-col-extra">${drr ? r.gw : r.sos}</td>
     </tr>`;
   }).join("");
 
-  const pointsNote = "Points order the table — a win is 1, a draw is ½, so a drawn game is never worth the same as a lost one.";
+  const pointsNote = "Pts is the share of the points on offer that a player has actually taken — a win is 1, a draw is ½, over the games they have played. "
+    + "That is what orders the table, so a draw is never worth what a loss is worth and nobody is ranked above anyone for having played more games. "
+    + "It settles into plain points once everyone has played the same number.";
   const note = drr
     ? `Nobody is cut — all ${rows.length} go through and the table sets the bracket: #1 v #4, #2 v #3. ${pointsNote} Then head-to-head over ${
         state.trim && (state.trim.dropped||[]).length ? "their meetings" : "both meetings"} → game difference → games won → ladder rating.`
@@ -17832,7 +17859,9 @@ function rpStandingsPanel(t, state, snap){
       <div class="sec-label" style="margin-top:0">Group standings</div>
       <table class="rp-table">
         <tr><th></th><th>Player</th><th style="text-align:right">W-L-D</th><th style="text-align:right">Played</th>
-            <th style="text-align:right">Diff</th><th style="text-align:right">${drr ? "Games" : "Opp pts"}</th></tr>
+            <th style="text-align:right">Pts</th>
+            <th style="text-align:right">Diff</th>
+            <th class="rp-col-extra" style="text-align:right">${drr ? "Games" : "Opp pts"}</th></tr>
         ${body}
       </table>
       <div class="bracket-note">${note}${qual.note?" "+esc(qual.note):""}</div>
