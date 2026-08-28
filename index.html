@@ -2,13 +2,10 @@
 <!-- data-skin="ffcup": FF Cup tournament dressing. Remove this attribute to restore the standard theme. -->
 <html lang="en" data-skin="ffcup">
 <head>
-<template id="__bundler_thumbnail" data-bg-color="#151125">
-  <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="100" cy="100" r="70" fill="#d4ff2b"/>
-    <path d="M40 60 Q100 100 40 140" stroke="#ffffff" stroke-width="6" fill="none"/>
-    <path d="M160 60 Q100 100 160 140" stroke="#ffffff" stroke-width="6" fill="none"/>
-  </svg>
-</template>
+<!-- charset first: the encoding declaration has to land inside the first
+     1024 bytes of the document, and anything placed above it (there used to
+     be a <template> here) is bytes the parser spends before it knows how to
+     decode them. -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- matches the cup skin's --bg, so the phone's own chrome joins the grade
@@ -67,6 +64,28 @@
     --r-sm:12px; --r-md:18px; --r-lg:26px; --r-pill:999px;
     /* warm, soft, diffuse elevation instead of a hard offset block shadow */
     --shadow:0 24px 60px -28px rgba(0,0,0,.6);
+
+    /* ===== STACKING SCALE ===========================================
+       The app had grown ~20 unrelated z-index values with no stated
+       order, which is how a toast ended up at 50 (under the nav) while
+       an autocomplete list sat at 600 (over every modal). The tiers
+       below are the contract; anything new picks a tier rather than a
+       number, and the comment says what lives there.
+
+         1-10    in-panel layering (sheens, rims, chart tips, badges)
+         50-70   the app shell: ticker (55), top/bottom bars (60),
+                 the utility menu hanging off the bar (70)
+         80-90   sheets and drawers that sit over the shell
+         100-600 dialogs: the modal scrim (100), the tab wipe (500),
+                 and inputs' own popovers, which have to clear the
+                 dialog that contains them (600)
+         900     toasts — the layer that reports failure, so it is
+                 above every surface a failure can be triggered from
+         9999+   full-bleed FX: particle layer, cinematic intro,
+                 celebration overlays
+       ================================================================ */
+    --z-shell:60; --z-drawer:80; --z-modal:100; --z-popover:600;
+    --z-toast:900; --z-fx:9999;
 
     /* ===== DEPTH & CONTRAST PALETTE =================================
        Ten tokens layered on top of the base system above. Nothing here
@@ -136,8 +155,13 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",'Outfit',sans-serif;
     font-size:16px;
     line-height:1.6; -webkit-font-smoothing:antialiased;
-    /* room for fixed top bar; bottom padding cleared on mobile for the bottom bar */
-    padding:0 24px 72px;
+    /* room for fixed top bar; bottom padding cleared on mobile for the bottom bar.
+       The horizontal gutters add the display's own insets: with
+       viewport-fit=cover the page is allowed to run under the notch and the
+       rounded corners, and in landscape on a notched phone the left gutter is
+       exactly where the sensor housing sits. inset-right was not referenced
+       anywhere in the file before this. */
+    padding:0 calc(24px + env(safe-area-inset-right)) 72px calc(24px + env(safe-area-inset-left));
     padding-top:calc(60px + env(safe-area-inset-top));
   }
   .wrap{max-width:860px;margin:0 auto}
@@ -155,7 +179,7 @@
   .topbar{
     position:fixed;top:0;left:0;right:0;z-index:60;
     height:calc(60px + env(safe-area-inset-top));
-    padding:env(safe-area-inset-top) 20px 0;
+    padding:env(safe-area-inset-top) calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left));
     display:flex;align-items:center;gap:18px;
     background:color-mix(in srgb, #0a0814 92%, transparent);
     backdrop-filter:blur(18px) saturate(1.4);
@@ -214,7 +238,7 @@
 
   /* ===== CUSTOM PLAYER-NAME AUTOCOMPLETE (replaces native <datalist> UI) ===== */
   .ac-menu{
-    position:fixed;z-index:600;background:var(--panel);border:1px solid var(--line);
+    position:fixed;z-index:var(--z-popover);background:var(--panel);border:1px solid var(--line);
     border-radius:var(--r-md);box-shadow:var(--shadow);max-height:230px;overflow-y:auto;
     display:none;padding:6px;
   }
@@ -470,10 +494,19 @@
   .bracket-stage b{color:var(--ink)}
   .bracket-note{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);margin-top:8px;line-height:1.6}
 
+  /* The toast used to sit at z-index:50 — under the top/bottom bars (60), the
+     more-sheet (80) and every modal (100-600). So the one message that most
+     needs to be seen, "that didn't save", was painted behind whatever the
+     person was doing when it failed, and on a phone it was behind the bottom
+     bar as well: bottom:28px lands inside a ~76px tall bar. It now sits in
+     the notification tier, above every dialog and below the fullscreen FX
+     layer, and clears the bottom bar on mobile. */
   .toast{
     position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);
     background:var(--ink);border:1px solid var(--ink);color:var(--bg);
-    padding:14px 24px;border-radius:var(--r-pill);font-size:14px;font-weight:600;opacity:0;transition:.3s cubic-bezier(.16,1,.3,1);z-index:50;
+    padding:14px 24px;border-radius:var(--r-pill);font-size:14px;font-weight:600;opacity:0;
+    transition:.3s cubic-bezier(.16,1,.3,1);z-index:var(--z-toast);
+    max-width:min(92vw, 520px);text-align:center;overflow-wrap:anywhere;
     box-shadow:var(--shadow);
   }
   .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
@@ -707,10 +740,6 @@
       0 0 20px -6px var(--accent-glow);
   }
 
-  .tab-count{
-    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;background:var(--ink);
-    color:var(--bg);padding:1px 7px;border-radius:6px;
-  }
   .see-all{
     background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;
     font-family:'JetBrains Mono',monospace;margin-left:auto;padding:0;letter-spacing:0;text-transform:none;
@@ -1032,7 +1061,7 @@
 
   /* ===== MOBILE REFINEMENTS ===== */
   @media(max-width:759px){
-    body{padding-left:14px;padding-right:14px}
+    body{padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right))}
     section{margin-top:26px}
     .panel{padding:18px;border-radius:var(--r-md)}
     .sec-label{font-size:10px;letter-spacing:1.6px}
@@ -1511,8 +1540,14 @@
   .gc-n{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
   .gc-w{font-size:12.5px;font-weight:600}
   .gc-p{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+  /* One definition. There were two: an --ink/11px/6px-radius version up in
+     the nav section and this --danger/10px/8px-radius one, and because they
+     sat in the same layer the second silently won every property it named.
+     Merged to what was actually rendering, plus the font-weight that was the
+     first version's only surviving contribution. */
   .tab-count{background:var(--danger);color:var(--bg);border-radius:8px;padding:0 6px;font-size:10px;
-    font-family:'JetBrains Mono',monospace;margin-left:2px;display:inline-flex;align-items:center;min-height:16px}
+    font-family:'JetBrains Mono',monospace;font-weight:600;margin-left:2px;
+    display:inline-flex;align-items:center;min-height:16px}
 
   @media(max-width:760px){
     .dm-layout{grid-template-columns:1fr;height:auto}
@@ -1523,65 +1558,14 @@
     .triv-row{grid-template-columns:auto 1fr auto 1fr auto;font-size:13px}
     .triv-n{display:none}
   }
-  /* ===== PRO SUITE ===== */
-  .pindex{display:flex;flex-direction:column;gap:3px;margin-top:12px}
-  .pi-row{display:grid;grid-template-columns:26px 32px 1fr 120px 42px;gap:11px;align-items:center;
-    padding:9px 8px;border-radius:var(--r-sm);cursor:pointer;transition:.15s}
-  .pi-row:hover{background:var(--panel-2)}
-  .pi-rank{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--dim);text-align:center}
-  .pi-id{min-width:0}
-  .pi-name{font-weight:700;font-size:15px}
-  .pi-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
-  .pi-num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;text-align:right}
-  .pbar{display:block;height:8px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
-  .pbar>span{display:block;height:100%;border-radius:6px;transition:width .5s cubic-bezier(.3,.8,.4,1)}
-  .form-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--line)}
-  .form-row:last-child{border-bottom:none}
-  .form-name{font-weight:600;font-size:14px}
-  .form-arrow{font-family:'JetBrains Mono',monospace;font-size:11px}
-  .form-rising{color:var(--accent)} .form-falling{color:var(--danger)} .form-steady{color:var(--dim)}
-  .clutch-row{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--line)}
-  .clutch-row:last-child{border-bottom:none}
-  .clutch-v{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--accent)}
-  .clutch-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);text-align:right}
-  .pw-table{width:100%;border-collapse:collapse}
-  .pw-table th{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5px;
-    text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
-  .pw-table td{padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px}
-  .pctl-row{display:grid;grid-template-columns:90px 1fr 54px;gap:12px;align-items:center;padding:9px 0}
-  .pctl-track{position:relative;height:8px;background:var(--line);border-radius:6px}
-  .pctl-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;opacity:.5}
-  .pctl-dot{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:var(--ink);
-    transform:translate(-50%,-50%);box-shadow:0 0 0 3px var(--bg)}
-  .pctl-v{font-family:'JetBrains Mono',monospace;font-weight:700;text-align:right}
-  .pctl-th{font-size:9px;color:var(--dim)}
-  .ms-line{display:flex;flex-direction:column;gap:2px}
-  .ms-item{display:grid;grid-template-columns:28px 1fr auto;gap:11px;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--line)}
-  .ms-item:last-child{border-bottom:none}
-  .ms-icon{font-size:16px;text-align:center}
-  .ms-txt{font-size:14px}
-  .ms-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
-  .sig-row{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
-  .sig-row:last-child{border-bottom:none}
-  .sig-row:hover{padding-left:4px}
-  .sig-id{font-size:14px}
-  .sig-odds{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--gold)}
-  .cf-row{display:grid;grid-template-columns:90px 1fr 78px;gap:12px;align-items:center;padding:9px 0}
-  .cf-track{position:relative;height:10px;background:var(--line);border-radius:6px}
-  .cf-band{position:absolute;top:0;bottom:0;border-radius:6px;opacity:.4}
-  .cf-cur{position:absolute;top:50%;width:3px;height:16px;background:var(--ink);transform:translate(-50%,-50%);border-radius:3px}
-  .cf-nums{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-align:right}
-  @media(max-width:560px){
-    .pi-row{grid-template-columns:22px 28px 1fr 60px 34px;gap:7px}
-    .pi-name{font-size:13px}
-    .clutch-row{grid-template-columns:1fr auto;gap:6px}
-    .clutch-sub{grid-column:1/-1;text-align:left}
-  }
-  /* ===== PRO SUITE ===== */
+  /* ===== PRO SUITE =====
+     This block was pasted twice back to back with drifted values (row
+     heights, bar thickness, font sizes, and two different mobile
+     breakpoint bodies), so roughly 60 rules were being parsed and then
+     immediately overwritten by a near-copy of themselves. Merged to the
+     values that were actually winning, with the three declarations only
+     the first copy carried folded back in: .ms-icon's centring, and
+     .pi-name / .clutch-row inside the 560px query. */
   .pindex{display:flex;flex-direction:column;gap:3px;margin-top:6px}
   .pi-row{display:grid;grid-template-columns:26px 32px 1fr 90px 40px;gap:11px;align-items:center;
     padding:10px 8px;border-radius:var(--r-sm);cursor:pointer;transition:.15s}
@@ -1619,7 +1603,7 @@
   .ms-item{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:center;
     padding:11px 0;border-bottom:1px solid var(--line)}
   .ms-item:last-child{border-bottom:none}
-  .ms-icon{font-size:16px}
+  .ms-icon{font-size:16px;text-align:center}
   .ms-txt{font-size:14px}
   .ms-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
   .sig-row{display:grid;grid-template-columns:30px 1fr auto;gap:11px;align-items:center;
@@ -1635,7 +1619,11 @@
   .cf-nums{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-align:right}
   @media(max-width:560px){
     .pi-row{grid-template-columns:22px 28px 1fr 60px 34px;gap:8px}
+    .pi-name{font-size:13px}
     .pctl-row,.cf-row{grid-template-columns:70px 1fr 48px;gap:8px}
+    .clutch-row{grid-template-columns:1fr auto;gap:6px}
+    /* the sub-label is hidden at this width, which also retires the
+       grid-column/text-align the older copy of this block set on it */
     .clutch-sub{display:none}
   }
   /* ===== FX LAYER ===== */
@@ -1791,9 +1779,10 @@
     --surface-bevel-light:#5d7a90; --surface-bevel-shadow:#111a23;
     --glow-mesh:#59a8ff;
   }
-  body[data-heat="cold"] .panel{box-shadow:0 0 0 1px rgba(190,230,255,.16) inset, 0 24px 60px -28px rgba(0,10,20,.6)}
-  body[data-heat="cold"] .panel::before{background:linear-gradient(90deg,#bff0ff,var(--accent))}
-
+  /* one copy. This rule was pasted twice with two different inset values
+     (0 0 0 1px and 0 0 1px 1px); the second was the one actually winning the
+     cascade, so it is the one kept — deduplicating here changes nothing on
+     screen, which is the point. */
   body[data-heat="cold"] .panel{box-shadow:0 0 1px 1px rgba(190,230,255,.16) inset, 0 24px 60px -28px rgba(0,10,20,.6)}
   body[data-heat="cold"] .panel::before{background:linear-gradient(90deg,#bff0ff,var(--accent))}
 
@@ -1818,14 +1807,6 @@
     0%,100%{box-shadow:0 0 22px -6px rgba(255,77,46,.4), 0 24px 60px -28px rgba(0,0,0,.6)}
     50%{box-shadow:0 0 34px 0px rgba(255,140,31,.65), 0 24px 60px -28px rgba(0,0,0,.6)}
   }
-  body[data-heat="hot"] .panel{
-    box-shadow:0 0 26px -4px rgba(255,77,46,.5), 0 24px 60px -28px rgba(0,0,0,.6);
-    animation:ignitepulse 2.4s ease-in-out infinite;
-  }
-  @keyframes ignitepulse{
-    0%,100%{box-shadow:0 0 22px -6px rgba(255,77,46,.4), 0 24px 60px -28px rgba(0,0,0,.6)}
-    50%{box-shadow:0 0 34px 0px rgba(255,140,31,.65), 0 24px 60px -28px rgba(0,0,0,.6)}
-  }
   body[data-heat="hot"] .panel::before{
     top:-3px;height:8px;
     background:linear-gradient(180deg,#ffe08a,#ff7a1f 55%,#ff4d2e);
@@ -1839,26 +1820,6 @@
     50%{transform:scaleY(.9);opacity:.9;filter:brightness(1.05)}
     75%{transform:scaleY(1.2) translateY(-1px);opacity:1;filter:brightness(1.2)}
     100%{transform:scaleY(1) translateY(0);opacity:.85;filter:brightness(1)}
-  }
-  body[data-heat="hot"] .panel::after{
-    content:'';position:absolute;left:0;right:0;top:-2px;height:50px;pointer-events:none;z-index:2;
-    background-image:
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff8a3d 100%, transparent 100%),
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff5a2e 100%, transparent 100%),
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff8a3d 100%, transparent 100%);
-    background-repeat:no-repeat;
-    background-position:10% 100%, 27% 100%, 45% 100%, 62% 100%, 80% 100%, 94% 100%;
-    animation:sparkrise 1.6s linear infinite;
-    opacity:0;
-  }
-  @keyframes sparkrise{
-    0%{background-position:10% 100%, 27% 100%, 45% 100%, 62% 100%, 80% 100%, 94% 100%;opacity:0}
-    8%{opacity:1}
-    55%{opacity:.7}
-    100%{background-position:6% -46px, 31% -52px, 41% -40px, 66% -55px, 76% -44px, 98% -50px;opacity:0}
   }
   body[data-heat="hot"] .panel::after{
     content:'';position:absolute;left:0;right:0;top:-2px;height:50px;pointer-events:none;z-index:2;
@@ -3877,28 +3838,40 @@
   .fx-row,
   .pi-row{
     animation:rowIn .42s cubic-bezier(.16,1,.3,1) both;
+    /* after the shorthand, which resets delay to 0 */
+    animation-delay:calc(var(--row-i, 0) * 25ms);
   }
-  /* stagger ladder — capped at 20 rows, the delay is imperceptible past that */
-  .brow:nth-child(1),.pend:nth-child(1),.comment:nth-child(1),.rlb-row:nth-child(1),.h2h-row:nth-child(1),.set-row:nth-child(1),.tl-row:nth-child(1),.boot-row:nth-child(1),.pr-row:nth-child(1),.audit-row:nth-child(1),.upset-row:nth-child(1),.odds-row:nth-child(1),.form-row:nth-child(1),.pctl-row:nth-child(1),.sig-row:nth-child(1),.cf-row:nth-child(1),.clutch-row:nth-child(1),.buzz-row:nth-child(1),.roster-row:nth-child(1),.skill-row:nth-child(1),.lev-row:nth-child(1),.attr-row:nth-child(1),.rec-row:nth-child(1),.trend-row:nth-child(1),.srch-row:nth-child(1),.triv-row:nth-child(1),.fx-row:nth-child(1),.pi-row:nth-child(1){animation-delay:0ms}
-  .brow:nth-child(2),.pend:nth-child(2),.comment:nth-child(2),.rlb-row:nth-child(2),.h2h-row:nth-child(2),.set-row:nth-child(2),.tl-row:nth-child(2),.boot-row:nth-child(2),.pr-row:nth-child(2),.audit-row:nth-child(2),.upset-row:nth-child(2),.odds-row:nth-child(2),.form-row:nth-child(2),.pctl-row:nth-child(2),.sig-row:nth-child(2),.cf-row:nth-child(2),.clutch-row:nth-child(2),.buzz-row:nth-child(2),.roster-row:nth-child(2),.skill-row:nth-child(2),.lev-row:nth-child(2),.attr-row:nth-child(2),.rec-row:nth-child(2),.trend-row:nth-child(2),.srch-row:nth-child(2),.triv-row:nth-child(2),.fx-row:nth-child(2),.pi-row:nth-child(2){animation-delay:25ms}
-  .brow:nth-child(3),.pend:nth-child(3),.comment:nth-child(3),.rlb-row:nth-child(3),.h2h-row:nth-child(3),.set-row:nth-child(3),.tl-row:nth-child(3),.boot-row:nth-child(3),.pr-row:nth-child(3),.audit-row:nth-child(3),.upset-row:nth-child(3),.odds-row:nth-child(3),.form-row:nth-child(3),.pctl-row:nth-child(3),.sig-row:nth-child(3),.cf-row:nth-child(3),.clutch-row:nth-child(3),.buzz-row:nth-child(3),.roster-row:nth-child(3),.skill-row:nth-child(3),.lev-row:nth-child(3),.attr-row:nth-child(3),.rec-row:nth-child(3),.trend-row:nth-child(3),.srch-row:nth-child(3),.triv-row:nth-child(3),.fx-row:nth-child(3),.pi-row:nth-child(3){animation-delay:50ms}
-  .brow:nth-child(4),.pend:nth-child(4),.comment:nth-child(4),.rlb-row:nth-child(4),.h2h-row:nth-child(4),.set-row:nth-child(4),.tl-row:nth-child(4),.boot-row:nth-child(4),.pr-row:nth-child(4),.audit-row:nth-child(4),.upset-row:nth-child(4),.odds-row:nth-child(4),.form-row:nth-child(4),.pctl-row:nth-child(4),.sig-row:nth-child(4),.cf-row:nth-child(4),.clutch-row:nth-child(4),.buzz-row:nth-child(4),.roster-row:nth-child(4),.skill-row:nth-child(4),.lev-row:nth-child(4),.attr-row:nth-child(4),.rec-row:nth-child(4),.trend-row:nth-child(4),.srch-row:nth-child(4),.triv-row:nth-child(4),.fx-row:nth-child(4),.pi-row:nth-child(4){animation-delay:75ms}
-  .brow:nth-child(5),.pend:nth-child(5),.comment:nth-child(5),.rlb-row:nth-child(5),.h2h-row:nth-child(5),.set-row:nth-child(5),.tl-row:nth-child(5),.boot-row:nth-child(5),.pr-row:nth-child(5),.audit-row:nth-child(5),.upset-row:nth-child(5),.odds-row:nth-child(5),.form-row:nth-child(5),.pctl-row:nth-child(5),.sig-row:nth-child(5),.cf-row:nth-child(5),.clutch-row:nth-child(5),.buzz-row:nth-child(5),.roster-row:nth-child(5),.skill-row:nth-child(5),.lev-row:nth-child(5),.attr-row:nth-child(5),.rec-row:nth-child(5),.trend-row:nth-child(5),.srch-row:nth-child(5),.triv-row:nth-child(5),.fx-row:nth-child(5),.pi-row:nth-child(5){animation-delay:100ms}
-  .brow:nth-child(6),.pend:nth-child(6),.comment:nth-child(6),.rlb-row:nth-child(6),.h2h-row:nth-child(6),.set-row:nth-child(6),.tl-row:nth-child(6),.boot-row:nth-child(6),.pr-row:nth-child(6),.audit-row:nth-child(6),.upset-row:nth-child(6),.odds-row:nth-child(6),.form-row:nth-child(6),.pctl-row:nth-child(6),.sig-row:nth-child(6),.cf-row:nth-child(6),.clutch-row:nth-child(6),.buzz-row:nth-child(6),.roster-row:nth-child(6),.skill-row:nth-child(6),.lev-row:nth-child(6),.attr-row:nth-child(6),.rec-row:nth-child(6),.trend-row:nth-child(6),.srch-row:nth-child(6),.triv-row:nth-child(6),.fx-row:nth-child(6),.pi-row:nth-child(6){animation-delay:125ms}
-  .brow:nth-child(7),.pend:nth-child(7),.comment:nth-child(7),.rlb-row:nth-child(7),.h2h-row:nth-child(7),.set-row:nth-child(7),.tl-row:nth-child(7),.boot-row:nth-child(7),.pr-row:nth-child(7),.audit-row:nth-child(7),.upset-row:nth-child(7),.odds-row:nth-child(7),.form-row:nth-child(7),.pctl-row:nth-child(7),.sig-row:nth-child(7),.cf-row:nth-child(7),.clutch-row:nth-child(7),.buzz-row:nth-child(7),.roster-row:nth-child(7),.skill-row:nth-child(7),.lev-row:nth-child(7),.attr-row:nth-child(7),.rec-row:nth-child(7),.trend-row:nth-child(7),.srch-row:nth-child(7),.triv-row:nth-child(7),.fx-row:nth-child(7),.pi-row:nth-child(7){animation-delay:150ms}
-  .brow:nth-child(8),.pend:nth-child(8),.comment:nth-child(8),.rlb-row:nth-child(8),.h2h-row:nth-child(8),.set-row:nth-child(8),.tl-row:nth-child(8),.boot-row:nth-child(8),.pr-row:nth-child(8),.audit-row:nth-child(8),.upset-row:nth-child(8),.odds-row:nth-child(8),.form-row:nth-child(8),.pctl-row:nth-child(8),.sig-row:nth-child(8),.cf-row:nth-child(8),.clutch-row:nth-child(8),.buzz-row:nth-child(8),.roster-row:nth-child(8),.skill-row:nth-child(8),.lev-row:nth-child(8),.attr-row:nth-child(8),.rec-row:nth-child(8),.trend-row:nth-child(8),.srch-row:nth-child(8),.triv-row:nth-child(8),.fx-row:nth-child(8),.pi-row:nth-child(8){animation-delay:175ms}
-  .brow:nth-child(9),.pend:nth-child(9),.comment:nth-child(9),.rlb-row:nth-child(9),.h2h-row:nth-child(9),.set-row:nth-child(9),.tl-row:nth-child(9),.boot-row:nth-child(9),.pr-row:nth-child(9),.audit-row:nth-child(9),.upset-row:nth-child(9),.odds-row:nth-child(9),.form-row:nth-child(9),.pctl-row:nth-child(9),.sig-row:nth-child(9),.cf-row:nth-child(9),.clutch-row:nth-child(9),.buzz-row:nth-child(9),.roster-row:nth-child(9),.skill-row:nth-child(9),.lev-row:nth-child(9),.attr-row:nth-child(9),.rec-row:nth-child(9),.trend-row:nth-child(9),.srch-row:nth-child(9),.triv-row:nth-child(9),.fx-row:nth-child(9),.pi-row:nth-child(9){animation-delay:200ms}
-  .brow:nth-child(10),.pend:nth-child(10),.comment:nth-child(10),.rlb-row:nth-child(10),.h2h-row:nth-child(10),.set-row:nth-child(10),.tl-row:nth-child(10),.boot-row:nth-child(10),.pr-row:nth-child(10),.audit-row:nth-child(10),.upset-row:nth-child(10),.odds-row:nth-child(10),.form-row:nth-child(10),.pctl-row:nth-child(10),.sig-row:nth-child(10),.cf-row:nth-child(10),.clutch-row:nth-child(10),.buzz-row:nth-child(10),.roster-row:nth-child(10),.skill-row:nth-child(10),.lev-row:nth-child(10),.attr-row:nth-child(10),.rec-row:nth-child(10),.trend-row:nth-child(10),.srch-row:nth-child(10),.triv-row:nth-child(10),.fx-row:nth-child(10),.pi-row:nth-child(10){animation-delay:225ms}
-  .brow:nth-child(11),.pend:nth-child(11),.comment:nth-child(11),.rlb-row:nth-child(11),.h2h-row:nth-child(11),.set-row:nth-child(11),.tl-row:nth-child(11),.boot-row:nth-child(11),.pr-row:nth-child(11),.audit-row:nth-child(11),.upset-row:nth-child(11),.odds-row:nth-child(11),.form-row:nth-child(11),.pctl-row:nth-child(11),.sig-row:nth-child(11),.cf-row:nth-child(11),.clutch-row:nth-child(11),.buzz-row:nth-child(11),.roster-row:nth-child(11),.skill-row:nth-child(11),.lev-row:nth-child(11),.attr-row:nth-child(11),.rec-row:nth-child(11),.trend-row:nth-child(11),.srch-row:nth-child(11),.triv-row:nth-child(11),.fx-row:nth-child(11),.pi-row:nth-child(11){animation-delay:250ms}
-  .brow:nth-child(12),.pend:nth-child(12),.comment:nth-child(12),.rlb-row:nth-child(12),.h2h-row:nth-child(12),.set-row:nth-child(12),.tl-row:nth-child(12),.boot-row:nth-child(12),.pr-row:nth-child(12),.audit-row:nth-child(12),.upset-row:nth-child(12),.odds-row:nth-child(12),.form-row:nth-child(12),.pctl-row:nth-child(12),.sig-row:nth-child(12),.cf-row:nth-child(12),.clutch-row:nth-child(12),.buzz-row:nth-child(12),.roster-row:nth-child(12),.skill-row:nth-child(12),.lev-row:nth-child(12),.attr-row:nth-child(12),.rec-row:nth-child(12),.trend-row:nth-child(12),.srch-row:nth-child(12),.triv-row:nth-child(12),.fx-row:nth-child(12),.pi-row:nth-child(12){animation-delay:275ms}
-  .brow:nth-child(13),.pend:nth-child(13),.comment:nth-child(13),.rlb-row:nth-child(13),.h2h-row:nth-child(13),.set-row:nth-child(13),.tl-row:nth-child(13),.boot-row:nth-child(13),.pr-row:nth-child(13),.audit-row:nth-child(13),.upset-row:nth-child(13),.odds-row:nth-child(13),.form-row:nth-child(13),.pctl-row:nth-child(13),.sig-row:nth-child(13),.cf-row:nth-child(13),.clutch-row:nth-child(13),.buzz-row:nth-child(13),.roster-row:nth-child(13),.skill-row:nth-child(13),.lev-row:nth-child(13),.attr-row:nth-child(13),.rec-row:nth-child(13),.trend-row:nth-child(13),.srch-row:nth-child(13),.triv-row:nth-child(13),.fx-row:nth-child(13),.pi-row:nth-child(13){animation-delay:300ms}
-  .brow:nth-child(14),.pend:nth-child(14),.comment:nth-child(14),.rlb-row:nth-child(14),.h2h-row:nth-child(14),.set-row:nth-child(14),.tl-row:nth-child(14),.boot-row:nth-child(14),.pr-row:nth-child(14),.audit-row:nth-child(14),.upset-row:nth-child(14),.odds-row:nth-child(14),.form-row:nth-child(14),.pctl-row:nth-child(14),.sig-row:nth-child(14),.cf-row:nth-child(14),.clutch-row:nth-child(14),.buzz-row:nth-child(14),.roster-row:nth-child(14),.skill-row:nth-child(14),.lev-row:nth-child(14),.attr-row:nth-child(14),.rec-row:nth-child(14),.trend-row:nth-child(14),.srch-row:nth-child(14),.triv-row:nth-child(14),.fx-row:nth-child(14),.pi-row:nth-child(14){animation-delay:325ms}
-  .brow:nth-child(15),.pend:nth-child(15),.comment:nth-child(15),.rlb-row:nth-child(15),.h2h-row:nth-child(15),.set-row:nth-child(15),.tl-row:nth-child(15),.boot-row:nth-child(15),.pr-row:nth-child(15),.audit-row:nth-child(15),.upset-row:nth-child(15),.odds-row:nth-child(15),.form-row:nth-child(15),.pctl-row:nth-child(15),.sig-row:nth-child(15),.cf-row:nth-child(15),.clutch-row:nth-child(15),.buzz-row:nth-child(15),.roster-row:nth-child(15),.skill-row:nth-child(15),.lev-row:nth-child(15),.attr-row:nth-child(15),.rec-row:nth-child(15),.trend-row:nth-child(15),.srch-row:nth-child(15),.triv-row:nth-child(15),.fx-row:nth-child(15),.pi-row:nth-child(15){animation-delay:350ms}
-  .brow:nth-child(16),.pend:nth-child(16),.comment:nth-child(16),.rlb-row:nth-child(16),.h2h-row:nth-child(16),.set-row:nth-child(16),.tl-row:nth-child(16),.boot-row:nth-child(16),.pr-row:nth-child(16),.audit-row:nth-child(16),.upset-row:nth-child(16),.odds-row:nth-child(16),.form-row:nth-child(16),.pctl-row:nth-child(16),.sig-row:nth-child(16),.cf-row:nth-child(16),.clutch-row:nth-child(16),.buzz-row:nth-child(16),.roster-row:nth-child(16),.skill-row:nth-child(16),.lev-row:nth-child(16),.attr-row:nth-child(16),.rec-row:nth-child(16),.trend-row:nth-child(16),.srch-row:nth-child(16),.triv-row:nth-child(16),.fx-row:nth-child(16),.pi-row:nth-child(16){animation-delay:375ms}
-  .brow:nth-child(17),.pend:nth-child(17),.comment:nth-child(17),.rlb-row:nth-child(17),.h2h-row:nth-child(17),.set-row:nth-child(17),.tl-row:nth-child(17),.boot-row:nth-child(17),.pr-row:nth-child(17),.audit-row:nth-child(17),.upset-row:nth-child(17),.odds-row:nth-child(17),.form-row:nth-child(17),.pctl-row:nth-child(17),.sig-row:nth-child(17),.cf-row:nth-child(17),.clutch-row:nth-child(17),.buzz-row:nth-child(17),.roster-row:nth-child(17),.skill-row:nth-child(17),.lev-row:nth-child(17),.attr-row:nth-child(17),.rec-row:nth-child(17),.trend-row:nth-child(17),.srch-row:nth-child(17),.triv-row:nth-child(17),.fx-row:nth-child(17),.pi-row:nth-child(17){animation-delay:400ms}
-  .brow:nth-child(18),.pend:nth-child(18),.comment:nth-child(18),.rlb-row:nth-child(18),.h2h-row:nth-child(18),.set-row:nth-child(18),.tl-row:nth-child(18),.boot-row:nth-child(18),.pr-row:nth-child(18),.audit-row:nth-child(18),.upset-row:nth-child(18),.odds-row:nth-child(18),.form-row:nth-child(18),.pctl-row:nth-child(18),.sig-row:nth-child(18),.cf-row:nth-child(18),.clutch-row:nth-child(18),.buzz-row:nth-child(18),.roster-row:nth-child(18),.skill-row:nth-child(18),.lev-row:nth-child(18),.attr-row:nth-child(18),.rec-row:nth-child(18),.trend-row:nth-child(18),.srch-row:nth-child(18),.triv-row:nth-child(18),.fx-row:nth-child(18),.pi-row:nth-child(18){animation-delay:425ms}
-  .brow:nth-child(19),.pend:nth-child(19),.comment:nth-child(19),.rlb-row:nth-child(19),.h2h-row:nth-child(19),.set-row:nth-child(19),.tl-row:nth-child(19),.boot-row:nth-child(19),.pr-row:nth-child(19),.audit-row:nth-child(19),.upset-row:nth-child(19),.odds-row:nth-child(19),.form-row:nth-child(19),.pctl-row:nth-child(19),.sig-row:nth-child(19),.cf-row:nth-child(19),.clutch-row:nth-child(19),.buzz-row:nth-child(19),.roster-row:nth-child(19),.skill-row:nth-child(19),.lev-row:nth-child(19),.attr-row:nth-child(19),.rec-row:nth-child(19),.trend-row:nth-child(19),.srch-row:nth-child(19),.triv-row:nth-child(19),.fx-row:nth-child(19),.pi-row:nth-child(19){animation-delay:450ms}
-  .brow:nth-child(20),.pend:nth-child(20),.comment:nth-child(20),.rlb-row:nth-child(20),.h2h-row:nth-child(20),.set-row:nth-child(20),.tl-row:nth-child(20),.boot-row:nth-child(20),.pr-row:nth-child(20),.audit-row:nth-child(20),.upset-row:nth-child(20),.odds-row:nth-child(20),.form-row:nth-child(20),.pctl-row:nth-child(20),.sig-row:nth-child(20),.cf-row:nth-child(20),.clutch-row:nth-child(20),.buzz-row:nth-child(20),.roster-row:nth-child(20),.skill-row:nth-child(20),.lev-row:nth-child(20),.attr-row:nth-child(20),.rec-row:nth-child(20),.trend-row:nth-child(20),.srch-row:nth-child(20),.triv-row:nth-child(20),.fx-row:nth-child(20),.pi-row:nth-child(20){animation-delay:475ms}
+  /* stagger ladder. This was twenty lines each repeating the same 28-class
+     selector list — 560 compound selectors and about 19KB of CSS to express
+     one multiplication. The list is now written once per step inside :is(),
+     which carries exactly the same specificity (0,2,0) as the long form did,
+     and the step feeds a custom property that the base rule multiplies out.
+
+     It also fixes a visible bug. The old chain stopped at :nth-child(20), so
+     row 21 onward matched no delay rule at all, fell back to 0ms, and flew in
+     at the same instant as row 1 — on any list longer than twenty rows the
+     bottom of the list landed before the middle of it. The last step is now
+     an (n+20) range, so everything past the cap holds at 475ms instead. */
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(1){--row-i:0}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(2){--row-i:1}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(3){--row-i:2}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(4){--row-i:3}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(5){--row-i:4}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(6){--row-i:5}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(7){--row-i:6}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(8){--row-i:7}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(9){--row-i:8}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(10){--row-i:9}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(11){--row-i:10}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(12){--row-i:11}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(13){--row-i:12}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(14){--row-i:13}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(15){--row-i:14}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(16){--row-i:15}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(17){--row-i:16}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(18){--row-i:17}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(19){--row-i:18}
+  :is(.brow,.pend,.comment,.rlb-row,.h2h-row,.set-row,.tl-row,.boot-row,.pr-row,.audit-row,.upset-row,.odds-row,.form-row,.pctl-row,.sig-row,.cf-row,.clutch-row,.buzz-row,.roster-row,.skill-row,.lev-row,.attr-row,.rec-row,.trend-row,.srch-row,.triv-row,.fx-row,.pi-row):nth-child(n+20){--row-i:19}
 
 
   /* -- 2. panel / section entrance -- */
@@ -3915,15 +3888,20 @@
   .pair > section{
     animation:panelIn .5s cubic-bezier(.16,1,.3,1) both;
   }
-  .layout > .col-main > section:nth-child(1),.col-main > section:nth-child(1){animation-delay:0ms}
-  .layout > .col-main > section:nth-child(2),.col-main > section:nth-child(2){animation-delay:60ms}
-  .layout > .col-main > section:nth-child(3),.col-main > section:nth-child(3){animation-delay:120ms}
-  .layout > .col-main > section:nth-child(4),.col-main > section:nth-child(4){animation-delay:180ms}
-  .layout > .col-main > section:nth-child(5),.col-main > section:nth-child(5){animation-delay:240ms}
-  .layout > .col-side > section:nth-child(1),.col-side > section:nth-child(1){animation-delay:40ms}
-  .layout > .col-side > section:nth-child(2),.col-side > section:nth-child(2){animation-delay:100ms}
-  .layout > .col-side > section:nth-child(3),.col-side > section:nth-child(3){animation-delay:160ms}
-  .layout > .col-side > section:nth-child(4),.col-side > section:nth-child(4){animation-delay:220ms}
+  /* the `.layout > .col-main > section` half of each of these pairs was dead
+     weight: `.col-main > section` already matches everything it did, and set
+     the identical value. And as with the rows, the chain simply stopped —
+     a sixth panel in the main column got no rule, so it animated in before
+     the second through fifth. Both columns now hold at their last step. */
+  .col-main > section:nth-child(1){animation-delay:0ms}
+  .col-main > section:nth-child(2){animation-delay:60ms}
+  .col-main > section:nth-child(3){animation-delay:120ms}
+  .col-main > section:nth-child(4){animation-delay:180ms}
+  .col-main > section:nth-child(n+5){animation-delay:240ms}
+  .col-side > section:nth-child(1){animation-delay:40ms}
+  .col-side > section:nth-child(2){animation-delay:100ms}
+  .col-side > section:nth-child(3){animation-delay:160ms}
+  .col-side > section:nth-child(n+4){animation-delay:220ms}
   .panel{animation:panelIn .45s cubic-bezier(.16,1,.3,1) both}
 
   /* -- 3. hover / press micro-interactions -- */
@@ -4506,7 +4484,7 @@
      there is nothing to find, tab to or tap. */
   .ffi:not(.unlocked) .ffi-skip{display:none}
   .ffi.unlocked .ffi-skip{animation:ffiFade .4s ease both}
-  .ffi-skip{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:6;
+  .ffi-skip{position:absolute;top:calc(14px + env(safe-area-inset-top));right:calc(14px + env(safe-area-inset-right));z-index:6;
     font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;
     color:rgba(255,255,255,.55);background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);
     padding:8px 13px;border-radius:var(--r-pill);cursor:pointer;backdrop-filter:blur(8px)}
@@ -6035,6 +6013,20 @@
   :root[data-skin="ffcup"] .live-ticker-bar{
     backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
   }
+  /* The same argument holds off-skin. backdrop-filter on a bar pinned across
+     the full width of the viewport makes the browser re-snapshot and re-blur
+     everything behind it on every scrolled frame, and these bars are painted
+     92-96% opaque, so there is essentially nothing legible back there to
+     blur. The rule above only covered the cup skin, and the mobile rule in
+     the 860px query only reduced the radius rather than removing it. On a
+     touch device — which is where the GPU budget is tightest and where the
+     bars are pinned during every scroll — the effect comes off entirely and
+     the bars are composited as flat slabs. Desktop keeps its glass. */
+  @media (hover:none) and (pointer:coarse){
+    .topbar,.botbar,.live-ticker-bar,.ms-panel{
+      backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+    }
+  }
   /* the bar sits across the hottest part of the sky, so it carries the
      grade rather than cutting a dark band through the top of the frame */
   :root[data-skin="ffcup"] .topbar{
@@ -6529,6 +6521,134 @@
     .ms-handle{margin-bottom:12px}
   }
 
+  /* ================================================================
+     TOUCH TARGETS
+     Measured on a 390px viewport with every view and dialog forced
+     open, rather than guessed at. What came back under the 44px
+     minimum: .see-all at 58x14, .tb-ico at 34x34, .modal-x at 35x32,
+     .ffcup-chip at 76x28, .cs-btn 67x29, .cn-geo 160x31, .back-btn
+     77x33, .qa-btn 87x33, .mini 79x37, .ss-win-btn 194x37 and
+     .res-btn 124x40.
+
+     Scoped to coarse pointers, so a mouse-driven desktop layout is
+     untouched — this is the one place where growing the control is
+     correct rather than a regression. Everything here needs height
+     only, except the two icon buttons, which need both axes.
+     ================================================================ */
+  @media (hover:none) and (pointer:coarse){
+    .mini,.subtab,.qa-btn,.cs-btn,.back-btn,.cn-geo,.res-btn,.ss-win-btn,.admin-btn,.chart-chip{
+      min-height:44px;
+      /* buttons already centre their own text; being explicit keeps the
+         label centred once the box is taller than its line box */
+      display:inline-flex;align-items:center;justify-content:center;
+    }
+    .res-btn,.ss-win-btn{display:flex}
+    .tb-ico{width:44px;height:44px}
+    .modal-x{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+    .ffcup-chip,:root[data-skin="ffcup"] .ffcup-chip{min-height:44px}
+
+    /* .see-all is a 12px text link sitting at the end of a section
+       heading. Growing the box would push every heading on the page
+       ~30px taller, so it gets an invisible hit area centred on
+       itself instead — the layout is identical, the tappable region
+       is 44px. The headings it lives in are far enough apart that
+       these expanded areas cannot overlap a neighbouring control. */
+    .see-all{position:relative}
+    .see-all::after{
+      content:'';position:absolute;left:50%;top:50%;
+      width:100%;height:44px;min-width:44px;
+      transform:translate(-50%,-50%);
+    }
+  }
+
+  /* ================================================================
+     SCROLL CHAINING
+     Three of the app's fourteen scroll containers set
+     overscroll-behavior; the other eleven let a flick that reaches
+     the end of a comment list, a search result list, a DM thread or
+     an open sheet carry on into the page behind it — which on a
+     phone reads as the dialog dragging the whole app around under
+     itself. Contained, so the scroll stops where the box does.
+     ================================================================ */
+  .ms-panel,.comment-list,.modal-card,.srch-results,.dm-side,.dm-body,
+  .pt-health-body,.rr-list,.ac-menu,#notifPanel{
+    overscroll-behavior:contain;
+  }
+  /* the horizontal rails — nav strips, the moments carousel, the wide stat
+     and chart tables. Flicking one of these past its end used to hand the
+     leftover momentum to the page, which on iOS and Android is also the
+     back-navigation gesture: a hard swipe along the tab strip could leave
+     the app. -x only, so a vertical scroll started on top of a rail still
+     scrolls the page, which is what a thumb expects. */
+  .tb-tabs,.subtabs,.moments,.pred-out,.ct-days,#statsGrid,#statsExp,
+  #labDominance,#deepSOS,.chart-legend,.rr-strip{
+    overscroll-behavior-x:contain;
+  }
+  textarea{overscroll-behavior:contain}
+
+  /* the standard clip-rect pattern: out of sight, still in the accessibility
+     tree and still announced. Not display:none, which would remove it. */
+  .sr-only{
+    position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+  }
+
+  /* ================================================================
+     OFF-SCREEN PAINT COST
+     The feed renders every post it has, the comment list every comment,
+     and the match archive every result — all of them fully laid out and
+     painted whether or not they are within a screen of the viewport.
+
+     content-visibility:auto lets the browser skip layout and paint for
+     the ones that are not. contain-intrinsic-size carries the `auto`
+     keyword, so once a card has been measured the browser remembers
+     that height and reuses it as the placeholder — without it the
+     scrollbar jumps around as real sizes replace guessed ones.
+
+     Applied only to repeated list items in genuinely long lists. Not to
+     panels or anything containing a focusable control that a user might
+     reach with the keyboard while it is off-screen, and not to anything
+     inside a fixed-height scroller where the saving would be nil.
+     ================================================================ */
+  .fcard,.comment{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 180px;
+  }
+  .comment{contain-intrinsic-size:auto 64px}
+  /* find-in-page and anchor navigation still reach skipped subtrees, but a
+     printed page must not: printing forces everything back into layout */
+  @media print{
+    .fcard,.comment{content-visibility:visible}
+  }
+
+  /* ================================================================
+     IDLE ANIMATION STATES
+     Nothing in the app stopped an infinite animation, ever. The
+     ticker marquee, the cup marquee's light sweep and its perspective
+     floor, and the hype-meter's gradient all kept the compositor
+     ticking at 60fps whether or not they were anywhere near the
+     viewport, and whether or not the tab was even on screen.
+
+     Two switches, both play-state only. Pausing is not stopping: the
+     animation holds its current frame and resumes from it, so nothing
+     jumps when it comes back. Deliberately narrow — a blanket
+     `* { animation-play-state: paused }` would also freeze the
+     entrance animations mid-flight, which fill their `both` state and
+     would then be stuck half-drawn.
+     ================================================================ */
+  .fx-idle,.fx-idle::before,.fx-idle::after,
+  .fx-idle *,.fx-idle *::before,.fx-idle *::after{
+    animation-play-state:paused!important;
+  }
+  /* the fixed backdrop layers never leave the viewport, so they take
+     the document-hidden switch instead of the intersection one */
+  body.fx-hidden #hudGrid,body.fx-hidden #hudGrid::before,body.fx-hidden #hudGrid::after,
+  body.fx-hidden .ticker-track,body.fx-hidden .cupmark,
+  body.fx-hidden .cupmark *,body.fx-hidden .cupmark *::before,body.fx-hidden .cupmark *::after,
+  body.fx-hidden .cupmark::before,body.fx-hidden .cupmark::after{
+    animation-play-state:paused!important;
+  }
+
 </style>
 <body>
 <div id="hudGrid" aria-hidden="true"></div>
@@ -6709,7 +6829,12 @@
     <div class="cup-mount" data-cup-mount="full"></div>
     <div class="live-mount"></div>
     <div id="otdBox" style="display:none"></div>
-    <div id="tickerWrap" class="ticker-wrap" style="display:none">
+    <!-- The marquee is a decorative, endlessly looping restatement of the
+         feed below it. Announcing it would mean a screen reader reading the
+         same items on a 32-second cycle forever, so it is hidden from the
+         accessibility tree; every item in it is reachable as real content in
+         the feed and the activity list. -->
+    <div id="tickerWrap" class="ticker-wrap" aria-hidden="true" style="display:none">
       <span class="ticker-live">● LIVE</span>
       <div class="ticker-mask"><div id="tickerTrack" class="ticker-track"></div></div>
     </div>
@@ -7099,7 +7224,7 @@
     <section>
       <div class="sec-label">All matches <span class="count-pill" id="allCount">0</span></div>
       <div class="match-filter">
-        <input id="matchSearch" placeholder="filter by player name…" autocomplete="off" oninput="renderAllMatches()">
+        <input id="matchSearch" placeholder="filter by player name…" autocomplete="off" oninput="renderAllMatchesD()">
         <div class="mf-controls">
           <select id="mfResult" onchange="renderAllMatches()">
             <option value="">All results</option>
@@ -7185,8 +7310,8 @@
       <div class="panel">
         <div class="pred-hint">Everything worth knowing before two players step on court — form, history, set patterns, and exactly what each result does to the ladder.</div>
         <div class="grid2" style="margin-top:12px">
-          <div><input id="brfA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="runBriefing()"></div>
-          <div><input id="brfB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="runBriefing()"></div>
+          <div><input id="brfA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="runBriefingD()"></div>
+          <div><input id="brfB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="runBriefingD()"></div>
         </div>
         <div id="brfOut" class="pred-out"></div>
       </div>
@@ -7197,8 +7322,8 @@
       <div class="panel">
         <div class="pred-hint">Pick two players. Uses live Elo ratings to project win probability and how the rating would move on each result.</div>
         <div class="grid2" style="margin-top:12px">
-          <div><input id="predA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="runMatchPredict()"></div>
-          <div><input id="predB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="runMatchPredict()"></div>
+          <div><input id="predA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="runMatchPredictD()"></div>
+          <div><input id="predB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="runMatchPredictD()"></div>
         </div>
         <div id="predMatchOut" class="pred-out"></div>
       </div>
@@ -7563,8 +7688,8 @@
       <div class="panel">
         <div class="pred-hint">Pick two players to see their whole story — every meeting, the rating swing, who owns the matchup, and where it's trending.</div>
         <div class="grid2" style="margin-top:12px">
-          <input id="rvA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="renderRivalry()">
-          <input id="rvB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="renderRivalry()">
+          <input id="rvA" data-ac="players" placeholder="player 1" autocomplete="off" oninput="renderRivalryD()">
+          <input id="rvB" data-ac="players" placeholder="player 2" autocomplete="off" oninput="renderRivalryD()">
         </div>
         <div id="rivalryOut" class="pred-out"></div>
       </div>
@@ -7767,7 +7892,7 @@
       <div class="cn-controls">
         <div class="cn-chips" id="cnChips"></div>
         <input class="cn-search" id="cnSearch" type="search" placeholder="Search a park or street…"
-               oninput="nearbySearch(this.value)" autocomplete="off">
+               oninput="nearbySearchD(this.value)" autocomplete="off">
       </div>
       <div class="cn-controls cn-controls-2">
         <div class="cn-seg">
@@ -7796,12 +7921,17 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+<!-- One polite live region for the whole app. Announcing a score by putting
+     aria-live on the tracker itself would make a screen reader re-read the
+     entire rebuilt panel on every point; this carries one short sentence
+     instead, and only when the thing it describes has actually changed. -->
+<div id="a11yLive" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- SEARCH MODAL -->
 <div class="modal" id="searchModal" onclick="if(event.target===this)closeSearch()">
   <div class="modal-card srch-card">
-    <input id="searchInput" class="srch-input" placeholder="Search players, matches, posts, #tags…" oninput="runSearch()" autocomplete="off">
+    <input id="searchInput" class="srch-input" placeholder="Search players, matches, posts, #tags…" oninput="runSearchD()" autocomplete="off">
     <div id="searchResults" class="srch-results"></div>
     <button class="modal-x" onclick="closeSearch()">✕</button>
   </div>
@@ -8136,6 +8266,35 @@ function ytEmbedCard(id){
     +`<a class="yt-out" href="${ytWatchUrl(v)}" target="_blank" rel="noopener"
         onclick="event.stopPropagation()">YouTube ↗</a></div>`;
 }
+/* Nothing in here used to yield the floor to anything else, so a feed of
+   posts could end up with three iframes playing over each other, and opening
+   a post's video while a match was streaming gave you both soundtracks at
+   once. One playing surface at a time: any other inline card is torn back
+   down to its poster (which also stops it holding an iframe open off-screen),
+   and the two API-driven players are paused rather than destroyed, because
+   they hold live-stream position and reel state worth coming back to. */
+function ytStopOtherEmbeds(keep){
+  document.querySelectorAll(".yt-card.yt-playing").forEach(card=>{
+    if(card===keep) return;
+    const id=ytSafeId(card.getAttribute("data-yt"));
+    if(!ytIsId(id)) return;
+    const frame=card.querySelector("iframe.yt-frame");
+    if(!frame) return;
+    const face=document.createElement("button");
+    face.className="yt-face"; face.type="button";
+    face.setAttribute("aria-label","Play video");
+    face.onclick=ev=>ytPlayEmbed(ev,face);
+    face.innerHTML='<img class="yt-thumb" src="https://i.ytimg.com/vi/'+id
+      +'/hqdefault.jpg" loading="lazy" alt="" onerror="this.remove()">'
+      +'<span class="yt-play" aria-hidden="true"></span>';
+    card.replaceChild(face, frame);
+    card.classList.remove("yt-playing");
+  });
+}
+function ytPauseApiPlayers(){
+  try{ if(typeof PTStream!=="undefined" && PTStream && PTStream.player && PTStream.player.pauseVideo) PTStream.player.pauseVideo(); }catch(e){}
+  try{ if(typeof REEL!=="undefined" && REEL && REEL.player && REEL.player.pauseVideo) REEL.player.pauseVideo(); }catch(e){}
+}
 function ytPlayEmbed(e, btn){
   /* result and comment cards open the match on click, and "play the video"
      is not "open the match" */
@@ -8144,6 +8303,8 @@ function ytPlayEmbed(e, btn){
   if(!card) return;
   const id=ytSafeId(card.getAttribute("data-yt"));
   if(!ytIsId(id)) return;
+  ytStopOtherEmbeds(card);
+  ytPauseApiPlayers();
   const f=document.createElement("iframe");
   f.className="yt-frame";
   f.src=`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1&modestbranding=1`;
@@ -8194,10 +8355,106 @@ function countsForElo(m){
 }
 
 const $ = id => document.getElementById(id);
+
+/* Every live-filter input in the app fired its handler on the raw `input`
+   event, so each keystroke ran a full recompute-and-rerender — and the
+   handlers behind them are not cheap (the global search replays the league's
+   Elo history; the court filter re-renders 173 venues; the match filter
+   rebuilds the whole archive). A key repeat or a fast typist queued one of
+   those per character. These now coalesce: the work runs once the typing
+   pauses, and a trailing call is guaranteed, so the last character typed is
+   always the one reflected. Each wrapper keeps its own timer, so debouncing
+   the search never delays the court filter. */
+function debounce(fn, wait){
+  let t=null;
+  const wrapped=function(...args){
+    if(t) clearTimeout(t);
+    t=setTimeout(()=>{ t=null; fn.apply(this,args); }, wait);
+  };
+  wrapped.cancel=()=>{ if(t){ clearTimeout(t); t=null; } };
+  wrapped.flush=function(...args){ if(t){ clearTimeout(t); t=null; } fn.apply(this,args); };
+  return wrapped;
+}
+/* Bound to `window` because inline oninput= handlers resolve names against
+   the global object, not this script's top-level scope. The originals stay
+   exported and undebounced for the places that call them directly and want
+   the answer now (opening a panel, applying a filter from code). */
+window.runSearchD        = debounce((...a)=>runSearch(...a),        140);
+window.nearbySearchD     = debounce((...a)=>nearbySearch(...a),     160);
+window.renderAllMatchesD = debounce((...a)=>renderAllMatches(...a), 160);
+window.runBriefingD      = debounce((...a)=>runBriefing(...a),      200);
+window.runMatchPredictD  = debounce((...a)=>runMatchPredict(...a),  200);
+window.renderRivalryD    = debounce((...a)=>renderRivalry(...a),    200);
+
+/* Per-second intervals that only ever touch the screen. Four of them were
+   running unconditionally for the life of the page — the ref clock, the
+   stream bug queue, the countdown sweep (which walks the DOM every tick) and
+   the ghost-cursor reaper — including while the tab sat in the background on
+   a phone, where the work is invisible by definition and the wakeup is spent
+   on battery. They now no-op while the document is hidden, and each one runs
+   immediately on the way back so nothing shows a stale clock for a second
+   after you return to the tab. The interval itself is left alone rather than
+   torn down and recreated, so nothing can end up double-scheduled. */
+/* Repeating an identical string into a live region is a no-op in most screen
+   readers (nothing changed, nothing to read), so a re-render that produces
+   the same score stays silent, and a genuine change always speaks. */
+let _lastAnnounce='';
+function announce(msg){
+  const el=document.getElementById('a11yLive');
+  if(!el || !msg || msg===_lastAnnounce) return;
+  _lastAnnounce=msg;
+  el.textContent=msg;
+}
+window.announce=announce;
+
+const _visibleTicks=[];
+function everyVisible(fn, ms){
+  _visibleTicks.push(fn);
+  return setInterval(()=>{ if(document.visibilityState==='visible') fn(); }, ms);
+}
+document.addEventListener('visibilitychange', ()=>{
+  /* the CSS switch for the always-on backdrop animations */
+  document.body.classList.toggle('fx-hidden', document.visibilityState!=='visible');
+  if(document.visibilityState!=='visible') return;
+  _visibleTicks.forEach(fn=>{ try{ fn(); }catch(e){} });
+});
+
+/* The other half: the decorative infinite animations that DO scroll. An
+   IntersectionObserver marks each one idle the moment it leaves the viewport
+   and un-marks it on the way back, so a ticker sitting three screens up is
+   not costing a composited frame every 16ms. rootMargin gives them a screen
+   of warning in each direction, so one is always already running by the time
+   it is visible. Elements are re-scanned after renders because most of these
+   are rebuilt by innerHTML; the observer de-duplicates via a WeakSet. */
+const FX_IDLE_SELECTOR='.ticker-track,.cupmark,.hype-fill,.pod-base';
+let _fxObserver=null,_fxSeen=null;
+function fxObserveAnimated(){
+  if(!('IntersectionObserver' in window)) return;
+  if(!_fxObserver){
+    _fxSeen=new WeakSet();
+    _fxObserver=new IntersectionObserver(entries=>{
+      entries.forEach(en=>en.target.classList.toggle('fx-idle', !en.isIntersecting));
+    }, {rootMargin:'100% 0px'});
+  }
+  document.querySelectorAll(FX_IDLE_SELECTOR).forEach(el=>{
+    if(_fxSeen.has(el)) return;
+    _fxSeen.add(el);
+    _fxObserver.observe(el);
+  });
+}
+window.fxObserveAnimated=fxObserveAnimated;
+/* The hide timer used to be fired and forgotten. Two toasts inside 2.6s and
+   the first one's timer would strip the `show` class off the second, so the
+   message that mattered flashed and vanished. One timer, cleared and
+   restarted per call. */
+let _toastTimer = null;
 const toast = (msg, err=false) => {
-  const t = $("toast"); t.textContent = msg;
+  const t = $("toast");
+  if(!t) return;
+  t.textContent = msg;
   t.className = "toast show" + (err ? " err" : "");
-  setTimeout(()=>t.className="toast", 2600);
+  if(_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>{ t.className = "toast"; _toastTimer = null; }, 2600);
 };
 
 /* ---------- Elo engine: recompute everything from approved history ---------- */
@@ -8920,7 +9177,21 @@ function ptCloseGame(winSide, wasTiebreak){
   const setDone = wasTiebreak || ((PT.gamesA>=6||PT.gamesB>=6) && Math.abs(PT.gamesA-PT.gamesB)>=2);
   if(setDone) ptCloseSet(winSide);
 }
-function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} }
+function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} }
+/* Every scoring path — point, ace, game, set, undo and redo — funnels through
+   ptAfterMutate, so one call here covers all of them. The sentence is built
+   from state rather than scraped from the DOM, so it stays correct however
+   the panel is rendered. */
+function ptAnnounceScore(){
+  if(!PT) return;
+  if(PT.winner){
+    announce(`${PT.winner==='a'?PT.a:PT.b} wins the match, ${PT.setsA} sets to ${PT.setsB}.`);
+    return;
+  }
+  if(PT.draw){ announce('Match recorded as a draw.'); return; }
+  const pts = PT.tiebreak ? `Tiebreak ${PT.tbA}-${PT.tbB}` : `Points ${PT.ptsA}-${PT.ptsB}`;
+  announce(`${PT.a} versus ${PT.b}. ${pts}. Games ${PT.gamesA}-${PT.gamesB}. Sets ${PT.setsA}-${PT.setsB}.`);
+}
 
 /* expand/collapse the point-by-point log. Nothing here needs a targeted DOM
    poke (the ⚖️/💬/🐛 toggles avoid a rebuild because it would nuke a live
@@ -9009,7 +9280,7 @@ function ptTickTimer(){
     const rc=document.getElementById("ptRefClock"); if(rc) rc.textContent=ptFmtElapsed((rp.endedAt||Date.now())-rp.startedAt);
   }
 }
-setInterval(ptTickTimer,1000);
+everyVisible(ptTickTimer,1000);
 
 /* ---- celebration plumbing (set won + the 8-8 easter egg) ----
    See the "CELEBRATIONS" CSS block for the full story. The two rules that
@@ -9819,6 +10090,9 @@ function openReel(matchId){
         rate:1, tuneOpen:false, all:[], segs:[], longCut:0};
   rrCompute();
   renderReel();
+  /* the reel is about to start talking — everything else stops */
+  try{ ytStopOtherEmbeds(null); }catch(e){}
+  try{ if(PTStream && PTStream.player && PTStream.player.pauseVideo) PTStream.player.pauseVideo(); }catch(e){}
   if(rrCanPlay(data)) rrMountPlayer();
 }
 window.openReel=openReel;
@@ -11200,6 +11474,10 @@ function renderTickerBar(){
   let bar=$("liveTicker");
   if(!bar){
     bar=document.createElement("div"); bar.id="liveTicker"; bar.className="live-ticker-bar";
+    /* "a match just went live" is a real status change and a rare one, so
+       unlike the scrolling marquee this one is worth announcing */
+    bar.setAttribute("role","status");
+    bar.setAttribute("aria-live","polite");
     document.body.appendChild(bar);
   }
   tickerQueue = tickerQueue.slice(-12);
@@ -11237,7 +11515,7 @@ function initGhostCursors(){
     const docH=Math.max(document.documentElement.scrollHeight,1);
     try{ presenceChan.send({type:"broadcast",event:"cursor",payload:{name, x:e.clientX/window.innerWidth, y:(e.clientY+window.scrollY)/docH}}); }catch(e){}
   }, {passive:true});
-  setInterval(()=>{
+  everyVisible(()=>{
     const now=Date.now(); let changed=false;
     Object.keys(ghostCursors).forEach(k=>{ if(now-ghostCursors[k].t>4500){ delete ghostCursors[k]; changed=true; } });
     if(changed) renderGhostCursors();
@@ -11255,21 +11533,54 @@ function renderGhostCursors(){
   if(_ghostRaf!=null) return;
   _ghostRaf=requestAnimationFrame(()=>{ _ghostRaf=null; drawGhostCursors(); });
 }
+/* This used to rebuild the whole layer with innerHTML on every frame, which
+   had two costs and one outright bug.
+
+   The bug: each pass threw the cursor elements away and parsed new ones, so
+   the `transition:left/top` written onto them never had a previous value to
+   animate from. A brand-new element does not transition. Every cursor
+   teleported between packets, and the eleven-times-a-second glide the
+   transition was there to provide had never once run.
+
+   The costs: re-parsing HTML and reallocating the whole subtree every frame,
+   and animating `left`/`top`, which are layout properties — the browser
+   reflows the layer on each change instead of handing a transform to the
+   compositor.
+
+   Now the nodes persist, keyed by name, and a frame only writes `transform`.
+   The transition works for the first time, and it runs off the main thread. */
+const _ghostNodes=new Map();
 function drawGhostCursors(){
   let layer=$("ghostLayer");
-  if(!layer){ layer=document.createElement("div"); layer.id="ghostLayer"; layer.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:8500;overflow:hidden"; document.body.appendChild(layer); }
+  if(!layer){ layer=document.createElement("div"); layer.id="ghostLayer"; layer.style.cssText="position:fixed;inset:0;pointer-events:none;z-index:8500;overflow:hidden"; document.body.appendChild(layer); _ghostNodes.clear(); }
   const now=Date.now();
   if(now-_ghostDocHAt>250){ _ghostDocH=Math.max(document.documentElement.scrollHeight,1); _ghostDocHAt=now; }
   const docH=_ghostDocH;
-  layer.innerHTML=Object.entries(ghostCursors).map(([name,g])=>{
+  const live=new Set();
+  Object.entries(ghostCursors).forEach(([name,g])=>{
+    live.add(name);
+    let el=_ghostNodes.get(name);
+    if(!el){
+      const c=playerColor(name);
+      el=document.createElement("div");
+      el.style.cssText="position:absolute;left:0;top:0;will-change:transform;transition:transform .18s linear";
+      el.innerHTML=`<div style="width:11px;height:11px;border-radius:50% 50% 50% 0;background:${c};transform:rotate(45deg);box-shadow:0 0 8px ${c}"></div>`
+        +`<div style="margin-top:3px;font-family:'JetBrains Mono',monospace;font-size:10px;color:${c};background:rgba(10,8,20,.75);padding:2px 6px;border-radius:6px;white-space:nowrap">${esc(name)}</div>`;
+      layer.appendChild(el);
+      _ghostNodes.set(name,el);
+    }
     const x=g.x*window.innerWidth, y=g.y*docH-window.scrollY;
-    if(y<-40||y>window.innerHeight+40) return '';
-    const c=playerColor(name);
-    return `<div style="position:absolute;left:${x}px;top:${y}px;transition:left .18s linear,top .18s linear">
-      <div style="width:11px;height:11px;border-radius:50% 50% 50% 0;background:${c};transform:rotate(45deg);box-shadow:0 0 8px ${c}"></div>
-      <div style="margin-top:3px;font-family:'JetBrains Mono',monospace;font-size:10px;color:${c};background:rgba(10,8,20,.75);padding:2px 6px;border-radius:6px;white-space:nowrap">${esc(name)}</div>
-    </div>`;
-  }).join('');
+    /* off-screen cursors stop being drawn but keep their node, so coming back
+       into view is a transform change rather than another parse */
+    if(y<-40||y>window.innerHeight+40){ el.style.display="none"; return; }
+    el.style.display="";
+    el.style.transform=`translate3d(${x}px,${y}px,0)`;
+  });
+  _ghostNodes.forEach((el,name)=>{
+    if(live.has(name)) return;
+    el.remove();
+    _ghostNodes.delete(name);
+  });
 }
 
 /* ============================================================
@@ -12023,15 +12334,31 @@ let ptYTApiPromise=null;
 function ptYTLoadApi(){
   if(window.YT && window.YT.Player) return Promise.resolve(window.YT);
   if(ptYTApiPromise) return ptYTApiPromise;
+  /* Every rejection has to un-cache the promise. It used to be that only the
+     script's own onerror did, so a load that merely ran past the 15s timeout
+     left a permanently-rejected promise in ptYTApiPromise — and from then on
+     every player in the session (the live stream AND the rally reel, which
+     share this loader) failed instantly with a stale error, even once the API
+     had finished loading and window.YT was sitting right there. The timer is
+     also cleared on success now rather than being left to fire into a
+     settled promise. */
   ptYTApiPromise=new Promise((resolve,reject)=>{
+    let timer=null;
+    const settle=fn=>(...a)=>{ if(timer){ clearTimeout(timer); timer=null; } fn(...a); };
+    const ok=settle(resolve);
+    const fail=settle(err=>{ ptYTApiPromise=null; reject(err); });
     const prev=window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady=()=>{ try{ prev && prev(); }catch(e){} resolve(window.YT); };
+    window.onYouTubeIframeAPIReady=()=>{ try{ prev && prev(); }catch(e){} ok(window.YT); };
     const s=document.createElement('script');
     s.src='https://www.youtube.com/iframe_api';
     s.async=true;
-    s.onerror=()=>{ ptYTApiPromise=null; reject(new Error('could not load the YouTube player')); };
+    s.onerror=()=>fail(new Error('could not load the YouTube player'));
     document.head.appendChild(s);
-    setTimeout(()=>reject(new Error('the YouTube player did not load')), 15000);
+    timer=setTimeout(()=>{
+      /* the callback can be late without the API being absent */
+      if(window.YT && window.YT.Player) return ok(window.YT);
+      fail(new Error('the YouTube player did not load'));
+    }, 15000);
   });
   return ptYTApiPromise;
 }
@@ -12068,6 +12395,9 @@ async function ptMountPlayer(videoId){
   const mount=document.getElementById('ptYTMount');
   if(!mount){ S.playerBooting=false; return; }
   mount.innerHTML='<div id="ptYTPlayer"></div>';
+  /* same rule the other way round: a stream starting silences the feed's
+     inline cards rather than playing underneath them */
+  try{ ytStopOtherEmbeds(null); }catch(e){}
   S.playerVideoId=videoId;
   try{
     S.player=new YT.Player('ptYTPlayer',{
@@ -12441,7 +12771,7 @@ function ptBugTick(){
   if(next) S.bugPT=next.payload;
   ptSyncBug();
 }
-setInterval(ptBugTick,1000);
+everyVisible(ptBugTick,1000);
 function ptToggleBug(){
   const S=PTStream;
   if(!S) return;
@@ -14328,6 +14658,8 @@ function _showViewCore(v){
   renderCupMarquee();
   try{ renderLiveMarquee(); }catch(e){}
   moveTabIndicator();
+  /* the marquees were just rebuilt, so the new nodes need watching */
+  try{ fxObserveAnimated(); }catch(e){}
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -16086,7 +16418,7 @@ function rpContext(players){
 
   // recency-weighted rematch count for every pair in the field
   const rematch = {};
-  const key = (a,b) => a < b ? a+" "+b : b+" "+a;
+  const key = (a,b) => a < b ? a+"\u0000"+b : b+"\u0000"+a;
   const inField = {}; players.forEach(n=>inField[n.toLowerCase()] = n);
   const now = Date.now();
   for(const m of matches){
@@ -20171,14 +20503,21 @@ window.postWeeklyRecap=postWeeklyRecap;
 /* ============================================================
    GLOBAL SEARCH
    ============================================================ */
+/* computeStandings() replays every approved match in the league through the
+   Elo engine and sorts the result. This function used to call it once to
+   filter, and then AGAIN inside the loop for each matching player just to
+   read that player's rank — so a query matching ten people replayed the
+   whole league eleven times, on every keystroke. One call, and the rank
+   comes out of the array that call already produced. */
 function runSearch(){
   const q=$("searchInput").value.trim().toLowerCase();
   const out=$("searchResults");
   if(!q){ out.innerHTML=''; return; }
   const res=[];
   // players
-  computeStandings().filter(p=>p.games>0&&p.name.toLowerCase().includes(q)).forEach(p=>
-    res.push({icon:avatar(p.name,26),label:p.name,sub:`#${computeStandings().findIndex(x=>x.name===p.name)+1} · ${Math.round(p.rating)}`,act:`openProfile('${p.name.replace(/'/g,"\\'")}')`}));
+  const standings=computeStandings();
+  standings.filter(p=>p.games>0&&p.name.toLowerCase().includes(q)).forEach(p=>
+    res.push({icon:avatar(p.name,26),label:p.name,sub:`#${standings.indexOf(p)+1} · ${Math.round(p.rating)}`,act:`openProfile('${p.name.replace(/'/g,"\\'")}')`}));
   // matches
   matches.filter(m=>m.status==="approved"&&(`${m.p1} ${m.p2}`.toLowerCase().includes(q))).slice(0,6).forEach(m=>
     res.push({icon:'🎾',label:`${m.p1} vs ${m.p2}`,sub:new Date(m.created_at).toLocaleDateString(),act:`openMatch(${m.id})`}));
@@ -24280,6 +24619,108 @@ $("adminBtn").onclick=async()=>{
   openAdminLogin();
 };
 
+/* ============================================================
+   DIALOG SEMANTICS + FOCUS TRAP
+
+   The app has six modals. None of them announced itself as a
+   dialog, none confined focus, and only one of the six — the
+   match modal — closed on Escape; the other five (search, help,
+   admin sign-in, player sign-in, display name) trapped a keyboard
+   user with no way out but a mouse, and let Tab walk straight out
+   of the dialog into the page behind it.
+
+   Rather than edit fourteen open/close call sites, this watches
+   the `class` attribute the app already toggles, so any path that
+   opens a modal — including ones added later — gets the same
+   behaviour for free. aria-modal plus a real Tab cycle is used in
+   preference to marking the rest of the document `inert`: inert
+   would also silence the toast and the live region, which are
+   siblings of the dialogs and are exactly what a user needs to
+   hear while a dialog is open.
+   ============================================================ */
+(function(){
+  const FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]),'
+    +'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const FALLBACK_LABEL={searchModal:'Search',helpModal:'Welcome to the FGTA Ladder',
+    adminLoginModal:'Admin sign in',loginModal:'Sign in to play',
+    nameModal:'Pick a display name',modal:'Match details'};
+  let lastFocused=null;
+
+  function label(m){
+    const h=m.querySelector('.help-h,.tool-h,h2');
+    let t=(h && h.textContent.trim())||'';
+    /* the headings are decorated with a leading glyph (◆, 🎾) and some carry
+       a trailing one. A screen reader would read those out as "black diamond
+       admin sign in", so the decoration is trimmed off the accessible name
+       while the visible heading keeps it. */
+    t=t.replace(/^[^\p{L}\p{N}]+/u,'').replace(/[^\p{L}\p{N}.!?)]+$/u,'').trim();
+    return t || FALLBACK_LABEL[m.id] || 'Dialog';
+  }
+  function visibleFocusable(m){
+    return [...m.querySelectorAll(FOCUSABLE)]
+      .filter(el=>el.offsetWidth>0 || el.offsetHeight>0 || el===document.activeElement);
+  }
+  function onOpen(m){
+    lastFocused=document.activeElement;
+    m.setAttribute('aria-label', label(m));
+    /* the openers that focus a field do it on a 50ms timer; wait past that
+       so this never steals focus back off the input they chose */
+    setTimeout(()=>{
+      if(!m.classList.contains('open')) return;
+      if(m.contains(document.activeElement)) return;
+      const f=visibleFocusable(m);
+      (f[0]||m).focus();
+    },70);
+  }
+  function onClose(){
+    /* returning focus to whatever opened the dialog is the whole point of
+       tracking it — otherwise focus resets to the top of the document */
+    if(lastFocused && document.contains(lastFocused)){
+      try{ lastFocused.focus(); }catch(e){}
+    }
+    lastFocused=null;
+  }
+  function openDialog(){ return document.querySelector('.modal.open'); }
+
+  document.querySelectorAll('.modal').forEach(m=>{
+    m.setAttribute('role','dialog');
+    m.setAttribute('aria-modal','true');
+    m.setAttribute('tabindex','-1');
+    m.setAttribute('aria-label', label(m));
+    new MutationObserver(recs=>{
+      recs.forEach(r=>{
+        if(r.attributeName!=='class') return;
+        const wasOpen=(r.oldValue||'').includes('open');
+        const isOpen=m.classList.contains('open');
+        if(isOpen && !wasOpen) onOpen(m);
+        else if(!isOpen && wasOpen) onClose();
+      });
+    }).observe(m,{attributes:true,attributeFilter:['class'],attributeOldValue:true});
+  });
+
+  document.addEventListener('keydown', e=>{
+    const m=openDialog();
+    if(!m) return;
+    if(e.key==='Escape'){
+      /* click the dialog's own ✕ so each one runs its real teardown —
+         clearing the search field, remembering the help dismissal, and so
+         on — rather than this reaching in and stripping the class */
+      const x=m.querySelector('.modal-x');
+      if(x){ e.preventDefault(); x.click(); }
+      return;
+    }
+    if(e.key!=='Tab') return;
+    const f=visibleFocusable(m);
+    if(!f.length){ e.preventDefault(); m.focus(); return; }
+    const first=f[0], last=f[f.length-1];
+    if(e.shiftKey && (document.activeElement===first || !m.contains(document.activeElement))){
+      e.preventDefault(); last.focus();
+    } else if(!e.shiftKey && document.activeElement===last){
+      e.preventDefault(); first.focus();
+    }
+  }, true);
+})();
+
 /* ---------- keyboard: Enter posts a comment, Escape closes modal ---------- */
 document.addEventListener("keydown", e=>{
   if(e.key==="Escape" && $("modal").classList.contains("open")) closeMatch();
@@ -24329,7 +24770,8 @@ if(configured){
 /* ---------- surface theme + composer boot ---------- */
 applySurface(currentSurface());
 showView("ladder");
-setInterval(updateCountdowns, 1000); // started once here; walks the DOM each tick, not re-created on render
+try{ fxObserveAnimated(); }catch(e){}
+everyVisible(updateCountdowns, 1000); // started once here; walks the DOM each tick, not re-created on render
 window.addEventListener("resize", moveTabIndicator);
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndicator).catch(()=>{});
 
