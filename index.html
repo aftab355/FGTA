@@ -6431,6 +6431,694 @@
   }
 
   /* ================================================================
+     11. THE RUN-IN — fire, retro, and a court to play it on
+
+     The cup has one week left. Sections 1-10 built a graded frame and
+     then kept it tasteful; a final week is not the moment for tasteful.
+     This pass turns the grade up until it burns, sets the whole thing
+     in the heavy retro sports-poster idiom the wordmark was already
+     halfway toward, and — the part the skin never actually committed
+     to — puts a real tennis court under the type instead of a grid.
+
+     Three things are added, and they are all one idea seen from
+     different distances:
+
+       FIRE    the page is lit from below now, not just graded. A bed of
+               flame stands along the bottom of the viewport, the marquee
+               has tongues licking up its own base, and the countdown
+               burns rather than glows. All of it is drawn in gradients
+               and moved with transforms — no filters animate, nothing
+               repaints.
+       RETRO   scanlines and a slow roll bar over the content, a banded
+               sun sinking behind the wordmark, and type set the way a
+               1984 tournament poster set it: skewed, tracked out, with
+               hard colour echoes stacked under the letters rather than
+               a soft shadow.
+       TENNIS  the perspective plane behind the marquee stops being graph
+               paper and becomes a court — sidelines, service line, centre
+               line, baseline — laid in the same perspective as the grid
+               it sits on, and a flaming ball hangs over the far corner.
+
+     The perf contract from section 10 still holds, and it is the only
+     reason a pass this loud is affordable: every looping animation below
+     moves transform or opacity on one small element and nothing else.
+     The flames are gradients on `border-radius` blobs, not blurs; the
+     court is six background layers on one element; the sun is two mask
+     stops. Add up the whole section and it is ~14 composited layers that
+     never re-rasterise after the first frame.
+     ================================================================ */
+
+  /* -- 11.1 the fire palette ---------------------------------------
+     The skin runs on two hues. Fire needs the ramp BETWEEN them spelled
+     out, because a flame is not a magenta-to-amber fade — it is a
+     white-hot core that loses temperature outward through gold, orange
+     and red before it hands off to the magenta already in the frame.
+     Naming the four stops means every flame in the section is the same
+     fire, and re-grading it later is four values.
+
+     --court-line is the one cool tone allowed in, and it earns it: a
+     tennis court's markings are chalk under floodlight, and painting
+     them in the skin's warm white would make them read as another
+     highlight instead of as the ground truth of the surface. */
+  :root[data-skin="ffcup"],
+  :root[data-skin="ffcup"] body,
+  :root[data-skin="ffcup"] body[data-heat],
+  :root[data-skin="ffcup"] body[data-wx]{
+    --fire-core:#fff6d8;   /* clipped, where the flame has no colour left */
+    --fire-gold:#ffcf3d;
+    --fire-amber:#ff8a1f;
+    --fire-ember:#ff3d1f;
+    --fire-deep:#c4104f;   /* where the fire hands back to the grade */
+    --court-line:#eafcff;  /* chalk under floodlight */
+
+    /* the wordmark ramp, re-cut as heated metal: the chrome of section 1
+       reflected a magenta sky, this one is glowing from the inside. The
+       hard stop stays — that is still what makes it read as metal and
+       not as a fade — it just falls at the temperature break now. */
+    --chrome-fire:linear-gradient(180deg,
+      #fffdf4 0%, #fff0b8 13%, var(--fire-gold) 29%, #ff9f24 43%,
+      #ff5a12 55%, var(--fire-deep) 68%,
+      #ff2d8f 80%, #ffa8d2 91%, #fff4fa 100%);
+  }
+
+  /* -- 11.2 the fire bed -------------------------------------------
+     A fixed strip along the bottom of the viewport, under everything the
+     app draws (z -2, so it is over the sky at -3 and under the content).
+     It is the reason the page now reads as lit from below: the amber
+     ground bounce in section 2 was a static gradient standing in for a
+     hot court, and this is the thing that was supposedly making it hot,
+     finally shown.
+
+     Structure is deliberately dumb: one element for the heat haze, five
+     children for the tongues. Each tongue is a single radial gradient in
+     a blob-shaped border-radius, composited with `screen` so overlapping
+     tongues add light the way real flame does rather than stacking as
+     opaque shapes. Not one of them is blurred — the softness is in the
+     gradient stops, which costs a single rasterisation, where a blur
+     would cost a second render surface per tongue on every frame. */
+  .ff-fire{display:none}
+  :root[data-skin="ffcup"] .ff-fire{
+    display:block;position:fixed;left:0;right:0;bottom:0;
+    height:min(44vh,400px);z-index:-2;pointer-events:none;overflow:hidden;
+    /* the haze the tongues stand in — this is what actually lights the
+       bottom third of the page; the tongues are the detail on top of it */
+    background:
+      radial-gradient(130% 104% at 50% 116%,
+        rgba(255,207,61,.30) 0%, rgba(255,138,31,.21) 20%,
+        rgba(255,61,31,.115) 40%, rgba(255,45,143,.05) 64%, transparent 84%);
+  }
+  :root[data-skin="ffcup"] .ff-fire i{
+    position:absolute;bottom:-16%;
+    /* the flame shape: broad and soft at the base, drawn to a point at
+       the crown. Written as a radius pair so the top corners round far
+       harder than the bottom ones, which is the whole silhouette. */
+    border-radius:52% 48% 46% 54% / 68% 66% 34% 32%;
+    transform-origin:50% 100%;
+    mix-blend-mode:screen;
+    background:radial-gradient(58% 62% at 50% 78%,
+      var(--fire-core) 0%, var(--fire-gold) 17%, var(--fire-amber) 36%,
+      rgba(255,61,31,.55) 56%, rgba(255,45,143,.22) 74%, transparent 90%);
+    animation:ffFlame 3.4s ease-in-out infinite;
+  }
+  /* five tongues, none of them the same width, speed or phase — a row of
+     flames on one timing reads as a curtain, and a curtain reads as CSS */
+  :root[data-skin="ffcup"] .ff-fire i:nth-child(1){left:-6%;width:44%;height:74%;animation-duration:3.1s;opacity:.7}
+  :root[data-skin="ffcup"] .ff-fire i:nth-child(2){left:16%;width:34%;height:96%;animation-duration:4.3s;animation-delay:-1.4s;opacity:.55}
+  :root[data-skin="ffcup"] .ff-fire i:nth-child(3){left:38%;width:40%;height:112%;animation-duration:3.7s;animation-delay:-2.6s;opacity:.62}
+  :root[data-skin="ffcup"] .ff-fire i:nth-child(4){left:62%;width:32%;height:88%;animation-duration:4.9s;animation-delay:-.7s;opacity:.5}
+  :root[data-skin="ffcup"] .ff-fire i:nth-child(5){left:78%;width:46%;height:78%;animation-duration:3.3s;animation-delay:-3.1s;opacity:.66}
+  /* A flame does three things at once: it climbs, it necks in as it
+     climbs, and it leans. Scale on both axes plus a small skew covers
+     all three, and every one of them is a compositor transform. */
+  @keyframes ffFlame{
+    0%  {transform:translate3d(0,7%,0)     scale(1,.84)    skewX(0deg)}
+    21% {transform:translate3d(-1.6%,-2%,0) scale(.92,1.1)  skewX(3.5deg)}
+    43% {transform:translate3d(1.2%,3%,0)   scale(1.07,.92) skewX(-3deg)}
+    67% {transform:translate3d(-.8%,-5%,0)  scale(.88,1.2)  skewX(2.5deg)}
+    85% {transform:translate3d(.6%,1%,0)    scale(1.02,.97) skewX(-1.5deg)}
+    100%{transform:translate3d(0,7%,0)     scale(1,.84)    skewX(0deg)}
+  }
+  /* the embers in section 2 were drifting off a warm court; they are now
+     coming off an open fire, so they run faster and carry further */
+  :root[data-skin="ffcup"] #hudGrid::after{animation-duration:22s}
+
+  /* -- 11.3 the CRT ------------------------------------------------
+     Scanlines, a corner vignette and one roll bar drifting down the
+     frame. This is the single cheapest thing in the section and it does
+     more for the retro read than anything else here, because it stops
+     the app looking like a web page and starts it looking like footage
+     of one.
+
+     It sits at 59 — over the content and the panels (the 1-10 tier),
+     under the app shell at 60 and therefore under every menu, sheet,
+     dialog and toast above it. Lines over a leaderboard are the effect;
+     lines over the dialog you are typing into are a bug. */
+  .ff-crt{display:none}
+  :root[data-skin="ffcup"] .ff-crt{
+    display:block;position:fixed;inset:0;z-index:59;pointer-events:none;
+    overflow:hidden;opacity:.5;
+    background:
+      /* the lines themselves: plum, never black, same rule as everything */
+      repeating-linear-gradient(0deg, rgba(24,0,15,.34) 0 1px, transparent 1px 3px),
+      /* the tube's corners fall off — a flat rectangle of scanlines reads
+         as a texture laid on top, a vignetted one reads as a screen */
+      radial-gradient(128% 112% at 50% 48%,
+        transparent 50%, rgba(38,0,22,.22) 78%, rgba(22,0,14,.5) 100%);
+  }
+  /* the roll: one band of slightly brighter lines drifting down the
+     frame, the way a CRT out of sync with its source does */
+  :root[data-skin="ffcup"] .ff-crt i{
+    position:absolute;left:0;right:0;top:0;height:26vh;
+    background:linear-gradient(180deg,
+      transparent 0%, rgba(255,207,61,.045) 34%, rgba(255,138,31,.06) 52%,
+      rgba(255,45,143,.035) 70%, transparent 100%);
+    animation:ffRoll 9s linear infinite;
+  }
+  @keyframes ffRoll{
+    from{transform:translate3d(0,-30vh,0)}
+    to  {transform:translate3d(0,100vh,0)}
+  }
+
+  /* -- 11.4 the poster ---------------------------------------------
+     The wordmark, reset in the heavy retro idiom. Four things change and
+     each of them is doing one job:
+
+       skew      a hard -7deg. Nothing else in the app is skewed, so the
+                 wordmark stops being the largest label on the page and
+                 starts being a logo.
+       tracking  opened up and floored higher, because retro sports type
+                 is set wide and the chrome ramp needs room to run
+                 through each letter rather than across the word.
+       fill      --chrome-fire, so the letters are glowing from inside
+                 instead of reflecting a sky.
+       echo      two ZERO-radius drop-shadows in ember and deep magenta,
+                 offset down-right. That is the whole retro print look:
+                 not a soft shadow but the same word re-printed twice
+                 underneath in the next colours down the ramp. They have
+                 to be drop-shadows and not text-shadows — the fill is
+                 transparent, and a text-shadow would show straight
+                 through the letters. */
+  :root[data-skin="ffcup"] .cupmark-name{
+    transform:skewX(-7deg);transform-origin:0 50%;
+    letter-spacing:clamp(2px,.9vw,8px);
+    background:var(--chrome-fire);
+    -webkit-background-clip:text;background-clip:text;
+    filter:
+      drop-shadow(0 1px 0 rgba(26,0,14,.95))
+      drop-shadow(3px 4px 0 var(--fire-ember))
+      drop-shadow(6px 8px 0 var(--fire-deep))
+      drop-shadow(0 0 34px rgba(255,138,31,.5))
+      drop-shadow(0 0 70px rgba(255,45,143,.4));
+  }
+  /* the mini bar carries the same wordmark at a sixth the size, where a
+     6px echo is a smear — it keeps the skew and the fire and drops the
+     print stack to a single step */
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-name{
+    filter:
+      drop-shadow(0 1px 0 rgba(26,0,14,.95))
+      drop-shadow(1.5px 2px 0 var(--fire-ember))
+      drop-shadow(0 0 14px rgba(255,138,31,.4));
+  }
+  /* the strapline under it gets the same treatment at label scale, so the
+     two lines read as one lockup rather than a logo with a caption */
+  :root[data-skin="ffcup"] .cupmark-sub{
+    transform:skewX(-7deg);transform-origin:0 50%;
+    letter-spacing:2.6px;color:var(--fire-gold);
+    text-shadow:0 1px 0 rgba(26,0,14,.9), 0 0 16px rgba(255,207,61,.3);
+  }
+  /* the status pill and the window chip lean with it — three elements at
+     three different angles is a mistake, not a design */
+  :root[data-skin="ffcup"] .cupmark-status,
+  :root[data-skin="ffcup"] .cupmark-window,
+  :root[data-skin="ffcup"] .cup-final{
+    transform:skewX(-7deg);padding-left:15px;padding-right:15px;
+  }
+  /* the pill leans, the ball inside it does not — a skewed circle is an
+     ellipse, and the one object in this skin that must stay round is the
+     ball */
+  :root[data-skin="ffcup"] .cupmark-status i{transform:skewX(7deg)}
+
+  /* -- 11.5 the sun ------------------------------------------------
+     A banded disc going down behind the type. The banding is the entire
+     reason it reads as 1984 and not as a lens flare, and it is two mask
+     layers: the top half solid, the bottom half a repeating stripe.
+     Multiple mask layers union by default, so the disc keeps its top and
+     loses alternating slices of its base — the classic cut.
+
+     It sits at z -1 inside .cupmark-void, which means BEHIND the
+     perspective grid: the sun is on the far side of the court, which is
+     the only place a sun can be. */
+  :root[data-skin="ffcup"] .cup-sun{
+    position:absolute;left:50%;bottom:11%;z-index:-1;
+    /* Sized against the SLAB, not the page. The marquee is about 280px
+       tall, and the composition only works if the whole disc fits inside
+       that: too big and the solid crown never reaches the frame, so all
+       that arrives is the banded underside — a barcode behind the type
+       rather than a sun going down behind it.
+       Sitting a little above the base is what puts the horizon through
+       it: the bands dissolve into the court's far end, which is where a
+       sun is supposed to go. */
+    width:clamp(150px,21%,230px);aspect-ratio:1;
+    transform:translateX(-50%);border-radius:50%;
+    background:linear-gradient(180deg,
+      var(--fire-core) 0%, var(--fire-gold) 20%, var(--fire-amber) 42%,
+      var(--fire-ember) 60%, #ff2d8f 80%, var(--fire-deep) 100%);
+    -webkit-mask:
+      linear-gradient(180deg,#000 0 50%, transparent 50%),
+      repeating-linear-gradient(180deg,
+        #000 0 7px, transparent 7px 12px,
+        #000 12px 17px, transparent 17px 25px,
+        #000 25px 29px, transparent 29px 41px);
+    mask:
+      linear-gradient(180deg,#000 0 50%, transparent 50%),
+      repeating-linear-gradient(180deg,
+        #000 0 7px, transparent 7px 12px,
+        #000 12px 17px, transparent 17px 25px,
+        #000 25px 29px, transparent 29px 41px);
+    /* pitched high because the void's haze scrim paints over it: the
+       crown loses about two thirds of this before it reaches the eye,
+       which is what puts the sun BEHIND the weather rather than on it */
+    opacity:.8;pointer-events:none;
+  }
+  :root[data-skin="ffcup"] .cupmark.mini .cup-sun{display:none}
+  /* Below the two-column breakpoint the slab stops being a letterbox and
+     becomes a tall card, and "11% up from the base" stops meaning "behind
+     the wordmark" and starts meaning "behind the footer", where the bands
+     cut straight through the one sentence on the slab. Anchored from the
+     top instead, so it stays where the composition put it. */
+  @media(max-width:900px){
+    :root[data-skin="ffcup"] .cup-sun{
+      top:10%;bottom:auto;width:clamp(120px,28%,180px);
+      /* and it has to sit further back here than it does on the wide
+         layout: there the disc has empty slab to itself between the
+         wordmark and the clock, and on a phone it is directly behind
+         two lines of type */
+      opacity:.55;
+    }
+  }
+
+  /* -- 11.6 the court ----------------------------------------------
+     The plane behind the marquee was a two-axis grid: correct
+     perspective, no meaning. It is now a tennis court, drawn flat as six
+     hard-edged background layers on one element and then laid down with
+     the same perspective transform the grid uses, so the two share a
+     vanishing point and read as one surface.
+
+     Each line is a three-stop gradient rather than a solid fill — the
+     falloff either side of the centre stop is what gives a 3px line a
+     soft chalk edge without a filter anywhere near it. Sized and
+     positioned in percentages so the court scales with the slab.
+
+     It sits UNDER the void's haze scrim, which is what keeps it out of
+     the footer's way: a service line is a bright horizontal rule at
+     exactly the height a line of body text wants to sit, and one running
+     clean through "Not drawn yet — the field opens in Events" is a
+     legibility bug wearing a design's clothes. Under the scrim the near
+     chalk still reads and the far chalk dissolves into the haze, which
+     is also what it does on a real court at night. */
+  :root[data-skin="ffcup"] .cup-court{
+    position:absolute;left:50%;bottom:0;z-index:0;
+    /* Laid down at 71 degrees on a 420px perspective, the horizon sits a
+       fixed 420/tan(71°) ≈ 145px above the near edge NO MATTER how tall
+       the plane is — everything beyond that is asymptote. So the height
+       is not "how much court", it is how much of that 145px the court
+       actually reaches, and it climbs slowly: 118% gets 62px of it, 210%
+       gets 77px, and 400% would still only get 100px for four times the
+       texture. 210% is where the curve stops paying. */
+    width:164%;height:210%;pointer-events:none;
+    transform:translateX(-50%) perspective(420px) rotateX(71deg);
+    transform-origin:50% 100%;
+    background-repeat:no-repeat;
+    background-image:
+      /* doubles sideline, left and right — the outermost pair */
+      linear-gradient(90deg, transparent, rgba(234,252,255,.92) 45% 55%, transparent),
+      linear-gradient(90deg, transparent, rgba(234,252,255,.92) 45% 55%, transparent),
+      /* singles sideline, left and right */
+      linear-gradient(90deg, transparent, rgba(234,252,255,.78) 45% 55%, transparent),
+      linear-gradient(90deg, transparent, rgba(234,252,255,.78) 45% 55%, transparent),
+      /* centre service line, running from the service line to the net */
+      linear-gradient(90deg, transparent, rgba(234,252,255,.66) 45% 55%, transparent),
+      /* service line across, and the baseline nearest the viewer */
+      linear-gradient(180deg, transparent, rgba(234,252,255,.78) 40% 60%, transparent),
+      linear-gradient(180deg, transparent, rgba(234,252,255,1) 40% 60%, transparent);
+    /* The near end of a plane laid at 71 degrees is the only part with
+       any room left in it, so the court is measured from the baseline
+       forward: baseline just inside the slab's bottom edge, service line
+       a third of the way back, centre line spanning between the two, and
+       the net left off entirely — at this angle it would land inside the
+       first two pixels of the horizon and read as dirt. */
+    background-size:
+      5px 100%, 5px 100%,
+      4px 100%, 4px 100%,
+      4px 36%,
+      46% 4px, 66% 5px;
+    background-position:
+      19% 50%, 81% 50%,
+      27% 50%, 73% 50%,
+      50% 96%,
+      50% 62%, 50% 96%;
+    /* the court comes out of the haze at the far end, exactly the way the
+       grid under it does, so the two vanish together */
+    -webkit-mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 12%, #000 34%, #000 100%);
+    mask:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.45) 12%, #000 34%, #000 100%);
+  }
+  /* on the mini bar there is no room for a court, and a court you cannot
+     read is just noise across a 50px strip */
+  :root[data-skin="ffcup"] .cupmark.mini .cup-court{display:none}
+  /* with a court on it, the graph-paper grid underneath only has to be
+     the texture of the surface, not the subject */
+  :root[data-skin="ffcup"] .cupmark-void::before{opacity:.34}
+  :root[data-skin="ffcup"] .cupmark.mini .cupmark-void::before{opacity:.16}
+
+  /* -- 11.7 the ball -----------------------------------------------
+     Hanging over the far corner of the court, on fire. The sphere is two
+     radial gradients; the seam is the standard pair of oversized circles
+     with a thick border, clipped by the ball's own overflow, which is
+     the only way to get a tennis seam that stays correct at any size.
+
+     It turns, very slowly, and the specular turns with it — on a ball
+     that is alight that reads as the flame moving around it rather than
+     as a lighting error. One element, one transform, 30 seconds a
+     revolution: it costs a layer and nothing else. */
+  :root[data-skin="ffcup"] .cup-ball{
+    position:absolute;right:-2%;top:-12%;z-index:1;
+    /* small and fairly opaque rather than big and faint: a large ball at
+       low alpha is a coloured blob, and the seam — the only thing that
+       says tennis — needs enough contrast to survive being cropped by
+       the slab's own top edge */
+    width:min(150px,21%);aspect-ratio:1;border-radius:50%;overflow:hidden;
+    pointer-events:none;opacity:.55;
+    background:
+      radial-gradient(circle at 33% 26%, rgba(255,255,255,.85) 0%, rgba(255,255,255,0) 34%),
+      radial-gradient(circle at 50% 52%,
+        var(--fire-core) 0%, var(--fire-gold) 26%, var(--fire-amber) 50%,
+        var(--fire-ember) 72%, var(--fire-deep) 92%, #7d0838 100%);
+    box-shadow:0 0 60px -6px rgba(255,138,31,.55), 0 0 120px -20px rgba(255,45,143,.5);
+    animation:ffSpin 30s linear infinite;
+  }
+  /* the seam: two circles wider than the ball, pushed off each side, so
+     only the arc of each one crosses the face */
+  :root[data-skin="ffcup"] .cup-ball::before,
+  :root[data-skin="ffcup"] .cup-ball::after{
+    content:'';position:absolute;top:-9%;height:118%;width:104%;
+    border-radius:50%;border:6px solid rgba(255,246,216,.92);
+  }
+  :root[data-skin="ffcup"] .cup-ball::before{left:-60%}
+  :root[data-skin="ffcup"] .cup-ball::after{right:-60%}
+  :root[data-skin="ffcup"] .cupmark.mini .cup-ball{display:none}
+  /* below the two-column breakpoint the ball would sit on the wordmark
+     rather than beside it */
+  @media(max-width:900px){
+    :root[data-skin="ffcup"] .cup-ball{width:140px;right:-4%;top:-34%;opacity:.4}
+  }
+  @media(max-width:600px){
+    :root[data-skin="ffcup"] .cup-ball{display:none}
+  }
+
+  /* -- 11.8 the marquee is alight ----------------------------------
+     Tongues along the slab's own base, inside its rounded clip. Same
+     object as the fire bed in 11.2 at a quarter the scale — the page is
+     burning and the marquee is the part of it closest to the fire. */
+  :root[data-skin="ffcup"] .cup-fire{
+    position:absolute;left:0;right:0;bottom:0;height:46%;
+    z-index:1;pointer-events:none;overflow:hidden;border-radius:inherit;
+  }
+  :root[data-skin="ffcup"] .cup-fire i{
+    position:absolute;bottom:-22%;
+    border-radius:52% 48% 46% 54% / 68% 66% 34% 32%;
+    transform-origin:50% 100%;mix-blend-mode:screen;
+    background:radial-gradient(56% 60% at 50% 80%,
+      var(--fire-core) 0%, var(--fire-gold) 18%, var(--fire-amber) 38%,
+      rgba(255,61,31,.5) 58%, rgba(255,45,143,.18) 76%, transparent 92%);
+    animation:ffFlame 3.6s ease-in-out infinite;
+  }
+  :root[data-skin="ffcup"] .cup-fire i:nth-child(1){left:2%;width:26%;height:62%;animation-duration:3.2s;opacity:.5}
+  :root[data-skin="ffcup"] .cup-fire i:nth-child(2){left:26%;width:22%;height:88%;animation-duration:4.1s;animation-delay:-1.9s;opacity:.4}
+  :root[data-skin="ffcup"] .cup-fire i:nth-child(3){left:48%;width:28%;height:70%;animation-duration:3.5s;animation-delay:-2.7s;opacity:.46}
+  :root[data-skin="ffcup"] .cup-fire i:nth-child(4){left:72%;width:24%;height:94%;animation-duration:4.6s;animation-delay:-.9s;opacity:.36}
+  /* on the mini bar the flames only get the bottom edge, as a lit hem */
+  :root[data-skin="ffcup"] .cupmark.mini .cup-fire{height:74%}
+  :root[data-skin="ffcup"] .cupmark.mini .cup-fire i{opacity:.22}
+  /* and the slab itself now sits in its own firelight */
+  :root[data-skin="ffcup"] .cupmark:not(.mini){
+    box-shadow:
+      inset 0 1px 0 rgba(255,220,240,.5),
+      inset 0 -1px 0 rgba(255,207,61,.34),
+      inset 0 16px 26px -22px rgba(255,255,255,.6),
+      inset 0 -60px 80px -50px rgba(255,138,31,.85),
+      inset 0 0 70px -26px rgba(255,45,143,.5),
+      0 60px 110px -40px rgba(40,0,24,.95),
+      0 0 90px -20px rgba(255,90,25,.45),
+      0 0 60px -26px rgba(255,45,143,.55);
+  }
+
+  /* -- 11.9 the clock burns ----------------------------------------
+     The countdown was exposed tube. In the last week it is the loudest
+     object on the page, so the wells go heavier and retro — thicker
+     rims, a harder scanline — and each one takes a flame at its base
+     from a pseudo-element that was going spare. */
+  :root[data-skin="ffcup"] .cup-cd-cell{
+    padding:16px 5px 12px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.34),
+      inset 0 0 0 1px rgba(255,138,31,.16),
+      inset 0 -26px 34px -26px rgba(255,90,25,.85),
+      0 22px 36px -26px rgba(26,0,14,1);
+  }
+  :root[data-skin="ffcup"] .cup-cd-cell::before{
+    content:'';position:absolute;left:50%;bottom:-40%;width:150%;height:90%;
+    transform:translateX(-50%);pointer-events:none;
+    background:radial-gradient(50% 56% at 50% 84%,
+      var(--fire-gold) 0%, rgba(255,138,31,.5) 26%,
+      rgba(255,61,31,.22) 50%, transparent 76%);
+    opacity:.5;mix-blend-mode:screen;
+  }
+  /* the digits stop being lit and start being molten */
+  :root[data-skin="ffcup"] .cup-cd-cell b{
+    color:var(--fire-core);
+    text-shadow:
+      0 0 5px var(--fire-gold),
+      0 0 16px rgba(255,138,31,.9),
+      0 0 40px rgba(255,61,31,.6),
+      0 0 70px rgba(255,45,143,.45);
+  }
+  :root[data-skin="ffcup"] .cup-cd-cell i{color:var(--fire-gold);opacity:.75}
+  :root[data-skin="ffcup"] .cup-cd-cap{
+    color:var(--fire-gold);letter-spacing:3.4px;
+    text-shadow:0 0 14px rgba(255,207,61,.6);
+  }
+  /* the scanline over the wells is the retro tell — it was there at half
+     strength for realism, it is here at full strength on purpose */
+  :root[data-skin="ffcup"] .cup-cd-cell::after{opacity:.72}
+
+  /* -- 11.10 the last week -----------------------------------------
+     Everything above dresses the cup. The rules under [data-cup-final]
+     only exist while it is nearly over — the branding script sets that
+     attribute inside the last seven days and it comes off with the skin.
+
+     The point of them is not decoration, it is that somebody opening the
+     ladder on the Thursday should not have to read a date to work out
+     that the thing is about to close. */
+  :root[data-skin="ffcup"] .cup-final{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:5px 14px 6px;border-radius:var(--r-pill);
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:800;
+    letter-spacing:2.6px;text-transform:uppercase;color:#2b0016;
+    border:1px solid rgba(255,246,216,.75);
+    background:linear-gradient(180deg,
+      var(--fire-core) 0%, var(--fire-gold) 34%, var(--fire-amber) 68%, var(--fire-ember) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.85),
+      0 0 26px -4px rgba(255,138,31,.9),
+      0 0 50px -12px rgba(255,61,31,.7);
+    animation:ffUrgent 1.9s ease-in-out infinite;
+  }
+  /* the badge breathes rather than blinks: a blink is an error state, and
+     the cup running out is not an error */
+  @keyframes ffUrgent{
+    0%,100%{opacity:1}
+    50%    {opacity:.72}
+  }
+  :root[data-skin="ffcup"] .cup-final b{font-weight:800;letter-spacing:1.6px}
+  /* the days well is the number that matters now, so it is the one that
+     stops looking like the other three */
+  :root[data-skin="ffcup"][data-cup-final] .cup-cd-cell[data-unit="d"]{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.5),
+      inset 0 0 0 1px rgba(255,207,61,.4),
+      inset 0 -30px 40px -24px rgba(255,90,25,1),
+      0 0 34px -12px rgba(255,138,31,.8),
+      0 22px 36px -26px rgba(26,0,14,1);
+  }
+  :root[data-skin="ffcup"][data-cup-final] .cup-cd-cell[data-unit="d"]::before{opacity:.9}
+  :root[data-skin="ffcup"][data-cup-final] .cup-cd-cell[data-unit="d"] b{
+    font-size:clamp(24px,5.4vw,38px);
+  }
+  /* The mini bar has no room for a badge — it is one 50px line carrying a
+     status, a name, a clock and a way in. So the news reaches it through
+     the two things it already shows: the status pill changes temperature,
+     and the clock stops being lit and starts being molten like the wells
+     on the full slab. data-final is written onto the slab by the marquee
+     builder, so a mini bar rendered in a view that never sees the root
+     attribute still knows. */
+  :root[data-skin="ffcup"] .cupmark.mini[data-final] .cupmark-status{
+    color:var(--fire-gold);border-color:rgba(255,138,31,.55);
+    background:linear-gradient(180deg, rgba(255,138,31,.2), rgba(255,138,31,.04));
+    box-shadow:0 0 22px -6px rgba(255,138,31,.85), inset 0 0 16px -9px var(--fire-amber);
+    text-shadow:0 0 12px rgba(255,207,61,.85);
+  }
+  :root[data-skin="ffcup"] .cupmark.mini[data-final] .cupmark-status i{
+    background:var(--fire-core);
+    box-shadow:0 0 8px var(--fire-gold), 0 0 18px rgba(255,138,31,.9);
+  }
+  :root[data-skin="ffcup"] .cupmark.mini[data-final] .cup-clock{
+    color:var(--fire-core);
+    text-shadow:0 0 6px var(--fire-gold), 0 0 20px rgba(255,138,31,.85);
+  }
+
+  /* the badge in the top bar carries the same news everywhere in the app,
+     with a flame licking out from behind it */
+  :root[data-skin="ffcup"][data-cup-final] .ffcup-chip{
+    position:relative;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.55),
+      inset 0 -1px 0 rgba(255,226,168,.2),
+      0 0 26px -6px rgba(255,138,31,.85),
+      0 12px 22px -14px rgba(26,0,14,1);
+  }
+  :root[data-skin="ffcup"][data-cup-final] .ffcup-chip::after{
+    content:'';position:absolute;left:8%;right:8%;bottom:-6px;height:14px;
+    border-radius:50% 50% 40% 40% / 70% 70% 30% 30%;
+    pointer-events:none;mix-blend-mode:screen;transform-origin:50% 100%;
+    background:radial-gradient(56% 62% at 50% 84%,
+      var(--fire-gold) 0%, rgba(255,138,31,.6) 34%, transparent 78%);
+    animation:ffFlame 2.6s ease-in-out infinite;
+  }
+  :root[data-skin="ffcup"][data-cup-final] .ffcup-chip i{
+    color:var(--fire-gold);
+    text-shadow:0 0 10px rgba(255,207,61,.9), 0 0 22px rgba(255,90,25,.6);
+    animation:ffUrgent 1.9s ease-in-out infinite;
+  }
+
+  /* -- 11.11 the grip ----------------------------------------------
+     The way into the event is the only filled button in the skin, and it
+     is now wrapped like a racket handle: diagonal bands of overgrip laid
+     over the fire ramp underneath. It is one extra background layer on
+     an element that already had five, so it costs nothing, and it is the
+     detail that makes the CTA read as equipment rather than as a
+     gradient somebody liked. */
+  :root[data-skin="ffcup"] .cup-cta{
+    background:
+      repeating-linear-gradient(58deg,
+        rgba(26,0,14,.13) 0 2px, transparent 2px 4px,
+        rgba(255,255,255,.14) 4px 5px, transparent 5px 13px),
+      linear-gradient(180deg, var(--fire-core) 0%, var(--fire-gold) 24%,
+        var(--fire-amber) 46%, #ff2d8f 76%, var(--fire-deep) 100%);
+    border-color:rgba(255,246,216,.8);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.85),
+      inset 0 -8px 12px -10px rgba(26,0,14,.5),
+      0 0 30px -4px rgba(255,138,31,.8),
+      0 0 52px -10px rgba(255,45,143,.6),
+      0 20px 38px -20px rgba(40,0,24,.95);
+  }
+  :root[data-skin="ffcup"] .cup-cta:hover{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.95),
+      inset 0 -8px 12px -10px rgba(26,0,14,.45),
+      0 0 46px 0 rgba(255,138,31,.9),
+      0 0 74px -6px rgba(255,45,143,.7),
+      0 28px 50px -20px rgba(26,0,14,1);
+  }
+  /* the stage rail's live dot is the ball again, and in the last week the
+     ball is alight like everything else */
+  :root[data-skin="ffcup"] .cup-step.now::after{
+    background:radial-gradient(circle at 38% 34%,
+      var(--fire-core) 0 26%, var(--fire-gold) 46%, var(--fire-amber) 72%, var(--fire-ember) 100%);
+    box-shadow:
+      0 0 0 4px rgba(255,138,31,.26),
+      0 0 0 7px rgba(255,138,31,.1),
+      0 0 16px var(--fire-amber), 0 0 40px rgba(255,90,25,.9);
+  }
+  :root[data-skin="ffcup"] .cup-step.now{color:var(--fire-core);text-shadow:0 0 14px rgba(255,138,31,.8)}
+  :root[data-skin="ffcup"] .cup-step.done::after{
+    background:var(--fire-amber);box-shadow:0 0 10px var(--fire-amber), 0 0 22px rgba(255,90,25,.5);
+  }
+  /* the facts strip picks up the retro lean and the fire numerals so the
+     row under the wordmark belongs to the same poster */
+  :root[data-skin="ffcup"] .cup-fact{transform:skewX(-7deg);border-color:rgba(255,138,31,.28)}
+  :root[data-skin="ffcup"] .cup-fact b{color:var(--fire-gold);text-shadow:0 0 12px rgba(255,207,61,.45)}
+
+  /* -- 11.12 section labels ----------------------------------------
+     One retro pass on the rest of the app, kept to a single line of type
+     per section: the label is tracked out and the dashed rule beside it
+     becomes a court line running off to the edge. Anything more than
+     this and the ladder — which is what people actually came for —
+     starts competing with its own dressing. */
+  :root[data-skin="ffcup"] .sec-label{
+    letter-spacing:3.2px;color:var(--fire-gold);
+    text-shadow:0 1px 0 rgba(26,0,14,.8), 0 0 14px rgba(255,207,61,.28);
+  }
+  :root[data-skin="ffcup"] .sec-label::after{
+    background:repeating-linear-gradient(90deg,
+      rgba(255,138,31,.42) 0 8px, transparent 8px 14px);
+    opacity:.7;
+  }
+
+  /* -- 11.13 budget ------------------------------------------------
+     The section is loud, so it has to be the first thing to go quiet.
+     Three gates, in order of how strongly the user asked:
+
+       reduced motion  — every loop stops, and the flames hold at a
+                         static frame rather than vanishing, because a
+                         still fire is still a fire.
+       coarse pointer  — a phone runs the fire bed at half height with
+                         two fewer tongues and no roll bar. The court,
+                         the sun and the wordmark all stay: they are the
+                         design, the extra layers were the polish.
+       fx-hidden       — the tab is in the background. Everything pauses,
+                         same contract as the rest of the skin. */
+  @media(prefers-reduced-motion:reduce){
+    :root[data-skin="ffcup"] .ff-fire i,
+    :root[data-skin="ffcup"] .ff-crt i,
+    :root[data-skin="ffcup"] .cup-fire i,
+    :root[data-skin="ffcup"] .cup-ball,
+    :root[data-skin="ffcup"] .cup-final,
+    :root[data-skin="ffcup"] .ffcup-chip::after,
+    :root[data-skin="ffcup"] .ffcup-chip i{animation:none!important}
+    :root[data-skin="ffcup"] .ff-crt i{opacity:0}
+  }
+  @media(hover:none) and (pointer:coarse){
+    :root[data-skin="ffcup"] .ff-fire{height:min(30vh,260px)}
+    :root[data-skin="ffcup"] .ff-fire i:nth-child(2),
+    :root[data-skin="ffcup"] .ff-fire i:nth-child(4){display:none}
+    :root[data-skin="ffcup"] .ff-crt i{display:none}
+    :root[data-skin="ffcup"] .ff-crt{opacity:.36}
+    :root[data-skin="ffcup"] .cup-fire i:nth-child(2),
+    :root[data-skin="ffcup"] .cup-fire i:nth-child(4){display:none}
+  }
+  /* the wordmark's print stack is five chained drop-shadows; at phone
+     width the letters are small enough that the two blurred ones are
+     just a haze over a 30px word, and they are the expensive pair */
+  @media(max-width:560px){
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-name{
+      filter:
+        drop-shadow(0 1px 0 rgba(26,0,14,.95))
+        drop-shadow(2px 3px 0 var(--fire-ember))
+        drop-shadow(0 0 22px rgba(255,138,31,.45));
+    }
+    /* the same asymptote as above — trimmed rather than flattened, so a
+       phone still gets a court and not two stray diagonals */
+    :root[data-skin="ffcup"] .cup-court{height:170%}
+  }
+  body.fx-hidden .ff-fire i,
+  body.fx-hidden .ff-crt i,
+  body.fx-hidden .cup-fire i,
+  body.fx-hidden .cup-ball,
+  body.fx-hidden .cup-final,
+  body.fx-hidden .ffcup-chip::after{animation-play-state:paused!important}
+
+  /* ================================================================
      MOBILE FIT — the phone-width pass
 
      Everything below exists because a real phone (390px and down) was
@@ -6679,6 +7367,13 @@
 </style>
 <body>
 <div id="hudGrid" aria-hidden="true"></div>
+<!-- The cup's fire and its CRT. Both are inert off-skin (display:none) and
+     take no part in layout: .ff-fire is a fixed strip of flame behind the
+     app at z-index -2, .ff-crt is the scanline/roll overlay at 59, over the
+     content and under every bar, menu and dialog. The <i>s are the flame
+     tongues and the roll bar; they carry no content and no meaning. -->
+<div class="ff-fire" id="ffFire" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="ff-crt" id="ffCrt" aria-hidden="true"><i></i></div>
 <canvas id="wxfx" aria-hidden="true"></canvas>
 <div class="loadscreen" id="loadScreen">
   <svg class="ls-court" viewBox="0 0 300 400" fill="none">
@@ -6774,14 +7469,48 @@
   if(now>end){ root.removeAttribute('data-skin'); return; }
   root.dataset.cup = now<start ? 'pre' : 'live';
   var range = short(START)+' – '+short(END);
-  [document.getElementById('ffcupDates'), document.querySelector('.ls-cup i')]
-    .forEach(function(el){ if(el) el.textContent = range; });
+
+  /* THE RUN-IN. Inside the last seven days the badge stops reporting a
+     date range — which is a fact you have to do arithmetic on — and
+     starts reporting how much of the cup is left, which is the thing
+     anybody opening the app actually wants to know.
+
+     data-cup-final carries the same news to the stylesheet, where the
+     11.10 rules light the fire on the badge and the days well. It is set
+     ONLY while the cup is running and only inside the window, so it
+     never appears before the event and comes off with the skin. Counted
+     in whole days to the last minute of the closing day, so the final
+     day reads "last day" rather than "0 days left".
+
+     Counted between local MIDNIGHTS, not between timestamps: what is
+     being reported is how many more days the cup can be played on, and
+     that is a calendar question. Measuring the raw gap instead would
+     make the same Tuesday read as 7 days at breakfast and 6 at dinner,
+     and round the last afternoon down to nothing. */
+  function midnight(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  var daysLeft  = Math.max(0, Math.round((midnight(end) - midnight(now)) / 86400000));
+  var finalWeek = root.dataset.cup === 'live' && daysLeft <= 7;
+  var urgent    = daysLeft === 0 ? 'Last day'
+                : daysLeft === 1 ? '1 day left'
+                : daysLeft + ' days left';
+  if(finalWeek) root.dataset.cupFinal = String(daysLeft);
+
+  var chip = document.getElementById('ffcupDates');
+  if(chip) chip.textContent = finalWeek ? urgent : range;
+  /* the load screen has the room to say both, and the range is what makes
+     the countdown mean something on a cold open */
+  var ls = document.querySelector('.ls-cup i');
+  if(ls) ls.textContent = finalWeek ? range + ' · ' + urgent : range;
+
   window.FFCUP = {
     name:  'FF Cup',
     start: start,          // Date — first day, 00:00 local
     end:   end,            // Date — last day, 23:59 local
     range: range,          // "Aug 17 – Sep 8"
-    state: root.dataset.cup
+    state: root.dataset.cup,
+    daysLeft: daysLeft,    // calendar days still playable, 0 on the last day
+    finalWeek: finalWeek,  // true inside the last seven days of a live cup
+    urgent: urgent         // "Last day" / "1 day left" / "5 days left"
   };
 })();
 </script>
@@ -19057,15 +19786,39 @@ function cupLine(t, phase){
 
 const CUP_PHASE_LABEL = {pre:"Upcoming", live:"Live now", done:"Complete"};
 
+/* how much cup is left, as the branding script measured it. Read off the
+   root attribute rather than recomputed, so the badge in the top bar, the
+   marquee and the stylesheet can never disagree about what day it is.
+   Returns null whenever the cup is not in its last week. */
+function cupFinalDays(){
+  const v = document.documentElement.dataset.cupFinal;
+  return v == null ? null : (parseInt(v, 10) || 0);
+}
+
+/* the scenery behind the type: a banded sun going down, the court it is
+   going down over, a ball alight above the far corner, and the flames the
+   slab is standing in. All of it is inert decoration — aria-hidden on the
+   void it lives in, no text, nothing focusable — and all of it evaporates
+   with the skin, because every one of these classes styles to nothing
+   without :root[data-skin="ffcup"] in front of it. */
+const CUP_SCENERY = `<i class="cup-sun"></i><i class="cup-court"></i><i class="cup-ball"></i>`;
+const CUP_FLAMES  = `<div class="cup-fire" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`;
+
 /* A bare set of digits is ambiguous — the same clock counts to first serve
-   before the cup and to the last day once it's running, so it says which. */
+   before the cup and to the last day once it's running, so it says which.
+   In the last week it says that too: "cup closes in" is a schedule,
+   "final week" is a reason to go and play the game you owe somebody. */
 function cupCountdownHtml(target, phase){
   if(!target) return "";
   const p = cupParts(target - Date.now());
+  const final = phase === "live" ? cupFinalDays() : null;
+  const cap = phase === "pre" ? "First serve in"
+            : final != null   ? "Final week — cup closes in"
+            : "Cup closes in";
   const cell = (unit, val, label) =>
     `<div class="cup-cd-cell" data-unit="${unit}"><b data-cup-cd="${unit}">${val}</b><i>${label}</i></div>`;
   return `<div class="cup-clockbox">
-    <div class="cup-cd-cap">${phase === "pre" ? "First serve in" : "Cup closes in"}</div>
+    <div class="cup-cd-cap">${cap}</div>
     <div class="cup-cd">
       ${cell("d", p.d, "days")}${cell("h", cupPad(p.h), "hrs")}
       ${cell("m", cupPad(p.m), "min")}${cell("s", cupPad(p.s), "sec")}
@@ -19088,7 +19841,8 @@ function cupMarqueeHtml(t, variant){
   const target = cupTarget(t, phase);
   const name   = t ? t.name : (window.FFCUP ? window.FFCUP.name : "FF Cup");
   const window_ = window.FFCUP ? window.FFCUP.range : "";
-  const attrs  = `data-phase="${phase}"${target?` data-cup-target="${target}"`:""}`;
+  const attrs  = `data-phase="${phase}"${target?` data-cup-target="${target}"`:""}`
+    + (cupFinalDays() != null && phase === "live" ? ` data-final="1"` : "");
   const statusLabel = phase === "pre" && t && t.start_date
     ? `Starts ${tournStartLabel(t)}` : CUP_PHASE_LABEL[phase];
 
@@ -19098,7 +19852,8 @@ function cupMarqueeHtml(t, variant){
       ? `<span class="cup-clock"><span data-cup-cd="d">${p.d}</span>d<i>·</i><span data-cup-cd="h">${cupPad(p.h)}</span><i>:</i><span data-cup-cd="m">${cupPad(p.m)}</span><i>:</i><span data-cup-cd="s">${cupPad(p.s)}</span></span>`
       : "";
     return `<div class="cupmark mini" ${attrs}>
-      <div class="cupmark-void" aria-hidden="true"></div>
+      <div class="cupmark-void" aria-hidden="true">${CUP_SCENERY}</div>
+      ${CUP_FLAMES}
       <div class="cupmark-body">
         <span class="cupmark-status"><i></i>${esc(CUP_PHASE_LABEL[phase])}</span>
         <span class="cupmark-name">${esc(name)}</span>
@@ -19121,10 +19876,23 @@ function cupMarqueeHtml(t, variant){
     facts.push(`<span class="cup-fact">${esc(tournamentCountsElo(t)?"Counts for Elo":"Exhibition")}</span>`);
   }
 
+  /* the run-in badge. It leads the head row rather than trailing it: in the
+     last week "how long is left" outranks "what state is it in", and the
+     status pill beside it already says the second thing. */
+  const finalDays = phase === "live" ? cupFinalDays() : null;
+  const finalBadge = finalDays == null ? "" :
+    `<span class="cup-final">${esc(window.FFCUP && window.FFCUP.urgent
+       ? window.FFCUP.urgent
+       : finalDays === 0 ? "Last day"
+       : finalDays === 1 ? "1 day left"
+       : finalDays+" days left")}</span>`;
+
   return `<div class="cupmark" ${attrs}>
-    <div class="cupmark-void" aria-hidden="true"></div>
+    <div class="cupmark-void" aria-hidden="true">${CUP_SCENERY}</div>
+    ${CUP_FLAMES}
     <div class="cupmark-body">
       <div class="cupmark-head">
+        ${finalBadge}
         <span class="cupmark-status"><i></i>${esc(statusLabel)}</span>
         ${window_?`<span class="cupmark-window">${esc(window_)}</span>`:""}
       </div>
