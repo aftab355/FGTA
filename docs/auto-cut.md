@@ -70,12 +70,23 @@ Synthetic audio is not real audio. Those numbers say the method is sound,
 not that your footage will behave. That's exactly why every threshold is on
 a slider and why the output is a **review list**, not a finished file.
 
-### The one it can't do
+### The one it can't do by ear
 
 **An adjacent court in use sounds exactly like your court.** There is no
 audio-only fix — the strikes are identical. If courts either side of you are
-busy, expect extra clips. The review pass is the fix, and the app says so
-rather than leaving you to discover it.
+busy, expect extra clips.
+
+On a **video** file there is now a second pass that can: a rally on the next
+court is, from your camera, a still frame with a soundtrack, so the picture
+is checked for someone actually moving on your court while those strikes were
+heard. It runs by itself after this one and only ever pre-drops, into the
+same review list. See [Watching the picture](video-analyzer.md) — including
+what it deliberately does not attempt, which is the ball, the bounce and the
+score.
+
+On an audio-only file, or when the picture pass declares itself blind, the
+review pass is still the fix, and the app says so rather than leaving you to
+discover it.
 
 ---
 
@@ -85,7 +96,9 @@ rather than leaving you to discover it.
 your own browser. It never leaves the device — there is no server in this
 app that could receive a video.
 
-1. **Drop a file in.** Video or audio.
+1. **Drop a file in.** Video or audio. A video also gets the
+   [picture pass](video-analyzer.md), which starts on its own once the
+   rallies are found.
 2. **Wait for the decode.** The detecting is milliseconds; the decoding is
    the slow part, and it's the browser doing it.
 3. **Review.** Every clip is listed with its time, how many strikes it
@@ -148,13 +161,14 @@ in a tab would be slower and worse than the one command that already exists.
 
 ## Which one should I use?
 
-| | rally reel | auto-cut |
-|---|---|---|
-| needs | the match scored in the point tracker | any footage |
-| accuracy | exact — real point endings | good first pass, review it |
-| knows the score | yes: set, game, who won each point | no |
-| filters | long rallies, pressure, aces, per player | none — it's just rallies |
-| next court over | irrelevant | will be picked up |
+| | rally reel | auto-cut (audio) | auto-cut (+ picture) |
+|---|---|---|---|
+| needs | the match scored in the point tracker | any footage | a video file |
+| accuracy | exact — real point endings | good first pass, review it | fewer wrong clips, still review it |
+| knows the score | yes: set, game, who won each point | no | no |
+| filters | long rallies, pressure, aces, per player | none — it's just rallies | none |
+| next court over | irrelevant | will be picked up | usually thrown out |
+| rallies nobody heard | n/a | missed | still missed — it only checks candidates |
 
 If the match was reffed in the app, use the reel. It's not a better version
 of the same guess — it's not a guess at all.
