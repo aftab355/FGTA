@@ -4301,6 +4301,31 @@
   .ac-audio-note{margin-top:10px;padding:12px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.65;
     color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft)}
 
+  .av-band{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
+    color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft)}
+  .av-band b{color:var(--ink)}
+  .av-band .mini{margin-top:8px}
+  .av-band-on{background:rgba(75,227,255,.07);border-color:rgba(75,227,255,.28)}
+  .av-band-on b{color:var(--ball)}
+  .av-band-blind{background:rgba(255,177,0,.07);border-color:rgba(255,177,0,.26)}
+  .av-band-blind b{color:var(--pending)}
+  .av-band-run{background:var(--panel-2)}
+  .av-band-h{font-weight:700;color:var(--ink);margin-bottom:8px}
+  .av-band-b{margin-top:8px;font-size:12px;color:var(--dim)}
+  .av-band-n{display:block;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.4px;color:var(--dim)}
+  .av-pip{flex:0 0 30px;text-align:center;padding:2px 0;border-radius:5px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.3px;
+    border:1px solid var(--line-soft);color:var(--dim);background:var(--panel-2)}
+  .av-pip-ok{color:var(--win);border-color:rgba(75,227,255,.35)}
+  .av-pip-no{color:var(--danger);border-color:rgba(255,45,120,.35)}
+  .av-pip-un{color:var(--dim)}
+  .av-tune-h{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin:16px 0 4px;padding-top:14px;border-top:1px solid var(--line-soft);
+    font-weight:700;color:var(--ink);font-size:12.5px}
+  .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
+  .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
+
   .ac-warn{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
     color:var(--muted);background:rgba(255,177,0,.08);border:1px solid rgba(255,177,0,.28)}
   .ac-warn b{color:var(--pending)}
@@ -11762,6 +11787,832 @@ function acSegments(runs, opt, duration){
                   hits:s.hits, peak:s.peak, keep:true}));
 }
 
+
+/* ============================================================
+   THE PICTURE — a second opinion on every clip the audio found.
+
+   auto-cut's own notes say a court in use next to yours "sounds precisely
+   like yours" and that there is no audio-only fix. That is still true. This
+   is the fix that isn't audio-only.
+
+   It is NOT a ball tracker. A tennis ball two frames from now is a four-pixel
+   smear on a phone at 30fps, and everything that follows from tracking it —
+   bounce localisation, line calls, who actually won the point — is what
+   Hawk-Eye needs six calibrated cameras for. Nothing here pretends
+   otherwise.
+
+   What it does instead is answer the one question audio genuinely cannot:
+   WHEN THOSE STRIKES HAPPENED, DID ANYTHING MOVE ON YOUR COURT? A rally on
+   the next court is, from this camera, a completely still frame with a
+   soundtrack. That asymmetry is the whole idea, and it is cheap to measure.
+
+   Three signals, from a coarse map of where the picture changed:
+     A  how much busier the court is than the rest of the frame
+     B  whether both halves of it were busy at once
+     C  whether the movement lines up with the strikes better than with
+        deliberately wrong lags
+   A and B convict. C can only acquit — see the note on the weights.
+
+   Two things it deliberately does not do. It never looks outside the
+   candidates the audio already found, so it cannot discover a rally that was
+   missed; and it never deletes anything, it only pre-drops into the same
+   review list you were already going to read, one tap from undone.
+   ============================================================ */
+/* ==== AV-CORE-START ====
+   Everything between these sentinels is pure: it takes the coarse motion
+   tensor the scan produced and the strike times the audio detector found,
+   and returns a verdict per segment. No DOM, no video, no globals. That is
+   deliberate — test/video-core.test.js pulls this exact region out of this
+   file and runs it in node against synthetic tensors with known answers.
+   Move the sentinels and the tests stop testing the shipped code. */
+
+const AV_GX=16, AV_GY=9, AV_CELLS=AV_GX*AV_GY;
+
+/* Weights, and why these ones.
+
+   A (motion in the court) and B (both halves of it busy) are the two that
+   can CONVICT: an adjacent-court strike, by construction, moves nothing in
+   your frame, and one player wandering back to the baseline is half a
+   court's worth of movement, not a rally's. They are combined and that is
+   the score.
+
+   C (motion locked to the strikes) can only ACQUIT. It is a bonus term,
+   never a penalty, and the reason is a failure the first version had: a
+   real rally's motion is high CONTINUOUSLY, so asking "does motion spike at
+   each strike?" scores a genuine long rally near zero and threw it away.
+   What C actually measures is whether the correlation between the strike
+   train and the motion is better at lag zero than at deliberately wrong
+   lags — uniform motion scores ~0 at every lag and the term politely
+   abstains, which is what it should do. */
+const AV_DEF={
+  roiFrac:0.18,     // a cell joins the court if it holds this share of the busiest cell's motion
+  roiJoin:0.15,     // a second blob joins the court at this share of the biggest blob's motion
+  roiNoise:2.5,     // a cell must beat the typical cell by this much to be court at all
+  ratio:2.5,        // court this many times busier than the rest of frame = full marks
+  thresh:0.70,      // below this confidence a clip is pre-dropped for review
+  /* wMot alone is deliberately BELOW thresh: when the camera can see both
+     halves of the court, one busy side and one idle one is never enough on
+     its own, however busy that side is. That is the walking-back-to-serve
+     clip, and it is the most common thing audio gets wrong after the next
+     court over. */
+  wMot:0.62, wBoth:0.38, wSync:0.35,
+  syncWin:0.18,     // ± seconds counted as "at" a strike
+  bothFrac:0.12,    // a half is "busy" at this fraction of the reference level
+  quiet:0.85,       // if not even the BEST clip clears this, the pass declares itself blind
+  minW:5            // narrower than this many cells and left-vs-right means nothing
+};
+
+/* HOW MUCH MOTION IS "ENOUGH" — and why the answer is not a number of
+   pixels. This took three attempts and both of the dead ends are worth
+   keeping written down, because both look obviously right.
+
+   ATTEMPT 1, self-normalising: score each clip's motion against the
+   recording's own 90th percentile, the way the onset detector scores a
+   strike against its own loudest transients. Correct on real footage.
+   Catastrophic on the file this pass exists for — if NOTHING of yours is on
+   camera, the 90th percentile is itself noise, every clip scores full marks
+   against it, and the pass confirms all the junk it was built to catch.
+
+   ATTEMPT 2, an absolute floor in mean-absolute-difference units. This
+   fails for a duller reason: the number is meaningless without fixing the
+   interval it is measured over. Sampled every 100ms a real rally scored
+   1.9; sampled every 290ms the same rally scored 6.2, because things had
+   moved further between frames. Any fixed floor is therefore secretly a
+   statement about frame timing, camera distance and lens — i.e. about
+   footage nobody has seen.
+
+   WHAT IS ACTUALLY INVARIANT is not how much the picture changed but WHERE.
+   Noise — sensor grain, compression blocking, grass, a flickering
+   floodlight — is spread evenly over the frame. Two people playing tennis
+   are not: their movement is concentrated in a few cells and the rest of the
+   frame is still. So the measure is a RATIO — how much busier the court is
+   than everything outside it — which is dimensionless, survives any camera
+   distance, any exposure, any frame interval, and needs no calibration
+   against footage this was never going to have. `ratio` is how many times
+   busier counts as certain. */
+
+function avPct(a,p){
+  if(!a.length) return 0;
+  const c=Float64Array.from(a); c.sort();
+  return c[Math.min(c.length-1,Math.max(0,Math.floor(c.length*p)))];
+}
+function avMedian(a){ return avPct(a,0.5); }
+function avMad(a){
+  if(!a.length) return 0;
+  const m=avMedian(a), d=new Float64Array(a.length);
+  for(let i=0;i<a.length;i++) d[i]=Math.abs(a[i]-m);
+  return avMedian(d);
+}
+function avClamp(x,lo,hi){ return x<lo?lo:(x>hi?hi:x); }
+
+/* ---- where the court is ------------------------------------------------
+   Not by finding lines — by finding where the movement lives. Over a scan
+   that only ever looked inside candidate rallies, the busiest cells ARE the
+   players, so their bounding box is the court to within a metre. A tree in
+   the corner of frame moves too, but never as much as a person swinging,
+   and roiFrac is what separates them. */
+function avROI(grid,n,opt){
+  const o={...AV_DEF,...(opt||{})};
+  const tot=new Float64Array(AV_CELLS);
+  for(let k=0;k<n;k++){
+    const base=k*AV_CELLS;
+    for(let c=0;c<AV_CELLS;c++) tot[c]+=grid[base+c];
+  }
+  let peak=0;
+  for(let c=0;c<AV_CELLS;c++) if(tot[c]>peak) peak=tot[c];
+  if(peak<=0) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
+                      mid:AV_GX>>1, w:AV_GX, coreW:0, cellCount:0, empty:true};
+
+  /* Above-threshold cells, then FLOOD FILL them into blobs rather than
+     taking a bounding box over the lot. A bounding box is what the first
+     version did and a tree swaying in the top corner of frame stretched the
+     "court" across the whole picture, which quietly re-admitted every bit
+     of motion the ROI existed to exclude. Two players are one blob (the
+     ball's own cells bridge them) or two comparable ones; scenery is a
+     small separate blob and gets left out. */
+  /* Two bars, and the second one matters: a fraction of the busiest cell
+     alone lets a uniformly noisy recording elect the entire frame as court,
+     and a court that is the whole frame has no outside to be compared
+     against. A cell must also beat the TYPICAL cell. */
+  const bar=Math.max(peak*o.roiFrac, avMedian(tot)*o.roiNoise);
+  const hot=new Uint8Array(AV_CELLS);
+  for(let c=0;c<AV_CELLS;c++) if(tot[c]>=bar) hot[c]=1;
+
+  const lab=new Int16Array(AV_CELLS).fill(-1);
+  const mass=[]; const stack=[];
+  for(let c0=0;c0<AV_CELLS;c0++){
+    if(!hot[c0]||lab[c0]>=0) continue;
+    const id=mass.length; let m=0;
+    stack.length=0; stack.push(c0); lab[c0]=id;
+    while(stack.length){
+      const c=stack.pop(); m+=tot[c];
+      const x=c%AV_GX, y=(c/AV_GX)|0;
+      if(x>0)        { const d=c-1;     if(hot[d]&&lab[d]<0){lab[d]=id;stack.push(d);} }
+      if(x<AV_GX-1)  { const d=c+1;     if(hot[d]&&lab[d]<0){lab[d]=id;stack.push(d);} }
+      if(y>0)        { const d=c-AV_GX; if(hot[d]&&lab[d]<0){lab[d]=id;stack.push(d);} }
+      if(y<AV_GY-1)  { const d=c+AV_GX; if(hot[d]&&lab[d]<0){lab[d]=id;stack.push(d);} }
+    }
+    mass.push(m);
+  }
+  /* Which blobs are the other player, and which are scenery?
+
+     Mass alone cannot answer it. The obvious rule — keep blobs of
+     comparable size — fails on the ordinary case of one player in white and
+     one in a dark shirt: against a green court the white one produces
+     roughly three times the frame difference, so their opponent looks like
+     scenery and the court collapses onto one half. That is not a corner
+     case, it is what everybody's footage looks like.
+
+     What actually separates them is where they are. Two people playing each
+     other stand on the same ground: their blobs share rows. A tree, a fence,
+     a road behind the court, someone watching from a balcony — all sit in
+     different rows from the players. So a second blob joins the court if it
+     is not trivially small AND its rows overlap the main blob's. */
+  const bb=[];
+  for(let i=0;i<mass.length;i++) bb.push({y0:AV_GY,y1:-1});
+  for(let c=0;c<AV_CELLS;c++){
+    const id=lab[c]; if(id<0) continue;
+    const y=(c/AV_GX)|0;
+    if(y<bb[id].y0) bb[id].y0=y;
+    if(y>bb[id].y1) bb[id].y1=y;
+  }
+  let big=0;
+  for(let i=1;i<mass.length;i++) if(mass[i]>mass[big]) big=i;
+  const keepBlob=mass.map((m,i)=>
+    i===big || (m>=mass[big]*o.roiJoin && bb[i].y1>=bb[big].y0 && bb[i].y0<=bb[big].y1));
+
+  const cells=new Uint8Array(AV_CELLS);
+  for(let c=0;c<AV_CELLS;c++) if(lab[c]>=0 && keepBlob[lab[c]]) cells[c]=1;
+  /* dilate by one cell — a player standing still for half a second leaves a
+     hole in their own court, and a hole in the ROI is a hole in the evidence */
+  let cx0=AV_GX,cx1=-1;
+  for(let c=0;c<AV_CELLS;c++) if(cells[c]){ const x=c%AV_GX; if(x<cx0)cx0=x; if(x>cx1)cx1=x; }
+  const coreW = cx1<0 ? 0 : cx1-cx0+1;   // width BEFORE the dilation below, which would otherwise
+                                          // widen a one-player blob into a "two-sided" court
+  const grown=Uint8Array.from(cells);
+  for(let c=0;c<AV_CELLS;c++){
+    if(!cells[c]) continue;
+    const x=c%AV_GX, y=(c/AV_GX)|0;
+    if(x>0) grown[c-1]=1;
+    if(x<AV_GX-1) grown[c+1]=1;
+    if(y>0) grown[c-AV_GX]=1;
+    if(y<AV_GY-1) grown[c+AV_GX]=1;
+  }
+
+  let x0=AV_GX,x1=-1,y0=AV_GY,y1=-1,count=0;
+  for(let c=0;c<AV_CELLS;c++){
+    if(!grown[c]) continue;
+    count++;
+    const x=c%AV_GX, y=(c/AV_GX)|0;
+    if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+  }
+
+  /* nothing cleared both bars: a recording where the movement is spread
+     evenly over the frame, which is what noise looks like and what tennis
+     does not */
+  if(!count) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
+                     mid:AV_GX>>1, w:0, coreW:0, cellCount:0, empty:true};
+
+  /* the midline splits the court's own motion mass in half, rather than
+     sitting at the middle of the frame — the camera is never centred */
+  const colMass=new Float64Array(AV_GX);
+  let m2=0;
+  for(let c=0;c<AV_CELLS;c++){ if(!grown[c]) continue; const x=c%AV_GX; colMass[x]+=tot[c]; m2+=tot[c]; }
+  let acc=0, mid=x0;
+  for(let x=x0;x<=x1;x++){ acc+=colMass[x]; if(acc>=m2/2){ mid=x; break; } }
+  return {cells:grown,x0,x1,y0,y1,mid,w:x1-x0+1,coreW,cellCount:count,empty:false};
+}
+
+/* ---- the three series everything else is measured from ---------------- */
+function avSeries(grid,n,roi){
+  /* MEANS, not sums. A sum over the ROI grows with the ROI, so the same
+     rally scores differently depending on how much court the camera got in
+     — which would make the absolute floor above meaningless. A mean is in
+     the frame's own 0-255 difference units whatever the framing. */
+  const m=new Float64Array(n), L=new Float64Array(n), R=new Float64Array(n);
+  /* the two halves are separated by a one-cell dead band, so a player
+     standing on the midline is not counted as both of them */
+  const O=new Float64Array(n);
+  let nA=0,nL=0,nR=0,nO=0;
+  for(let c=0;c<AV_CELLS;c++){
+    if(!roi.cells[c]){ nO++; continue; }
+    nA++;
+    const x=c%AV_GX;
+    if(x<roi.mid) nL++; else if(x>roi.mid) nR++;
+  }
+  for(let k=0;k<n;k++){
+    const base=k*AV_CELLS;
+    let a=0,l=0,r=0,ou=0;
+    for(let c=0;c<AV_CELLS;c++){
+      const v=grid[base+c];
+      if(!roi.cells[c]){ ou+=v; continue; }
+      a+=v;
+      const x=c%AV_GX;
+      if(x<roi.mid) l+=v; else if(x>roi.mid) r+=v;
+    }
+    m[k]=nA?a/nA:0; L[k]=nL?l/nL:0; R[k]=nR?r/nR:0; O[k]=nO?ou/nO:0;
+  }
+  /* If the court came out as the whole frame there is no outside to compare
+     against, so the recording's own quietest moments stand in for one. */
+  const floor = nO ? 0 : avPct(m,0.05);
+  return {m,L,R,O, ref:avPct(m,0.9), noise:avPct(m,0.10),
+          roiW:roi.coreW, cells:nA, outCells:nO, floor};
+}
+
+/* ---- C: is the movement locked to the strikes? ------------------------
+   Correlate a smoothed strike train against the motion, at lag 0 and at
+   four lags chosen to be wrong. The decoys are the control: they absorb
+   whatever correlation the segment would produce by accident, so the
+   difference is the part that is actually about the strikes. Returns 0 when
+   there is nothing to say. */
+const AV_DECOY=[-1.10,-0.70,0.70,1.10];
+function avCorr(a,b){
+  const n=a.length; if(n<4) return 0;
+  let sa=0,sb=0;
+  for(let i=0;i<n;i++){ sa+=a[i]; sb+=b[i]; }
+  const ma=sa/n, mb=sb/n;
+  let num=0,da=0,db=0;
+  for(let i=0;i<n;i++){ const x=a[i]-ma, y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
+  if(da<=0||db<=0) return 0;
+  return num/Math.sqrt(da*db);
+}
+function avStrikeTrain(T,lo,hi,strikes,lag,win){
+  const s=new Float64Array(hi-lo);
+  for(const t of strikes){
+    const at=t+lag;
+    for(let k=lo;k<hi;k++) if(Math.abs(T[k]-at)<=win) s[k-lo]=1;
+  }
+  return s;
+}
+function avSync(T,m,lo,hi,strikes,win){
+  if(hi-lo<6 || strikes.length<2) return 0;
+  const sig=Array.prototype.slice.call(m.subarray?m.subarray(lo,hi):m.slice(lo,hi));
+  const at0=avCorr(avStrikeTrain(T,lo,hi,strikes,0,win), sig);
+  let acc=0,cnt=0;
+  for(const lag of AV_DECOY){
+    const tr=avStrikeTrain(T,lo,hi,strikes,lag,win);
+    let any=0; for(let i=0;i<tr.length;i++) any+=tr[i];
+    if(any<1) continue;
+    acc+=avCorr(tr,sig); cnt++;
+  }
+  if(!cnt) return 0;
+  return at0-(acc/cnt);
+}
+
+/* ---- per segment ------------------------------------------------------ */
+function avMeasure(seg,T,dt,S,strikes,opt){
+  const o={...AV_DEF,...(opt||{})};
+  const n=T.length;
+  let lo=-1,hi=-1;
+  for(let k=0;k<n;k++){
+    if(T[k]>=seg.start && T[k]<=seg.end){ if(lo<0) lo=k; hi=k+1; }
+  }
+  if(lo<0) return {seen:false};
+  const inSeg=S.m.slice(lo,hi);
+  const ref=S.ref||1e-9;
+  const mean=inSeg.reduce((a,b)=>a+b,0)/inSeg.length;
+
+  /* A — how much busier the court is than the rest of the frame */
+  let outAcc=0;
+  for(let k=lo;k<hi;k++) outAcc+=S.outCells?S.O[k]:S.floor;
+  const out=outAcc/(hi-lo);
+  const ratio=mean/(out+1e-9);
+  const A=avClamp((ratio-1)/(o.ratio-1),0,1);
+
+  /* B — both halves of the court doing something at the same time */
+  const bar=Math.max(o.bothFrac*ref, (out||0)*1.5);
+  let both=0;
+  for(let k=lo;k<hi;k++) if(S.L[k]>bar && S.R[k]>bar) both++;
+  const B=both/(hi-lo);
+
+  const mine=strikes.filter(t=>t>=seg.start&&t<=seg.end);
+  const C=avSync(T,S.m,lo,hi,mine,o.syncWin);
+
+  /* which half was still moving as it ended — a hint about who was last on
+     the ball, never more than a hint (see the docs: last to touch it is
+     exactly the ambiguous case) */
+  let lL=0,lR=0,lc=0;
+  for(let k=hi-1;k>=lo;k--){
+    if(T[k]<seg.end-1.0) break;
+    lL+=S.L[k]; lR+=S.R[k]; lc++;
+  }
+  const lastSide = lc&&(lL+lR)>0 ? (lR-lL)/(lR+lL) : 0;
+
+  let shake=0;
+  for(let k=lo;k<hi;k++) shake+=dt.shift[k];
+  shake/=(hi-lo);
+
+  return {seen:true, lo, hi, samples:hi-lo, A, B, C, level:mean, out, ratio,
+          motion:ref?mean/ref:0, quiet:ratio<1.3,
+          lastSide, shake, strikes:mine.length};
+}
+
+/* ---- the verdict ------------------------------------------------------ */
+function avScore(mm,opt,useBoth){
+  const o={...AV_DEF,...(opt||{})};
+  if(!mm.seen) return {conf:null, reason:'not looked at'};
+  const wM=useBoth?o.wMot:(o.wMot+o.wBoth), wB=useBoth?o.wBoth:0;
+  let conf=avClamp(wM*mm.A + wB*mm.B, 0, 1);
+  conf=avClamp(conf + o.wSync*Math.max(0,mm.C), 0, 1);
+  let reason='';
+  if(mm.quiet) reason='nothing moved in the court while these strikes happened';
+  else if(mm.A<0.3) reason='barely any movement on your court';
+  else if(useBoth && mm.B<0.2) reason='only one side of the court was busy';
+  else if(conf>=o.thresh) reason='players moving on both sides through the strikes';
+  else reason='weak picture evidence';
+  return {conf, reason};
+}
+
+/* ---- the whole pass, over every segment -------------------------------
+   Two safety valves, both of which suppress the drops rather than the
+   analysis, because a confident wrong drop is far worse than a shrug:
+
+   1. If no segment anywhere shows bilateral activity, the camera probably
+      cannot see both players (behind the baseline, one figure tiny). B is
+      then measuring the framing, not the tennis, so it is switched off and
+      its weight goes to A.
+   2. If the typical segment scores below `quiet`, the picture is telling us
+      nothing at all — a distant static camera, a dark clip, a locked-off
+      wide shot where nobody is more than a few pixels. The pass reports
+      itself inconclusive and drops NOTHING. */
+function avApply(segs,T,dt,S,strikes,opt){
+  const o={...AV_DEF,...(opt||{})};
+  const raw=segs.map(s=>avMeasure(s,T,dt,S,strikes,o));
+  const seen=raw.filter(r=>r.seen);
+  /* B is only meaningful if there IS a left and a right to compare. A court
+     three cells wide is a camera parked behind one player: the far one is a
+     handful of pixels, never clears the floor, and "only one side was busy"
+     would be true of every real rally in the file. */
+  const wide = (S.roiW||0) >= o.minW;
+  const useBoth = wide && seen.length ? avPct(seen.map(r=>r.B),0.9) >= 0.2 : false;
+  const out=raw.map(r=>({...r,...avScore(r,o,useBoth)}));
+  const confs=out.filter(r=>r.conf!=null).map(r=>r.conf);
+  /* Judged on the BEST clip in the file, not the typical one. In any real
+     recording at least a few candidates are genuinely your match, so if not
+     one of them looks like it happened on a court the camera can see, the
+     picture has nothing to contribute — the camera is pointed elsewhere, the
+     players are four pixels, or none of this footage is yours. Median would
+     call a file blind whenever most candidates were junk, which is precisely
+     the file this pass is most useful on. */
+  const best = confs.length?avPct(confs,0.9):0;
+  const inconclusive = !confs.length || best < o.quiet;
+  return {
+    per:out, useBoth, wide, inconclusive,
+    scanned:seen.length, total:segs.length,
+    best, median: confs.length?avMedian(confs):0,
+    drops: inconclusive?0:out.filter(r=>r.conf!=null&&r.conf<o.thresh).length
+  };
+}
+/* ==== AV-CORE-END ==== */
+
+/* ==== AV-SCAN-START ====
+   Turning a video file into the motion tensor the core above reasons over.
+   Browser-only: <video> + canvas, no library, no upload, nothing decoded
+   that the tab was not already able to decode. */
+
+const AV_W=96, AV_H=54;      // working size. Small on purpose: this is about where
+                             // people are and how much they moved, not about the ball.
+const AV_PIX=8;              // per-pixel difference below this is sensor noise
+const AV_MAXSHIFT=8;         // camera-shake search, in working-size pixels
+const AV_STEP=0.10;          // sample the media every 100ms, whatever the playback rate
+const AV_MAXDT=0.34;         // a gap longer than this is a dropped-frame artefact
+const AV_PAD=2.0;            // seconds either side of a candidate that get looked at
+const AV_BUDGET=150;         // aim to finish the scan in about this many seconds
+
+/* Only the candidate rallies get watched, padded and merged. Scanning the
+   dead time as well would double the work to answer a question nobody asked
+   — with one real consequence, stated plainly in the UI and the docs: the
+   picture can throw a candidate OUT, but it can never find a rally the
+   audio missed, because it never looks where the audio heard nothing. */
+function avWindows(segs, duration, pad){
+  const p=pad==null?AV_PAD:pad;
+  const w=segs.map(s=>({start:Math.max(0,s.start-p), end:Math.min(duration,s.end+p)}))
+              .sort((a,b)=>a.start-b.start);
+  const out=[];
+  for(const s of w){
+    const last=out[out.length-1];
+    if(last && s.start<=last.end+0.35) last.end=Math.max(last.end,s.end);
+    else out.push({...s});
+  }
+  return out;
+}
+function avWindowSeconds(win){ return win.reduce((a,w)=>a+(w.end-w.start),0); }
+/* Playback rate is chosen from how much footage there is to get through, so
+   a two-minute clip is examined closely and a two-hour recording still
+   finishes. Faster playback means the browser presents fewer frames, so the
+   real cost of speed is temporal resolution — which is why it is measured
+   after the first window and corrected rather than assumed. */
+function avRate(seconds, budget){
+  return Math.max(1, Math.min(12, Math.round(seconds/(budget||AV_BUDGET))||1));
+}
+
+function avGray(d,out){
+  for(let i=0,p=0;i<out.length;i++,p+=4) out[i]=(d[p]*77+d[p+1]*150+d[p+2]*29)>>8;
+  return out;
+}
+function avProfiles(g,col,row){
+  col.fill(0);
+  for(let y=0;y<AV_H;y++){
+    let r=0; const o=y*AV_W;
+    for(let x=0;x<AV_W;x++){ const v=g[o+x]; r+=v; col[x]+=v; }
+    row[y]=r;
+  }
+}
+/* Camera shake, estimated from 1-D projection profiles rather than a 2-D
+   search: a handheld phone translates, and translation is exactly what a
+   column sum and a row sum see. It costs about 1700 operations a frame
+   instead of 400,000, and without it every frame of handheld footage reads
+   as wall-to-wall motion and the whole pass is worthless. It does not
+   correct rotation or zoom, and does not pretend to. */
+function avShift1D(prev,cur,max){
+  /* returns d such that prev[i+d] lines up with cur[i] — the same d that
+     avCell then reads the previous frame at */
+  let best=0,bestv=Infinity;
+  const n=prev.length, need=n*0.6;
+  for(let d=-max;d<=max;d++){
+    let sum=0,cnt=0;
+    const lo=Math.max(0,-d), hi=Math.min(n,n-d);
+    for(let i=lo;i<hi;i++){ sum+=Math.abs(prev[i+d]-cur[i]); cnt++; }
+    if(cnt<need) continue;
+    const v=sum/cnt;
+    if(v<bestv){ bestv=v; best=d; }
+  }
+  return best;
+}
+/* One row of the tensor: mean absolute difference per grid cell, with the
+   camera's own movement taken out first. */
+function avCell(prev,cur,dx,dy,grid,base,scale){
+  const cw=AV_W/AV_GX, ch=AV_H/AV_GY, per=cw*ch;
+  for(let c=0;c<AV_CELLS;c++) grid[base+c]=0;
+  for(let y=0;y<AV_H;y++){
+    const sy=y+dy; if(sy<0||sy>=AV_H) continue;
+    const cellRow=((y/ch)|0)*AV_GX, o=y*AV_W, so=sy*AV_W;
+    for(let x=0;x<AV_W;x++){
+      const sx=x+dx; if(sx<0||sx>=AV_W) continue;
+      const d=cur[o+x]-prev[so+sx], a=d<0?-d:d;
+      if(a<AV_PIX) continue;
+      grid[base+cellRow+((x/cw)|0)]+=a;
+    }
+  }
+  for(let c=0;c<AV_CELLS;c++) grid[base+c]=grid[base+c]*scale/per;
+}
+
+function avOnce(el,ev){ return new Promise(r=>el.addEventListener(ev,r,{once:true})); }
+function avSeekTo(v,t){
+  return new Promise(r=>{
+    let done=false;
+    const fin=()=>{ if(done) return; done=true; v.removeEventListener('seeked',fin); r(); };
+    v.addEventListener('seeked',fin);
+    setTimeout(fin,3000);                       // a seek that never lands must not hang the pass
+    try{ v.currentTime=t; }catch(e){ fin(); }
+  });
+}
+
+/* The scan. Returns the tensor plus the bookkeeping the UI needs to be
+   honest about how good a look it got. */
+async function avScanVideo(url, windows, opt){
+  const o=opt||{};
+  const onProgress=o.onProgress||function(){};
+  const cancelled=o.cancelled||function(){ return false; };
+
+  const v=document.createElement('video');
+  v.muted=true; v.defaultMuted=true; v.playsInline=true; v.preload='auto';
+  v.setAttribute('playsinline',''); v.style.position='fixed';
+  v.style.left='-10000px'; v.style.width='2px'; v.style.height='2px';
+  document.body.appendChild(v);
+  v.src=url;
+
+  const cleanup=()=>{ try{ v.pause(); }catch(e){} try{ v.removeAttribute('src'); v.load(); }catch(e){}
+                      try{ v.remove(); }catch(e){} };
+  try{
+    await Promise.race([avOnce(v,'loadedmetadata'), new Promise((_,rj)=>setTimeout(()=>rj(new Error('metadata')),15000))]);
+  }catch(e){ cleanup(); throw new Error('This video could not be opened for analysis in the page.'); }
+
+  const cv=document.createElement('canvas'); cv.width=AV_W; cv.height=AV_H;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  const gA=new Uint8Array(AV_W*AV_H), gB=new Uint8Array(AV_W*AV_H);
+  const colA=new Float32Array(AV_W), colB=new Float32Array(AV_W);
+  const rowA=new Float32Array(AV_H), rowB=new Float32Array(AV_H);
+
+  const total=avWindowSeconds(windows)||1;
+  const cap=Math.ceil(total/AV_STEP)+windows.length*4+64;
+  const grid=new Float32Array(cap*AV_CELLS);
+  const T=new Float64Array(cap), DT=new Float64Array(cap), SH=new Float64Array(cap);
+  let n=0, done=0, coarse=0;
+  const perWindow=[];
+
+  let rate=avRate(total, o.budget);
+  const hasRVFC=typeof v.requestVideoFrameCallback==='function';
+
+  let prev=null, prevT=0, useA=true;
+  const take=(t)=>{
+    if(n>=cap) return;
+    const cur=useA?gA:gB;
+    ctx.drawImage(v,0,0,AV_W,AV_H);
+    avGray(ctx.getImageData(0,0,AV_W,AV_H).data, cur);
+    if(prev){
+      const dt=t-prevT;
+      if(dt>0.005){
+        avProfiles(prev,colA,rowA); avProfiles(cur,colB,rowB);
+        const dx=avShift1D(colA,colB,AV_MAXSHIFT), dy=avShift1D(rowA,rowB,AV_MAXSHIFT);
+        /* Motion between two frames grows with the gap between them, so a
+           dropped frame would otherwise read as a burst of activity. This is
+           a first-order correction only — displacement saturates once things
+           move further than they are wide — hence the clamp, and hence
+           samples past AV_MAXDT being counted as coarse and reported. */
+        const scale=Math.max(0.5,Math.min(2,AV_STEP/dt));
+        avCell(prev,cur,dx,dy,grid,n*AV_CELLS,scale);
+        T[n]=t; DT[n]=dt; SH[n]=Math.abs(dx)+Math.abs(dy);
+        if(dt>AV_MAXDT) coarse++;
+        n++;
+      } else return;
+    }
+    prev=cur; useA=!useA; prevT=t;
+  };
+
+  for(let wi=0; wi<windows.length; wi++){
+    if(cancelled()) break;
+    const w=windows[wi];
+    const wStart=n;
+    prev=null;
+    await avSeekTo(v, w.start);
+    if(cancelled()) break;
+
+    if(hasRVFC){
+      v.playbackRate=rate;
+      let next=w.start;
+      await new Promise(res=>{
+        let stopped=false;
+        const stop=()=>{ if(stopped) return; stopped=true; try{ v.pause(); }catch(e){} res(); };
+        const guard=setTimeout(stop, Math.max(8000, ((w.end-w.start)/rate)*1000*4));
+        const cb=(now,meta)=>{
+          if(stopped) return;
+          const t=meta&&isFinite(meta.mediaTime)?meta.mediaTime:v.currentTime;
+          if(cancelled() || t>=w.end){ clearTimeout(guard); stop(); return; }
+          /* A seek can land after the point it was asked for, which used to
+             leave `next` in the past and, on a short final window, end the
+             window before a single frame was taken. */
+          if(t>=next){ take(t); next=t+AV_STEP; }
+          else if(n===wStart){ take(t); next=t+AV_STEP; }
+          v.requestVideoFrameCallback(cb);
+        };
+        v.requestVideoFrameCallback(cb);
+        v.addEventListener('ended',()=>{ clearTimeout(guard); stop(); },{once:true});
+        const p=v.play();
+        if(p&&p.catch) p.catch(()=>{ clearTimeout(guard); stop(); });
+      });
+      /* What that playback rate actually bought us, measured rather than
+         assumed. Asking for 6x does not deliver 6x worth of frames: the
+         browser presents what it can and drops the rest, so the real cost of
+         speed is temporal resolution. Checked after every window, because a
+         machine that keeps up at the start may not once something else wants
+         the CPU. */
+      if(n>wStart+4){
+        let s=0; for(let k=wStart;k<n;k++) s+=DT[k];
+        const med=s/(n-wStart);
+        if(med>AV_STEP*2 && rate>1) rate=Math.max(1,Math.floor(rate*0.6));
+      }
+    } else {
+      /* no requestVideoFrameCallback (Firefox): seek-and-grab. Correct, and
+         slow enough that the step is stretched to keep it finite. */
+      const span=w.end-w.start;
+      const step=Math.max(AV_STEP, span/240);
+      for(let t=w.start; t<w.end; t+=step){
+        if(cancelled()) break;
+        await avSeekTo(v,t);
+        take(v.currentTime);
+      }
+    }
+    perWindow.push({start:Math.round(w.start*10)/10, end:Math.round(w.end*10)/10,
+                    got:n-wStart, first:n>wStart?Math.round(T[wStart]*10)/10:null,
+                    last:n>wStart?Math.round(T[n-1]*10)/10:null, rate});
+    done+=(w.end-w.start);
+    onProgress(Math.min(1,done/total), n);
+    await new Promise(r=>setTimeout(r,0));
+  }
+
+  cleanup();
+  return {grid, n, T:T.subarray(0,n), dt:{dt:DT.subarray(0,n), shift:SH.subarray(0,n)},
+          samples:n, coarse, rate, perWindow, method:hasRVFC?'playback':'seek',
+          seconds:total, cancelled:cancelled()};
+}
+/* ==== AV-SCAN-END ==== */
+
+
+/* ---- the pass, wired into the auto-cut -------------------------------- */
+const AV_TUNE_KEY="fgta_autocut_vision";
+const AV_TUNE_UI=[
+  ['ratio',  'Court vs. frame', 1.4, 6,    0.1,  'how much busier your court has to be than everything else in shot'],
+  ['thresh', 'Keep above',      0.3, 0.95, 0.05, 'below this a clip is pre-dropped for you to look at']
+];
+function avTune(){
+  const t={...AV_DEF, on:true};
+  try{
+    const raw=JSON.parse(localStorage.getItem(AV_TUNE_KEY)||'{}');
+    Object.keys(AV_DEF).forEach(k=>{ if(isFinite(raw[k])) t[k]=Number(raw[k]); });
+    if(raw.on===false) t.on=false;
+  }catch(e){}
+  return t;
+}
+function avSaveTune(t){ try{ localStorage.setItem(AV_TUNE_KEY, JSON.stringify(t)); }catch(e){} }
+
+/* Verdicts are re-derived from the stored tensor, never from the video, so
+   moving an audio slider re-groups the strikes AND re-judges every new
+   segment with no decoding at all — the same bargain the audio side makes
+   by keeping its envelope. */
+function avAttach(A){
+  A.segs.forEach(s=>{ s.v=null; });
+  const av=A.av;
+  if(!av || av.busy || av.error || !av.scan || !av.tune) return;
+  if(!av.tune.on){ av.res=null; return; }   // don't leave a stale verdict for the exports to quote
+  const res=avApply(A.segs, av.scan.T, av.scan.dt, av.ser, (A.hits||[]).map(h=>h.t), av.tune);
+  av.res=res;
+  A.segs.forEach((s,i)=>{
+    const r=res.per[i]; s.v=r;
+    if(!res.inconclusive && r.conf!=null && r.conf<av.tune.thresh) s.keep=false;
+  });
+}
+
+function avPaintProgress(){
+  const A=AC; if(!A||!A.av) return;
+  const bar=document.getElementById('avBar'), lbl=document.getElementById('avBarLabel');
+  if(bar) bar.style.width=Math.round((A.av.progress||0)*100)+'%';
+  if(lbl) lbl.textContent=A.av.note||'';
+}
+function avCancel(){ const A=AC; if(A&&A.av) A.av.cancel=true; }
+window.avCancel=avCancel;
+
+async function avRun(){
+  const A=AC;
+  if(!A || A.kind!=='video' || !A.segs || !A.segs.length) return;
+  const tune=avTune();
+  A.av={busy:true, progress:0, note:'opening the video…', cancel:false, tune};
+  renderAutoCut();
+  try{
+    const windows=avWindows(A.segs, A.duration);
+    const secs=avWindowSeconds(windows);
+    const scan=await avScanVideo(A.url, windows, {
+      onProgress:(p)=>{
+        if(AC!==A||!A.av) return;
+        A.av.progress=p;
+        A.av.note='watching the candidate rallies — '+Math.round(p*100)+'%';
+        avPaintProgress();
+      },
+      cancelled:()=>AC!==A || !A.av || A.av.cancel
+    });
+    if(AC!==A) return;
+    if(A.av.cancel || scan.cancelled){ A.av=null; renderAutoCut(); return; }
+    if(!scan.n){
+      A.av={busy:false, tune, error:'The video decoded, but no frames could be read out of it '+
+            'for analysis. The audio cut below is unaffected.'};
+      renderAutoCut(); return;
+    }
+    A.av={busy:false, tune, scan, windows, seconds:secs};
+    A.av.roi=avROI(scan.grid, scan.n, tune);
+    A.av.ser=avSeries(scan.grid, scan.n, A.av.roi);
+    acRecompute();
+    renderAutoCut();
+  }catch(e){
+    if(AC!==A) return;
+    A.av={busy:false, tune, error:(e&&e.message)||'The picture could not be analysed here.'};
+    renderAutoCut();
+  }
+}
+window.avRun=avRun;
+
+function avSetTune(k,v){
+  const A=AC; if(!A) return;
+  const n=Number(v); if(!isFinite(n)) return;
+  const t=A.av&&A.av.tune?A.av.tune:avTune();
+  t[k]=n; avSaveTune(t);
+  if(A.av){ A.av.tune=t; acRecompute(); }
+  renderAutoCut();
+}
+window.avSetTune=avSetTune;
+function avTuneReadout(k,v){
+  const out=document.getElementById('avTuneVal-'+k);
+  if(out) out.textContent = k==='ratio' ? (Number(v).toFixed(1)+'×') : Math.round(Number(v)*100)+'%';
+}
+window.avTuneReadout=avTuneReadout;
+function avToggleOn(on){
+  const A=AC; if(!A) return;
+  const t=A.av&&A.av.tune?A.av.tune:avTune();
+  t.on=!!on; avSaveTune(t);
+  if(A.av){ A.av.tune=t; acRecompute(); renderAutoCut(); }
+  else if(on) avRun();
+  else renderAutoCut();
+}
+window.avToggleOn=avToggleOn;
+
+/* ---- what the panel says about it ------------------------------------- */
+function avPip(s){
+  if(!s.v) return '';
+  const A=AC, av=A&&A.av;
+  if(!s.v.seen) return `<span class="av-pip av-pip-un" title="This clip falls outside the stretch of video that was watched — retune the audio and it moves. Re-scan to judge it.">?</span>`;
+  const c=s.v.conf, blind=av&&av.res&&av.res.inconclusive;
+  const cls = blind ? 'av-pip-un' : (c>=(av.tune.thresh)?'av-pip-ok':'av-pip-no');
+  return `<span class="av-pip ${cls}" title="${esc(s.v.reason)} — court ${s.v.ratio.toFixed(1)}× busier than the rest of frame${blind?' (not acted on: the pass called itself blind)':''}">${Math.round(c*100)}</span>`;
+}
+
+function avBand(){
+  const A=AC; if(!A) return '';
+  if(A.kind!=='video') return '';
+  const av=A.av;
+
+  if(!av){
+    return `<div class="av-band av-band-off">
+      <b>The picture has not been looked at.</b> The cut below comes from the audio alone, which
+      cannot tell your court from the one next to it.
+      <button class="mini" onclick="avRun()">▶ watch the video too</button>
+    </div>`;
+  }
+  if(av.busy){
+    return `<div class="av-band av-band-run">
+      <div class="av-band-h">Watching the picture</div>
+      <div class="ac-bar"><div class="ac-bar-fill" id="avBar" style="width:${Math.round((av.progress||0)*100)}%"></div></div>
+      <div class="ac-bar-label" id="avBarLabel">${esc(av.note||'')}</div>
+      <div class="av-band-b">Only the candidate rallies get watched, not the whole recording, and the
+        video is played fast rather than decoded frame by frame. The cut below already works — this
+        only decides which clips are yours.</div>
+      <button class="mini" onclick="avCancel()">skip it</button>
+    </div>`;
+  }
+  if(av.error){
+    return `<div class="av-band av-band-off"><b>The picture could not be analysed.</b>
+      ${esc(av.error)} The audio cut below is unaffected.
+      <button class="mini" onclick="avRun()">try again</button></div>`;
+  }
+  if(!av.tune.on){
+    return `<div class="av-band av-band-off"><b>Picture check is off.</b> The cut is from the audio alone.
+      <button class="mini" onclick="avToggleOn(true)">turn it back on</button></div>`;
+  }
+  const res=av.res, sc=av.scan;
+  if(!res) return '';
+  const unseen=A.segs.filter(s=>s.v&&!s.v.seen).length;
+  const gap=`${sc.samples} frames over ${Math.round(av.seconds)}s of candidate footage, ${sc.method==='seek'?'seeked':'played at '+sc.rate+'×'}`;
+  if(res.inconclusive){
+    return `<div class="av-band av-band-blind">
+      <b>The picture had nothing usable to say, so nothing was dropped on account of it.</b>
+      Not one candidate looked like it happened on a court this camera can see — which usually means
+      the camera is too far back, too dark, or pointed somewhere else. The cut below is the audio's,
+      unchanged. Scores are still shown so you can see what it saw.
+      <span class="av-band-n">${gap} · best clip scored ${Math.round(res.best*100)}% · needs ${Math.round(av.tune.quiet*100)}%</span>
+    </div>`;
+  }
+  return `<div class="av-band av-band-on">
+    <b>${res.drops||'No'} clip${res.drops===1?'':'s'} pre-dropped by the picture${res.drops?'':' — the audio and the video agree'}.</b>
+    Each one had strikes on the soundtrack but nothing on your court to go with them: the next court
+    over, or somebody walking back. Every drop is a suggestion — tap ✓ to put one back.
+    <span class="av-band-n">${gap} · court found at cells ${av.roi.x0}–${av.roi.x1} across, ${av.roi.y0}–${av.roi.y1} down · ${
+      res.useBoth?'both halves visible, so one-sided clips are rejected'
+                 :'only one half of the court is really visible, so one-sided clips cannot be rejected'}${
+      sc.coarse?` · ${sc.coarse} frames arrived too far apart to be precise`:''}</span>
+    ${unseen?`<span class="av-band-n">${unseen} clip${unseen===1?' falls':'s fall'} outside the stretch that was watched, because the audio settings moved since.
+      <button class="mini" onclick="avRun()">re-scan</button></span>`:''}
+  </div>`;
+}
+
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -11814,7 +12665,12 @@ async function acLoad(file){
   const isVideo=/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file.name);
   AC={file, url:URL.createObjectURL(file), kind:isVideo?'video':'audio',
       duration:0, onsets:null, tune:acTune(), segs:[], idx:0, playing:false,
-      video:null, timer:null, busy:true, progress:0, note:'reading…', error:null};
+      video:null, timer:null, busy:true, progress:0, note:'reading…', error:null,
+      /* av: the picture pass (null until it runs). hits: strike times, which
+         the picture pass correlates against. user: keep/drop decisions a
+         person made, kept by start time so retuning cannot silently undo
+         them — and so the picture cannot re-drop something they put back. */
+      av:null, hits:null, user:{}};
   renderAutoCut();
   try{
     if(file.size>AC_MAX_BYTES) throw new Error('TOOBIG');
@@ -11858,6 +12714,10 @@ async function acLoad(file){
     acProgress(1,'done');
     renderAutoCut();
     if(AC.kind==='video') acMountVideo();
+    /* The audio cut is finished and usable at this point; the picture pass
+       runs after it and only ever narrows the result, so it is started
+       rather than waited for. */
+    if(AC.kind==='video' && AC.segs.length && avTune().on) avRun();
   }catch(e){
     if(!AC) return;
     AC.busy=false;
@@ -11869,14 +12729,19 @@ async function acLoad(file){
 
 function acRecompute(){
   const A=AC; if(!A || !A.o) return;
-  const keptBefore={};
-  (A.segs||[]).forEach(s=>{ if(!s.keep) keptBefore[Math.round(s.start*10)]=true; });
   const hits=acPickOnsets(A.o, A.env, A.tune);
   A.strikes=hits.length;
+  A.hits=hits;
   A.segs=acSegments(acCluster(hits,A.tune), A.tune, A.duration);
-  /* a retune shouldn't silently un-drop the clips somebody already
-     rejected, so carry the drops across by their start time */
-  A.segs.forEach(s=>{ if(keptBefore[Math.round(s.start*10)]) s.keep=false; });
+  /* Order matters here. The picture pre-drops, and THEN a person's own
+     keep/drop decisions are laid on top — so a clip somebody put back stays
+     back through any number of retunes, and the picture never overrules a
+     human twice for the same clip. */
+  avAttach(A);
+  A.segs.forEach(s=>{
+    const k=Math.round(s.start*10);
+    if(A.user && A.user[k]!=null) s.keep=A.user[k];
+  });
   if(A.idx>=A.segs.length) A.idx=Math.max(0,A.segs.length-1);
 }
 
@@ -11953,13 +12818,14 @@ function acKeepToggle(n, ev){
   const A=AC; if(!A) return;
   const s=A.segs.find(x=>x.n===n); if(!s) return;
   s.keep=!s.keep;
+  A.user[Math.round(s.start*10)]=s.keep;
   if(A.idx>=acKept().length) A.idx=Math.max(0,acKept().length-1);
   renderAutoCut();
 }
 window.acKeepToggle=acKeepToggle;
 function acKeepAll(on){
   const A=AC; if(!A) return;
-  A.segs.forEach(s=>s.keep=!!on);
+  A.segs.forEach(s=>{ s.keep=!!on; A.user[Math.round(s.start*10)]=!!on; });
   A.idx=0;
   renderAutoCut();
 }
@@ -11997,6 +12863,11 @@ function acNotes(){
   return [
     `${A.file.name} — ${list.length} rallies, ${rrClock(reel)} of tennis cut from ${rrClock(A.duration)}`,
     `Found by ear, not by hand: ${A.strikes} ball strikes detected, grouped into rallies.`,
+    ...(A.av && A.av.res && !A.av.error && A.av.tune.on ? (A.av.res.inconclusive
+      ? [`The picture was analysed and had nothing usable to say, so it dropped nothing.`]
+      : [`Checked against the picture: ${A.av.res.drops} clip(s) had strikes but no matching`,
+         `movement on court and were pre-dropped. picture=` +
+           AV_TUNE_UI.map(([k])=>`${k}=${A.av.tune[k]}`).join(' ')]) : []),
     `Settings: ` + AC_TUNE_UI.map(([k])=>`${k}=${A.tune[k]}`).join(' '),
     ``,
     `These timings are seconds into ${A.file.name} itself, so this script wants that`,
@@ -12018,17 +12889,46 @@ window.acExportFfmpeg=acExportFfmpeg;
 function acExportJson(){
   const A=AC, list=acKept(); if(!A||!list.length) return;
   rrDownload(acSlug()+'-cutlist.json', JSON.stringify({
-    generator:'FGTA auto-cut', version:1,
+    generator:'FGTA auto-cut', version:2,
     source:{name:A.file.name, bytes:A.file.size, seconds:Math.round(A.duration)},
-    method:'ball-strike onset detection over the recording\'s own audio',
+    method: A.av && A.av.res && !A.av.error && A.av.tune.on
+      ? 'ball-strike onset detection over the audio, each candidate then checked against the picture'
+      : 'ball-strike onset detection over the recording\'s own audio',
     timebase:'seconds into the source file',
     settings:{...A.tune},
+    picture: !(A.av && A.av.scan && !A.av.error) ? null : {
+      used:!!A.av.tune.on,
+      inconclusive:!!(A.av.res && A.av.res.inconclusive),
+      settings:Object.fromEntries(AV_TUNE_UI.map(([k])=>[k,A.av.tune[k]])),
+      scan:{frames:A.av.scan.samples, secondsWatched:Math.round(A.av.seconds),
+            method:A.av.scan.method, playbackRate:A.av.scan.rate, coarseFrames:A.av.scan.coarse},
+      court:{x0:A.av.roi.x0,x1:A.av.roi.x1,y0:A.av.roi.y0,y1:A.av.roi.y1,
+             midline:A.av.roi.mid, gridWidth:AV_GX, gridHeight:AV_GY},
+      bothHalvesUsable: !!(A.av.res && A.av.res.useBoth),
+      prelDropped: A.av.res ? A.av.res.drops : 0
+    },
     totals:{rallies:list.length, strikes:A.strikes,
             reelSeconds:Math.round(list.reduce((a,s)=>a+s.dur,0)*10)/10,
             sourceSeconds:Math.round(A.duration)},
     segments:list.map(s=>({n:s.n, start:Math.round(s.start*100)/100,
       end:Math.round(s.end*100)/100, duration:Math.round(s.dur*100)/100,
-      strikes:s.hits}))
+      strikes:s.hits,
+      /* lastSide is -1 for the left of the midline, +1 for the right: which
+         half was still moving as the clip ended. It is a HINT about who was
+         last on the ball and nothing more — the last person to touch it wins
+         the point if it was a winner and loses it if it went out, which is
+         exactly the case this cannot tell apart. It is exported because it
+         is cheap and someone tapping a winner per rally can use it as a
+         default; it is not a score. */
+      picture: s.v && s.v.seen ? {
+        confidence:Math.round(s.v.conf*100)/100,
+        courtVsFrame:Math.round(s.v.ratio*100)/100,
+        bothHalves:Math.round(s.v.B*100)/100,
+        strikeAlignment:Math.round(s.v.C*100)/100,
+        lastSide:Math.round(s.v.lastSide*100)/100,
+        cameraShiftPx:Math.round(s.v.shake*100)/100,
+        frames:s.v.samples, note:s.v.reason
+      } : null}))
   },null,2), 'application/json');
 }
 window.acExportJson=acExportJson;
@@ -12106,6 +13006,7 @@ function renderAutoCut(){
       <span class="ac-row-n">${g.n}</span>
       <span class="ac-row-t">${rrClock(g.start)}</span>
       <span class="ac-row-h">${g.hits} strike${g.hits===1?'':'s'}</span>
+      ${avPip(g)}
       <span class="ac-row-d">${rrSecs(g.dur)}</span>
     </button>`;
   }).join('');
@@ -12143,11 +13044,17 @@ function renderAutoCut(){
             cut list below is exactly what it would be for the video, and the script it
             exports runs against the video.</div>`}
 
+      ${avBand()}
+
       <div class="ac-warn">
-        <b>Give this a once-over before you trust it.</b> It listens for struck balls, so a
-        court in use next to yours sounds precisely like yours — there is no audio-only fix
-        for that. Tap ✓ to drop anything that isn't your rally; only the ticked ones are
-        exported.
+        <b>Give this a once-over before you trust it.</b> ${
+          A.kind==='video' && A.av && A.av.res && !A.av.error && A.av.tune.on && !A.av.res.inconclusive
+          ? `It listens for struck balls and then checks the picture for someone moving on your
+             court while they happened — but two rough measurements agreeing is not a person
+             watching, and the picture can only reject clips, never find the ones nobody heard.`
+          : `It listens for struck balls, so a court in use next to yours sounds precisely like
+             yours${A.kind==='video'?' until the picture is looked at as well.':', and there is no audio-only fix for that.'}`
+        } Tap ✓ to drop anything that isn't your rally; only the ticked ones are exported.
         <span class="ac-warn-n">${A.strikes} strikes detected, ${A.duration>0?Math.round(A.strikes/(A.duration/60)):0} per minute
           — a real singles match runs about 15–25.</span>
       </div>
@@ -12166,6 +13073,22 @@ function renderAutoCut(){
              reach for: too many clips means lower it, missed rallies means raise it.</p>
           ${tuneRows}
           <button class="mini" onclick="acResetTune()">reset to defaults</button>
+          ${A.kind==='video' && A.av && A.av.scan && !A.av.error ? `
+            <div class="av-tune-h">The picture
+              <label class="av-sw"><input type="checkbox" ${A.av.tune.on?'checked':''}
+                onchange="avToggleOn(this.checked)"> use it</label></div>
+            <p class="av-tune-p">Also instant — the frames were measured once and only the verdicts
+               are recomputed. <b>Court vs. frame</b> is the one to reach for. Real rallies pre-dropped
+               means lower it; the next court's rallies surviving means raise it. Every clip's own
+               figure is on its badge, so you can read them off before deciding.</p>
+            ${AV_TUNE_UI.map(([k,label,lo,hi,st,help])=>`
+              <label class="rr-tune">
+                <span class="rr-tune-l">${label}<i>${help}</i></span>
+                <input type="range" min="${lo}" max="${hi}" step="${st}" value="${A.av.tune[k]}"
+                  ${A.av.tune.on?'':'disabled'}
+                  oninput="avTuneReadout('${k}',this.value)" onchange="avSetTune('${k}',this.value)">
+                <span class="rr-tune-v" id="avTuneVal-${k}">${k==='ratio'?A.av.tune[k].toFixed(1)+'×':Math.round(A.av.tune[k]*100)+'%'}</span>
+              </label>`).join('')}` : ''}
         </div>
       </details>
 
