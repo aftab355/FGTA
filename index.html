@@ -3764,11 +3764,8 @@
   .cn-list{display:flex;flex-direction:column;gap:8px}
   .cn-row{
     display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:16px;
-    border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);
-    padding:13px 16px;transition:.15s;
+    padding:13px 16px;
   }
-  .cn-row:hover{border-color:var(--accent-dim)}
-  .cn-row.home{border-color:var(--accent);background:var(--accent-dim)}
   .cn-name{font-size:15px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .cn-tag{
     font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
@@ -3813,6 +3810,113 @@
     font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;
   }
   .cn-more:hover{color:var(--ink);border-color:var(--dim)}
+
+  /* ---- per-park busyness: a collapsed strip on every row, a chart inside ----
+     The card border moved from .cn-row up to .cn-item so the strip and its
+     panel sit inside the same card instead of stacking three boxes. */
+  .cn-item{
+    border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);
+    transition:.15s;overflow:hidden;
+  }
+  .cn-item:hover{border-color:var(--accent-dim)}
+  .cn-item.home{border-color:var(--accent);background:var(--accent-dim)}
+
+  .cn-busy-bar{
+    width:100%;display:flex;align-items:center;gap:10px;
+    background:var(--panel-2);border:0;border-top:1px solid var(--line);
+    padding:9px 16px;cursor:pointer;text-align:left;transition:.15s;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);
+  }
+  .cn-busy-bar:hover{background:var(--panel);color:var(--ink)}
+  .cn-busy-bar.open{background:var(--panel);color:var(--ink)}
+  .cn-busy-bar.off{cursor:pointer;color:var(--dim)}
+  /* the dot ramps on opacity as well as hue: some skins collapse the accent
+     colours onto one another, and an intensity cue has to survive that */
+  .cn-busy-dot{
+    width:8px;height:8px;border-radius:50%;flex:none;
+    background:var(--court);opacity:.5;
+  }
+  .cn-busy-dot.warm{background:var(--pending);opacity:.8}
+  .cn-busy-dot.hot{background:var(--danger);opacity:1;box-shadow:0 0 9px -1px var(--danger)}
+  .cn-busy-dot.off{background:var(--line);opacity:1;box-shadow:none}
+  .cn-busy-v{font-weight:700;color:var(--ink);white-space:nowrap}
+  .cn-busy-bar.off .cn-busy-v{color:var(--dim)}
+  .cn-busy-pct,.cn-busy-free{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cn-busy-src{
+    margin-left:auto;font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);
+    border:1px solid var(--line);border-radius:var(--r-pill);padding:2px 7px;flex:none;
+  }
+  .cn-busy-caret{color:var(--dim);flex:none;font-size:10px}
+
+  /* the sparkline in the collapsed strip — today, 6am to 10pm */
+  .cn-spark{display:flex;align-items:flex-end;gap:1.5px;height:16px;flex:none;margin-left:2px}
+  .cn-spark i{width:3px;background:var(--line);border-radius:1px;display:block}
+  .cn-busy-bar:hover .cn-spark i{background:var(--dim)}
+  .cn-spark i.now{background:var(--accent)}
+
+  .cn-busy-body{padding:14px 16px 16px;border-top:1px solid var(--line);background:var(--panel)}
+  .cn-bdays{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+  .cn-bday{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer;
+    border-radius:var(--r-pill);padding:4px 10px;transition:.15s;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5px;
+  }
+  .cn-bday:hover{color:var(--ink);border-color:var(--dim)}
+  .cn-bday.on{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:700}
+  .cn-bday.today:not(.on){color:var(--accent);border-color:var(--accent-dim)}
+
+  .cn-bars{display:flex;align-items:flex-end;gap:3px;height:84px}
+  .cn-bar{flex:1;position:relative;height:100%;display:flex;align-items:flex-end}
+  .cn-bar i{width:100%;background:var(--line);border-radius:2px 2px 0 0;display:block;transition:.15s}
+  .cn-bar:hover i{background:var(--dim)}
+  .cn-bar.quiet i{background:var(--accent-dim)}
+  .cn-bar.now i{background:var(--court);box-shadow:0 0 10px -3px var(--court)}
+  .cn-bar.shut i{background:transparent;border-bottom:2px dotted var(--line)}
+  .cn-bar-tip{
+    position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+    background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:5px 8px;white-space:nowrap;opacity:0;pointer-events:none;transition:.15s;z-index:4;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink);
+  }
+  .cn-bar:hover .cn-bar-tip{opacity:1}
+  .cn-baxis{
+    display:flex;margin-top:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);
+  }
+  .cn-baxis span{flex:1;text-align:center}
+
+  .cn-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-top:12px}
+  .cn-slot{
+    border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);padding:8px 10px;
+  }
+  .cn-slot.best{border-color:var(--accent-dim);background:var(--accent-dim)}
+  .cn-slot b{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--ink);
+  }
+  .cn-slot i{
+    display:block;font-style:normal;margin-top:2px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim);
+  }
+  .cn-slot.best i{color:var(--accent)}
+
+  .cn-busy-sub{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);
+    margin-top:9px;line-height:1.6;
+  }
+  .cn-busy-note{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);
+    margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);line-height:1.7;
+  }
+  .cn-busy-note b{color:var(--muted);font-weight:700}
+
+  @media(max-width:640px){
+    /* the phone keeps the verdict and the sparkline and drops the rest —
+       a strip that wraps to three lines stops being a compact summary */
+    .cn-busy-pct{display:none}   /* the free-court count is the part worth the width */
+    .cn-busy-bar{gap:8px;padding:9px 14px}
+    .cn-busy-body{padding:12px 14px 14px}
+    .cn-bars{height:72px;gap:2px}
+  }
 
   @media(max-width:640px){
     /* the phone drops the row to two lines: the site, then its times and
@@ -28503,7 +28607,11 @@ const NEARBY_LIGHTS = [
 ];
 const nearbyState = {
   filter:"short", lights:"lit", sort:"transit", q:"", expanded:false,
-  origin:nearbyLoadOrigin(), geo:""
+  origin:nearbyLoadOrigin(), geo:"",
+  /* which busyness dropdowns are open, and which day each of them is showing.
+     Keyed by park rather than by row index so the panel you opened stays open
+     when a filter or a new GPS fix reorders the list under it. */
+  busyOpen:{}, busyDay:{}
 };
 const NEARBY_PAGE = 12;   // how many rows before the "show all" button
 
@@ -28563,7 +28671,7 @@ function nearbyRows(){
   let rows = q
     ? NEARBY.filter(c=> c.name.toLowerCase().includes(q) || c.addr.toLowerCase().includes(q) || c.club.toLowerCase().includes(q))
     : NEARBY.filter(f.test);
-  rows = rows.filter(nearbyLightTest).map(c=>({ c, t:nearbyTrip(c) }));
+  rows = rows.filter(nearbyLightTest).map(c=>({ c, t:nearbyTrip(c), b:pbNow(c) }));
 
   const by = nearbyState.sort;
   rows.sort((A,B)=>{
@@ -28571,6 +28679,14 @@ function nearbyRows(){
     if(by==="courts")   return b.courts - a.courts || ta.driveMin - tb.driveMin;
     if(by==="drive")    return ta.driveMin - tb.driveMin;
     if(by==="distance") return ta.crow - tb.crow;
+    /* quietest: on courts in use, which is comparable between parks in a way
+       that percent-of-own-peak is not. A closed park is not a quiet one, so it
+       sinks; ties break on how many courts that actually leaves free. */
+    if(by==="quiet"){
+      const rank = x => x.closed ? 1e6 : x.dark ? 1e5 : x.occ;
+      const qa = rank(A.b), qb = rank(B.b);
+      return qa - qb || B.b.free - A.b.free || ta.driveMin - tb.driveMin;
+    }
     // transit: sites with no computed itinerary sink below the ones that have one
     return (ta.transitMin ?? 1e6) - (tb.transitMin ?? 1e6) || ta.driveMin - tb.driveMin;
   });
@@ -28583,6 +28699,532 @@ function nearbyOriginAge(o){
   if(mins < 60) return mins + " min ago";
   return Math.round(mins/60) + "h ago";
 }
+
+/* ---------------------------------------------------------------------------
+   Per-park busyness — how full each site usually is, hour by hour.
+
+   The honest framing first, because it decides how everything below is
+   labelled. Exactly one site in this table has measured busyness: the home
+   court, which Google publishes popular times for and which the Court tab
+   already reads through the SerpApi proxy. The other 172 have no feed and
+   cannot get one here — Google doesn't publish popular times for most public
+   parks, the proxy is pinned to a single place_id, and 173 SerpApi calls per
+   page load would spend real money on numbers nobody asked for.
+
+   So the home court row shows its real curve and says so, and every other row
+   shows a MODEL that says so just as plainly. The model isn't invented out of
+   nothing: every input is either real per-site data already in this table or
+   something computable for the site's own coordinates.
+
+     shape     a weekday and a weekend hour-of-day profile for outdoor public
+               tennis — the weekday evening peak, the weekend late morning.
+               This is the one judgement call in the stack; it is a shape, not
+               a measurement, and it is the same shape for every park.
+     daylight  real sunrise and sunset for the park's own latitude, longitude
+               and today's date. This is the input that actually separates one
+               park from another: an unlit court is finished within half an
+               hour of sunset, a lit one runs to lights-out, and in this city
+               that gap is forty minutes in June and four hours in December.
+     season    outdoor nets in Toronto come down for the winter. A site with
+               no winter play reads as closed from December to March instead
+               of inventing a number for it.
+     capacity  the court count, which is real, turns a percentage into the
+               thing people actually want to know: roughly how many courts are
+               free. 70% of peak is a wait at a 2-court park and four open
+               courts at a 12-court one.
+     club      member sites run on bookings and leagues — quieter on a weekday
+               afternoon than a public court, busier on league evenings.
+     weather   the same live Open-Meteo multipliers the Court tab uses, applied
+               only to the "right now" number. A curve for next Tuesday has no
+               business knowing today's rain.
+
+   Treat the ordering as the point and any single number as a ballpark.       */
+
+/* ---- local competition ----
+   Left to the hour-of-day shape alone, every lit public park in the city reads
+   identically at 5pm, which is a clock dressed up as a busyness feature. The
+   one thing in this table that honestly separates two of them is what else is
+   within reach: a two-court park alone in its neighbourhood absorbs all the
+   local demand, while a two-court park four blocks from a twelve-court hub is
+   where people go once the hub is full.
+
+   So each site gets a share of the courts around it — a Gaussian over the
+   whole table, 2 km wide — and that share sets how full it gets at its own
+   busiest hour. Nothing here is measured. It is bounded to roughly ±20% and it
+   is named in the panel, because a spread you invented is only defensible if
+   you say you invented it.                                                   */
+const PB_PRESSURE = (()=>{
+  const m = new Map();
+  NEARBY.forEach(a=>{
+    let alt = 0;
+    NEARBY.forEach(b=>{
+      if(b === a) return;
+      const d = nearbyCrowKm(a.lat, a.lon, b.lat, b.lon);
+      alt += b.courts * Math.exp(-Math.pow(d/2, 2));
+    });
+    const share = a.courts / (a.courts + alt);   // 1 when it stands alone
+    m.set(a.name+"|"+a.addr, 0.8 + 0.32*Math.pow(share, 0.4));
+  });
+  return m;
+})();
+
+/* ==== PARK-BUSY-START ====
+   Everything between these sentinels is the busyness model itself and nothing
+   else — no DOM, no rendering. test/park-busy.test.js pulls this region out of
+   this file and runs it directly, so the tests exercise the shipped code
+   rather than a copy that drifts away from it. Keep the renderers below the
+   END sentinel. */
+
+/* hour-of-day demand, 0-23, before any per-park adjustment */
+const PB_WEEKDAY = [0,0,0,0,0,3, 22,28,25,22, 26,30,34,33,34, 42,55,74,90,100, 88,62,34,12];
+const PB_WEEKEND = [0,0,0,0,0,3, 20,34,52,72, 88,96,92,84,78, 76,74,72,74,72, 58,40,22,8];
+/* Friday evening loses players to everything else Friday evening is for;
+   Sunday winds down early. Small, and a guess. */
+const PB_DOW = [0.95, 1, 1, 1, 1.02, 0.9, 1];
+/* Jan…Dec. Nets go up in Toronto around the start of May and come down late
+   October; April and November are the shoulders nobody can predict. */
+const PB_SEASON = [0, 0, 0.05, 0.45, 0.85, 1, 1, 1, 1, 0.7, 0.15, 0];
+
+function pbSeasonMult(c, month){
+  const s = PB_SEASON[month];
+  /* winter-play sites keep courts open through the cold — quieter, not shut */
+  return c.winter ? Math.max(s, 0.55) : s;
+}
+
+/* a club court is booked, not queued: members are at work on a Tuesday
+   afternoon and on court for a Tuesday league night */
+function pbClubMult(dow, h){
+  const weekend = dow===0 || dow===6;
+  if(weekend) return (h>=8 && h<=12) ? 1.1 : 0.95;
+  if(h>=9  && h<=15) return 0.55;
+  if(h>=17 && h<=21) return 1.1;
+  return 0.9;
+}
+
+/* ---- sunrise / sunset, NOAA's low-precision formulas ----
+   Good to about a minute at this latitude, which is far better than anything
+   else in this model deserves. Returns local decimal hours so it can be
+   compared straight against an hour index. */
+const pbSunCache = new Map();
+function pbSun(date, lat, lon){
+  const key = date.getFullYear()+"-"+date.getMonth()+"-"+date.getDate()+"|"+
+              lat.toFixed(2)+","+lon.toFixed(2);
+  const hit = pbSunCache.get(key);
+  if(hit) return hit;
+
+  const rad = Math.PI/180;
+  const n   = Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+                          Date.UTC(date.getFullYear(), 0, 1)) / 86400000);
+  const g   = 2*Math.PI/365 * n;
+  const eq  = 229.18*(0.000075 + 0.001868*Math.cos(g) - 0.032077*Math.sin(g)
+                    - 0.014615*Math.cos(2*g) - 0.040849*Math.sin(2*g));
+  const dec = 0.006918 - 0.399912*Math.cos(g) + 0.070257*Math.sin(g)
+            - 0.006758*Math.cos(2*g) + 0.000907*Math.sin(2*g)
+            - 0.002697*Math.cos(3*g) + 0.00148*Math.sin(3*g);
+
+  const cosH = Math.cos(90.833*rad)/(Math.cos(lat*rad)*Math.cos(dec)) - Math.tan(lat*rad)*Math.tan(dec);
+  let out;
+  if(cosH >= 1)       out = { sunrise:12, sunset:12, polar:"night" };   // never rises
+  else if(cosH <= -1) out = { sunrise:0,  sunset:24, polar:"day" };     // never sets
+  else {
+    /* Anchor both times to the local midnight of the day solar noon falls in,
+       rather than reading each one's own local clock hour. A June sunset in
+       Toronto is 01:02 the next day in UTC, and a viewer whose browser is on
+       UTC would otherwise get a sunset of 1am, "before" a 9:35am sunrise, and
+       an empty daylight window for every unlit court in the city. Measuring
+       out from solar noon keeps sunset after sunrise wherever you read it. */
+    const ha    = Math.acos(cosH)/rad;
+    const noon  = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) +
+                  (720 - 4*lon - eq)*60000;
+    const nd    = new Date(noon);
+    const mid   = new Date(nd.getFullYear(), nd.getMonth(), nd.getDate()).getTime();
+    const hrs   = ms => (ms - mid)/3600000;
+    out = { sunrise: hrs(noon - ha*4*60000), sunset: hrs(noon + ha*4*60000) };
+  }
+  pbSunCache.set(key, out);
+  return out;
+}
+
+/* what fraction of the hour starting at h is actually playable here */
+function pbDaylightFrac(c, h, sun){
+  /* lights installed: from first light to lights-out. "Installed" is not
+     "on" — see the note under the chart. */
+  const from = c.lit ? Math.max(5.5, sun.sunrise - 0.5) : sun.sunrise;
+  const to   = c.lit ? 23 : sun.sunset + 0.4;   // unlit play runs a little into dusk
+  return Math.max(0, Math.min(h+1, to) - Math.max(h, from));
+}
+
+/* one park, one day: 24 raw scores on an arbitrary scale */
+function pbDayCurve(c, dow, date){
+  const sun    = pbSun(date, c.lat, c.lon);
+  const base   = (dow===0 || dow===6) ? PB_WEEKEND : PB_WEEKDAY;
+  const season = pbSeasonMult(c, date.getMonth());
+  const out    = new Array(24);
+  for(let h=0; h<24; h++){
+    let v = base[h] * PB_DOW[dow] * season;
+    if(c.access===1) v *= pbClubMult(dow, h);
+    out[h] = v * pbDaylightFrac(c, h, sun);
+  }
+  return out;
+}
+
+/* every hour of the week, normalised to the park's own busiest hour. Keeping
+   the peak weekly rather than per-day is what lets a Tuesday lunchtime read
+   as quiet next to a Saturday morning instead of both maxing out their own
+   bar. In November it also correctly flattens the whole week. */
+const pbWeekCache = new Map();
+function pbWeek(c){
+  const now = new Date();
+  const key = c.name+"|"+c.addr+"|"+now.getFullYear()+"-"+now.getMonth()+"-"+now.getDate();
+  const hit = pbWeekCache.get(key);
+  if(hit) return hit;
+
+  const days = [];
+  for(let d=0; d<7; d++) days.push(pbDayCurve(c, d, now));
+  let peak = 0;
+  days.forEach(r => r.forEach(v => { if(v > peak) peak = v; }));
+
+  /* How full this park gets at its own busiest hour. A public court under
+     pressure is effectively full at its peak; a club's booking sheet leaves
+     more gaps; a park with three alternatives down the road never fills.
+
+     This is the number that makes percentages comparable between parks. The
+     curve below is normalised to each park's OWN peak — the same thing Google
+     means by "% of popular times", and the same trap: 80% of peak at a quiet
+     park and 80% at a busy one are not the same court queue. Multiplying the
+     two gives occupancy, which is comparable, and which is what decides
+     whether you get a court.
+
+     The season belongs here rather than in the curve. Normalising to the
+     park's own weekly peak divides the season straight back out, so without
+     this a December evening on a winter court reads exactly as full as a July
+     one. It isn't. Percent of peak stays a within-park number; occupancy is
+     the one that has to know what month it is. */
+  const peakOcc = Math.max(0.05, Math.min(0.95,
+    (c.access===1 ? 0.72 : 0.84) *
+    (PB_PRESSURE.get(c.name+"|"+c.addr) || 1) *
+    pbSeasonMult(c, now.getMonth())));
+
+  const out = {
+    peak, peakOcc,
+    /* percent of the park's own peak, by day and hour */
+    pct: days.map(r => r.map(v => peak > 0 ? Math.round(v/peak*100) : 0)),
+    closed: peak <= 0
+  };
+  pbWeekCache.set(key, out);
+  return out;
+}
+
+/* percent of this park's courts in use — comparable between parks, unlike
+   percent of its own peak */
+function pbOcc(pct, peakOcc){
+  return Math.max(0, Math.min(100, Math.round(pct * peakOcc)));
+}
+function pbFreeCourts(c, pct, peakOcc){
+  const busy = Math.round(c.courts * pbOcc(pct, peakOcc)/100);
+  return Math.max(0, c.courts - Math.min(c.courts, busy));
+}
+
+/* live weather, applied to "now" only — the same three multipliers the Court
+   tab folds into its own typical number */
+function pbWeatherMult(){
+  if(!ctWx) return { mult:1, label:null };
+  const cat  = ctWxCategory(ctWx);
+  const mult = (CT_WX_ADJUST[cat] != null ? CT_WX_ADJUST[cat] : 1) *
+               ctTempMultiplier(ctWx) * ctWindMultiplier(ctWx);
+  if(mult >= 0.995) return { mult:1, label:null };
+  const label = [ctWxLabel(cat), ctTempLabel(ctWx), ctWindLabel(ctWx)].filter(Boolean).join(", ");
+  return { mult, label: label || "the weather" };
+}
+
+/* the next hour this park is playable, as a label — used when it is dark now.
+   Looks through today, then tomorrow, and gives up rather than guessing. */
+function pbNextOpen(week, dow, hour){
+  const lab = h => (h%12||12) + (h<12 ? "am" : "pm");
+  const today = week.pct[dow] || [];
+  for(let h=hour+1; h<24; h++) if((today[h]||0) > 0) return "opens " + lab(h);
+  const tmr = week.pct[(dow+1)%7] || [];
+  for(let h=0; h<24; h++) if((tmr[h]||0) > 0) return "opens " + lab(h) + " tomorrow";
+  return null;
+}
+
+/* graded on courts in use, not on percent of peak */
+function pbVerdict(occ){
+  if(occ == null) return { t:"Closed",     c:"off"  };
+  if(occ <= 20)   return { t:"Wide open",  c:""     };
+  if(occ <= 45)   return { t:"Quiet",      c:""     };
+  if(occ <= 70)   return { t:"Filling up", c:"warm" };
+  if(occ <= 88)   return { t:"Busy",       c:"hot"  };
+  return            { t:"Packed",    c:"hot"  };
+}
+
+/* is this row the home court, the one place with a real feed */
+function pbIsHome(c){ return c.addr.toLowerCase() === NEARBY_HOME; }
+
+/* the real Google curve, as pct-by-day-and-hour, when the Court tab has it */
+function pbHomeWeek(){
+  const g = courtState.data && courtState.data.popular_times &&
+            courtState.data.popular_times.graph_results;
+  if(!g) return null;
+  const pct = [];
+  let any = false;
+  for(let d=0; d<7; d++){
+    const row = new Array(24).fill(0);
+    (g[CT_DAYS[d]] || []).forEach(e => {
+      const h = ctHour24(e.time);
+      if(h != null){ row[h] = e.busyness_score || 0; if(row[h] > 0) any = true; }
+    });
+    pct.push(row);
+  }
+  if(!any) return null;
+
+  /* if Google is publishing a live number for this hour, that is the number —
+     it counts the phones that are actually on the court right now */
+  let live = null;
+  const today = g[CT_DAYS[new Date().getDay()]] || [];
+  const nowH  = new Date().getHours();
+  const cur   = today.find(e => e.current === true) || today.find(e => ctHour24(e.time) === nowH);
+  if(cur && typeof cur.live_busyness_score === "number") live = cur.live_busyness_score;
+
+  /* Google's numbers are normalised to this court's own peak too, so it takes
+     the same occupancy step as everywhere else */
+  return { pct, peakOcc:null, closed:false, real:true, live };
+}
+
+/* everything one row needs about how busy its park is right now */
+function pbNow(c){
+  const now  = new Date();
+  const dow  = now.getDay();
+  const h    = now.getHours();
+  const real = pbIsHome(c) ? pbHomeWeek() : null;
+  const wk   = real || pbWeek(c);
+  /* the real curve borrows the modelled park's occupancy ceiling — Google
+     supplies the shape, the court count and its neighbours supply the scale */
+  if(wk.peakOcc == null) wk.peakOcc = pbWeek(c).peakOcc;
+
+  if(wk.closed) return { closed:true, week:wk, dow, hour:h, pct:null, occ:null, free:0, real:false };
+
+  const isLive = !!(real && real.live != null);
+  let pct = isLive ? real.live : wk.pct[dow][h];
+  let wx  = null;
+
+  /* a live Google reading already counts the phones that are out there, so
+     never second-guess it with a weather model */
+  if(!isLive){
+    const wxm = pbWeatherMult();
+    if(wxm.mult < 1 && pct > 0){
+      wx  = { from:pct, label:wxm.label };
+      pct = Math.max(1, Math.round(pct * wxm.mult));
+      wx.to = pct;
+    }
+  }
+
+  const occ = pbOcc(pct, wk.peakOcc);
+
+  /* Nothing playable this hour, but the season is on: the court is dark, or
+     past lights-out. Every court is technically "free" and that is exactly
+     the wrong thing to tell somebody at 7pm in December, so this gets its own
+     state rather than reading as the quietest park in the city. */
+  if(pct <= 0) return {
+    closed:false, dark:true, week:wk, dow, hour:h, pct:0, occ:0, wx:null,
+    real: !!real, live:false, free:c.courts,
+    next: pbNextOpen(wk, dow, h),
+    verdict: { t: c.lit ? "Closed for the night" : "Dark — no lights here", c:"off" }
+  };
+
+  return {
+    closed:false, dark:false, week:wk, dow, hour:h, pct, occ, wx,
+    real: !!real, live: isLive,
+    free: pbFreeCourts(c, pct, wk.peakOcc),
+    verdict: pbVerdict(occ)
+  };
+}
+
+/* ==== PARK-BUSY-END ==== */
+
+/* ---- rendering ---- */
+
+/* the collapsed strip: a dot, a verdict, how many courts that leaves, and a
+   sparkline of the rest of today so "trend" is visible without opening it */
+function nearbyBusySpark(week, dow, nowH){
+  const row = week.pct[dow] || [];
+  let out = "";
+  for(let h=6; h<=22; h++){
+    const v = row[h] || 0;
+    out += `<i class="${h===nowH?"now":""}" style="height:${Math.max(4, v)}%"></i>`;
+  }
+  return `<span class="cn-spark">${out}</span>`;
+}
+
+function nearbyBusyBar(r, i){
+  const c = r.c, b = r.b;
+  const open = !!nearbyState.busyOpen[nearbyBusyKey(c)];
+
+  if(b.closed){
+    return `<button class="cn-busy-bar off" id="cnBusyBtn${i}" aria-expanded="${open}"
+              onclick="nearbyBusyToggle(${i})">
+        <span class="cn-busy-dot off"></span>
+        <span class="cn-busy-v">Closed for the season</span>
+        <span class="cn-busy-free">nets down · no winter play here</span>
+        <span class="cn-busy-caret">${open?"▴":"▾"}</span>
+      </button>`;
+  }
+
+  const detail = b.dark
+    ? (b.next || "nothing playable left today")
+    : (b.free === 0 ? `every court in use` : `~${b.free} of ${c.courts} free`);
+
+  return `<button class="cn-busy-bar${open?" open":""}${b.dark?" off":""}" id="cnBusyBtn${i}"
+            aria-expanded="${open}" onclick="nearbyBusyToggle(${i})"
+            title="How busy this park usually is, hour by hour">
+      <span class="cn-busy-dot ${b.verdict.c}"></span>
+      <span class="cn-busy-v">${esc(b.verdict.t)}</span>
+      ${b.dark ? `` : `<span class="cn-busy-pct">${b.occ}% full</span>`}
+      <span class="cn-busy-free">${esc(detail)}</span>
+      ${nearbyBusySpark(b.week, b.dow, b.hour)}
+      <span class="cn-busy-src">${b.live ? "live" : b.real ? "google" : "modelled"}</span>
+      <span class="cn-busy-caret">${open?"▴":"▾"}</span>
+    </button>`;
+}
+
+/* the panel: pick a day, see the whole day, see the quiet windows left */
+function nearbyBusyPanel(r, i){
+  const c = r.c, b = r.b, wk = b.week;
+  const sel  = nearbyState.busyDay[nearbyBusyKey(c)];
+  const dow  = (sel == null) ? b.dow : sel;
+  const row  = wk.pct[dow] || [];
+  const isToday = dow === b.dow;
+
+  if(b.closed){
+    return `<div class="cn-busy-body">
+      <div class="cn-busy-note">Outdoor nets in this city come down for the winter, and this site isn't
+      one of the ones set up for winter play. There's nothing honest to plot for it until spring —
+      the drive and transit times above still hold if you want to look at it now.</div>
+    </div>`;
+  }
+
+  const days = CT_SHORT.map((n,d)=>
+    `<button class="cn-bday${d===dow?" on":""}${d===b.dow?" today":""}"
+       onclick="nearbyBusyDay(${i},${d})">${n}</button>`).join("");
+
+  const bars = [];
+  for(let h=6; h<=22; h++){
+    const v    = row[h] || 0;
+    const now  = isToday && h === b.hour;
+    const free = pbFreeCourts(c, v, wk.peakOcc);
+    const lab  = (h%12||12) + (h<12?"am":"pm");
+    const tip  = v === 0
+      ? `${lab} · closed`
+      : `${lab} · ${v}% of peak · ${pbOcc(v, wk.peakOcc)}% full · ~${free} of ${c.courts} free`;
+    bars.push(`<div class="cn-bar${now?" now":""}${v>0&&v<=30?" quiet":""}${v===0?" shut":""}">
+        <span class="cn-bar-tip">${esc(tip)}</span><i style="height:${Math.max(2,v)}%"></i>
+      </div>`);
+  }
+
+  const ticks = [];
+  for(let h=6; h<=22; h++)
+    ticks.push(`<span>${h%3===0 ? ((h%12||12)+(h<12?"a":"p")) : ""}</span>`);
+
+  /* the quiet windows still ahead, which is the only part of this anyone acts on */
+  let pool = [];
+  for(let h=(isToday ? b.hour+1 : 6); h<=22; h++)
+    if((row[h]||0) > 0) pool.push({ h, v:row[h] });
+  let slotNote = isToday ? "Quietest hours still left today." : `Quietest hours on ${CT_SHORT[dow]}.`;
+  if(!pool.length && isToday){
+    const nxt = wk.pct[(dow+1)%7] || [];
+    for(let h=6; h<=22; h++) if((nxt[h]||0) > 0) pool.push({ h, v:nxt[h], d:(dow+1)%7 });
+    slotNote = `Nothing playable left today — the quietest hours on ${CT_SHORT[(dow+1)%7]} instead.`;
+  }
+  const slots = pool.slice().sort((a,x)=> a.v - x.v).slice(0,3).map((s,n)=>{
+    const free = pbFreeCourts(c, s.v, wk.peakOcc);
+    return `<div class="cn-slot${n===0?" best":""}">
+      <b>${(s.h%12||12)}${s.h<12?"am":"pm"}</b>
+      <i>~${free} of ${c.courts} free${n===0?" · best bet":""}</i>
+    </div>`;
+  }).join("");
+
+  const sun = pbSun(new Date(), c.lat, c.lon);
+  let compete = 0;
+  NEARBY.forEach(o=>{ if(o!==c && nearbyCrowKm(c.lat,c.lon,o.lat,o.lon) <= 2) compete += o.courts; });
+  const hhmm = t => {
+    const hh = Math.floor(t), mm = Math.round((t-hh)*60);
+    return (hh%12||12) + ":" + String(mm).padStart(2,"0") + (hh<12?"am":"pm");
+  };
+
+  const provenance = b.real
+    ? `<div class="cn-busy-note"><b>Measured.</b> This is our home court, and it's the one site here Google
+       publishes popular times for — these bars are that data, the same feed the Court tab reads.
+       ${b.live ? `Google is publishing a live number for this hour, so that is what the strip above shows;
+         the bars stay the weekly average.`
+        : `No live reading right now — Google only publishes one when enough phones are at the court,
+           which a quiet public court often can't manage. The weekly average is still the useful part.`}
+       <button class="cn-reset" onclick="document.getElementById('ctHero').scrollIntoView({behavior:'smooth',block:'center'})">jump
+       to the full panel at the top</button></div>`
+    : `<div class="cn-busy-note"><b>Modelled, not measured.</b> Nobody publishes busyness for this park —
+       Google only does it for a handful of sites, and ours is the one in this table it covers. So the bars
+       are an outdoor-tennis demand curve put through what we actually know about this site:
+       ${c.courts} court${c.courts===1?"":"s"}, ${c.lit?"lit":"unlit"},
+       ${c.access===1?"members only":"public"}${c.winter?", winter play":""}, roughly
+       ${Math.round(compete)} other court${Math.round(compete)===1?"":"s"} within 2 km of it, and today's
+       real sunrise and sunset here (${hhmm(sun.sunrise)} / ${hhmm(sun.sunset)})${
+        c.lit ? " — lights are what let it run past that" : " — which is what closes an unlit court"}.
+       ${b.wx ? `Today's reading is pulled from ${b.wx.from}% to ${b.wx.to}% of peak for ${esc(b.wx.label)}.` : ``}
+       <br>Bars are percent of <i>this</i> park's own peak, the same thing Google means by popular times;
+       "full" and the free-court counts convert that to courts in use, which is the part you can compare
+       against another park. Read the shape and the ordering — don't bet a drive on a single number.</div>`;
+
+  return `<div class="cn-busy-body">
+    <div class="cn-bdays">${days}</div>
+    <div class="cn-bars">${bars.join("")}</div>
+    <div class="cn-baxis">${ticks.join("")}</div>
+    ${slots ? `<div class="cn-slots">${slots}</div><div class="cn-busy-sub">${esc(slotNote)}</div>` : ``}
+    ${c.lit ? `<div class="cn-busy-sub">Lights are installed here — that's the asset register, not a promise
+      they're on, free or scheduled.</div>` : ``}
+    ${provenance}
+  </div>`;
+}
+
+function nearbyBusyKey(c){ return c.name + "|" + c.addr; }
+
+function nearbyBusyToggle(i){
+  const r = nearbyShownRow(i); if(!r) return;
+  const k = nearbyBusyKey(r.c);
+  if(nearbyState.busyOpen[k]) delete nearbyState.busyOpen[k];
+  else nearbyState.busyOpen[k] = true;
+  nearbyBusyPaint(i, r);
+}
+
+function nearbyBusyDay(i, d){
+  const r = nearbyShownRow(i); if(!r) return;
+  nearbyState.busyDay[nearbyBusyKey(r.c)] = d;
+  nearbyBusyPaint(i, r);
+}
+
+/* repaint one row's strip and panel rather than the whole list — a dropdown
+   that rebuilds 12 other rows to open itself loses its own animation */
+function nearbyBusyPaint(i, r){
+  const wrap = $("cnBusy"+i), btn = $("cnBusyBtn"+i);
+  if(!wrap) return;
+  const open = !!nearbyState.busyOpen[nearbyBusyKey(r.c)];
+  wrap.innerHTML = open ? nearbyBusyPanel(r, i) : "";
+  wrap.style.display = open ? "" : "none";
+  if(btn){
+    btn.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    const caret = btn.querySelector(".cn-busy-caret");
+    if(caret) caret.textContent = open ? "▴" : "▾";
+  }
+}
+
+/* the row at visible index i, recomputed from state so it always agrees with
+   what was rendered */
+function nearbyShownRow(i){
+  const rows = nearbyRows();
+  return (nearbyState.expanded ? rows : rows.slice(0, NEARBY_PAGE))[i];
+}
+
+window.nearbyBusyToggle = nearbyBusyToggle;
+window.nearbyBusyDay    = nearbyBusyDay;
 
 function renderNearbyControls(){
   const f = NEARBY_FILTERS.find(f=>f.id===nearbyState.filter) || NEARBY_FILTERS[0];
@@ -28597,6 +29239,7 @@ function renderNearbyControls(){
        <option value="drive"${nearbyState.sort==="drive"?" selected":""}>Sort · drive ▾</option>
        <option value="distance"${nearbyState.sort==="distance"?" selected":""}>Sort · closest ▾</option>
        <option value="courts"${nearbyState.sort==="courts"?" selected":""}>Sort · courts ▾</option>
+       <option value="quiet"${nearbyState.sort==="quiet"?" selected":""}>Sort · quietest now ▾</option>
      </select>`;
 
   const lights = $("cnLights");
@@ -28640,10 +29283,20 @@ function renderNearbyControls(){
   }
 }
 
+/* the busyness strips fold in live conditions, and the shared weather fetch
+   may not have landed yet when this list first renders — ask once, redraw once */
+let nearbyWxTried = false;
+function nearbyEnsureWeather(){
+  if(nearbyWxTried || ctWx || typeof ctLoadWeather !== "function") return;
+  nearbyWxTried = true;
+  Promise.resolve(ctLoadWeather()).then(()=>{ if(ctWx) renderNearby(); }).catch(()=>{});
+}
+
 function renderNearby(){
   const list = $("cnList"); if(!list) return;
 
   nearbyAutoLocate();
+  nearbyEnsureWeather();
   renderNearbyControls();
 
   const rows = nearbyRows();
@@ -28664,7 +29317,7 @@ function renderNearby(){
   const est = !!nearbyState.origin && !nearbyOriginIsHome();
   const approx = est ? `<span class="cn-approx">≈</span>` : "";
 
-  list.innerHTML = shown.map(r=>{
+  list.innerHTML = shown.map((r,i)=>{
     const c = r.c, t = r.t;
     const home = c.addr.toLowerCase() === NEARBY_HOME;
     const tags = [
@@ -28687,7 +29340,10 @@ function renderNearby(){
       ? `<div class="cn-t${est?" est":""}${isFastest&&nearbyState.sort==="transit"?" fast":""}"><b>${approx}${t.transitMin}</b><i>transit</i></div>`
       : `<div class="cn-t none"><b>—</b><i>transit</i></div>`;
 
-    return `<div class="cn-row${home?" home":""}">
+    const busyOpen = !!nearbyState.busyOpen[nearbyBusyKey(c)];
+
+    return `<div class="cn-item${home?" home":""}">
+    <div class="cn-row">
       <div class="cn-main">
         <div class="cn-name">${esc(c.name)}${tags}</div>
         <div class="cn-meta"><b>${c.courts} court${c.courts===1?"":"s"}</b> · ${esc(c.addr)}${away}<br>${trip}</div>
@@ -28700,6 +29356,10 @@ function renderNearby(){
         <a href="${nearbyLink(c,"driving")}" target="_blank" rel="noopener" title="Driving directions">🚗</a>
         <a href="${nearbyLink(c,"transit")}" target="_blank" rel="noopener" title="Transit directions">🚌</a>
       </div>
+    </div>
+    ${nearbyBusyBar(r, i)}
+    <div class="cn-busy-wrap" id="cnBusy${i}"${busyOpen?"":' style="display:none"'}>${
+      busyOpen ? nearbyBusyPanel(r, i) : ""}</div>
     </div>`;
   }).join("");
 
@@ -28716,10 +29376,13 @@ function renderNearby(){
        detour and drive-speed this table's own measured trips imply, and each site's recorded TTC
        itinerary shifted by the same ratio. Treat every ≈ as a ballpark and the ordering as the point;
        the 🚗 and 🚌 links recompute the real route from where you are, live.
+       Busyness is modelled per site — open a strip to see exactly what goes into it.
        Court data: City of Toronto Open Data, Tennis Courts Facilities.`
     : `Times are from ${esc(NEARBY_ORIGIN)}. Driving is free-flow — no traffic — so anything over 15 minutes
        is a best case; transit is a Saturday 10 a.m. TTC itinerary, door to door. The 🚗 and 🚌 links recompute
-       both live, with current traffic. Court data: City of Toronto Open Data, Tennis Courts Facilities.`;
+       both live, with current traffic. Busyness is measured only at our home court, where Google publishes
+       it; every other strip is modelled from that site's courts, lights, access and real daylight — open one
+       to see the whole derivation. Court data: City of Toronto Open Data, Tennis Courts Facilities.`;
 }
 
 /* ---- location ---- */
