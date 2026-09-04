@@ -38,4 +38,38 @@ function loadScore(){
                'scSetOrders','scBestOrder','scScore'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,APP};
+
+/* The park-busyness model. It leans on a handful of things that live outside
+   its region — the competition map built from the court table, the shared
+   weather read, the home court's own feed — so they come in as stubs the test
+   controls rather than as a second copy of the model. */
+function loadParkBusy(opts){
+  const o = opts || {};
+  const code = region('PARK-BUSY');
+  const names = ['PB_WEEKDAY','PB_WEEKEND','PB_DOW','PB_SEASON','pbSeasonMult','pbClubMult',
+                 'pbSun','pbDaylightFrac','pbDayCurve','pbWeek','pbOcc','pbFreeCourts',
+                 'pbWeatherMult','pbNextOpen','pbVerdict','pbIsHome','pbHomeWeek','pbNow'];
+  const pre = [
+    'const PB_PRESSURE = arguments[0].pressure;',
+    'const NEARBY_HOME = arguments[0].home;',
+    'const courtState  = arguments[0].courtState;',
+    'const CT_DAYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];',
+    'let ctWx = arguments[0].wx;',
+    'const CT_WX_ADJUST = { storm:0.35, heavyRain:0.45, rain:0.6, snow:0.5, fog:0.85 };',
+    'const ctWxCategory = arguments[0].wxCategory || (()=>"clear");',
+    'const ctTempMultiplier = arguments[0].tempMult || (()=>1);',
+    'const ctWindMultiplier = arguments[0].windMult || (()=>1);',
+    'const ctWxLabel = ()=>null, ctTempLabel = ()=>null, ctWindLabel = ()=>null;',
+    'const ctHour24 = l => { const m=String(l).trim().match(/^(\\d{1,2})\\s*([ap])\\.?\\s*m\\.?$/i);' +
+      ' if(!m) return null; let h=Number(m[1])%12; if(m[2].toLowerCase()==="p") h+=12; return h; };'
+  ].join('\n');
+  return new Function(pre+'\n'+code+'\nreturn {'+names.join(',')+'};')({
+    pressure: o.pressure || new Map(),
+    home: o.home || "nowhere at all",
+    courtState: o.courtState || { data:null, live:false },
+    wx: o.wx || null,
+    wxCategory: o.wxCategory, tempMult: o.tempMult, windMult: o.windMult
+  });
+}
+
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,APP};
