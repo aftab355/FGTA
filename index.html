@@ -4326,6 +4326,9 @@
   .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
   .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
 
+  .pt-serve{display:inline-block;margin-right:6px;font-size:9px;vertical-align:middle;
+    color:var(--pending);text-shadow:0 0 6px rgba(255,177,0,.7)}
+
   .ac-busy-p{margin:9px 0 0}
 
   .ac-warn{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
@@ -8049,6 +8052,10 @@
             <input id="ptA" data-ac="players" placeholder="player 1" autocomplete="off">
             <input id="ptB" data-ac="players" placeholder="player 2" autocomplete="off">
           </div>
+          <select id="ptServe" style="margin-top:10px">
+            <option value="a">player 1 serves first</option>
+            <option value="b">player 2 serves first</option>
+          </select>
           <div class="pt-well" style="margin-top:12px" data-pt-target-mount></div>
           <button class="btn" style="margin-top:14px" onclick="ptStart()">Start tracking</button>
         </div>
@@ -10121,6 +10128,10 @@ function ptDefaultState(a,b){
        are plain fields on PT so undo/redo, the localStorage draft and the
        submit payload all carry them for free. */
     rallies:[], video:null,
+    /* Who serves the FIRST point of the current game — see SERVE below.
+       On PT like everything else, so undo/redo, the draft and the submit
+       payload carry it without a second code path. */
+    server:"a",
     /* where this game gets filed on submit — see WHERE A TRACKED GAME IS
        FILED. Set from the standing preference in ptStart; on PT rather than
        module-level so the localStorage draft carries it. */
@@ -10138,6 +10149,7 @@ function ptStart(){
   const a=($("ptA").value||"").trim(), b=($("ptB").value||"").trim();
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
+  const sv=$("ptServe"); PT.server = (sv && sv.value==='b') ? 'b' : 'a';
   /* the match carries the target it was started under, so resuming a draft
      doesn't quietly re-file it under whatever was picked for a later game */
   PT.target=ptTarget;
@@ -10155,6 +10167,56 @@ window.ptStart=ptStart;
 function ptPointLabel(pa,pb){
   return [String(pa), String(pb)];
 }
+
+/* ============================================================
+   SERVE — who is on it, and which court they are standing in.
+
+   The tracker did not model this at all: PT had no server, no point carried
+   one, and the Predict tab said so in its own copy — "service is assumed to
+   alternate starting with player 1" — because the data had never carried it.
+   That assumption is now a measurement.
+
+   It matters for three separate reasons, in increasing order of interest:
+
+   1. Every real scoreboard shows who is serving. The overlay could not.
+   2. The serve/return split the Predict tab recurses over stops being an
+      assumption about game parity and becomes what actually happened —
+      which is the difference between a model and a guess when somebody
+      starts a set receiving.
+   3. It is the checkable half of reconstructing a score from footage nobody
+      reffed. See docs/scoring.md: the server alternates every game and the
+      serve court alternates every point, both deterministically, so a
+      sequence of serve positions read off a video is not a weak hint about
+      who won — it is a CONSTRAINT that a candidate point sequence either
+      satisfies or does not.
+
+   PT.server is who serves the first point of the current game, and it simply
+   alternates. A tiebreak counts as one game for that purpose, which is not a
+   special case dressed up as one: the rule "whoever received first in the
+   tiebreak serves the first game of the next set" is exactly what strict
+   alternation produces. Inside a tiebreak the serve does move differently —
+   one point, then two at a time — and that is the only place the arithmetic
+   is not simply "the player whose turn it is". */
+function ptServerNow(state){
+  const S=state||PT;
+  if(!S || !S.server) return null;
+  if(!S.tiebreak) return S.server;
+  const p=(S.tbA||0)+(S.tbB||0);
+  /* first point to the player whose turn it was, then in pairs: the flip
+     happens after points 1, 3, 5, … */
+  const flipped=Math.floor((p+1)/2)%2===1;
+  return flipped ? (S.server==='a'?'b':'a') : S.server;
+}
+/* Deuce court on an even number of points played, ad court on an odd one —
+   true in a game and in a tiebreak alike. This is the per-POINT observable;
+   ptServerNow is the per-GAME one. */
+function ptServeCourt(state){
+  const S=state||PT;
+  if(!S) return null;
+  const p=S.tiebreak?((S.tbA||0)+(S.tbB||0)):((S.ptsA||0)+(S.ptsB||0));
+  return p%2===0?'deuce':'ad';
+}
+window.ptServerNow=ptServerNow; window.ptServeCourt=ptServeCourt;
 
 function ptCloseSet(winSide){
   const setScore = `${PT.gamesA}-${PT.gamesB}`;
@@ -10187,6 +10249,9 @@ function ptCloseGame(winSide, wasTiebreak){
   PT._flash={side:winSide, name:winSide==='a'?PT.a:PT.b, gameNum:PT.gamesA+PT.gamesB, t:Date.now()};
   sfx('gameWin');
   PT.ptsA=0; PT.ptsB=0; PT.tiebreak=false; PT.tbA=0; PT.tbB=0;
+  /* before the tiebreak branch below returns, so the tiebreak inherits the
+     rotated server as the player who serves its first point */
+  PT.server = PT.server==='b' ? 'a' : 'b';
   if(!wasTiebreak && PT.gamesA===6 && PT.gamesB===6){
     PT.tiebreak=true;
     PT.log.unshift(`6 games all → tiebreak to 7`);
@@ -10424,6 +10489,9 @@ function ptLogRally(pre, side, isAce){
     b: pre.tiebreak?`${pre.tbA}-${pre.tbB}`:`${pre.ptsA}-${pre.ptsB}`
   };
   if(pre.tiebreak) r.tb=1;
+  /* sv/ct are read off the PRE-point state, which is the state the point was
+     actually played under — same reason the score `b` is */
+  r.sv=ptServerNow(pre); r.ct=ptServeCourt(pre);
   if(isAce) r.ace=1;
   if(ptWouldWinGame('a',pre)||ptWouldWinGame('b',pre)) r.gp=1;
   if(ptIsMatchPoint('a',pre)||ptIsMatchPoint('b',pre)) r.mp=1;
@@ -10796,7 +10864,7 @@ function renderTracker(){
     <div class="pt-board">
       ${flash?`<div class="pt-game-banner">🎾 Game ${flash.gameNum} — ${esc(flash.name)}</div>`:''}
       <div class="pt-side${flash&&flash.side==='a'?' pt-game-win':''}" style="--ac:${cA}">
-        <div class="pt-name">${esc(PT.a)}</div>
+        <div class="pt-name">${(()=>{const sv=ptServerNow();return !decided&&sv==='a'?`<span class="pt-serve" title="serving from the ${ptServeCourt()==='ad'?'ad':'deuce'} court">●</span>`:'';})()}${esc(PT.a)}</div>
         <div class="pt-sets">${PT.setsA}</div>
         <div class="pt-games">${PT.gamesA} games</div>
         <div class="pt-point">${lbl[0]!==""?lbl[0]:'&nbsp;'}</div>
@@ -10809,7 +10877,7 @@ function renderTracker(){
         <div class="pt-sets-row">${setsChips}</div>
       </div>
       <div class="pt-side${flash&&flash.side==='b'?' pt-game-win':''}" style="--ac:${cB}">
-        <div class="pt-name">${esc(PT.b)}</div>
+        <div class="pt-name">${(()=>{const sv=ptServerNow();return !decided&&sv==='b'?`<span class="pt-serve" title="serving from the ${ptServeCourt()==='ad'?'ad':'deuce'} court">●</span>`:'';})()}${esc(PT.b)}</div>
         <div class="pt-sets">${PT.setsB}</div>
         <div class="pt-games">${PT.gamesB} games</div>
         <div class="pt-point">${lbl[1]!==""?lbl[1]:'&nbsp;'}</div>
@@ -15055,7 +15123,10 @@ function ptAnnounceToChannel(){
 function ptSyncPayload(){
   if(typeof PT==='undefined' || !PT) return null;
   const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB}=PT;
-  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB};
+  /* server is sent RESOLVED rather than as PT.server, so the overlay does not
+     have to reimplement the tiebreak rotation to draw a dot */
+  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB,
+          server:ptServerNow(), serveCourt:ptServeCourt()};
 }
 function ptSyncBroadcastIfLive(){
   const S=PTStream;

@@ -110,20 +110,29 @@ reconstruction that is quietly wrong is worse than asking for ten taps,
 because it is wrong *and* it looks right. The value here is removing tedium
 under supervision, not removing the supervisor.
 
-### What blocks it today
+### What blocked it, and no longer does
 
-**The point tracker does not know who is serving.** `ptDefaultState` has no
-server field; `ptPoint(side)` just increments. The Predict tab says so out
+**The point tracker did not know who was serving.** `ptDefaultState` had no
+server field; `ptPoint(side)` just incremented. The Predict tab said so out
 loud — *"service is assumed to alternate starting with player 1"* — because
-the data has never carried it.
+the data had never carried it.
 
-So route B's first deliverable is not vision at all. It is **adding a server
-to the scoring state machine**: a field on `PT`, rotated on `ptCloseGame`,
-recorded per point in `ptLogRally` alongside `w`/`s`/`g`/`b`, shown on the
-scorecard and on the [broadcast overlay](../overlay.html). That is worth doing
-on its own merits — every real scoreboard shows who is serving, and it turns
-the Predict tab's serve/return split from an assumption into a measurement.
-It also happens to be the thing route B needs to check its own work against.
+That is now built. `PT.server` is who serves the first point of the current
+game, it rotates in `ptCloseGame`, `ptServerNow()` resolves the tiebreak's
+different rotation, `ptServeCourt()` gives deuce or ad, every point in
+`PT.rallies` carries `sv` and `ct`, the scorecard draws a serving dot and so
+does the [broadcast overlay](../overlay.html), which never had one because
+nothing upstream knew.
+
+`test/serve.test.js` plays a scripted match through the shipped tracker and
+checks the result against the rules — including the one that looks like a bug
+and is not: **a tiebreak occupies a rotation slot, so the games either side of
+it are served by the same player.** The first version of that test filtered
+the tiebreak out and then demanded the remaining games alternate, which fails
+on correct behaviour.
+
+So route B's foundation exists. What it still needs is the vision half:
+`firstSide`, serve-court detection, and the reconstructor.
 
 ---
 
@@ -165,10 +174,39 @@ actually is: matches nobody reffed.
    time.
 4. **Never** C.
 
+## The sport is tennis, and that helps more than it sounds
+
+An earlier draft of this hedged about what the rules were. They are the ones
+the tracker already hard-codes: games to 6, win by 2, tiebreak to 7 at 6-6.
+That removes the biggest unknown from both routes, and it hands route B a
+constraint I had underrated.
+
+**The serve court alternates every single point.** Deuce court, ad court,
+deuce court — from the first point of a game to the last, and through a
+tiebreak too. So the server's lateral position at the moment of serve is a
+per-*point* observable, not a per-game one, and it is a large, slow, obvious
+thing to see: a person standing still in one half of the baseline.
+
+Read off a video, that gives you:
+
+- **Where the games end**, because the pattern resets to the deuce court and
+  the serve moves to the other end of the court.
+- **How many points each game contained** — the parity sequence counts them
+  for you.
+- **A checksum.** Games can only end after 4, 5, 6, 8, 10, 12 … points. Never
+  7, never 9: 3-3 is deuce, so the game runs to 5-3 at eight points, not 5-2
+  at seven. Any reading that produces a seven-point game is a misread, and it
+  says so without needing a second opinion.
+
+Which leaves exactly one bit per game — did the server hold, or get broken —
+and that bit is what the final scoreline and the hold-rate priors are for.
+
+**Ends changes** land in the same bucket: after every odd game, so they are
+another independent count of where the game boundaries are.
+
 ## Still unknown
 
-The rules. Route A needs them for the legal-successor check, route B needs
-them for the rotation. Points to a game, games to a match, serve rotation,
-deuce or golden point, ends-change interval, singles or doubles. The existing
-tracker hard-codes classic tennis — games to 6, win by 2, tiebreak to 7 at
-6-6 — which is very likely not what a board tennis match is.
+Nothing about the rules. What is unknown is the footage: whether the camera
+sees enough of the baseline, from enough of an angle, to tell which half of
+it the server is standing in. That is the measurement route B lives or dies
+on, and unlike everything above it cannot be settled from a rulebook.
