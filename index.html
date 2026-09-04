@@ -4232,6 +4232,36 @@
   .rp-state.out{background:var(--line-soft);color:var(--dim)}
   .rp-state.seed{background:var(--line-soft);color:var(--muted)}
 
+  /* ---- the forecast ---- */
+  .rp-fc-lead{font-size:14px;color:var(--ink);margin:2px 0 12px;line-height:1.5}
+  .rp-fc-lead b{color:var(--ball)}
+  .rp-fc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .rp-fc-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--dim);text-align:right;padding:6px 8px;
+    border-bottom:1px solid var(--line)}
+  .rp-fc-table th:first-child{text-align:left}
+  .rp-fc-table td{padding:9px 8px;border-bottom:1px solid var(--line-soft);
+    font-family:'JetBrains Mono',monospace;color:var(--muted);text-align:right}
+  .rp-fc-table td:first-child{text-align:left;font-family:inherit;font-weight:600;color:var(--ink)}
+  .rp-fc-table tr.gone{opacity:.5}
+  .rp-fc-title{color:var(--ink);font-weight:600;white-space:nowrap}
+  .rp-fc-bar{display:inline-block;width:56px;height:6px;background:var(--surface-sunken);
+    border-radius:6px;overflow:hidden;margin-left:8px;vertical-align:middle}
+  .rp-fc-bar span{display:block;height:100%;width:0;background:var(--ball)}
+  .rp-fc-swing{margin-top:14px;padding:12px 14px;border-radius:var(--r-sm);
+    border:1px solid var(--line-soft);background:var(--panel-2)}
+  .rp-fc-swing-h{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .rp-fc-swing-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;
+    padding:5px 0;color:var(--ink)}
+  .rp-fc-swing-row i{font-style:normal;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+  .rp-fc-swing-row b{color:var(--ball)}
+  @media(max-width:640px){
+    .rp-fc-table{font-size:12px}
+    .rp-fc-table th,.rp-fc-table td{padding:8px 5px}
+    .rp-fc-bar{display:none}
+  }
+
   /* the divider between the two legs of a four-player group */
   .rp-leg-h{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
     color:var(--dim);margin:16px 0 9px;padding-top:12px;border-top:1px dashed var(--line)}
@@ -9297,6 +9327,7 @@ let openScheduledMatchId = null; // scheduled_matches.id currently shown in the 
    under the ref's submit picker can never disagree about what a
    result is going to mean.
    ============================================================ */
+/* ==== ELO-SCOPE-START ==== */
 function tournamentCountsElo(t){
   if(!t) return true;              // no event = a plain ladder game
   return t.counts_elo !== false;
@@ -9366,6 +9397,8 @@ function countsForAnalysis(m){
      games behind; they were still played, so they still count here */
   return t ? tournamentCountsStats(t) : true;
 }
+
+/* ==== ELO-SCOPE-END ==== */
 
 const $ = id => document.getElementById(id);
 
@@ -21288,6 +21321,91 @@ function bracketWinner(g){
   const o = Number(g.outcome);
   return o===1 ? g.p1 : o===0 ? g.p2 : null; // draws don't resolve a knockout game
 }
+/* ============================================================
+   THE SAME QUESTION, FOR A HYBRID
+
+   A hybrid is four games and the whole shape is known from the
+   start — top 3 off the ladder, a 4v5 play-in, then semis into a
+   final — so there is nothing to solve and nothing to sample but
+   the results themselves. Small enough to do exactly, without a
+   simulation: walk the five endings and add up the probability of
+   each. Exact beats fast here, and both are instant.
+
+   The play-in loser is not in this at all, which is the point of a
+   play-in and the reason the odds are worth reading before it.
+   ============================================================ */
+function hybridForecast(t){
+  const seeds = hybridSeeds();
+  if(!seeds) return null;
+  const standings = computeStandings();
+  const power = {};
+  const field = seeds.top3.concat([seeds.playinA, seeds.playinB]);
+  field.forEach(n => { power[n] = predictiveRating(n, standings); });
+  const p = (a,b) => 1 / (1 + Math.pow(10, (power[b] - power[a]) / DIVISOR));
+
+  /* a played game is a certainty, not a coin flip */
+  const byRound = r => {
+    const m = matches.find(x => x.tournament_id === t.id && x.round === r && x.status === "approved");
+    return m ? bracketWinner(m) : null;
+  };
+  const pin = (round, a, b) => {
+    const w = byRound(round);
+    return w === a ? 1 : w === b ? 0 : p(a, b);
+  };
+
+  const [s1, s2, s3] = seeds.top3, A = seeds.playinA, B = seeds.playinB;
+  const title = {}, final = {};
+  field.forEach(n => { title[n] = 0; final[n] = 0; });
+
+  const pA = pin("playin", A, B);
+  [[A, pA], [B, 1 - pA]].forEach(([qualifier, pq])=>{
+    if(pq <= 0) return;
+    const pS1 = pin("semi1", s1, qualifier);          // seed 1 v the play-in winner
+    const pS2 = pin("semi2", s2, s3);                 // seed 2 v seed 3
+    [[s1, pS1], [qualifier, 1 - pS1]].forEach(([f1, p1])=>{
+      [[s2, pS2], [s3, 1 - pS2]].forEach(([f2, p2])=>{
+        const w = pq * p1 * p2;
+        if(w <= 0) return;
+        final[f1] += w; final[f2] += w;
+        const pF = pin("final", f1, f2);
+        title[f1] += w * pF;
+        title[f2] += w * (1 - pF);
+      });
+    });
+  });
+
+  const rows = field.map(n=>({name:n, power:power[n], title:title[n], final:final[n],
+                              seed: seeds.top3.indexOf(n) >= 0 ? seeds.top3.indexOf(n)+1 : null}))
+    .sort((a,b)=> b.title - a.title);
+  return {rows, seeds};
+}
+
+function hybridForecastPanel(t){
+  if(t.status === "completed") return "";
+  const f = hybridForecast(t);
+  if(!f) return "";
+  const lead = f.rows[0];
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Forecast <span class="pred-tag">exact</span></div>
+      <div class="rp-fc-lead">${lead && lead.title
+        ? `<b>${esc(lead.name)}</b> takes it in ${rpFcPct(lead.title)} of the ways this can go.`
+        : "Nothing to forecast yet."}</div>
+      <table class="rp-fc-table">
+        <tr><th>Player</th><th>Final</th><th>Title</th></tr>
+        ${f.rows.map(r=>`<tr class="${r.title<=0?"gone":""}">
+          <td>${esc(r.name)}${r.seed?` <span class="rp-state seed">#${r.seed}</span>`:""}</td>
+          <td>${rpFcPct(r.final)}</td>
+          <td class="rp-fc-title">${rpFcPct(r.title)}<span class="rp-fc-bar"><span data-w="${Math.round(r.title*100)}"></span></span></td>
+        </tr>`).join("")}
+      </table>
+      <div class="bracket-note">Every path through the bracket, weighted by each game's odds — no sampling, so these
+        are the exact numbers the model implies. Results already played are treated as certainties. Strength is the live
+        ladder power rating (Elo plus form, peak gap, reliability and the scouting prior), and seeds are read live from
+        ladder position, so they move until the play-in is done.</div>
+    </div>`;
+}
+
 function renderHybridBracket(t, games){
   const seeds = hybridSeeds();
   const byRound = r => games.find(g=>g.round===r);
@@ -21949,6 +22067,7 @@ window.rpRestoreLeg2 = rpRestoreLeg2;
 /* ============================================================
    RESULTS, STANDINGS, QUALIFICATION
    ============================================================ */
+/* ==== RP-ENGINE-START ==== */
 function rpGame(tid, round){
   return matches.find(m => m.tournament_id === tid && m.round === round && m.status === "approved") || null;
 }
@@ -22001,28 +22120,51 @@ function rpPoints(r){ return (r.w||0) + (r.d||0)*0.5; }
    next to it doesn't have is a draw that reads as a loss. */
 function rpRecord(r){ return r ? `${r.w||0}-${r.l||0}-${r.d||0}` : "0-0-0"; }
 
+/* ---------- reading a group result ------------------------------
+   Every read of a group result goes through one of these. The real
+   one unwraps the match row, orientation and all. A simulation
+   hands in its own — so the table, the head-to-head, the cut and
+   the seeding run on imagined results under exactly the rules that
+   settle real ones, which is the only way a forecast can be trusted
+   to agree with the event it is forecasting.
+
+   Returns null for "not played yet", otherwise, oriented to `first`
+   (the FIXTURE's p1, which the match row may have stored the other
+   way round):
+
+     win   1 = first won, 2 = the other won, 0 = drawn
+     gw/gl games first took / conceded (0 when no score was entered)
+   ---------------------------------------------------------------- */
+function rpRealResult(t){
+  return (round, first) => {
+    const m = rpGame(t.id, round);
+    if(!m) return null;
+    const flipped = rpRowFlipped(m, first);
+    const o = Number(m.outcome);
+    const s = m.sets ? rpParseScore(m.sets) : {a:0, b:0};
+    return {
+      win: o === 0.5 ? 0 : (flipped ? (o === 0 ? 1 : 2) : (o === 1 ? 1 : 2)),
+      gw:  flipped ? s.b : s.a,
+      gl:  flipped ? s.a : s.b
+    };
+  };
+}
+
 /* group table — points first, then the games you actually won */
-function rpGroupTable(t, state){
+function rpGroupTable(t, state, res){
+  res = res || rpRealResult(t);
   const rows = {};
   state.roster.forEach(n => rows[n] = {name:n, w:0, l:0, d:0, gw:0, gl:0, played:0, opponents:[]});
   (state.order||[]).forEach(fx=>{
-    const m = rpGame(t.id, fx.round);
     const A = rows[fx.p1], B = rows[fx.p2];
     if(!A || !B) return;
     A.opponents.push(fx.p2); B.opponents.push(fx.p1);
-    if(!m) return;
+    const r = res(fx.round, fx.p1);
+    if(!r) return;
     A.played++; B.played++;
-    // the row's own orientation: the fixture is stored p1-first, the match row may not be
-    const flipped = rpRowFlipped(m, fx.p1);
-    const o = Number(m.outcome);
-    const aWon = flipped ? o === 0 : o === 1;
-    const bWon = flipped ? o === 1 : o === 0;
-    if(aWon){ A.w++; B.l++; } else if(bWon){ B.w++; A.l++; } else { A.d++; B.d++; }
-    if(m.sets){
-      const s = rpParseScore(m.sets);
-      A.gw += flipped ? s.b : s.a; A.gl += flipped ? s.a : s.b;
-      B.gw += flipped ? s.a : s.b; B.gl += flipped ? s.b : s.a;
-    }
+    if(r.win === 1){ A.w++; B.l++; } else if(r.win === 2){ B.w++; A.l++; } else { A.d++; B.d++; }
+    A.gw += r.gw; A.gl += r.gl;
+    B.gw += r.gl; B.gl += r.gw;
   });
   const list = Object.values(rows);
   list.forEach(r => r.pts = rpPoints(r));
@@ -22037,11 +22179,13 @@ function rpGroupTable(t, state){
    (once, for a pair the shortened return leg dropped), so it's the
    aggregate over however many games they had — a 1-1 split settles
    nothing and falls through to the next criterion. */
-function rpH2H(t, state, a, b){
+function rpH2H(t, state, a, b, res){
+  res = res || rpRealResult(t);
   let score = 0;
   (state.order||[]).forEach(f=>{
     if(!((f.p1===a && f.p2===b) || (f.p1===b && f.p2===a))) return;
-    const w = rpWinner(rpGame(t.id, f.round));
+    const r = res(f.round, f.p1);
+    const w = !r || !r.win ? null : (r.win === 1 ? f.p1 : f.p2);
     if(w === a) score--; else if(w === b) score++;
   });
   return score < 0 ? -1 : score > 0 ? 1 : 0;
@@ -22049,10 +22193,10 @@ function rpH2H(t, state, a, b){
 
 /* full ordering — hard criteria first, then the soft ones that only
    set the seeding (they never decide who qualifies; a decider does) */
-function rpRankRows(t, state, rows, ctx){
+function rpRankRows(t, state, rows, ctx, res){
   return rows.slice().sort((x,y)=>
     (y.pts - x.pts) ||
-    rpH2H(t, state, x.name, y.name) ||
+    rpH2H(t, state, x.name, y.name, res) ||
     ((y.gw - y.gl) - (x.gw - x.gl)) ||
     (y.gw - x.gw) ||
     (y.sos - x.sos) ||
@@ -22061,8 +22205,9 @@ function rpRankRows(t, state, rows, ctx){
   );
 }
 
-function rpGroupComplete(t, state){
-  return (state.order||[]).every(fx => !!rpGame(t.id, fx.round));
+function rpGroupComplete(t, state, res){
+  res = res || rpRealResult(t);
+  return (state.order||[]).every(fx => !!res(fx.round, fx.p1));
 }
 
 /* ---------- the cut ---------------------------------------------
@@ -22071,11 +22216,12 @@ function rpGroupComplete(t, state){
    across the 4th/5th line plays for it — that's the whole point of
    the format, so it is never silently broken on a tiebreak column.
    ---------------------------------------------------------------- */
-function rpQualification(t, state){
-  const ctx    = rpContext(state.roster);
-  const rows   = rpRankRows(t, state, rpGroupTable(t, state), ctx);
+function rpQualification(t, state, res, ctx){
+  res          = res || rpRealResult(t);
+  ctx          = ctx || rpContext(state.roster);
+  const rows   = rpRankRows(t, state, rpGroupTable(t, state, res), ctx, res);
   const spots  = Math.min(4, rows.length);
-  const done   = rpGroupComplete(t, state);
+  const done   = rpGroupComplete(t, state, res);
   const base   = {rows, spots, complete: done, qualified: [], bubble: null, note: ""};
 
   if(!done) return base;
@@ -22106,7 +22252,7 @@ function rpQualification(t, state){
     }
     // this block straddles the line
     const left = spots - filled;
-    const split = rpSplitOnH2H(t, state, block, left);
+    const split = rpSplitOnH2H(t, state, block, left, res);
     if(split){
       split.slice(0, left).forEach(n => base.qualified.push(n));
       filled += left;
@@ -22120,26 +22266,21 @@ function rpQualification(t, state){
 }
 
 /* can the mini-table among the tied players separate them at the cut? */
-function rpSplitOnH2H(t, state, block, left){
+function rpSplitOnH2H(t, state, block, left, res){
+  res = res || rpRealResult(t);
   if(block.length < 2) return null;
   const mini = {};
   block.forEach(r => mini[r.name] = {name:r.name, pts:0, gd:0});
   let played = 0;
   (state.order||[]).forEach(fx=>{
     if(!mini[fx.p1] || !mini[fx.p2]) return;
-    const m = rpGame(t.id, fx.round);
-    if(!m) return;
+    const r = res(fx.round, fx.p1);
+    if(!r) return;
     played++;
-    const flipped = rpRowFlipped(m, fx.p1);
-    const o = Number(m.outcome);
-    if(flipped ? o === 0 : o === 1) mini[fx.p1].pts += 1;
-    else if(flipped ? o === 1 : o === 0) mini[fx.p2].pts += 1;
+    if(r.win === 1) mini[fx.p1].pts += 1;
+    else if(r.win === 2) mini[fx.p2].pts += 1;
     else { mini[fx.p1].pts += 0.5; mini[fx.p2].pts += 0.5; }
-    if(m.sets){
-      const s = rpParseScore(m.sets);
-      const a = flipped ? s.b : s.a, b = flipped ? s.a : s.b;
-      mini[fx.p1].gd += a - b; mini[fx.p2].gd += b - a;
-    }
+    mini[fx.p1].gd += r.gw - r.gl; mini[fx.p2].gd += r.gl - r.gw;
   });
   if(!played) return null;
   const order = block.map(r=>mini[r.name]).sort((x,y)=> (y.pts - x.pts) || (y.gd - x.gd));
@@ -22307,6 +22448,478 @@ function rpSnapshot(t){
   if(br.final.winner) return {state, shape, stage:"done", qual, plan, resolved, seeds, br};
   if(br.semis.every(s=>s.winner)) return {state, shape, stage:"final", qual, plan, resolved, seeds, br};
   return {state, shape, stage:"semis", qual, plan, resolved, seeds, br};
+}
+
+/* ==== RP-ENGINE-END ==== */
+
+/* ============================================================
+   THE FORECAST — who actually wins this thing
+
+   The event page could tell you the table and it could tell you
+   the draw, and between those two facts sat the only question
+   anybody at the club was actually asking: so who wins it? Working
+   that out by eye is genuinely hard in this format — qualifying is
+   not the same as winning, the group decides the SEEDING as well
+   as the cut, and drawing the #1 seed in a semi can matter more
+   than finishing second instead of third.
+
+   So it is simulated. Play the rest of the event a few thousand
+   times from where it actually stands, and count how often each
+   ending happens.
+
+   WHAT THE SIMULATION IS TOLD
+     - every result already on record, unchanged. A forecast that
+       re-imagines played games is not a forecast of this event.
+     - each player's strength from the LIVE LADDER — the same
+       blended power number the rest of the app predicts with
+       (Elo + form + peak gap + reliability + scouting prior), so
+       the cup forecast and the ladder's own odds cannot disagree
+       about who is better. Cup results feed it too, through form:
+       the event is an exhibition to the ladder, not to the models.
+     - how big a win tends to be *in this event*, taken from the
+       event's own scorelines, because game difference is a
+       tiebreak and a forecast that ignores it mis-ranks level
+       players.
+
+   WHAT IT RUNS THROUGH
+     The real rules, not a simplified copy of them. Every simulated
+     result goes back through rpQualification() — the same points,
+     head-to-head, game difference and strength-of-opposition
+     ordering, the same cut, the same 1v1 decider when the line is
+     level — and then through the same 1v4 / 2v3 bracket. If the
+     format changes, the forecast changes with it, because there is
+     only one implementation of the format.
+
+   WHAT IT IS NOT
+     Not a prediction of a single game — for that the app already
+     has head-to-head odds, and they are better, because they are
+     not being pushed through six more coin flips. This answers a
+     different question: given everything so far, how does the
+     tournament END. Wide numbers mid-group are the honest answer,
+     not a failure of the model.
+   ============================================================ */
+/* ==== RP-FORECAST-START ==== */
+
+const RPF_RUNS      = 4000;   // full forecast
+const RPF_SWING_RUNS= 1500;   // the two conditional runs behind "what this game is worth"
+const RPF_GD_MEAN   = 3;      // fallback margin when the event has no scorelines yet
+const RPF_GD_SD     = 2;
+const RPF_GD_MIN    = 1;
+const RPF_MAX_DECIDERS = 8;  // qual1..qualN; a bubble never runs deeper than this
+
+/* ---------- how big a win tends to be --------------------------
+   Game difference only ever breaks a tie, but ties at the
+   qualification line are exactly what this format is built around,
+   so guessing the margin badly changes who qualifies. Read it off
+   the event's own games where there are any — a group playing
+   10-point breakers and a group playing full sets produce very
+   different numbers and neither is wrong — and fall back to the
+   wider history, then to a plain default.
+   ---------------------------------------------------------------- */
+function rpfMarginModel(rounds){
+  const diffs = rounds.filter(d => d > 0);
+  if(diffs.length < 3) return {mean: RPF_GD_MEAN, sd: RPF_GD_SD};
+  const mean = diffs.reduce((s,d)=>s+d,0) / diffs.length;
+  const varr = diffs.reduce((s,d)=>s+(d-mean)*(d-mean),0) / diffs.length;
+  return {mean, sd: Math.max(0.8, Math.sqrt(varr))};
+}
+
+/* margins observed in an event, then in the league, whichever has enough */
+function rpfMargins(t, state, res){
+  const own = [];
+  (state.order||[]).forEach(fx=>{
+    const r = res(fx.round, fx.p1);
+    if(r && (r.gw || r.gl)) own.push(Math.abs(r.gw - r.gl));
+  });
+  if(own.length >= 3) return rpfMarginModel(own);
+  const wide = [];
+  for(const m of matches){
+    if(m.status !== "approved" || !m.sets || !countsForAnalysis(m)) continue;
+    const s = rpParseScore(m.sets);
+    if(s.a || s.b) wide.push(Math.abs(s.a - s.b));
+    if(wide.length > 400) break;
+  }
+  return rpfMarginModel(wide);
+}
+
+/* how often anybody round here actually draws a game. Usually never,
+   in which case the simulation never produces one either — a made-up
+   draw rate would invent qualification scenarios that cannot happen. */
+function rpfDrawRate(){
+  let n = 0, d = 0;
+  for(const m of matches){
+    if(m.status !== "approved" || !countsForAnalysis(m)) continue;
+    n++; if(Number(m.outcome) === 0.5) d++;
+  }
+  return n >= 20 ? d / n : 0;
+}
+
+/* ---------- strengths -------------------------------------------
+   The live power rating, which is what every other forecast in the
+   app runs on. Computed once for the field and then held fixed for
+   the whole simulation: ratings do not move during an exhibition,
+   and pretending they do would only add noise nobody can act on.
+   ---------------------------------------------------------------- */
+function rpfStrengths(roster){
+  const standings = computeStandings();
+  const out = {};
+  roster.forEach(n => { out[n] = predictiveRating(n, standings); });
+  return out;
+}
+
+/* box-muller, on a supplied uniform source so a forecast is reproducible */
+function rpfNormal(rnd){
+  const u = Math.max(1e-9, rnd()), v = rnd();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+/* one simulated game between two known players.
+   Returns {win, gw, gl} oriented to `a`, the same shape rpRealResult
+   hands back, so the engine cannot tell the difference. */
+function rpfPlay(a, b, cfg, rnd, allowDraw){
+  const pA = 1 / (1 + Math.pow(10, (cfg.power[b] - cfg.power[a]) / DIVISOR));
+  if(allowDraw && cfg.drawRate > 0 && rnd() < cfg.drawRate){
+    const g = Math.max(0, Math.round(cfg.gd.mean * 0.4));
+    return {win: 0, gw: g, gl: g};
+  }
+  const aWon = rnd() < pA;
+  const pw = aWon ? pA : 1 - pA;
+  /* a stronger favourite tends to win by more. The shape is a light
+     touch on purpose: this only has to order tied players sensibly,
+     and a confident margin model on a dozen games would be fiction. */
+  const mean = cfg.gd.mean * (0.85 + (pw - 0.5) * 1.2);
+  const gd = Math.max(RPF_GD_MIN, Math.round(mean + cfg.gd.sd * rpfNormal(rnd)));
+  return aWon ? {win: 1, gw: gd, gl: 0} : {win: 2, gw: 0, gl: gd};
+}
+
+/* ---------- one whole tournament -------------------------------
+   Returns {seeds, through, champion, finalists} for a single run,
+   or null if the draw cannot produce a bracket.
+   ---------------------------------------------------------------- */
+function rpfRunOnce(t, state, cfg, rnd){
+  const sim = {};        // round -> result oriented to the fixture's p1
+
+  (state.order||[]).forEach(fx=>{
+    const real = cfg.played[fx.round];
+    if(real){ sim[fx.round] = real; return; }
+    if(cfg.force && cfg.force.round === fx.round){
+      /* the conditional run behind "what this game is worth": the
+         winner is pinned, the margin still varies */
+      const r  = rpfPlay(fx.p1, fx.p2, cfg, rnd, false);
+      const gd = Math.max(r.gw, r.gl);
+      sim[fx.round] = cfg.force.winner === fx.p1
+        ? {win:1, gw:gd, gl:0}
+        : {win:2, gw:0,  gl:gd};
+      return;
+    }
+    sim[fx.round] = rpfPlay(fx.p1, fx.p2, cfg, rnd, true);
+  });
+
+  /* the group accessor. Rounds outside the group — deciders, the
+     bracket — are resolved below rather than through this. */
+  const res = round => sim[round] || null;
+
+  const qual = rpQualification(t, state, res, cfg.ctx);
+  if(!qual.complete) return null;
+
+  const seedOrder = qual.rows.map(r=>r.name);
+  let through = [];
+  if(qual.bubble){
+    const plan = rpPlayoffPlan(qual.bubble, seedOrder, state.seed || 1);
+    through = rpfRunPlayoff(t, plan, cfg, rnd);
+    if(through === null) return null;
+  }
+
+  const seeds = qual.qualified.concat(through)
+    .filter((n,i,a)=> n && a.indexOf(n) === i)
+    .sort((a,b)=> seedOrder.indexOf(a) - seedOrder.indexOf(b))
+    .slice(0,4);
+  if(seeds.length < 2) return null;
+
+  /* the bracket. Real semis and a real final are respected the same
+     way real group games are — once a semi is played it is not a
+     probability any more. */
+  const tie = (round, a, b) => {
+    if(!a) return b || null;
+    if(!b) return a;
+    const won = cfg.won[round];
+    if(won === a || won === b) return won;   // played; a draw resolves nothing, so roll it
+    return rpfPlay(a, b, cfg, rnd, false).win === 1 ? a : b;
+  };
+  const w1 = tie("semi1", seeds[0], seeds[3]);
+  const w2 = tie("semi2", seeds[1], seeds[2]);
+  const champ = tie("final", w1, w2);
+
+  return {seeds, finalists: [w1, w2].filter(Boolean), champion: champ};
+}
+
+/* the qualification decider, simulated. Mirrors rpPlayoffResolve()'s
+   reading of a plan, with unplayed games rolled instead of skipped. */
+function rpfRunPlayoff(t, plan, cfg, rnd){
+  if(!plan) return [];
+
+  if(plan.kind === "ring"){
+    const tally = {}; plan.tied.forEach(n => tally[n] = {name:n, pts:0, gd:0});
+    plan.rounds[0].forEach(g=>{
+      const r = cfg.real(g.round, g.p1) || rpfPlay(g.p1, g.p2, cfg, rnd, true);
+      if(r.win === 1) tally[g.p1].pts += 1;
+      else if(r.win === 2) tally[g.p2].pts += 1;
+      else { tally[g.p1].pts += 0.5; tally[g.p2].pts += 0.5; }
+      tally[g.p1].gd += r.gw - r.gl; tally[g.p2].gd += r.gl - r.gw;
+    });
+    return Object.values(tally)
+      .sort((a,b)=> (b.pts - a.pts) || (b.gd - a.gd))
+      .slice(0, plan.spots).map(o=>o.name);
+  }
+
+  const through = plan.auto.slice();
+  const winners = {};
+  const nameOf = ref => typeof ref === "string" ? ref : winners[ref.winnerOf] || null;
+  for(let r = 0; r < plan.rounds.length; r++){
+    for(const g of plan.rounds[r]){
+      const a = nameOf(g.p1), b = nameOf(g.p2);
+      if(!a || !b) return null;
+      const real = cfg.won[g.round];
+      const won = (real === a || real === b) ? real
+                : (rpfPlay(a, b, cfg, rnd, false).win === 1 ? a : b);
+      winners[g.round] = won;
+      if(r === plan.rounds.length - 1) through.push(won);
+    }
+  }
+  return through;
+}
+
+/* ---------- the forecast ----------------------------------------
+   Runs the thing `runs` times and reports, per player, how often
+   each ending came up. `force` pins one fixture's winner, which is
+   what "what this game is worth" is made of.
+   ---------------------------------------------------------------- */
+function rpfForecast(t, state, opts){
+  opts = opts || {};
+  const roster = (state && state.roster) || [];
+  if(roster.length < 2 || !(state.order||[]).length) return null;
+
+  const real = rpRealResult(t);
+
+  /* two different kinds of "already played". A group game is a
+     record — points, game difference, both sides of it — so it is
+     kept as an oriented result. A knockout game is only ever a
+     name: who went through. Keeping them apart is what stops a
+     result stored the other way round from advancing the wrong
+     player through a semi-final that has already been played. */
+  const played = {};
+  (state.order||[]).forEach(fx=>{ const r = real(fx.round, fx.p1); if(r) played[fx.round] = r; });
+  const won = {};
+  ["semi1","semi2","final","bronze"].concat(
+    Array.from({length: RPF_MAX_DECIDERS}, (_,i) => RP_ROUND_QUAL + (i+1))
+  ).forEach(round=>{ const w = rpWinner(rpGame(t.id, round)); if(w) won[round] = w; });
+
+  const cfg = {
+    power: opts.power || rpfStrengths(roster),
+    gd: rpfMargins(t, state, real),
+    drawRate: rpfDrawRate(),
+    ctx: opts.ctx || rpContext(roster),
+    real, played, won,
+    force: opts.force || null
+  };
+
+  const runs = opts.runs || RPF_RUNS;
+  const rnd  = rpRng(((state.seed || 1) * 2654435761 + (opts.salt || 0)) >>> 0);
+  const tally = {};
+  roster.forEach(n => tally[n] = {name:n, qualify:0, top:0, final:0, title:0, seedSum:0});
+  let ok = 0;
+
+  for(let i = 0; i < runs; i++){
+    const out = rpfRunOnce(t, state, cfg, rnd);
+    if(!out) continue;
+    ok++;
+    out.seeds.forEach((n, si)=>{
+      if(!tally[n]) return;
+      tally[n].qualify++; tally[n].seedSum += si + 1;
+      if(si === 0) tally[n].top++;
+    });
+    out.finalists.forEach(n => { if(tally[n]) tally[n].final++; });
+    if(out.champion && tally[out.champion]) tally[out.champion].title++;
+  }
+  if(!ok) return null;
+
+  const rows = Object.values(tally).map(r=>({
+    name: r.name,
+    qualify: r.qualify / ok,
+    top:     r.top / ok,
+    final:   r.final / ok,
+    title:   r.title / ok,
+    seed:    r.qualify ? r.seedSum / r.qualify : null,
+    power:   cfg.power[r.name]
+  })).sort((a,b)=> (b.title - a.title) || (b.final - a.final) || (b.qualify - a.qualify));
+
+  return {rows, runs: ok, gd: cfg.gd, power: cfg.power, ctx: cfg.ctx, drawRate: cfg.drawRate};
+}
+
+/* ---------- what one game is worth ------------------------------
+   The number that makes a fixture list worth reading. Run the rest
+   of the event twice more with this game's winner pinned, and the
+   gap between the two title odds is what the players are actually
+   playing for tonight. It is deliberately the TITLE odds and not
+   the qualification odds: qualifying is not the prize.
+   ---------------------------------------------------------------- */
+function rpfSwing(t, state, fx, base){
+  if(!fx || !fx.p1 || !fx.p2 || !base) return null;
+  const shared = {power: base.power, ctx: base.ctx, runs: RPF_SWING_RUNS};
+  const ifA = rpfForecast(t, state, Object.assign({}, shared, {force:{round:fx.round, winner:fx.p1}, salt: 101}));
+  const ifB = rpfForecast(t, state, Object.assign({}, shared, {force:{round:fx.round, winner:fx.p2}, salt: 202}));
+  if(!ifA || !ifB) return null;
+  const pick = (f, n) => { const r = f.rows.find(x=>x.name===n); return r ? r.title : 0; };
+  return {
+    round: fx.round, p1: fx.p1, p2: fx.p2,
+    p1IfWin: pick(ifA, fx.p1), p1IfLose: pick(ifB, fx.p1),
+    p2IfWin: pick(ifB, fx.p2), p2IfLose: pick(ifA, fx.p2)
+  };
+}
+/* ==== RP-FORECAST-END ==== */
+
+/* ---------- the panel -------------------------------------------
+   Four thousand simulated tournaments is not free, and the event
+   page re-renders on every result, every roster edit and every
+   navigation back to it. So the forecast is keyed on the things
+   that can actually change it — the field, the draw, and every
+   result on record — and only recomputed when that key moves. A
+   re-render with nothing new to say reuses the numbers it already
+   has, which also means the odds do not visibly twitch when you
+   scroll away and come back.
+
+   It is computed off the paint, after the rest of the page is on
+   screen, because a panel that arrives a beat late is much better
+   than an event page that stalls before it draws anything.
+   ---------------------------------------------------------------- */
+const rpFcCache = {};     // tid -> {sig, html}
+const rpFcBusy  = {};     // tid -> sig currently being computed
+
+function rpFcSig(t, state){
+  const parts = [(state.roster||[]).join("|"), (state.order||[]).map(f=>f.round+f.p1+f.p2).join("|")];
+  matches.forEach(m=>{
+    if(m.tournament_id !== t.id || m.status !== "approved") return;
+    parts.push(m.round + ":" + m.p1 + ">" + m.p2 + ":" + m.outcome + ":" + (m.sets||""));
+  });
+  const str = parts.join("~");
+  let h = 5381;
+  for(let i=0;i<str.length;i++) h = ((h*33) ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/* under a percent is not "0%" — it is "a chance nobody would take", and
+   rounding it away is the one thing that makes a forecast look broken */
+function rpFcPct(x){
+  if(x >= 0.995) return "100%";
+  if(x <= 0)     return "—";
+  if(x < 0.005)  return "<1%";
+  return Math.round(x*100) + "%";
+}
+
+function rpForecastHtml(t, snap){
+  const state = snap.state;
+  const f = rpfForecast(t, state);
+  if(!f) return '<div class="c-empty">Not enough of the draw yet to play it out.</div>';
+
+  const bracketStage = snap.stage === "semis" || snap.stage === "final";
+  const lead = f.rows[0];
+  const second = f.rows[1];
+  const headline = !lead || !lead.title
+    ? "Too early to call — nothing has separated the field yet."
+    : (second && lead.title - second.title < 0.05
+        ? `<b>${esc(lead.name)}</b> and <b>${esc(second.name)}</b> can't be separated — ${rpFcPct(lead.title)} and ${rpFcPct(second.title)} to lift it.`
+        : `<b>${esc(lead.name)}</b> wins it in ${rpFcPct(lead.title)} of them.`);
+
+  const head = bracketStage
+    ? `<tr><th>Player</th><th>Final</th><th>Title</th></tr>`
+    : `<tr><th>Player</th><th>Qualify</th><th>Top seed</th><th>Final</th><th>Title</th></tr>`;
+
+  const body = f.rows.map(r=>{
+    const gone = r.qualify === 0;
+    const bar = `<span class="rp-fc-bar"><span data-w="${Math.round(r.title*100)}"></span></span>`;
+    const cells = bracketStage
+      ? `<td>${rpFcPct(r.final)}</td>`
+      : `<td>${rpFcPct(r.qualify)}</td><td>${rpFcPct(r.top)}</td><td>${rpFcPct(r.final)}</td>`;
+    return `<tr class="${gone?"gone":""}"><td>${esc(r.name)}</td>${cells}
+      <td class="rp-fc-title">${rpFcPct(r.title)}${bar}</td></tr>`;
+  }).join("");
+
+  /* what tonight is worth. Only ever the next unplayed GROUP game:
+     in the bracket the answer is "you're in the final", which is not
+     worth three thousand simulations to discover. */
+  let swingHtml = "";
+  const nextFx = (state.order||[]).find(fx => !rpGame(t.id, fx.round));
+  if(nextFx){
+    const sw = rpfSwing(t, state, nextFx, f);
+    if(sw){
+      /* a swing row always says 0%, never "—": the whole row is a
+         comparison, and a dash in one half of it reads as missing
+         data rather than as the answer */
+      const flat = x => x >= 0.995 ? "100%" : x <= 0.005 ? "0%" : Math.round(x*100) + "%";
+      const row = (name, ifWin, ifLose) => {
+        const d = Math.round(ifWin*100) - Math.round(ifLose*100);
+        return `<div class="rp-fc-swing-row"><span>${esc(name)}</span>
+          <i>win <b>${flat(ifWin)}</b> &middot; lose ${flat(ifLose)}
+          &middot; swing <b>${d>=0?"+":"\u2212"}${Math.abs(d)}</b></i></div>`;
+      };
+      swingHtml = `
+        <div class="rp-fc-swing">
+          <div class="rp-fc-swing-h">What ${esc(sw.p1)} v ${esc(sw.p2)} is worth</div>
+          ${row(sw.p1, sw.p1IfWin, sw.p1IfLose)}
+          ${row(sw.p2, sw.p2IfWin, sw.p2IfLose)}
+          <div class="bracket-note" style="margin-top:8px">Their odds of winning the whole event, with this one result pinned each way.</div>
+        </div>`;
+    }
+  }
+
+  return `
+    <div class="rp-fc-lead">${headline}</div>
+    <table class="rp-fc-table">${head}${body}</table>
+    ${swingHtml}
+    <div class="bracket-note">${f.runs.toLocaleString()} simulated tournaments from where this one actually stands.
+      Every result on record is kept; the rest are played out on each player's live ladder strength
+      (Elo plus form, peak gap, reliability and the scouting prior) and settled by the same rules the
+      real event uses — the same cut, the same 1v1 decider, the same #1 v #4 bracket.
+      Typical winning margin here is ${f.gd.mean.toFixed(1)} games, read off this event's own scorelines.
+      The cup doesn't move Elo, but it does feed the form these numbers are built on.</div>`;
+}
+
+/* fills the panel once the page has painted */
+function rpFcCompute(t, snap, sig){
+  if(rpFcBusy[t.id] === sig) return;
+  rpFcBusy[t.id] = sig;
+  setTimeout(()=>{
+    let html;
+    try{ html = rpForecastHtml(t, snap); }
+    catch(e){
+      console.warn("[forecast] failed", e);
+      html = '<div class="c-empty">Couldn\'t play this one out.</div>';
+    }
+    rpFcCache[t.id] = {sig, html};
+    if(rpFcBusy[t.id] === sig) delete rpFcBusy[t.id];
+    const box = document.getElementById("rpFcOut");
+    /* the page may have moved on while this ran — only write into the
+       panel that actually asked for these numbers */
+    if(box && box.dataset.sig === sig){ box.innerHTML = html; primeBars(box); }
+  }, 40);
+}
+
+function rpForecastPanel(t, snap){
+  const state = snap.state;
+  if(!state || !(state.order||[]).length) return "";
+  if(snap.stage === "setup" || snap.stage === "done") return "";
+
+  const sig = rpFcSig(t, state);
+  const hit = rpFcCache[t.id];
+  const ready = hit && hit.sig === sig;
+  if(!ready) rpFcCompute(t, snap, sig);
+
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Forecast <span class="pred-tag">Monte Carlo</span></div>
+      <div id="rpFcOut" data-sig="${sig}">${ready ? hit.html
+        : '<div class="c-empty">Playing the rest of it out…</div>'}</div>
+    </div>`;
 }
 
 /* the pair a round is between, wherever in the event that round lives */
@@ -23347,6 +23960,7 @@ function renderRobinPlus(t){
     ${rpTrimPanel(t, state)}
     ${rpCalendarPanel(t)}
     ${rpStandingsPanel(t, state, snap)}
+    ${rpForecastPanel(t, snap)}
     ${rpPlayoffPanel(t, snap)}
     ${(stage==="semis"||stage==="final"||stage==="done") ? rpBracketPanel(t, snap) : ""}
     ${localOnly}
@@ -24060,7 +24674,15 @@ window.renderTournaments = renderTournaments;
 function openTournament(id){ openTournamentId=id; renderTournamentDetail(id); }
 window.openTournament = openTournament;
 
+/* Every bar in the detail panel starts at zero width and is animated to
+   its real one by primeBars(). The panel has several early returns, so the
+   priming is done here, once, on whatever ended up in the box. */
 function renderTournamentDetail(id){
+  renderTournamentDetail_(id);
+  primeBars($("tournDetail"));
+}
+
+function renderTournamentDetail_(id){
   const t = tournaments.find(x=>x.id===id);
   const box = $("tournDetail");
   if(!t){ box.style.display="none"; return; }
@@ -24099,7 +24721,7 @@ function renderTournamentDetail(id){
           ? 'Top 3 on the ladder auto-qualify. Seeds 4 and 5 play a play-in match for the last spot. Then it\u2019s a straight 4-player knockout: semis into a final.'
           : 'Bracket opens once the tournament goes live.'}</div>
       </div>
-      ${t.format==='robin2' ? renderRobinPlus(t) : t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
+      ${t.format==='robin2' ? renderRobinPlus(t) : t.format==='hybrid' ? renderHybridBracket(t, games)+hybridForecastPanel(t) : ''}
       ${isAdmin ? tournEditControls(t) : ''}
     `;
     return;
@@ -24125,7 +24747,7 @@ function renderTournamentDetail(id){
     <div class="panel">
       <div class="pred-hint">${tournFormatLabel(t)} · ${tournEloLabel(t)} · ${t.status}</div>
     </div>
-    ${t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
+    ${t.format==='hybrid' ? renderHybridBracket(t, games)+hybridForecastPanel(t) : ''}
     <div class="panel" style="margin-top:14px">
       <div class="sec-label" style="margin-top:0">Standings</div>
       ${standRows}

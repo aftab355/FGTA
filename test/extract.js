@@ -72,4 +72,64 @@ function loadParkBusy(opts){
   });
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,APP};
+/* The Robin+ format engine and the forecast that simulates it. The two
+   regions are loaded together on purpose: the whole point of the forecast
+   is that it settles imagined results with the same rules that settle real
+   ones, so a test that gave it its own copy of those rules would be
+   testing nothing. Everything the pair reaches outside itself — the match
+   table, the ladder, the draw solver — is injected. */
+function loadRobinPlus(opts){
+  const o = opts || {};
+  const code = region('RP-ENGINE') + '\n' + region('RP-FORECAST');
+  const names = ['rpGame','rpWinner','rpParseScore','rpRowFlipped','rpSetsFor','rpPoints','rpRecord',
+                 'rpRealResult','rpGroupTable','rpH2H','rpRankRows','rpGroupComplete','rpQualification',
+                 'rpSplitOnH2H','rpPlayoffPlan','rpPlayoffResolve','rpBracket','rpSnapshot',
+                 'rpfMarginModel','rpfMargins','rpfDrawRate','rpfPlay','rpfRunOnce','rpfRunPlayoff',
+                 'rpfForecast','rpfSwing','rpRng'];
+  const pre = [
+    'const DIVISOR = arguments[0].divisor;',
+    'const RP_ROUND_QUAL = "qual";',
+    'const matches = arguments[0].matches;',
+    'const rpShapeOf = arguments[0].shapeOf;',
+    'const rpRead = arguments[0].read;',
+    'const rpContext = arguments[0].context;',
+    'const rpSolveRing = arguments[0].solveRing;',
+    'const computeStandings = arguments[0].standings;',
+    'const predictiveRating = arguments[0].predictiveRating;',
+    'const countsForAnalysis = () => true;',
+    'const rpRng = arguments[0].rng;'
+  ].join('\n');
+  return new Function(pre + '\n' + code + '\nreturn {' + names.join(',') + '};')({
+    divisor: o.divisor || 400,
+    matches: o.matches || [],
+    shapeOf: o.shapeOf || (st => (st && st.shape) || 'ring'),
+    read: o.read || (() => null),
+    context: o.context || (players => ({
+      players, rating: () => 1000, spread: 1, winProb: () => 0.5,
+      quality: () => 1, rematch: () => 0, metCount: () => false
+    })),
+    solveRing: o.solveRing || (players => ({order: players.map((p,i)=>(
+      {p1:p, p2:players[(i+1)%players.length], round:'r'+(i+1)}))})),
+    standings: o.standings || (() => []),
+    predictiveRating: o.predictiveRating || (() => 1000),
+    rng: o.rng || (seed => { let a = seed >>> 0; return function(){
+      a = (a + 0x6D2B79F5) | 0;
+      let x = Math.imul(a ^ (a >>> 15), 1 | a);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    }; })
+  });
+}
+
+/* The two questions an event answers: does it move the ladder, and did it
+   happen? They used to be one function and one answer, which is how three
+   weeks of cup tennis went missing from every stat in the app. */
+function loadEloScope(tournaments){
+  const code = region('ELO-SCOPE');
+  const names = ['tournamentCountsElo','tournamentCountsStats','tournEloLabel',
+                 'countsForElo','countsForAnalysis'];
+  return new Function('const tournaments = arguments[0];\n' + code +
+                      '\nreturn {' + names.join(',') + '};')(tournaments || []);
+}
+
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,APP};
