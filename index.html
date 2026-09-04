@@ -33,6 +33,15 @@
      standing in front of the paint. Preconnect keeps the handshake warm
      in the meantime. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- ...and preload starts the download itself here in the head, rather than
+     waiting for the parser to reach the tag at the bottom of the body half a
+     megabyte later. The script still EXECUTES exactly where it sits, so boot
+     order is untouched; it just isn't a cold round-trip standing between the
+     parsed document and the app starting. No crossorigin attribute, so the
+     request matches the plain script tag below and is reused rather than
+     fetched twice. (Deliberately not spelling that tag out: a bare "<scr"+
+     "ipt" inside a comment trips naive tag-regex tooling.) -->
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 <template id="__bundler_thumbnail" data-bg-color="#0a0814">
   <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
     <rect width="1200" height="800" fill="#0a0814"/>
@@ -8951,6 +8960,41 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================
+   FRAME SCHEDULING
+
+   resize and scroll fire far faster than the screen refreshes. A phone
+   collapsing its URL bar, or a window being dragged, emits them dozens of
+   times a second, and the handlers below each did their full job on every
+   one: reallocating a DPR-scaled full-viewport canvas backing store,
+   rebuilding two gradients, reading a rect and writing three styles. None
+   of that work is visible more than once per frame, so none of it should
+   run more than once per frame.
+
+     onFrame(fn)        runs fn at most once per animation frame, with the
+                        arguments from the most recent call. For work whose
+                        result is a single paint.
+     afterIdle(fn, ms)  runs fn once the events stop. For work where even
+                        one run per frame is too expensive to do while the
+                        user is still dragging — canvas reallocation.
+   ============================================================ */
+function onFrame(fn){
+  let raf = null, args = null;
+  return function(){
+    args = arguments;
+    if(raf != null) return;
+    raf = requestAnimationFrame(()=>{ raf = null; fn.apply(this, args); });
+  };
+}
+function afterIdle(fn, ms){
+  let t = null, args = null;
+  return function(){
+    args = arguments;
+    clearTimeout(t);
+    t = setTimeout(()=>{ t = null; fn.apply(this, args); }, ms == null ? 140 : ms);
+  };
+}
+
+/* ============================================================
    CONFIG  —  edit these three values, then deploy to Netlify
    ============================================================ */
 const SUPABASE_URL = "https://fzmuixlxnhervxzrinbh.supabase.co";
@@ -16322,7 +16366,7 @@ function ptSyncCompactChrome(){
     && window.matchMedia('(orientation: landscape)').matches;
   document.body.classList.toggle('pt-compact-chrome', compact);
 }
-window.addEventListener('resize', ptSyncCompactChrome);
+window.addEventListener('resize', onFrame(ptSyncCompactChrome), {passive:true});
 try{ window.matchMedia('(orientation: landscape)').addEventListener('change', ptSyncCompactChrome); }catch(e){}
 let ptWakeLock=null;
 async function ptRequestWakeLock(){
@@ -20104,30 +20148,60 @@ function drawChart(standings){
   area.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${grid}${lines}</svg>`
     + '<div id="chartTip" class="chart-tip"></div>';
 
-  // custom tooltip wiring
+  /* custom tooltip wiring
+
+     Two things were wrong with the old version. It bound three listeners to
+     every .gpoint — a season chart is a few hundred of them, re-bound from
+     scratch on every render — and its mousemove handler read
+     area.getBoundingClientRect(), wrote three styles, and then read
+     tip.getBoundingClientRect() in a rAF. That read-write-read pattern
+     forces a synchronous reflow, and mousemove fires far faster than the
+     screen refreshes, so dragging the pointer along the line could force
+     several full layouts per frame.
+
+     Now: three delegated listeners on the container regardless of how many
+     points the chart has; the chart's own rect measured once per hover (it
+     cannot move while you are pointing at it); and the position written from
+     a single rAF callback, so at most one write-then-measure lands per
+     frame. The one remaining forced layout is the clamp measurement, which
+     genuinely needs the tooltip's post-write size — it just happens at
+     frame rate now instead of pointer rate. */
   const tip = $("chartTip");
-  area.querySelectorAll(".gpoint").forEach(dot=>{
-    dot.addEventListener("mouseenter", e=>{
-      tip.textContent = dot.getAttribute("data-label");
-      tip.style.opacity = "1";
-    });
-    dot.addEventListener("mousemove", e=>{
-      const r = area.getBoundingClientRect();
-      const x = e.clientX - r.left, y = e.clientY - r.top - 12;
-      tip.style.left = x + "px";
-      tip.style.top  = y + "px";
-      tip.style.transform = "translate(-50%,-100%)";
-      requestAnimationFrame(()=>{
-        const tr = tip.getBoundingClientRect();
-        let dx=0, dy=0;
-        if(tr.left < r.left) dx = r.left - tr.left;
-        if(tr.right > r.right) dx = r.right - tr.right;
-        if(tr.top < r.top) dy = r.top - tr.top;
-        if(dx || dy) tip.style.transform = `translate(calc(-50% + ${dx}px), calc(-100% + ${dy}px))`;
-      });
-    });
-    dot.addEventListener("mouseleave", ()=>{ tip.style.opacity = "0"; });
+  let areaRect = null, tipDot = null, tipX = 0, tipY = 0, tipRaf = null;
+  function tipPlace(){
+    tipRaf = null;
+    if(!tipDot || !areaRect) return;
+    tip.style.left = tipX + "px";
+    tip.style.top  = tipY + "px";
+    tip.style.transform = "translate(-50%,-100%)";
+    const tr = tip.getBoundingClientRect();
+    let dx = 0, dy = 0;
+    if(tr.left  < areaRect.left)  dx = areaRect.left  - tr.left;
+    if(tr.right > areaRect.right) dx = areaRect.right - tr.right;
+    if(tr.top   < areaRect.top)   dy = areaRect.top   - tr.top;
+    if(dx || dy) tip.style.transform = `translate(calc(-50% + ${dx}px), calc(-100% + ${dy}px))`;
+  }
+  const near = (t, sel) => (t && t.closest) ? t.closest(sel) : null;
+  area.addEventListener("mouseover", e=>{
+    const dot = near(e.target, ".gpoint");
+    if(!dot || dot === tipDot) return;
+    tipDot = dot;
+    areaRect = area.getBoundingClientRect();   // measured once per hover, not per move
+    tip.textContent = dot.getAttribute("data-label");
+    tip.style.opacity = "1";
   });
+  area.addEventListener("mouseout", e=>{
+    if(!near(e.target, ".gpoint")) return;
+    if(near(e.relatedTarget, ".gpoint")) return;   // sliding straight onto the next point
+    tipDot = null;
+    tip.style.opacity = "0";
+  });
+  area.addEventListener("mousemove", e=>{
+    if(!tipDot || !areaRect) return;
+    tipX = e.clientX - areaRect.left;
+    tipY = e.clientY - areaRect.top - 12;
+    if(tipRaf == null) tipRaf = requestAnimationFrame(tipPlace);
+  }, {passive:true});
 }
 
 const esc = s => String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
@@ -30621,7 +30695,7 @@ applySurface(currentSurface());
 showView("ladder");
 try{ fxObserveAnimated(); }catch(e){}
 everyVisible(updateCountdowns, 1000); // started once here; walks the DOM each tick, not re-created on render
-window.addEventListener("resize", moveTabIndicator);
+window.addEventListener("resize", onFrame(moveTabIndicator), {passive:true});
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndicator).catch(()=>{});
 
 /* cinematic load screen — once per session.
@@ -30679,7 +30753,10 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
     cv.style.width=innerWidth+"px"; cv.style.height=innerHeight+"px";
   }
   size();
-  if(!WXFX_HIDDEN) window.addEventListener("resize", size);
+  /* size() reallocates a viewport-sized backing store at DPR 2 — tens of
+     MB of GPU memory. Doing that on every resize event stalls the whole
+     drag; the particles can sit stretched for a beat instead. */
+  if(!WXFX_HIDDEN) window.addEventListener("resize", afterIdle(size, 160), {passive:true});
 
   const WX_TTL = 20*60*1000; // 20 min cache — Toronto weather doesn't need to be checked more often
   const WX_KEY = "fgta_wx";
@@ -30942,8 +31019,15 @@ try{ tnFormatHint(); }catch(e){}   // sync the New-tournament blurb + Elo defaul
     else if(e.key==="Enter"){ if(hiIndex>=0 && items[hiIndex]){ e.preventDefault(); selectValue(items[hiIndex].textContent); } }
     else if(e.key==="Escape"){ hideMenu(); }
   });
-  window.addEventListener("scroll", ()=>{ if(activeInput) positionMenu(activeInput); }, true);
-  window.addEventListener("resize", ()=>{ if(activeInput) positionMenu(activeInput); });
+  /* Capture phase means this fires for every scrolling subtree on the page,
+     not just the window, and positionMenu() reads a rect and then writes
+     three styles — a layout read immediately after a style write forces a
+     synchronous reflow. At scroll-event rate that is several full reflows
+     per frame while the menu is open. One pass per frame is all that can be
+     seen, and passive lets the scroll itself stay on the compositor. */
+  const acReposition = onFrame(()=>{ if(activeInput) positionMenu(activeInput); });
+  window.addEventListener("scroll", acReposition, {capture:true, passive:true});
+  window.addEventListener("resize", acReposition, {passive:true});
   document.addEventListener("mousedown", e=>{
     if(activeInput && e.target!==activeInput && !(menu && menu.contains(e.target))) hideMenu();
   });
@@ -32519,8 +32603,11 @@ const FFIntro = (function(){
       GLOW_MAX = Math.max(60, Math.min(W,H)*0.42);
     }
     size();
-    const onResize = ()=>size();
-    window.addEventListener("resize", onResize);
+    /* same reasoning as the weather canvas: size() reallocates the backing
+       store and rebuilds both full-screen gradients, so it waits for the
+       drag to settle rather than running at event rate. */
+    const onResize = afterIdle(()=>size(), 160);
+    window.addEventListener("resize", onResize, {passive:true});
 
     /* scratch for the cull pass — allocated once, not sixty times a second */
     const CORN = new Array(8), FACE = new Array(4);
