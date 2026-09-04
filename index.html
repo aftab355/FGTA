@@ -539,6 +539,29 @@
   .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
   .toast.err{border-color:var(--danger);background:var(--danger);color:#1a0402}
 
+  /* A row that is on screen but not yet acknowledged by the server. It reads
+     as "this is real, it is just still going" — dimmed, but never so far that
+     the text drops under contrast. The controls that need a server id are
+     removed rather than disabled, so nothing here is a focus trap for a
+     keyboard, and the shimmer is a border, not a repaint of the card. */
+  .opt-pending{opacity:.62}
+  .opt-pending .c-sending,
+  .opt-pending .fc-sending{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);
+    letter-spacing:.04em;
+  }
+  .opt-pending::after{
+    content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    border:1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+    animation:optPulse 1.4s ease-in-out infinite;
+  }
+  .comment.opt-pending,.fcard.opt-pending,.frep.opt-pending,.dm-msg.opt-pending{position:relative}
+  @keyframes optPulse{0%,100%{opacity:.25}50%{opacity:.8}}
+  /* one paint, no wake-ups, for anyone who asked the OS for less motion */
+  @media (prefers-reduced-motion: reduce){
+    .opt-pending::after{animation:none;opacity:.5}
+  }
+
   .odds-wrap{margin-top:16px}
   .odds-row{display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center;gap:10px;font-size:13px;margin-bottom:7px;font-family:'JetBrains Mono',monospace}
   .odds-name{color:var(--muted);font-weight:500}
@@ -10981,7 +11004,14 @@ async function ptSubmit(){
     if(!missing) break;
     delete row[missing];
   }
-  if(error){ if(btn) btn.disabled=false; return toast(error.message,true); }
+  if(btn) btn.disabled=false;
+  if(error){
+    /* the tracker state is deliberately still standing here — a failed submit
+       must not throw away a match somebody just umpired point by point */
+    toast(optErrorText(error, "That match didn't send — the tracker is still here, try again."), true);
+    console.warn("[ptSubmit] insert failed", error);
+    return;
+  }
   broadcastTicker(`🎾 ${PT.a} vs ${PT.b} — ${PT.draw?'drawn':'tracked live'}`);
   toast(target ? `Submitted to ${target.name} — waiting for approval ✓`
                : "Submitted to the ladder — waiting for approval ✓");
@@ -10989,7 +11019,9 @@ async function ptSubmit(){
   ptPersist();
   $("ptA").value=""; $("ptB").value="";
   $("ptSetup").style.display=""; $("ptLive").style.display="none";
-  load();
+  /* the insert is already confirmed, so no placeholder row is needed — the
+     coalesced refresh brings back the real one with its real id */
+  optRefreshSoon(0);
 }
 window.ptSubmit=ptSubmit;
 
@@ -11546,9 +11578,16 @@ window.rrAttachVideo=rrAttachVideo;
 async function rrSaveSync(quiet){
   const R=REEL; if(!R) return;
   if(!isAdmin){ if(!quiet) toast("Only an admin can save the sync for everyone",true); return; }
-  const {error}=await sb.from("matches").update({rallies:JSON.stringify(R.data)}).eq("id",R.m.id);
-  if(error){ toast(error.message,true); return; }
-  R.m.rallies=JSON.stringify(R.data);     // keep the in-memory row in step; no reload needed
+  const raw=JSON.stringify(R.data);
+  const prev=R.m.rallies;
+  R.m.rallies=raw;                        // in-memory row moves first; no reload needed
+  const {error}=await sb.from("matches").update({rallies:raw}).eq("id",R.m.id);
+  if(error){
+    R.m.rallies=prev;                     // put the old sync back if the save was refused
+    toast(optErrorText(error, "Couldn't save the sync — your local view is unchanged."),true);
+    console.warn("[rrSaveSync] failed", error);
+    return;
+  }
   toast("Sync saved for this match ✓");
 }
 window.rrSaveSync=rrSaveSync;
@@ -19347,11 +19386,16 @@ async function saveAttributes(name){
     row[k]=Math.max(0,Math.min(99,v));
   }
   row.updated_at = new Date().toISOString();
-  const {error}=await sb.from("player_ratings").upsert(row,{onConflict:"name"});
-  if(error) return toast(error.message,true);
-  toast("Attributes saved ✓");
-  await load();
-  openProfile(name);
+  const k=(name||"").toLowerCase();
+  await optWrite({
+    key   : "attrs:"+k,
+    store :"player_ratings",
+    mutate: map => Object.assign({}, map, {[k]: Object.assign({}, map[k], row)}),
+    write : ()=>sb.from("player_ratings").upsert(row,{onConflict:"name"}),
+    paint : ()=>openProfile(name),
+    ok    : "Attributes saved ✓",
+    fail  : "Couldn't save those attributes."
+  });
 }
 window.saveAttributes = saveAttributes;
 
@@ -19773,11 +19817,15 @@ function buildTree(flat){
 function renderCommentNode(c, depth){
   const indent = depth>0 ? ` style="margin-left:${Math.min(depth,4)*18}px"` : "";
   const pinnedTag = c.pinned ? '<span class="c-pin-tag">📌 pinned</span>' : '';
-  const adminBtns = isAdmin ? `
+  /* a comment the server hasn't acknowledged has no real id yet, so pin,
+     delete and reply are held back until it does — otherwise they'd address
+     the negative placeholder id and silently do nothing */
+  const pending = optIsPendingRow(c);
+  const adminBtns = (isAdmin && !pending) ? `
     <button class="c-act" onclick="togglePin(${c.id},${c.pinned?'true':'false'})" title="${c.pinned?'Unpin':'Pin'}">${c.pinned?'unpin':'pin'}</button>
     <button class="c-del" onclick="deleteComment(${c.id})" title="Delete">✕</button>` : '';
   const kids = (c.children||[]).map(k=>renderCommentNode(k, depth+1)).join("");
-  return `<div class="comment${c.pinned?' is-pinned':''}"${indent}>
+  return `<div class="comment${c.pinned?' is-pinned':''}${pending?' opt-pending':''}"${pending?' aria-busy="true"':''}${indent}>
       <div class="c-head">
         ${avatar(c.author,26)}<span class="c-author">${esc(c.author)}</span>
         <span class="c-time">${when(c.created_at)}</span>${pinnedTag}
@@ -19786,7 +19834,8 @@ function renderCommentNode(c, depth){
       ${socialBody(c.body,'c-text')}
       ${c.image_url?`<div class="c-image"><img src="${esc(c.image_url)}" alt="attached image" loading="lazy" onclick="window.open('${esc(c.image_url)}','_blank')"></div>`:''}
       <div class="c-foot">
-        <button class="c-reply" onclick="startReply(${c.id},'${esc(c.author).replace(/'/g,"\\'")}')">reply</button>
+        ${pending ? '<span class="c-sending">sending…</span>'
+          : `<button class="c-reply" onclick="startReply(${c.id},'${esc(c.author).replace(/'/g,"\\'")}')">reply</button>`}
       </div>
     </div>${kids}`;
 }
@@ -19871,7 +19920,7 @@ async function postComment(){
     const up = await sb.storage.from("comment-images").upload(path, uploadBlob, {cacheControl:"3600", upsert:false, contentType:"image/jpeg"});
     if(up.error){
       if(btn){ btn.disabled=false; btn.textContent="Post"; }
-      return toast("Upload failed: "+up.error.message,true);
+      return toast(optErrorText(up.error, "Couldn't upload that photo — your comment wasn't sent."),true);
     }
     const { data:pub } = sb.storage.from("comment-images").getPublicUrl(path);
     image_url = pub.publicUrl;
@@ -19879,13 +19928,26 @@ async function postComment(){
   }
 
   const row = {match_id:openMatchId, author, body: body||"", parent_id: replyingTo, image_url};
-  const {error} = await sb.from("comments").insert(row);
-  if(error) return toast(error.message,true);
-  broadcastTicker(`💬 ${author}: ${(body||'shared a photo').slice(0,60)}`);
+  /* the comment shows up in the thread as you send it. If the insert is
+     refused it is pulled straight back out and the text is returned to the
+     box, because losing what someone just typed is the worst possible
+     failure mode for a comment field. */
+  const draft = $("cBody").value, draftReply = replyingTo, matchId = openMatchId;
   $("cBody").value="";
   clearImage();
   cancelReply();
-  load();
+  const sent = await optWrite({
+    store :"comments",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("comments").insert(row),
+    paint : ()=>{ if(openMatchId===matchId) renderComments(matchId); },
+    fail  : "Your comment didn't send — the text is back in the box.",
+    after : ()=>{ try{ broadcastTicker(`💬 ${author}: ${(body||'shared a photo').slice(0,60)}`); }catch(e){} }
+  });
+  if(!sent){
+    const b=$("cBody"); if(b){ b.value=draft; b.focus(); }
+    replyingTo = draftReply;
+  }
 }
 window.postComment = postComment;
 
@@ -19916,10 +19978,15 @@ async function deleteComment(id){
       await sb.storage.from("comment-images").remove([path]);
     }
   }
-  const {error} = await sb.from("comments").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Comment deleted");
-  load();
+  const matchId = c ? c.match_id : openMatchId;
+  await optWrite({
+    store :"comments",
+    mutate: optDrop(x=>String(x.id)===String(id)),
+    write : ()=>sb.from("comments").delete().eq("id",id),
+    paint : ()=>{ if(openMatchId===matchId) renderComments(matchId); },
+    ok    : "Comment deleted",
+    fail  : "Couldn't delete that comment."
+  });
 }
 window.deleteComment = deleteComment;
 
@@ -19927,15 +19994,30 @@ async function togglePin(id, currentlyPinned){
   if(!isAdmin) return;
   const mine = comments.find(c=>c.id===id);
   if(!mine) return;
-  // unpin any other pinned comment on the same match (only one pinned at a time)
-  if(!currentlyPinned){
-    const others = comments.filter(c=>c.match_id===mine.match_id && c.pinned && c.id!==id);
-    for(const o of others) await sb.from("comments").update({pinned:false}).eq("id",o.id);
-  }
-  const {error} = await sb.from("comments").update({pinned:!currentlyPinned}).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast(currentlyPinned?"Unpinned":"Pinned as top comment");
-  load();
+  const matchId = mine.match_id;
+  // only one comment per match is pinned, so pinning one unpins the rest
+  const others = currentlyPinned ? []
+    : comments.filter(c=>c.match_id===matchId && c.pinned && String(c.id)!==String(id));
+  await optWrite({
+    key   : "pin:"+id,
+    store :"comments",
+    /* both halves of the swap move together, so a half-applied pin can never
+       be on screen — two comments showing the pin badge at once */
+    mutate: rows => rows.map(c =>
+      String(c.id)===String(id) ? Object.assign({}, c, {pinned:!currentlyPinned})
+      : others.some(o=>String(o.id)===String(c.id)) ? Object.assign({}, c, {pinned:false})
+      : c),
+    write : async ()=>{
+      for(const o of others){
+        const r = await sb.from("comments").update({pinned:false}).eq("id",o.id);
+        if(r.error) return r;
+      }
+      return sb.from("comments").update({pinned:!currentlyPinned}).eq("id",id);
+    },
+    paint : ()=>{ if(openMatchId===matchId) renderComments(matchId); },
+    ok    : currentlyPinned?"Unpinned":"Pinned as top comment",
+    fail  : "Couldn't change the pinned comment."
+  });
 }
 window.togglePin = togglePin;
 
@@ -20063,53 +20145,374 @@ function when(ts){
   return d.toLocaleDateString();
 }
 
-/* ---------- data layer ---------- */
-async function load(){
-  if(!configured) return;
-  const {data,error} = await sb.from("matches").select("*");
-  if(error){
-    toast("Load failed — showing your last cached view",true);
-    try{ const cached=JSON.parse(localStorage.getItem("fgta_offline_cache")||"null"); if(cached){ Object.assign(globalThis,cached); render(); } }catch(e){}
-    return;
+/* ============================================================
+   OPTIMISTIC WRITES — show the change now, confirm it after
+   ------------------------------------------------------------
+   Every write in here used to run the same shape: await the round
+   trip, then await a full load() — fifteen more round trips, one
+   after another — and only then paint. Tapping 🔥 on a post cost a
+   second of frozen UI on a phone, and if the write failed the only
+   sign was a toast of raw Postgres.
+
+   Now a write lands in the local store first and paints straight
+   away; the round trip runs behind it. If the server says no, the
+   change is peeled back off, the UI repaints without it, and the
+   person is told what happened in a sentence rather than in
+   `new row violates row-level security policy`.
+
+   Two things make the rollback honest:
+
+   • the stores keep a *base* — the last rows the server actually
+     confirmed — and the live array is always base with every
+     in-flight change folded over it. Rolling one write back is
+     dropping its fold and rebuilding, so a failure in the middle
+     of three queued writes doesn't take the other two with it.
+
+   • a refresh that lands while a write is still in the air re-lays
+     the in-flight changes over the new server rows, so the row you
+     just typed doesn't blink out and back.
+
+   The stores are top-level `let` arrays, which are lexical
+   bindings — a global `let` is NOT a property of globalThis, so
+   they can't be reached by name through it. Hence the explicit
+   get/set pairs. (The old offline-cache path assumed otherwise;
+   see load().)
+   ============================================================ */
+const OPT_STORES = {
+  matches:           {get:()=>matches,          set:v=>{matches=v; _ensembleWeightsCache=null;}},
+  comments:          {get:()=>comments,         set:v=>{comments=v;}},
+  tournaments:       {get:()=>tournaments,      set:v=>{tournaments=v;}},
+  posts:             {get:()=>posts,            set:v=>{posts=v;}},
+  reactions:         {get:()=>reactions,        set:v=>{reactions=v;}},
+  challenges:        {get:()=>challenges,       set:v=>{challenges=v;}},
+  polls:             {get:()=>polls,            set:v=>{polls=v;}},
+  poll_votes:        {get:()=>pollVotes,        set:v=>{pollVotes=v;}},
+  feed_replies:      {get:()=>feedReplies,      set:v=>{feedReplies=v;}},
+  dms:               {get:()=>dms,              set:v=>{dms=v;}},
+  muted_names:       {get:()=>mutedNames,       set:v=>{mutedNames=v;}},
+  player_roster:     {get:()=>playerRoster,     set:v=>{playerRoster=v;}},
+  scheduled_matches: {get:()=>scheduledMatches, set:v=>{scheduledMatches=v;}},
+  player_ratings:    {get:()=>playerRatings,    set:v=>{playerRatings=v;}},
+  doubles_matches:   {get:()=>doublesMatches,   set:v=>{doublesMatches=v;}},
+  practice_log:      {get:()=>practiceLog,      set:v=>{practiceLog=v;}},
+  availability:      {get:()=>availabilityData, set:v=>{availabilityData=v;}},
+  court_reports:     {get:()=>courtReports,     set:v=>{courtReports=v;}}
+};
+
+const OPT_BASE = Object.create(null);   // store name -> last server-confirmed value
+const OPT_PENDING = new Map();          // op id -> {store, mutate, settled}
+let _optSeq = 0;
+
+/* Double-tap guard. A 🔥 chip repaints the instant it is tapped, so the second
+   tap of a double-tap sees the optimistic row and tries to delete a row id the
+   server has never heard of. Writes that must not overlap declare a key and
+   the second one is dropped until the first has landed. */
+const OPT_INFLIGHT = new Set();
+function optBusy(key){ return OPT_INFLIGHT.has(key); }
+window.optBusy = optBusy;
+
+/* Postgres hands out ascending positive bigints, so a descending negative
+   counter can never collide with a real row id. Number comparisons and the
+   inline onclick="fn(${id})" handlers both keep working while a row is in
+   flight, and isOptTempId() tells the UI not to offer edit/delete on a row
+   the server hasn't acknowledged yet. */
+let _optTmp = 0;
+function optTempId(){ return --_optTmp; }
+function isOptTempId(id){ return Number(id) < 0; }
+window.isOptTempId = isOptTempId;
+
+function optBase(name){
+  const s = OPT_STORES[name];
+  if(!(name in OPT_BASE)) OPT_BASE[name] = s ? s.get() : null;
+  return OPT_BASE[name];
+}
+
+/* live = base with every in-flight change folded over it, in the order they
+   were made. A mutate that throws is skipped rather than poisoning the fold. */
+function optRebuild(name){
+  const s = OPT_STORES[name];
+  if(!s) return;
+  try{
+    let v = optBase(name);
+    for(const op of OPT_PENDING.values()){
+      if(op.store !== name) continue;
+      try{ v = op.mutate(v); }catch(e){ console.warn("[optimistic] mutate failed", name, e); }
+    }
+    s.set(v);
+  }catch(e){ /* store not initialised yet — nothing to rebuild */ }
+}
+
+/* Once nothing is in flight for a store, everything still folded over its base
+   has been confirmed by the server, so it can be baked in and the ops dropped.
+   Without this the pending map would grow for the life of the page. */
+function optSettleStore(name){
+  const s = OPT_STORES[name];
+  if(!s) return;
+  for(const op of OPT_PENDING.values()) if(op.store === name && !op.settled) return;
+  for(const [id, op] of [...OPT_PENDING]) if(op.store === name) OPT_PENDING.delete(id);
+  try{ OPT_BASE[name] = s.get(); }catch(e){}
+}
+
+/* The ids of every op the server has already confirmed, taken before a
+   refresh goes out. An op that settles *while* the SELECT is in the air may
+   not be in the rows that come back, so it must survive the adopt — dropping
+   it would blink the row off screen and back on a refresh later. */
+function optSettledIds(){
+  const s = new Set();
+  for(const [id, op] of OPT_PENDING) if(op.settled) s.add(id);
+  return s;
+}
+
+/* Called by load() and the per-tab loaders the moment fresh server rows are
+   sitting in the globals: those rows ARE the new base. Ops confirmed before
+   the fetch went out are dropped; anything newer, or still in the air, is
+   re-laid on top so it stays on screen. */
+function optAdoptServerState(names, confirmed){
+  const list = names && names.length ? names : Object.keys(OPT_STORES);
+  for(const [id, op] of [...OPT_PENDING]){
+    if(!op.settled || list.indexOf(op.store) === -1) continue;
+    if(confirmed && !confirmed.has(id)) continue;   // settled mid-flight; keep it
+    OPT_PENDING.delete(id);
   }
-  matches = data||[];
-  _ensembleWeightsCache = null; // matches changed — refit the ensemble blend lazily on next use
-  const cRes = await sb.from("comments").select("*");
-  if(!cRes.error) comments = cRes.data||[];
-  const tRes = await sb.from("tournaments").select("*");
-  if(!tRes.error) tournaments = tRes.data||[];
-  const prRes = await sb.from("player_ratings").select("*");
-  if(!prRes.error){ playerRatings={}; (prRes.data||[]).forEach(r=>playerRatings[r.name.toLowerCase()]=r); }
-  const poRes = await sb.from("posts").select("*");
-  if(!poRes.error) posts = poRes.data||[];
-  const rxRes = await sb.from("reactions").select("*");
-  if(!rxRes.error) reactions = rxRes.data||[];
-  const chRes = await sb.from("challenges").select("*");
-  if(!chRes.error) challenges = chRes.data||[];
-  const plRes = await sb.from("polls").select("*");
-  if(!plRes.error) polls = plRes.data||[];
-  const pvRes = await sb.from("poll_votes").select("*");
-  if(!pvRes.error) pollVotes = pvRes.data||[];
-  const frRes = await sb.from("feed_replies").select("*");
-  if(!frRes.error) feedReplies = frRes.data||[];
-  const dmRes = await sb.from("dms").select("*");
-  if(!dmRes.error) dms = dmRes.data||[];
-  const mnRes = await sb.from("muted_names").select("*");
-  if(!mnRes.error) mutedNames = mnRes.data||[];
-  const aaRes = await sb.from("admin_actions").select("*");
-  if(!aaRes.error) adminActions = aaRes.data||[];
-  const prRosterRes = await sb.from("player_roster").select("*");
-  if(!prRosterRes.error) playerRoster = prRosterRes.data||[];
-  const smRes = await sb.from("scheduled_matches").select("*");
-  if(!smRes.error) scheduledMatches = smRes.data||[];
-  try{ localStorage.setItem("fgta_offline_cache", JSON.stringify({matches,comments,tournaments,posts,challenges})); }catch(e){}
-  render();
-  if(openMatchId!==null) renderComments(openMatchId);
-  if(openScheduledMatchId!==null) openScheduledMatch(openScheduledMatchId);
-  /* the draw is in memory now, so this is the first moment the app can
-     know whether the cup has a game on today — see ffBootWalkIn, which
-     only ever fires once and only on the day of a fixture */
-  try{ ffBootWalkIn(); }catch(e){}
+  for(const n of list){
+    const s = OPT_STORES[n];
+    if(!s) continue;
+    try{ OPT_BASE[n] = s.get(); }catch(e){}
+  }
+  const dirty = new Set();
+  for(const op of OPT_PENDING.values()) if(list.indexOf(op.store) !== -1) dirty.add(op.store);
+  dirty.forEach(optRebuild);
+}
+
+/* Ten reactions in ten seconds should cost one refresh, not ten. Coalesced,
+   never overlapping, and re-armed once if something landed mid-flight. */
+let _optRefreshTimer = null, _optRefreshRunning = false, _optRefreshAgain = false;
+function optRefreshSoon(delay){
+  if(_optRefreshTimer) return;
+  _optRefreshTimer = setTimeout(async ()=>{
+    _optRefreshTimer = null;
+    if(_optRefreshRunning){ _optRefreshAgain = true; return; }
+    _optRefreshRunning = true;
+    try{ await load({quiet:true}); }
+    catch(e){ console.warn("[optimistic] background refresh failed", e); }
+    _optRefreshRunning = false;
+    if(_optRefreshAgain){ _optRefreshAgain = false; optRefreshSoon(120); }
+  }, delay==null ? 400 : delay);
+}
+window.optRefreshSoon = optRefreshSoon;
+
+/* Postgres errors are written for the console, not for someone holding a
+   phone. Offline is checked first because a dead connection surfaces as a
+   dozen different messages depending on the browser. */
+function optErrorText(error, fallback){
+  const raw = (error && (error.message || error.error_description || error.msg || error.details)) || "";
+  if(typeof navigator !== "undefined" && navigator.onLine === false)
+    return "You're offline — that didn't send. Give it another go when you're back.";
+  if(/failed to fetch|networkerror|load failed|network request failed|timeout|aborted/i.test(raw))
+    return "Couldn't reach the server — nothing was saved.";
+  if(/row-level security|permission denied|not authori[sz]ed|jwt|401|403/i.test(raw))
+    return "You're not allowed to do that — try signing in again.";
+  if(/duplicate key|unique constraint|already exists/i.test(raw))
+    return "That's already there.";
+  if(/foreign key|violates/i.test(raw))
+    return fallback || "That didn't save — something it points at has gone.";
+  return fallback || raw || "That didn't save — try again.";
+}
+
+/* ---- the one entry point every write goes through ----
+     store   key in OPT_STORES the change lands in (omit for writes with no
+             local mirror — the audit log, say — to get error handling only)
+     mutate  pure (value) => value: the local version of the change. Must not
+             mutate its argument, because it gets replayed against fresh rows.
+     write   () => Promise resolving to {error} (a Supabase builder is
+             thenable, so `() => sb.from(...).insert(row)` is enough)
+     paint   () => void: whatever needs redrawing, called after the change is
+             applied and again if it has to be rolled back
+     ok      success toast — string, or a function returning one
+     fail    the human sentence for the failure toast
+     refresh pull fresh server rows after success (default true; pass false
+             for stores whose loader isn't part of load())
+     after   () => void, run once on success (clear a field, close a sheet)
+     key     optional string: refuse to start if a write with the same key is
+             already in flight, so a double-tap can't race itself
+   Resolves true on success and false on failure, so callers that need to
+   chain can await it. Never rejects. */
+async function optWrite(spec){
+  const {store, mutate, write, paint, ok, fail, after, key} = spec;
+  const refresh = spec.refresh !== false;
+  const id = ++_optSeq;
+  const mirrored = !!(store && mutate && OPT_STORES[store]);
+
+  if(key){
+    if(OPT_INFLIGHT.has(key)) return false;   // same change already in the air
+    OPT_INFLIGHT.add(key);
+  }
+  if(mirrored){
+    OPT_PENDING.set(id, {store, mutate, settled:false});
+    optRebuild(store);
+  }
+  if(paint) try{ paint(); }catch(e){ console.warn("[optimistic] paint failed", e); }
+
+  let error = null;
+  try{
+    const res = await write();
+    error = (res && res.error) || null;
+  }catch(e){ error = e; }
+  finally{ if(key) OPT_INFLIGHT.delete(key); }
+
+  if(error){
+    if(mirrored){
+      OPT_PENDING.delete(id);        // peel this one change back off…
+      optRebuild(store);             // …leaving anything else in flight alone
+      optSettleStore(store);
+      if(paint) try{ paint(); }catch(e){}
+    }
+    toast(optErrorText(error, fail), true);
+    console.warn("[write failed]", store || "(no store)", error);
+    return false;
+  }
+
+  if(mirrored){
+    const op = OPT_PENDING.get(id);
+    if(op) op.settled = true;        // keep it on screen until real rows land
+    if(!refresh) optSettleStore(store);
+  }
+  if(after) try{ after(); }catch(e){ console.warn("[optimistic] after failed", e); }
+  if(ok) toast(typeof ok === "function" ? ok() : ok);
+  if(refresh) optRefreshSoon();
+  return true;
+}
+window.optWrite = optWrite;
+
+/* Small helpers so the call sites below read as the change they make rather
+   than as array surgery. All three are pure. */
+const optAdd    = row       => rows => (Array.isArray(rows) ? rows : []).concat([row]);
+const optDrop   = pred      => rows => (Array.isArray(rows) ? rows : []).filter(r => !pred(r));
+const optPatch  = (pred, p) => rows => (Array.isArray(rows) ? rows : [])
+                                 .map(r => pred(r) ? Object.assign({}, r, typeof p === "function" ? p(r) : p) : r);
+
+/* A row the server hasn't acknowledged yet is dimmed and its own controls are
+   held back, so nobody taps delete on something that has no id to delete. */
+function optPendingAttrs(row){
+  return row && isOptTempId(row.id) ? ' class="opt-pending" aria-busy="true"' : '';
+}
+function optIsPendingRow(row){ return !!(row && isOptTempId(row.id)); }
+window.optIsPendingRow = optIsPendingRow;
+
+/* A local stand-in for a row the server is about to create. created_at has to
+   be present and sane or every "2m ago" and every sort puts it in 1970. */
+function optRow(fields){
+  return Object.assign({id: optTempId(), created_at: new Date().toISOString()}, fields);
+}
+
+/* ---------- data layer ---------- */
+/* Sixteen tables, and this used to await them one at a time — every table
+   waiting on the one before it for no reason, because none of them depend on
+   each other. On a phone that was the better part of a second of nothing.
+   They all go out together now, and the whole load costs one round trip's
+   latency instead of sixteen.
+
+   `quiet` is for the background refresh that follows an optimistic write:
+   the change is already on screen, so a hiccup on the confirmation pass must
+   not throw a "Load failed" toast over the top of it. */
+const LOAD_TABLES = [
+  ["matches",           d=>{ matches = d; _ensembleWeightsCache = null; }],
+  ["comments",          d=>{ comments = d; }],
+  ["tournaments",       d=>{ tournaments = d; }],
+  ["player_ratings",    d=>{ const m={}; d.forEach(r=>{ if(r && r.name) m[String(r.name).toLowerCase()] = r; }); playerRatings = m; }],
+  ["posts",             d=>{ posts = d; }],
+  ["reactions",         d=>{ reactions = d; }],
+  ["challenges",        d=>{ challenges = d; }],
+  ["polls",             d=>{ polls = d; }],
+  ["poll_votes",        d=>{ pollVotes = d; }],
+  ["feed_replies",      d=>{ feedReplies = d; }],
+  ["dms",               d=>{ dms = d; }],
+  ["muted_names",       d=>{ mutedNames = d; }],
+  ["admin_actions",     d=>{ adminActions = d; }],
+  ["player_roster",     d=>{ playerRoster = d; }],
+  ["scheduled_matches", d=>{ scheduledMatches = d; }]
+];
+
+let _loadInFlight = null;
+
+async function load(opts){
+  if(!configured) return;
+  const quiet = !!(opts && opts.quiet);
+
+  /* Two loads at once would both write the globals and the later, staler one
+     could win. Callers that arrive mid-load just wait for the one running. */
+  if(_loadInFlight){ try{ await _loadInFlight; }catch(e){} return; }
+
+  const run = (async ()=>{
+    /* taken before the fetches go out — see optSettledIds() */
+    const confirmed = optSettledIds();
+    const results = await Promise.all(LOAD_TABLES.map(([table]) =>
+      sb.from(table).select("*").then(r => r, e => ({error:e, data:null}))
+    ));
+
+    /* matches is the one table the app can't draw anything without, so its
+       failure — and only its failure — falls back to the cached view. */
+    if(results[0].error){
+      if(!quiet) toast("Load failed — showing your last cached view", true);
+      console.warn("[load] matches failed", results[0].error);
+      restoreOfflineCache();
+      return;
+    }
+
+    const touched = [];
+    results.forEach((res, i) => {
+      const [table, assign] = LOAD_TABLES[i];
+      if(res.error){
+        /* a table this project hasn't created yet, or one RLS hides from a
+           signed-out visitor: keep whatever is already in memory */
+        console.warn("[load] " + table + " unavailable", res.error.message || res.error);
+        return;
+      }
+      assign(res.data || []);
+      touched.push(table);
+    });
+
+    /* fresh server rows are the new base; anything still in flight from an
+       optimistic write gets re-laid on top so it doesn't blink out */
+    optAdoptServerState(touched, confirmed);
+
+    try{
+      localStorage.setItem("fgta_offline_cache",
+        JSON.stringify({matches, comments, tournaments, posts, challenges}));
+    }catch(e){ /* quota or private mode — the cache is a nicety */ }
+
+    render();
+    if(openMatchId !== null) renderComments(openMatchId);
+    if(openScheduledMatchId !== null) openScheduledMatch(openScheduledMatchId);
+    /* the draw is in memory now, so this is the first moment the app can
+       know whether the cup has a game on today — see ffBootWalkIn, which
+       only ever fires once and only on the day of a fixture */
+    try{ ffBootWalkIn(); }catch(e){}
+  })();
+
+  _loadInFlight = run;
+  try{ await run; }
+  finally{ _loadInFlight = null; }
+}
+
+/* This used to be `Object.assign(globalThis, cached)`, which quietly did
+   nothing at all: `let matches` at the top level is a lexical binding, and a
+   lexical binding shadows the same-named property on globalThis. It wrote
+   window.matches and every reader kept reading the empty `matches`. So the
+   offline cache has never once been shown. It is assigned by name now. */
+function restoreOfflineCache(){
+  let cached = null;
+  try{ cached = JSON.parse(localStorage.getItem("fgta_offline_cache") || "null"); }
+  catch(e){ return; }
+  if(!cached) return;
+  if(Array.isArray(cached.matches))     matches     = cached.matches;
+  if(Array.isArray(cached.comments))    comments    = cached.comments;
+  if(Array.isArray(cached.tournaments)) tournaments = cached.tournaments;
+  if(Array.isArray(cached.posts))       posts       = cached.posts;
+  if(Array.isArray(cached.challenges))  challenges  = cached.challenges;
+  _ensembleWeightsCache = null;
+  optAdoptServerState(["matches","comments","tournaments","posts","challenges"]);
+  try{ render(); }catch(e){ console.warn("[load] cached render failed", e); }
 }
 
 /* ============================================================
@@ -20319,12 +20722,22 @@ async function scheduleMatch(){
   if(!whenVal) return toast("Pick a date & time",true);
   const scheduled_at = new Date(whenVal).toISOString();
   if(!confirm(`Schedule ${p1} vs ${p2} for ${fmtScheduledDateTime(scheduled_at)}?`)) return;
-  const {error} = await sb.from("scheduled_matches").insert({p1,p2,scheduled_at,note:note||null,created_by:currentAdminUserId});
-  if(error) return toast(error.message,true);
-  logAdminAction("schedule_match",{p1,p2,scheduled_at});
-  toast("Match scheduled ✓");
+  const row = {p1, p2, scheduled_at, note:note||null, created_by:currentAdminUserId};
+  const draft = {p1, p2, at:$("schedAt").value, note};
   $("schedP1").value=""; $("schedP2").value=""; $("schedAt").value=""; $("schedNote").value="";
-  load();
+  const ok = await optWrite({
+    store :"scheduled_matches",
+    mutate: optAdd(optRow(Object.assign({status:"scheduled"}, row))),
+    write : ()=>sb.from("scheduled_matches").insert(row),
+    paint : ()=>render(),
+    ok    : "Match scheduled ✓",
+    fail  : "Couldn't schedule that match — your entries are back in the form."
+  });
+  if(ok) logAdminAction("schedule_match",{p1,p2,scheduled_at});
+  else {
+    $("schedP1").value=draft.p1; $("schedP2").value=draft.p2;
+    $("schedAt").value=draft.at; $("schedNote").value=draft.note;
+  }
 }
 window.scheduleMatch = scheduleMatch;
 
@@ -20332,12 +20745,17 @@ async function cancelScheduledMatch(id){
   if(!isAdmin) return;
   const m = scheduledMatches.find(x=>x.id===id);
   if(!confirm("Cancel this scheduled match?")) return;
-  const {error} = await sb.from("scheduled_matches").update({status:"cancelled"}).eq("id",id);
-  if(error) return toast(error.message,true);
-  logAdminAction("cancel_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
-  toast("Scheduled match cancelled");
   closeMatch();
-  load();
+  const ok = await optWrite({
+    key   : "sched:"+id,
+    store :"scheduled_matches",
+    mutate: optPatch(x=>String(x.id)===String(id), {status:"cancelled"}),
+    write : ()=>sb.from("scheduled_matches").update({status:"cancelled"}).eq("id",id),
+    paint : ()=>render(),
+    ok    : "Scheduled match cancelled",
+    fail  : "Couldn't cancel that match."
+  });
+  if(ok) logAdminAction("cancel_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
 }
 window.cancelScheduledMatch = cancelScheduledMatch;
 
@@ -20345,12 +20763,17 @@ async function completeScheduledMatch(id){
   if(!isAdmin) return;
   const m = scheduledMatches.find(x=>x.id===id);
   if(!confirm("Mark this scheduled match as completed?")) return;
-  const {error} = await sb.from("scheduled_matches").update({status:"completed"}).eq("id",id);
-  if(error) return toast(error.message,true);
-  logAdminAction("complete_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
-  toast("Marked completed ✓");
   closeMatch();
-  load();
+  const ok = await optWrite({
+    key   : "sched:"+id,
+    store :"scheduled_matches",
+    mutate: optPatch(x=>String(x.id)===String(id), {status:"completed"}),
+    write : ()=>sb.from("scheduled_matches").update({status:"completed"}).eq("id",id),
+    paint : ()=>render(),
+    ok    : "Marked completed ✓",
+    fail  : "Couldn't mark that match completed."
+  });
+  if(ok) logAdminAction("complete_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
 }
 window.completeScheduledMatch = completeScheduledMatch;
 
@@ -20413,32 +20836,77 @@ async function submitGame(){
   if(vibe) row.vibe=vibe;
   if(court) row.court=court;
   if(notes) row.notes=notes;
-  let {error}=await sb.from("matches").insert(row);
-  if(error && /vibe/.test(error.message)){ delete row.vibe; ({error}=await sb.from("matches").insert(row)); }
-  // gracefully retry if optional columns don't exist yet in the DB
-  if(error && /notes/.test(error.message)){ delete row.notes; ({error}=await sb.from("matches").insert(row)); }
-  if(error && /court/.test(error.message)){ delete row.court; ({error}=await sb.from("matches").insert(row)); }
-  $("submitBtn").disabled=false;
-  if(error) return toast(error.message,true);
-  broadcastTicker(`🎾 ${p1} vs ${p2} reported`);
+  /* the game lands in the pending queue straight away. It carries
+     status:"pending", so nothing it does can move a rating before an admin
+     approves it — the optimistic row is safe to compute against. */
+  const draft = {p1, p2, outcome, sets, court, notes, vibe};
   $("p1").value="";$("p2").value="";pickOutcome("1");$("setsInput").value="";ssReset();
   if($("courtInput"))$("courtInput").value="";if($("notesInput"))$("notesInput").value="";
-  toast("Submitted — waiting for approval ✓");
-  load();
+
+  const sent = await optWrite({
+    store :"matches",
+    mutate: optAdd(optRow(Object.assign({}, row))),
+    /* an older project may not have the optional columns yet, so each one is
+       dropped and retried in turn — testing the *latest* error each time,
+       which the old chain didn't do once the first retry changed it */
+    write : async ()=>{
+      let res = await sb.from("matches").insert(row);
+      for(const col of ["vibe","notes","court"]){
+        if(!res.error) break;
+        if(!(col in row)) continue;
+        if(!new RegExp(col).test(res.error.message||"")) continue;
+        delete row[col];
+        res = await sb.from("matches").insert(row);
+      }
+      return res;
+    },
+    paint : ()=>render(),
+    ok    : "Submitted — waiting for approval ✓",
+    fail  : "That game didn't send — your entries are back in the form.",
+    after : ()=>{ try{ broadcastTicker(`🎾 ${p1} vs ${p2} reported`); }catch(e){} }
+  });
+  $("submitBtn").disabled=false;
+  if(!sent){
+    $("p1").value=draft.p1; $("p2").value=draft.p2; pickOutcome(draft.outcome);
+    $("setsInput").value=draft.sets; ssRefreshLabels();
+    if($("courtInput")) $("courtInput").value=draft.court;
+    if($("notesInput")) $("notesInput").value=draft.notes;
+    if($("vibeInput"))  $("vibeInput").value=draft.vibe;
+  }
+}
+
+/* A game submitted seconds ago is on screen with a placeholder id until the
+   refresh behind it returns. Approving, editing, re-filing or deleting by that
+   id would address a row the server has never issued and silently do nothing,
+   so the admin queue says "one moment" instead. */
+function requireRealId(id){
+  if(!isOptTempId(id)) return true;
+  toast("Still saving that one — try again in a second.", true);
+  return false;
 }
 
 async function setStatus(id,status){
   if(!isAdmin) return;
+  if(!requireRealId(id)) return;
   const m = matches.find(x=>x.id===id);
   const desc = m ? `${m.p1} vs ${m.p2}` : "this game";
   const verb = status==="approved" ? "Approve" : (m && m.status==="approved" ? "Undo (reject)" : "Reject");
   if(!confirm(`${verb} ${desc}?`)) return;
-  const {error}=await sb.from("matches").update({status}).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast(status==="approved"?"Game approved ✓":"Game removed");
+  /* approving recomputes the whole ladder off the local rows, so the standings
+     move the moment the button is pressed and snap back if the update is
+     refused */
+  const ok = await optWrite({
+    key   : "match-status:"+id,
+    store :"matches",
+    mutate: optPatch(x=>String(x.id)===String(id), {status}),
+    write : ()=>sb.from("matches").update({status}).eq("id",id),
+    paint : ()=>render(),
+    ok    : status==="approved"?"Game approved ✓":"Game removed",
+    fail  : "Couldn't change that game's status."
+  });
+  if(!ok) return;
   logAdminAction(status==="approved"?"approve":"reject",{id, p1:m&&m.p1, p2:m&&m.p2});
   if(status==="approved"){ try{ celebrateResult(m); }catch(e){ if(typeof confetti==="function") confetti(); } }
-  load();
 }
 window.setStatus=setStatus;
 
@@ -20453,13 +20921,19 @@ async function bulkSetStatus(status){
   if(!isAdmin) return;
   const ids = [...document.querySelectorAll(".pend-chk:checked")].map(c=>Number(c.value));
   if(!ids.length) return toast("Nothing selected",true);
+  if(ids.some(isOptTempId)) return toast("One of those is still saving — try again in a second.",true);
   const verb = status==="approved" ? "Approve" : "Reject";
   if(!confirm(`${verb} ${ids.length} game${ids.length>1?'s':''}?`)) return;
-  const {error} = await sb.from("matches").update({status}).in("id",ids);
-  if(error) return toast(error.message,true);
-  toast(`${ids.length} game${ids.length>1?'s':''} ${status==="approved"?"approved":"rejected"} ✓`);
-  logAdminAction("bulk_"+status,{count:ids.length,ids});
-  load();
+  const idSet = new Set(ids.map(String));
+  const ok = await optWrite({
+    store :"matches",
+    mutate: optPatch(x=>idSet.has(String(x.id)), {status}),
+    write : ()=>sb.from("matches").update({status}).in("id",ids),
+    paint : ()=>render(),
+    ok    : `${ids.length} game${ids.length>1?'s':''} ${status==="approved"?"approved":"rejected"} ✓`,
+    fail  : "Couldn't update that batch — nothing was changed."
+  });
+  if(ok) logAdminAction("bulk_"+status,{count:ids.length,ids});
 }
 window.bulkSetStatus = bulkSetStatus;
 
@@ -20485,6 +20959,7 @@ window.bulkSetStatus = bulkSetStatus;
    ---------------------------------------------------------------- */
 async function refileMatch(id, value){
   if(!isAdmin) return toast("Admin only", true);
+  if(!requireRealId(id)) return;
   const m = matches.find(x=>x.id===id);
   if(!m) return;
   /* resolved against every tournament, not just the open ones: the admin is
@@ -20505,17 +20980,24 @@ async function refileMatch(id, value){
      older project may predate the round column, and re-filing must still
      work there. tournament_id is not optional — without it there is no
      re-filing to do, so that error is worth showing. */
-  let {error} = await sb.from("matches").update(patch).eq("id", id);
-  if(error && /round/.test(error.message||"")){
-    delete patch.round;
-    ({error} = await sb.from("matches").update(patch).eq("id", id));
-  }
-  if(error) return toast(error.message, true);
   const where = target ? target.name : "the ladder";
-  toast(`Filed under ${where} ✓`);
-  logAdminAction("refile_match", {id, p1:m.p1, p2:m.p2,
+  const ok = await optWrite({
+    store :"matches",
+    mutate: optPatch(x=>String(x.id)===String(id), ()=>Object.assign({}, patch)),
+    write : async ()=>{
+      let res = await sb.from("matches").update(patch).eq("id", id);
+      if(res.error && /round/.test(res.error.message||"")){
+        delete patch.round;
+        res = await sb.from("matches").update(patch).eq("id", id);
+      }
+      return res;
+    },
+    paint : ()=>render(),
+    ok    : `Filed under ${where} ✓`,
+    fail  : "Couldn't re-file that game."
+  });
+  if(ok) logAdminAction("refile_match", {id, p1:m.p1, p2:m.p2,
     from: m.tournament_id || null, to: patch.tournament_id, round: patch.round || null});
-  load();
 }
 window.refileMatch = refileMatch;
 
@@ -20544,15 +21026,20 @@ function refileSelectHTML(m){
 
 async function deleteMatchPermanently(id){
   if(!isAdmin) return;
+  if(!requireRealId(id)) return;
   const m = matches.find(x=>x.id===id);
   const desc = m ? `${m.p1} vs ${m.p2}` : "this game";
   if(!confirm(`Permanently delete ${desc}? This cannot be undone and is different from Reject.`)) return;
-  const {error} = await sb.from("matches").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Match permanently deleted");
-  logAdminAction("delete_match",{id, p1:m&&m.p1, p2:m&&m.p2, outcome:m&&m.outcome});
   if(openMatchId===id) closeMatch();
-  load();
+  const ok = await optWrite({
+    store :"matches",
+    mutate: optDrop(x=>String(x.id)===String(id)),
+    write : ()=>sb.from("matches").delete().eq("id",id),
+    paint : ()=>render(),
+    ok    : "Match permanently deleted",
+    fail  : "Couldn't delete that match."
+  });
+  if(ok) logAdminAction("delete_match",{id, p1:m&&m.p1, p2:m&&m.p2, outcome:m&&m.outcome});
 }
 window.deleteMatchPermanently = deleteMatchPermanently;
 
@@ -20566,6 +21053,7 @@ async function logAdminAction(action, detail){
 /* ---------- admin: edit a match ---------- */
 async function saveMatchEdit(id){
   if(!isAdmin) return;
+  if(!requireRealId(id)) return;
   const p1 = $("emP1").value.trim(), p2 = $("emP2").value.trim();
   const outcome = Number($("emOut").value);
   const sets = $("emSets").value.trim();
@@ -20575,12 +21063,16 @@ async function saveMatchEdit(id){
   const patch = {p1,p2,outcome,sets:sets||null};
   if(dateStr) patch.created_at = new Date(dateStr+"T12:00:00").toISOString();
   if(!confirm(`Save changes to this match?`)) return;
-  const {error}=await sb.from("matches").update(patch).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Match updated ✓");
-  logAdminAction("edit_match",{id, patch});
   closeMatch();
-  load();
+  const ok = await optWrite({
+    store :"matches",
+    mutate: optPatch(x=>String(x.id)===String(id), patch),
+    write : ()=>sb.from("matches").update(patch).eq("id",id),
+    paint : ()=>render(),
+    ok    : "Match updated ✓",
+    fail  : "Couldn't save those changes."
+  });
+  if(ok) logAdminAction("edit_match",{id, patch});
 }
 window.saveMatchEdit = saveMatchEdit;
 
@@ -20608,13 +21100,23 @@ async function addPastGame(){
   if(p1.toLowerCase()===p2.toLowerCase()) return toast("Players must differ",true);
   if(!dateStr) return toast("Pick the date it was played",true);
   const created_at = new Date(dateStr+"T12:00:00").toISOString();
-  const {error}=await sb.from("matches").insert({p1,p2,outcome,sets:sets||null,status:"approved",created_at});
-  if(error) return toast(error.message,true);
-  toast("Past game added ✓");
-  logAdminAction("add_past_game",{p1,p2,outcome,sets:sets||null,created_at});
+  const row = {p1, p2, outcome, sets:sets||null, status:"approved", created_at};
+  const draft = ["pgP1","pgP2","pgSets","pgDate"].map(i=>$(i).value);
   ["pgP1","pgP2","pgSets","pgDate"].forEach(i=>$(i).value="");
   $("pgOut").value="1";
-  load();
+  const ok = await optWrite({
+    store :"matches",
+    mutate: optAdd(optRow(Object.assign({}, row))),
+    write : ()=>sb.from("matches").insert(row),
+    paint : ()=>render(),
+    ok    : "Past game added ✓",
+    fail  : "Couldn't add that game — your entries are back in the form."
+  });
+  if(ok) logAdminAction("add_past_game",{p1,p2,outcome,sets:sets||null,created_at});
+  else {
+    ["pgP1","pgP2","pgSets","pgDate"].forEach((i,k)=>$(i).value=draft[k]);
+    $("pgOut").value=String(outcome);
+  }
 }
 window.addPastGame = addPastGame;
 
@@ -20630,11 +21132,17 @@ async function createTournament(){
   const counts_elo = $("tnElo").value === "true";
   const start_date = $("tnStartDate").value || null;
   if(!name) return toast("Give the tournament a name",true);
-  const {error} = await sb.from("tournaments").insert({name, format, counts_elo, status:"active", start_date});
-  if(error) return toast(error.message,true);
-  toast(start_date && new Date(start_date+"T00:00:00") > new Date() ? "Tournament scheduled ✓" : "Tournament created ✓");
+  const row = {name, format, counts_elo, status:"active", start_date};
   $("tnName").value=""; $("tnStartDate").value="";
-  load(); renderTournaments();
+  const ok = await optWrite({
+    store :"tournaments",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("tournaments").insert(row),
+    paint : ()=>renderTournaments(),
+    ok    : start_date && new Date(start_date+"T00:00:00") > new Date() ? "Tournament scheduled ✓" : "Tournament created ✓",
+    fail  : "Couldn't create that tournament."
+  });
+  if(!ok){ $("tnName").value=name; $("tnStartDate").value=start_date||""; }
 }
 window.createTournament = createTournament;
 
@@ -20843,6 +21351,7 @@ async function rpWrite(t, state){
       rpColumnMissing = true;
       return {local:true};
     }
+    console.warn("[rpWrite] bracket save failed", error);
     return {error};
   }
   return {};
@@ -22996,13 +23505,23 @@ async function rpSaveResult(tid, round, outcome){
   const payload = {p1: pair.p1, p2: pair.p2, outcome: Number(outcome), sets: sets || null,
                    status: "approved", tournament_id: tid, round};
 
-  const {error} = existing
-    ? await sb.from("matches").update(payload).eq("id", existing.id)
-    : await sb.from("matches").insert({...payload, created_at: new Date().toISOString()});
-  if(error) return toast(error.message, true);
-
+  /* the draw redraws off the local rows, so the bracket advances the moment
+     the score is saved rather than a round trip later */
+  const created_at = new Date().toISOString();
   rpOpenFixture = null;
-  await load();
+  const ok = await optWrite({
+    key   : `rp:${tid}:${round}`,
+    store :"matches",
+    mutate: existing
+      ? optPatch(x=>String(x.id)===String(existing.id), payload)
+      : optAdd(optRow(Object.assign({}, payload, {created_at}))),
+    write : ()=> existing
+      ? sb.from("matches").update(payload).eq("id", existing.id)
+      : sb.from("matches").insert(Object.assign({}, payload, {created_at})),
+    paint : ()=>{ renderTournaments(); renderTournamentDetail(tid); },
+    fail  : "Couldn't record that result."
+  });
+  if(!ok) return;
   const snap = rpSnapshot(t);
   if(snap.stage === "done" && snap.br && snap.br.final.winner){
     toast(`🏆 ${snap.br.final.winner} wins ${t.name}!`);
@@ -23010,7 +23529,6 @@ async function rpSaveResult(tid, round, outcome){
   } else {
     toast("Result recorded ✓");
   }
-  renderTournaments(); renderTournamentDetail(tid);
 }
 window.rpSaveResult = rpSaveResult;
 
@@ -23019,12 +23537,16 @@ async function rpUndoResult(tid, round){
   const m = rpGame(tid, round);
   if(!m) return;
   if(!confirm(`Undo ${m.p1} vs ${m.p2}? Anything that followed from it re-opens.`)) return;
-  const {error} = await sb.from("matches").delete().eq("id", m.id);
-  if(error) return toast(error.message, true);
   rpOpenFixture = null;
-  toast("Result undone");
-  await load();
-  renderTournaments(); renderTournamentDetail(tid);
+  await optWrite({
+    key   : `rp:${tid}:${round}`,
+    store :"matches",
+    mutate: optDrop(x=>String(x.id)===String(m.id)),
+    write : ()=>sb.from("matches").delete().eq("id", m.id),
+    paint : ()=>{ renderTournaments(); renderTournamentDetail(tid); },
+    ok    : "Result undone",
+    fail  : "Couldn't undo that result."
+  });
 }
 window.rpUndoResult = rpUndoResult;
 
@@ -23034,7 +23556,7 @@ async function rpToggleBronze(tid){
   const state = rpRead(t); if(!state) return;
   state.bronze = !state.bronze;
   const res = await rpWrite(t, state);
-  if(res.error) return toast(res.error.message, true);
+  if(res.error) return toast(optErrorText(res.error, "Couldn't save that change to the draw."), true);
   renderTournamentDetail(tid);
 }
 window.rpToggleBronze = rpToggleBronze;
@@ -23042,12 +23564,16 @@ window.rpToggleBronze = rpToggleBronze;
 async function rpCrown(tid, champ){
   if(!isAdmin) return;
   if(!confirm(`Crown ${champ} and close this event?`)) return;
-  const {error} = await sb.from("tournaments").update({status:"completed", champion:champ}).eq("id", tid);
-  if(error) return toast(error.message, true);
-  toast(`🏆 ${champ} crowned!`);
-  try{ confetti(); }catch(e){}
-  await load();
-  renderTournaments(); renderTournamentDetail(tid);
+  const ok = await optWrite({
+    key   : "crown:"+tid,
+    store :"tournaments",
+    mutate: optPatch(t=>String(t.id)===String(tid), {status:"completed", champion:champ}),
+    write : ()=>sb.from("tournaments").update({status:"completed", champion:champ}).eq("id", tid),
+    paint : ()=>{ renderTournaments(); renderTournamentDetail(tid); },
+    ok    : `🏆 ${champ} crowned!`,
+    fail  : "Couldn't crown that champion."
+  });
+  if(ok){ try{ confetti(); }catch(e){} }
 }
 window.rpCrown = rpCrown;
 
@@ -23075,18 +23601,28 @@ async function saveTournSchedule(tid){
   if(!isAdmin) return;
   const format = $("tnEditFormat").value;
   const start_date = $("tnEditStart").value || null;
-  const {error} = await sb.from("tournaments").update({format, start_date}).eq("id",tid);
-  if(error) return toast(error.message,true);
-  toast("Schedule updated ✓");
-  await load(); renderTournaments(); renderTournamentDetail(tid);
+  await optWrite({
+    key   : "tourn:"+tid,
+    store :"tournaments",
+    mutate: optPatch(t=>String(t.id)===String(tid), {format, start_date}),
+    write : ()=>sb.from("tournaments").update({format, start_date}).eq("id",tid),
+    paint : ()=>{ renderTournaments(); renderTournamentDetail(tid); },
+    ok    : "Schedule updated ✓",
+    fail  : "Couldn't save that schedule."
+  });
 }
 window.saveTournSchedule = saveTournSchedule;
 async function goLiveNow(tid){
   if(!isAdmin) return;
-  const {error} = await sb.from("tournaments").update({start_date:null}).eq("id",tid);
-  if(error) return toast(error.message,true);
-  toast("Tournament is live 🔴");
-  await load(); renderTournaments(); renderTournamentDetail(tid);
+  await optWrite({
+    key   : "tourn:"+tid,
+    store :"tournaments",
+    mutate: optPatch(t=>String(t.id)===String(tid), {start_date:null}),
+    write : ()=>sb.from("tournaments").update({start_date:null}).eq("id",tid),
+    paint : ()=>{ renderTournaments(); renderTournamentDetail(tid); },
+    ok    : "Tournament is live 🔴",
+    fail  : "Couldn't take that tournament live."
+  });
 }
 window.goLiveNow = goLiveNow;
 
@@ -23580,11 +24116,15 @@ async function addTournGame(tid){
   if(!p1||!p2) return toast("Both players required",true);
   if(p1.toLowerCase()===p2.toLowerCase()) return toast("Players must differ",true);
   const created_at = dateStr ? new Date(dateStr+"T12:00:00").toISOString() : new Date().toISOString();
-  const {error}=await sb.from("matches").insert({p1,p2,outcome,sets:sets||null,status:"approved",created_at,tournament_id:tid,round});
-  if(error) return toast(error.message,true);
-  toast("Game added to event ✓");
-  await load();
-  renderTournamentDetail(tid);
+  const row = {p1, p2, outcome, sets:sets||null, status:"approved", created_at, tournament_id:tid, round};
+  await optWrite({
+    store :"matches",
+    mutate: optAdd(optRow(Object.assign({}, row))),
+    write : ()=>sb.from("matches").insert(row),
+    paint : ()=>{ render(); renderTournamentDetail(tid); },
+    ok    : "Game added to event ✓",
+    fail  : "Couldn't add that game to the event."
+  });
 }
 window.addTournGame = addTournGame;
 
@@ -23593,11 +24133,15 @@ async function crownChampion(tid){
   const champ = $("tgChamp").value.trim();
   if(!champ) return toast("Enter the champion's name",true);
   if(!confirm(`Crown ${champ} as champion and complete this tournament?`)) return;
-  const {error}=await sb.from("tournaments").update({status:"completed",champion:champ}).eq("id",tid);
-  if(error) return toast(error.message,true);
-  toast(`🏆 ${champ} crowned!`);
-  await load();
-  renderTournaments();
+  await optWrite({
+    key   : "crown:"+tid,
+    store :"tournaments",
+    mutate: optPatch(t=>String(t.id)===String(tid), {status:"completed", champion:champ}),
+    write : ()=>sb.from("tournaments").update({status:"completed",champion:champ}).eq("id",tid),
+    paint : ()=>renderTournaments(),
+    ok    : `🏆 ${champ} crowned!`,
+    fail  : "Couldn't crown that champion."
+  });
 }
 window.crownChampion = crownChampion;
 
@@ -23606,12 +24150,17 @@ async function deleteTournament(id){
   const t = tournaments.find(x=>x.id===id);
   const n = t ? tournGames(id).length : 0;
   if(!confirm(`Permanently delete "${t?t.name:'this tournament'}"?${n?` Its ${n} game${n!==1?'s':''} stay on the ladder but lose the tournament tag.`:''} This cannot be undone.`)) return;
-  const {error} = await sb.from("tournaments").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Tournament deleted");
-  if(openTournamentId===id){ openTournamentId=null; $("tournDetail").style.display="none"; }
-  await load();
-  renderTournaments();
+  await optWrite({
+    store :"tournaments",
+    mutate: optDrop(t=>String(t.id)===String(id)),
+    write : ()=>sb.from("tournaments").delete().eq("id",id),
+    paint : ()=>{
+      if(openTournamentId===id){ openTournamentId=null; const d=$("tournDetail"); if(d) d.style.display="none"; }
+      renderTournaments();
+    },
+    ok    : "Tournament deleted",
+    fail  : "Couldn't delete that tournament."
+  });
 }
 window.deleteTournament = deleteTournament;
 
@@ -23779,7 +24328,7 @@ let doublesMatches=[];
 async function loadDoublesMatches(){
   try{
     const {data,error}=await sb.from("doubles_matches").select("*").order("created_at",{ascending:false}).limit(500);
-    if(!error && data) doublesMatches=data;
+    if(!error && data){ doublesMatches=data; optAdoptServerState(["doubles_matches"]); }
   }catch(e){}
 }
 function teamKey(a,b){ return [a,b].sort((x,y)=>x.localeCompare(y)).join(" & "); }
@@ -23788,11 +24337,21 @@ async function submitDoublesMatch(){
   const outcome=$("dbOut").value, sets=$("dbSets").value.trim();
   if(!a1||!a2||!b1||!b2) return toast("All four players required",true);
   const row={p1a:a1,p1b:a2,p2a:b1,p2b:b2,outcome:Number(outcome),sets:sets||null,status:"pending"};
-  const {error}=await sb.from("doubles_matches").insert(row);
-  if(error) return toast("Doubles needs its own Supabase table — ask your admin to create `doubles_matches` ("+error.message+")",true);
-  toast("Doubles match submitted ✓");
+  const draft = ["dbA1","dbA2","dbB1","dbB2","dbSets"].map(id=>$(id).value);
   ["dbA1","dbA2","dbB1","dbB2","dbSets"].forEach(id=>$(id).value="");
-  await loadDoublesMatches(); renderDoubles();
+  /* doubles_matches has its own loader, not load(), so this store settles
+     locally instead of waiting on the shared refresh */
+  const ok = await optWrite({
+    store  :"doubles_matches",
+    mutate : optAdd(optRow(Object.assign({}, row))),
+    write  : ()=>sb.from("doubles_matches").insert(row),
+    paint  : ()=>renderDoubles(),
+    ok     : "Doubles match submitted ✓",
+    fail   : "Doubles needs its own `doubles_matches` table — ask your admin to create it.",
+    refresh: false
+  });
+  if(ok){ await loadDoublesMatches(); optAdoptServerState(["doubles_matches"]); renderDoubles(); }
+  else ["dbA1","dbA2","dbB1","dbB2","dbSets"].forEach((id,k)=>$(id).value=draft[k]);
 }
 window.submitDoublesMatch=submitDoublesMatch;
 function computeDoublesStandings(){
@@ -23851,8 +24410,8 @@ const CASUAL_TYPE_LABEL={"1v1":"1v1","kings":"Kings court","doubles":"Casual dou
 const CASUAL_TYPE_MIN_PLAYERS={"1v1":2,"kings":3,"doubles":4};
 let casualPlayers=[{name:"",minutes:""},{name:"",minutes:""}];
 async function loadTrainingData(){
-  try{ const {data,error}=await sb.from("practice_log").select("*").order("created_at",{ascending:false}).limit(200); if(!error&&data) practiceLog=data; }catch(e){}
-  try{ const {data,error}=await sb.from("availability").select("*"); if(!error&&data) availabilityData=data; }catch(e){}
+  try{ const {data,error}=await sb.from("practice_log").select("*").order("created_at",{ascending:false}).limit(200); if(!error&&data){ practiceLog=data; optAdoptServerState(["practice_log"]); } }catch(e){}
+  try{ const {data,error}=await sb.from("availability").select("*"); if(!error&&data){ availabilityData=data; optAdoptServerState(["availability"]); } }catch(e){}
 }
 function renderCasualPlayerRows(){
   const box=$("csPlayerRows"); if(!box) return;
@@ -23880,14 +24439,36 @@ async function logCasualSession(){
   if(players.length<2) return toast("Add at least 2 players",true);
   const created_at=new Date(dateStr+"T12:00:00").toISOString();
   const row={type,notes,players,created_at,name:players[0].name,minutes:players[0].minutes};
-  let {error}=await sb.from("practice_log").insert(row);
-  if(error && /players/.test(error.message)){ delete row.players; ({error}=await sb.from("practice_log").insert(row)); }
-  if(error && /type/.test(error.message)){ delete row.type; ({error}=await sb.from("practice_log").insert(row)); }
-  if(error) return toast("Training log needs a `practice_log` table ("+error.message+")",true);
-  toast("Session logged ✓");
+  const draftPlayers = casualPlayers, draftNotes = $("csNotes").value, draftDate = $("csDate").value;
   casualPlayers=[{name:"",minutes:""},{name:"",minutes:""}];
   $("csNotes").value=""; $("csDate").value="";
-  await loadTrainingData(); renderTraining();
+  const ok = await optWrite({
+    store  :"practice_log",
+    mutate : optAdd(optRow(Object.assign({}, row))),
+    /* same optional-column story as the match forms: drop whichever column
+       PostgREST names and try again, testing the latest error each time */
+    write  : async ()=>{
+      let res = await sb.from("practice_log").insert(row);
+      for(const col of ["players","type"]){
+        if(!res.error) break;
+        if(!(col in row)) continue;
+        if(!new RegExp(col).test(res.error.message||"")) continue;
+        delete row[col];
+        res = await sb.from("practice_log").insert(row);
+      }
+      return res;
+    },
+    paint  : ()=>renderTraining(),
+    ok     : "Session logged ✓",
+    fail   : "The training log needs a `practice_log` table — ask your admin to create it.",
+    refresh: false
+  });
+  if(ok){ await loadTrainingData(); optAdoptServerState(["practice_log","availability"]); renderTraining(); }
+  else {
+    casualPlayers = draftPlayers;
+    $("csNotes").value = draftNotes; $("csDate").value = draftDate;
+    renderTraining();
+  }
 }
 window.logCasualSession=logCasualSession;
 let calCursor=new Date(); calCursor.setDate(1);
@@ -23992,13 +24573,21 @@ async function saveAvailability(){
   if(!name) return toast("Enter your name",true);
   const slots=[...document.querySelectorAll('.avail-cell.avail-on')].map(el=>el.dataset.k);
   const existing=availabilityData.find(a=>a.name===name);
-  const op = existing
-    ? sb.from("availability").update({slots}).eq("name",name)
-    : sb.from("availability").insert({name,slots});
-  const {error}=await op;
-  if(error) return toast("Availability needs an `availability` table ("+error.message+")",true);
-  toast("Availability saved ✓");
-  await loadTrainingData(); renderTraining();
+  const ok = await optWrite({
+    key    : "avail:"+name.toLowerCase(),
+    store  :"availability",
+    mutate : existing
+      ? optPatch(a=>a.name===name, {slots})
+      : optAdd(optRow({name, slots})),
+    write  : ()=> existing
+      ? sb.from("availability").update({slots}).eq("name",name)
+      : sb.from("availability").insert({name,slots}),
+    paint  : ()=>renderTraining(),
+    ok     : "Availability saved ✓",
+    fail   : "Availability needs an `availability` table — ask your admin to create it.",
+    refresh: false
+  });
+  if(ok){ await loadTrainingData(); optAdoptServerState(["practice_log","availability"]); renderTraining(); }
 }
 window.saveAvailability=saveAvailability;
 function renderScheduler(){
@@ -24562,19 +25151,34 @@ async function toggleReaction(type,id,emoji){
   if(!author){ toast("Add your name in the composer first",true); showView("feed"); $("cmpName")?.focus(); return; }
   const existing=reactions.find(r=>r.target_type===type && String(r.target_id)===String(id)
                  && r.emoji===emoji && (r.author||"").toLowerCase()===author.toLowerCase());
+  /* one chip, one write in the air at a time — otherwise the second tap of a
+     double-tap sees the optimistic row and asks the server to delete an id it
+     has never issued */
+  const key = `rx:${type}:${id}:${emoji}:${author.toLowerCase()}`;
+  const repaint = ()=>{
+    if(activeView==="feed") renderFeedSoon();
+    if(openMatchId!==null) openMatch(openMatchId);
+    if(openScheduledMatchId!==null) openScheduledMatch(openScheduledMatchId);
+  };
   if(existing){
-    const {error}=await sb.from("reactions").delete().eq("id",existing.id);
-    if(error) return toast(error.message,true);
+    await optWrite({
+      key, store:"reactions",
+      mutate: optDrop(r=>String(r.id)===String(existing.id)),
+      write : ()=>sb.from("reactions").delete().eq("id",existing.id),
+      paint : repaint,
+      fail  : "Couldn't take that reaction off."
+    });
   } else {
-    // celebratory burst from the tapped chip
+    // celebratory burst from the tapped chip — off the tap, not off the round trip
     try{ FX.burst(event.clientX, event.clientY, [emoji], 12); buzz(10); }catch(e){}
-    const {error}=await sb.from("reactions").insert({target_type:type,target_id:id,emoji,author});
-    if(error) return toast(error.message,true);
+    await optWrite({
+      key, store:"reactions",
+      mutate: optAdd(optRow({target_type:type, target_id:id, emoji, author})),
+      write : ()=>sb.from("reactions").insert({target_type:type,target_id:id,emoji,author}),
+      paint : repaint,
+      fail  : "Couldn't add that reaction."
+    });
   }
-  await load();
-  if(activeView==="feed") renderFeedSoon();
-  if(openMatchId!==null) openMatch(openMatchId);
-  if(openScheduledMatchId!==null) openScheduledMatch(openScheduledMatchId);
 }
 window.toggleReaction=toggleReaction;
 
@@ -24608,25 +25212,43 @@ async function publishPost(){
     let blob; try{ blob=await resizeImage(file,1200,0.82); }catch(e){ return toast("Couldn't process image",true); }
     const path=`posts/${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
     const up=await sb.storage.from("comment-images").upload(path,blob,{cacheControl:"3600",contentType:"image/jpeg"});
-    if(up.error) return toast("Upload failed: "+up.error.message,true);
+    if(up.error) return toast(optErrorText(up.error, "Couldn't upload that photo — your post wasn't sent."),true);
     image_url=sb.storage.from("comment-images").getPublicUrl(path).data.publicUrl;
   }
   const row={author,body,image_url};
   if(quoting){ row.quote_type=quoting.type; row.quote_id=quoting.id; }
-  const {error}=await sb.from("posts").insert(row);
-  if(error) return toast(error.message,true);
+  /* the composer clears and the post appears the moment you hit send; if the
+     insert is refused the post is pulled back out and the text is handed back
+     rather than lost */
+  const draft = body, draftQuote = quoting;
   $("cmpBody").value=""; clearPostImage(); cancelQuote();
-  toast("Posted ✓");
-  await load(); renderFeed();
+  const sent = await optWrite({
+    store :"posts",
+    mutate: optAdd(optRow(Object.assign({}, row, {user_id: currentUser ? currentUser.id : null}))),
+    write : ()=>sb.from("posts").insert(row),
+    paint : ()=>renderFeed(),
+    ok    : "Posted ✓",
+    fail  : "Your post didn't send — the text is back in the composer."
+  });
+  if(!sent){
+    const b=$("cmpBody"); if(b){ b.value=draft; b.focus(); }
+    quoting = draftQuote;
+    renderFeed();
+  }
 }
 window.publishPost=publishPost;
 
 async function deletePost(id){
   if(!isAdmin) return;
   if(!confirm("Delete this post?")) return;
-  const {error}=await sb.from("posts").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Post deleted"); await load(); renderFeed();
+  await optWrite({
+    store :"posts",
+    mutate: optDrop(p=>String(p.id)===String(id)),
+    write : ()=>sb.from("posts").delete().eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : "Post deleted",
+    fail  : "Couldn't delete that post."
+  });
 }
 window.deletePost=deletePost;
 
@@ -24754,21 +25376,33 @@ async function renamePlayer(){
   const verb = merging?`merge "${from}" into existing player "${to}"`:`rename "${from}" to "${to}"`;
   if(!confirm(`This will ${verb} across ${affected.length} game${affected.length>1?'s':''}, plus their comments, posts and ratings. Continue?`)) return;
 
-  // matches
-  for(const m of affected){
-    const patch={};
-    if(m.p1===from) patch.p1=to;
-    if(m.p2===from) patch.p2=to;
-    const {error}=await sb.from("matches").update(patch).eq("id",m.id);
-    if(error) return toast("Failed on a match: "+error.message,true);
+  /* This used to walk the affected matches one at a time — one round trip per
+     game, and a failure halfway through left the rename half applied with no
+     way back. There are only ever two shapes of patch, so it is two updates
+     now however many games there are, and far less room to end up half done.
+
+     A rename is a multi-table migration with no transaction around it, so it
+     is deliberately NOT optimistic: nothing local moves until the server has
+     taken every part of it. */
+  const p1ids = affected.filter(m=>m.p1===from).map(m=>m.id);
+  const p2ids = affected.filter(m=>m.p2===from).map(m=>m.id);
+  if(p1ids.length){
+    const {error}=await sb.from("matches").update({p1:to}).in("id",p1ids);
+    if(error) return toast(optErrorText(error,"The rename failed on the games — nothing else was changed."),true);
   }
-  // author fields across social tables (best-effort)
+  if(p2ids.length){
+    const {error}=await sb.from("matches").update({p2:to}).in("id",p2ids);
+    if(error) return toast(optErrorText(error,"The rename half applied — re-run it to finish the games."),true);
+  }
+  /* author fields across social tables. Best-effort by design: a project
+     without one of these tables must not block a rename, but a failure is
+     worth a line in the console rather than being swallowed whole. */
   const authorTables=[["comments","author"],["posts","author"],["reactions","author"],
     ["challenges","challenger"],["challenges","opponent"],["polls","author"],
     ["poll_votes","voter"],["feed_replies","author"],["dms","sender"],["dms","recipient"]];
-  for(const [tbl,col] of authorTables){
-    await sb.from(tbl).update({[col]:to}).eq(col,from);
-  }
+  const social = await Promise.all(authorTables.map(([tbl,col])=>
+    sb.from(tbl).update({[col]:to}).eq(col,from).then(r=>r, e=>({error:e}))));
+  social.forEach((r,i)=>{ if(r && r.error) console.warn("[rename] "+authorTables[i][0]+"."+authorTables[i][1]+" not renamed", r.error); });
   // player_ratings: move attributes if target has none
   const fromR=playerRatings[from.toLowerCase()];
   if(fromR){
@@ -24800,22 +25434,32 @@ async function muteName(){
   const name=$("muteNameInput").value.trim();
   if(!name) return toast("Enter a name to mute",true);
   const reason=$("muteReasonInput").value.trim();
-  const {error}=await sb.from("muted_names").insert({name, reason: reason||null, muted_by: currentAdminUserId});
-  if(error) return toast(error.message,true);
-  toast("Muted");
-  logAdminAction("mute_name",{name,reason});
+  const row = {name, reason: reason||null, muted_by: currentAdminUserId};
   $("muteNameInput").value=""; $("muteReasonInput").value="";
-  load();
+  const ok = await optWrite({
+    store :"muted_names",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("muted_names").insert(row),
+    paint : ()=>renderMutedNames(),
+    ok    : "Muted",
+    fail  : "Couldn't mute that name."
+  });
+  if(ok) logAdminAction("mute_name",{name,reason});
+  else { $("muteNameInput").value=name; $("muteReasonInput").value=reason; }
 }
 window.muteName = muteName;
 
 async function unmuteName(name){
   if(!isAdmin) return toast("Admin only",true);
-  const {error}=await sb.from("muted_names").delete().eq("name",name);
-  if(error) return toast(error.message,true);
-  toast("Unmuted");
-  logAdminAction("unmute_name",{name});
-  load();
+  const ok = await optWrite({
+    store :"muted_names",
+    mutate: optDrop(m=>(m.name||"")===name),
+    write : ()=>sb.from("muted_names").delete().eq("name",name),
+    paint : ()=>renderMutedNames(),
+    ok    : "Unmuted",
+    fail  : "Couldn't unmute that name."
+  });
+  if(ok) logAdminAction("unmute_name",{name});
 }
 window.unmuteName = unmuteName;
 
@@ -24852,22 +25496,32 @@ async function addToRoster(){
   const email=$("rosterEmailInput").value.trim().toLowerCase();
   const name=$("rosterNameInput").value.trim();
   if(!email||!name) return toast("Enter both an email and a name",true);
-  const {error}=await sb.from("player_roster").insert({email, name, added_by: currentAdminUserId});
-  if(error) return toast(error.message,true);
-  toast("Added to roster ✓");
-  logAdminAction("add_roster",{email,name});
+  const row = {email, name, added_by: currentAdminUserId};
   $("rosterEmailInput").value=""; $("rosterNameInput").value="";
-  load();
+  const ok = await optWrite({
+    store :"player_roster",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("player_roster").insert(row),
+    paint : ()=>renderPlayerRoster(),
+    ok    : "Added to roster ✓",
+    fail  : "Couldn't add them to the roster."
+  });
+  if(ok) logAdminAction("add_roster",{email,name});
+  else { $("rosterEmailInput").value=email; $("rosterNameInput").value=name; }
 }
 window.addToRoster = addToRoster;
 
 async function removeFromRoster(email){
   if(!isAdmin) return toast("Admin only",true);
-  const {error}=await sb.from("player_roster").delete().eq("email",email);
-  if(error) return toast(error.message,true);
-  toast("Removed from roster");
-  logAdminAction("remove_roster",{email});
-  load();
+  const ok = await optWrite({
+    store :"player_roster",
+    mutate: optDrop(r=>(r.email||"")===email),
+    write : ()=>sb.from("player_roster").delete().eq("email",email),
+    paint : ()=>renderPlayerRoster(),
+    ok    : "Removed from roster",
+    fail  : "Couldn't remove them from the roster."
+  });
+  if(ok) logAdminAction("remove_roster",{email});
 }
 window.removeFromRoster = removeFromRoster;
 
@@ -24939,9 +25593,10 @@ function renderDMs(){
     const mine=(d.sender||"").toLowerCase()===me.toLowerCase();
     /* a bubble sized for a sentence is not a bubble you can watch a video
        in, so one carrying a player is allowed to be wider */
-    return `<div class="dm-msg ${mine?'dm-mine':'dm-theirs'}${ytIdsIn(d.body).length?' dm-video':''}" style="--ac:${playerColor(d.sender)}">
+    const pend=optIsPendingRow(d);
+    return `<div class="dm-msg ${mine?'dm-mine':'dm-theirs'}${ytIdsIn(d.body).length?' dm-video':''}${pend?' opt-pending':''}"${pend?' aria-busy="true"':''} style="--ac:${playerColor(d.sender)}">
       ${socialBody(d.body,'dm-text')}
-      <div class="dm-time">${when(d.created_at)}</div>
+      <div class="dm-time">${pend?'sending…':when(d.created_at)}</div>
     </div>`;
   }).join(''):'<div class="c-empty">Say hi 👋</div>';
   const body=$("dmBody"); body.scrollTop=body.scrollHeight;
@@ -24955,10 +25610,16 @@ async function sendDM(){
   if(!me||!dmPeer) return;
   const el=$("dmInput"); const body=el.value.trim();
   if(!body) return;
-  const {error}=await sb.from("dms").insert({sender:me,recipient:dmPeer,body});
-  if(error) return toast(error.message,true);
+  const row = {sender:me, recipient:dmPeer, body};
   el.value="";
-  await load(); renderDMs();
+  const sent = await optWrite({
+    store :"dms",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("dms").insert(row),
+    paint : ()=>renderDMs(),
+    fail  : "That message didn't send."
+  });
+  if(!sent){ const back=$("dmInput"); if(back){ back.value=body; back.focus(); } }
 }
 window.sendDM=sendDM;
 
@@ -25001,7 +25662,7 @@ async function postWeeklyRecap(){
   const txt=weeklyRecap();
   if(!txt) return toast("No games this week to recap",true);
   const {error}=await sb.from("posts").insert({author:"League Bot",body:txt+" #weekinreview"});
-  if(error) return toast(error.message,true);
+  if(error) return toast(optErrorText(error,"Couldn't post the week in review."),true);
   toast("Weekly recap posted ✓");
   await load(); renderFeed();
 }
@@ -25312,7 +25973,7 @@ async function quickBanter(){
   const target=prompt("Who's the target? (optional)","");
   const body=(target?("@"+target+" "):"")+line;
   const {error}=await sb.from("posts").insert({author:me,body});
-  if(error) return toast(error.message,true);
+  if(error) return toast(optErrorText(error,"That didn't post."),true);
   FX.serve(); buzz(12);
   toast("Banter posted 🎤");
   await load(); renderFeed();
@@ -25553,22 +26214,26 @@ function renderFeed(){
     if(it.kind==="post"){
       const p=it.data;
       const own=ownsPost(p)||isAdmin;
-      return `<article class="fcard" style="--ac:${playerColor(p.author)}">
+      /* still in flight: no real id to save, quote, edit, delete or react
+         against, so the card shows but its controls wait */
+      const pend=optIsPendingRow(p);
+      return `<article class="fcard${pend?' opt-pending':''}"${pend?' aria-busy="true"':''} style="--ac:${playerColor(p.author)}">
         <div class="fc-head">${avatar(p.author,36)}
           <div><div class="fc-author">${esc(p.author)}${badgeStrip(p.author,2)}</div>
             <div class="fc-time">${when(p.created_at)}${p.edited_at?' · edited':''}</div></div>
           <div class="fc-tools">
+            ${pend?'<span class="fc-sending">sending…</span>':`
             <button onclick="event.stopPropagation();toggleSave('post',${p.id})" title="Save">${isSaved('post:'+p.id)?'🔖':'📑'}</button>
             <button onclick="event.stopPropagation();startQuote('post',${p.id})" title="Quote">❝</button>
             ${own?`<button onclick="event.stopPropagation();editPost(${p.id})" title="Edit">✎</button>
-                   <button onclick="event.stopPropagation();deletePost(${p.id})" title="Delete">✕</button>`:''}
+                   <button onclick="event.stopPropagation();deletePost(${p.id})" title="Delete">✕</button>`:''}`}
           </div>
         </div>
         ${socialBody(p.body,'fc-body')}
         ${p.quote_type?`<div class="qt-wrap">${quotePreview(p.quote_type,p.quote_id)}</div>`:''}
         ${p.image_url?`<div class="fc-img"><img src="${esc(p.image_url)}" loading="lazy" onclick="window.open('${esc(p.image_url)}','_blank')"></div>`:''}
-        ${reactionBar("post",p.id)}
-        ${replySection("post",p.id)}
+        ${pend?'':reactionBar("post",p.id)}
+        ${pend?'':replySection("post",p.id)}
       </article>`;
     }
     if(it.kind==="result"){
@@ -25631,16 +26296,17 @@ function replyNode(r,type,id,depth){
   const me=myName().toLowerCase();
   const mine=(r.author||"").toLowerCase()===me;
   const ind=depth>0?' style="margin-left:'+Math.min(depth,3)*16+'px"':'';
-  return '<div class="frep"'+ind+'>'
+  const pend=optIsPendingRow(r);   // no server id yet — edit/delete/reply wait
+  return '<div class="frep'+(pend?' opt-pending':'')+'"'+(pend?' aria-busy="true"':'')+ind+'>'
     +'<div class="frep-head">'+avatar(r.author,22)
     +'<span class="frep-author">'+esc(r.author)+'</span>'
-    +'<span class="frep-time">'+when(r.created_at)+(r.edited_at?' · edited':'')+'</span>'
-    +((mine||isAdmin)?'<span class="frep-tools">'
+    +'<span class="frep-time">'+(pend?'sending…':when(r.created_at)+(r.edited_at?' · edited':''))+'</span>'
+    +((mine||isAdmin)&&!pend?'<span class="frep-tools">'
        +'<button onclick="event.stopPropagation();editReply('+r.id+')">edit</button>'
        +'<button onclick="event.stopPropagation();deleteReply('+r.id+')">delete</button></span>':'')
     +'</div>'
     +socialBody(r.body,'frep-body')
-    +'<button class="frep-reply" onclick="event.stopPropagation();openReply(\''+type+'\','+id+','+r.id+',\''+esc(r.author).replace(/'/g,"\\'")+'\')">reply</button>'
+    +(pend?'':'<button class="frep-reply" onclick="event.stopPropagation();openReply(\''+type+'\','+id+','+r.id+',\''+esc(r.author).replace(/'/g,"\\'")+'\')">reply</button>')
     +r.kids.map(k=>replyNode(k,type,id,depth+1)).join('')
     +'</div>';
 }
@@ -25700,11 +26366,20 @@ async function sendReply(type,id){
   if(!body) return toast("Write something first",true);
   if(isNameMuted(author)) return toast("That name has been muted by an admin",true);
   const parent_id = replyParent[type+":"+id] || null;
-  const {error}=await sb.from("feed_replies").insert({target_type:type,target_id:id,parent_id,author,body});
-  if(error) return toast(error.message,true);
+  const row = {target_type:type, target_id:id, parent_id, author, body};
   if(el) el.value="";
   cancelFeedReply(type,id);
-  await load(); renderFeed();
+  const sent = await optWrite({
+    store :"feed_replies",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("feed_replies").insert(row),
+    paint : ()=>renderFeed(),
+    fail  : "Your reply didn't send — the text is back in the box."
+  });
+  if(!sent){
+    const back=$("frBody_"+type+"_"+id);
+    if(back){ back.value=body; back.focus(); }
+  }
 }
 window.sendReply=sendReply;
 
@@ -25715,9 +26390,14 @@ async function editReply(id){
   if((r.author||"").toLowerCase()!==me && !isAdmin) return toast("You can only edit your own",true);
   const v=prompt("Edit reply:",r.body);
   if(v===null) return;
-  const {error}=await sb.from("feed_replies").update({body:v.trim()}).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Reply updated"); await load(); renderFeed();
+  await optWrite({
+    store :"feed_replies",
+    mutate: optPatch(x=>String(x.id)===String(id), {body:v.trim()}),
+    write : ()=>sb.from("feed_replies").update({body:v.trim()}).eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : "Reply updated",
+    fail  : "Couldn't save that edit."
+  });
 }
 window.editReply=editReply;
 
@@ -25727,9 +26407,14 @@ async function deleteReply(id){
   const me=myName().toLowerCase();
   if((r.author||"").toLowerCase()!==me && !isAdmin) return toast("You can only delete your own",true);
   if(!confirm("Delete this reply?")) return;
-  const {error}=await sb.from("feed_replies").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Reply deleted"); await load(); renderFeed();
+  await optWrite({
+    store :"feed_replies",
+    mutate: optDrop(x=>String(x.id)===String(id)),
+    write : ()=>sb.from("feed_replies").delete().eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : "Reply deleted",
+    fail  : "Couldn't delete that reply."
+  });
 }
 window.deleteReply=deleteReply;
 
@@ -25750,9 +26435,15 @@ async function editPost(id){
   if(!ownsPost(p) && !isAdmin) return toast("You can only edit your own posts",true);
   const v=prompt("Edit your post:",p.body||"");
   if(v===null) return;
-  const {error}=await sb.from("posts").update({body:v.trim(),edited_at:new Date().toISOString()}).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast("Post updated ✓"); await load(); renderFeed();
+  const patch = {body:v.trim(), edited_at:new Date().toISOString()};
+  await optWrite({
+    store :"posts",
+    mutate: optPatch(x=>String(x.id)===String(id), patch),
+    write : ()=>sb.from("posts").update(patch).eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : "Post updated ✓",
+    fail  : "Couldn't save that edit."
+  });
 }
 window.editPost=editPost;
 
@@ -25947,10 +26638,18 @@ function playerStatus(name){
 }
 async function saveStatus(name){
   const v=$("statusInput").value.trim().slice(0,90);
-  const {error}=await sb.from("player_ratings").upsert({name, status:v||null},{onConflict:"name"});
-  if(error) return toast(error.message,true);
-  toast(v?"Status updated ✓":"Status cleared");
-  await load(); openProfile(name);
+  const k=(name||"").toLowerCase();
+  /* playerRatings is a name->row map rather than an array, so its mutate
+     rebuilds the object instead of filtering a list */
+  await optWrite({
+    key   : "status:"+k,
+    store :"player_ratings",
+    mutate: map => Object.assign({}, map, {[k]: Object.assign({name}, map[k], {status: v||null})}),
+    write : ()=>sb.from("player_ratings").upsert({name, status:v||null},{onConflict:"name"}),
+    paint : ()=>{ if(typeof openProfile==="function") openProfile(name); },
+    ok    : v?"Status updated ✓":"Status cleared",
+    fail  : "Couldn't save that status."
+  });
 }
 window.saveStatus=saveStatus;
 
@@ -25964,28 +26663,56 @@ async function postChallenge(){
   if(!opponent) return toast("Who are you calling out?",true);
   if(challenger.toLowerCase()===opponent.toLowerCase()) return toast("You can't challenge yourself",true);
   if(isNameMuted(challenger)) return toast("That name has been muted by an admin",true);
-  const {error}=await sb.from("challenges").insert({challenger,opponent,message,status:"open",stake:($("chStake")?.value||"").trim()||null});
-  if(error && /stake/.test(error.message)){ ({error:err2}=await sb.from("challenges").insert({challenger,opponent,message,status:"open"})); }
-  if(error) return toast(error.message,true);
+  const stake = ($("chStake")?.value||"").trim() || null;
+  const row = {challenger, opponent, message, status:"open", stake};
   $("chMsg").value=""; $("chTo").value=""; if($("chStake"))$("chStake").value="";
-  toast("Challenge thrown 🎾");
-  await load(); renderFeed();
+  const sent = await optWrite({
+    store :"challenges",
+    mutate: optAdd(optRow(row)),
+    /* older projects predate the stake column. The retry used to assign to an
+       undeclared `err2`, so the original error was still the one tested a line
+       later and the fallback insert could never actually rescue the write —
+       it just posted the challenge twice on the projects where it worked. */
+    write : async ()=>{
+      const first = await sb.from("challenges").insert(row);
+      if(first.error && /stake/.test(first.error.message||""))
+        return sb.from("challenges").insert({challenger, opponent, message, status:"open"});
+      return first;
+    },
+    paint : ()=>renderFeed(),
+    ok    : "Challenge thrown 🎾",
+    fail  : "That challenge didn't send."
+  });
+  if(!sent){
+    if($("chMsg")) $("chMsg").value=message;
+    if($("chTo"))  $("chTo").value=opponent;
+    if($("chStake") && stake) $("chStake").value=stake;
+  }
 }
 window.postChallenge=postChallenge;
 
 async function answerChallenge(id,status){
-  const {error}=await sb.from("challenges").update({status}).eq("id",id);
-  if(error) return toast(error.message,true);
-  toast(status==="accepted"?"Challenge accepted 🎾":status==="declined"?"Challenge declined":"Marked as played");
-  await load(); renderFeed();
+  await optWrite({
+    key   : "challenge:"+id,
+    store :"challenges",
+    mutate: optPatch(c=>String(c.id)===String(id), {status}),
+    write : ()=>sb.from("challenges").update({status}).eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : status==="accepted"?"Challenge accepted 🎾":status==="declined"?"Challenge declined":"Marked as played",
+    fail  : "Couldn't answer that challenge."
+  });
 }
 window.answerChallenge=answerChallenge;
 
 async function deleteChallenge(id){
   if(!confirm("Remove this challenge?")) return;
-  const {error}=await sb.from("challenges").delete().eq("id",id);
-  if(error) return toast(error.message,true);
-  await load(); renderFeed();
+  await optWrite({
+    store :"challenges",
+    mutate: optDrop(c=>String(c.id)===String(id)),
+    write : ()=>sb.from("challenges").delete().eq("id",id),
+    paint : ()=>renderFeed(),
+    fail  : "Couldn't remove that challenge."
+  });
 }
 window.deleteChallenge=deleteChallenge;
 
@@ -25999,11 +26726,18 @@ async function createPoll(){
   if(!question) return toast("Ask a question",true);
   if(opts.length<2) return toast("Give at least two options",true);
   if(isNameMuted(author)) return toast("That name has been muted by an admin",true);
-  const {error}=await sb.from("polls").insert({author,question,options:opts});
-  if(error) return toast(error.message,true);
-  ["plQ","plO1","plO2","plO3"].forEach(i=>$(i).value="");
-  toast("Poll posted ✓");
-  await load(); renderFeed();
+  const row = {author, question, options:opts};
+  const draft = ["plQ","plO1","plO2","plO3"].map(i=>$(i)?$(i).value:"");
+  ["plQ","plO1","plO2","plO3"].forEach(i=>{ if($(i)) $(i).value=""; });
+  const sent = await optWrite({
+    store :"polls",
+    mutate: optAdd(optRow(row)),
+    write : ()=>sb.from("polls").insert(row),
+    paint : ()=>renderFeed(),
+    ok    : "Poll posted ✓",
+    fail  : "That poll didn't send."
+  });
+  if(!sent) ["plQ","plO1","plO2","plO3"].forEach((i,k)=>{ if($(i)) $(i).value=draft[k]; });
 }
 window.createPoll=createPoll;
 
@@ -26012,23 +26746,48 @@ async function votePoll(pollId,choice){
   const voter=myName().trim();
   if(!voter) return toast("Add your name in the composer first",true);
   const existing=pollVotes.find(v=>v.poll_id===pollId && (v.voter||"").toLowerCase()===voter.toLowerCase());
+  /* the bar moves on the tap. One vote per poll per person in the air at a
+     time, so hammering the options can't leave two rows behind. */
+  const key = "vote:"+pollId+":"+voter.toLowerCase();
   if(existing && existing.choice===choice){
-    await sb.from("poll_votes").delete().eq("id",existing.id);
+    await optWrite({
+      key, store:"poll_votes",
+      mutate: optDrop(v=>String(v.id)===String(existing.id)),
+      write : ()=>sb.from("poll_votes").delete().eq("id",existing.id),
+      paint : ()=>renderFeed(),
+      fail  : "Couldn't take your vote back."
+    });
   } else if(existing){
-    await sb.from("poll_votes").update({choice}).eq("id",existing.id);
+    await optWrite({
+      key, store:"poll_votes",
+      mutate: optPatch(v=>String(v.id)===String(existing.id), {choice}),
+      write : ()=>sb.from("poll_votes").update({choice}).eq("id",existing.id),
+      paint : ()=>renderFeed(),
+      fail  : "Couldn't change your vote."
+    });
   } else {
-    const {error}=await sb.from("poll_votes").insert({poll_id:pollId,voter,choice});
-    if(error) return toast(error.message,true);
+    await optWrite({
+      key, store:"poll_votes",
+      mutate: optAdd(optRow({poll_id:pollId, voter, choice})),
+      write : ()=>sb.from("poll_votes").insert({poll_id:pollId,voter,choice}),
+      paint : ()=>renderFeed(),
+      fail  : "Your vote didn't go through."
+    });
   }
-  await load(); renderFeed();
 }
 window.votePoll=votePoll;
 
 async function deletePoll(id){
   if(!isAdmin) return;
   if(!confirm("Delete this poll?")) return;
-  await sb.from("polls").delete().eq("id",id);
-  await load(); renderFeed();
+  await optWrite({
+    store :"polls",
+    mutate: optDrop(p=>String(p.id)===String(id)),
+    write : ()=>sb.from("polls").delete().eq("id",id),
+    paint : ()=>renderFeed(),
+    ok    : "Poll deleted",
+    fail  : "Couldn't delete that poll."
+  });
 }
 window.deletePoll=deletePoll;
 
@@ -27894,7 +28653,7 @@ async function loadCourtReports(){
     const cutoff = new Date(Date.now() - CT_REPORT_MAX_AGE_DAYS*86400000).toISOString();
     const { data, error } = await sb.from("court_reports").select("*").gte("created_at",cutoff)
       .order("created_at",{ascending:false}).limit(300);
-    if(!error && data) courtReports = data;
+    if(!error && data){ courtReports = data; optAdoptServerState(["court_reports"]); }
   }catch(e){ /* keep last-known courtReports */ }
 }
 
@@ -27905,13 +28664,20 @@ async function submitCourtReport(score, label){
   ctReportSubmitting = true; renderCourtReportWidget();
   const row = { reporter, hour:new Date().getHours(), dow:new Date().getDay(), score,
                 note: ctReportNoteDraft.trim().slice(0,140) || null };
-  const { error } = await sb.from("court_reports").insert(row);
-  ctReportSubmitting = false;
-  if(error){ toast(error.message,true); renderCourtReportWidget(); return; }
-  toast(`Logged: ${label}`);
+  const draftNote = ctReportNoteDraft;
   ctReportNoteDraft = "";
-  await loadCourtReports();
-  renderCourt();
+  const ok = await optWrite({
+    store  :"court_reports",
+    mutate : optAdd(optRow(Object.assign({}, row))),
+    write  : ()=>sb.from("court_reports").insert(row),
+    paint  : ()=>{ ctReportSubmitting = false; renderCourt(); },
+    ok     : `Logged: ${label}`,
+    fail   : "Couldn't log that court report.",
+    refresh: false
+  });
+  ctReportSubmitting = false;
+  if(ok){ await loadCourtReports(); optAdoptServerState(["court_reports"]); renderCourt(); }
+  else { ctReportNoteDraft = draftNote; renderCourtReportWidget(); }
 }
 window.submitCourtReport = submitCourtReport;
 
@@ -29540,7 +30306,7 @@ async function signInPlayer(){
   const password=$("loginPassword").value;
   if(!email||!password) return toast("Enter your email and password",true);
   const {error}=await sb.auth.signInWithPassword({email,password});
-  if(error) return toast(error.message,true);
+  if(error) return toast(optErrorText(error, error.message),true);
   $("loginPassword").value="";
   closeLoginModal();
   await refreshAdminStatus();
@@ -29557,7 +30323,7 @@ async function signUpPlayer(){
   if(!email||!password) return toast("Enter your email and password",true);
   if(password.length<6) return toast("Password must be at least 6 characters",true);
   const {data,error}=await sb.auth.signUp({email,password});
-  if(error) return toast(error.message,true);
+  if(error) return toast(optErrorText(error, error.message),true);
   $("loginPassword").value="";
   if(data && data.session){
     closeLoginModal();
@@ -29675,7 +30441,7 @@ async function submitAdminLogin(){
   const password=$("adminPassword").value;
   if(!email||!password) return toast("Enter email and password",true);
   const {data,error} = await sb.auth.signInWithPassword({email,password});
-  if(error) return toast(error.message,true);
+  if(error) return toast(optErrorText(error, error.message),true);
   $("adminPassword").value="";
   closeAdminLogin();
   await refreshAdminStatus();
@@ -29814,25 +30580,30 @@ if(configured){
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   $("setupNote").style.display="none";
   $("tagline").textContent=taglineText();
-  refreshAdminStatus().then(load);
+  /* wrapped rather than passed bare: load() reads an options argument now,
+     and a bare `.then(load)` hands it whatever the promise resolved to */
+  refreshAdminStatus().then(()=>load());
   refreshMyProfile().then(()=>afterIdentityChange());
   sb.auth.onAuthStateChange((event,session)=>{
     refreshAdminStatus().then(()=>refreshAfterAdminChange());
     refreshMyProfile().then(()=>afterIdentityChange());
   });
-  // live updates: refresh when the matches table changes
-  sb.channel("matches-live")
-    .on("postgres_changes",{event:"*",schema:"public",table:"matches"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"comments"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"posts"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"reactions"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"challenges"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"polls"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"poll_votes"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"feed_replies"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"dms"},load)
-    .on("postgres_changes",{event:"*",schema:"public",table:"scheduled_matches"},load)
-    .subscribe();
+  /* Live updates. Each of these used to be wired straight to `load`, so a
+     busy minute in the feed — or one of your own writes, which comes back at
+     you as a change event — meant one full reload per row touched, each one
+     un-coalesced and each one able to throw a "Load failed" toast over
+     whatever you were doing. They share the write path's coalescer now: a
+     burst of changes costs one quiet refresh, and an in-flight optimistic
+     write is re-laid over the rows that come back rather than blinking out.
+     (Handlers are also called with a payload argument, which `load` would
+     have read as its options object.) */
+  const liveTables = ["matches","comments","posts","reactions","challenges",
+                      "polls","poll_votes","feed_replies","dms","scheduled_matches"];
+  const liveChan = sb.channel("matches-live");
+  liveTables.forEach(table=>{
+    liveChan.on("postgres_changes",{event:"*",schema:"public",table},()=>optRefreshSoon(600));
+  });
+  liveChan.subscribe();
   // separate, lighter channel: court reports don't need the full standings/feed reload
   sb.channel("court-reports-live")
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"court_reports"}, async ()=>{

@@ -201,6 +201,18 @@ No framework — plain module-level JS arrays/objects re-rendered via innerHTML 
 - Calendar keeps calCursor (visible month) and selectedCalDay (highlighted day key) as local UI state.
 In the target codebase, model these as: a data layer (whatever the app already uses — React Query, Redux, plain hooks, etc.) for the Supabase-backed collections, plus local component state for in-progress/unsaved flows (point tracker, casual-session form, calendar selection).
 
+### Writes are optimistic
+Every write goes through one helper (`optWrite`) rather than talking to Supabase directly, because the naive shape — await the insert, await a full refetch, then paint — cost about a second of frozen UI per tap on a phone.
+
+- **The change is applied locally and painted first**, then the round trip runs behind it. A refused write is peeled back off, the UI repaints without it, and the person gets a plain sentence ("You're offline — that didn't send") instead of raw Postgres.
+- **Each store keeps a *base*** — the last rows the server confirmed — and the live array is always base with every in-flight change folded over it. Rolling one write back is dropping its fold and rebuilding, so a failure in the middle of three queued writes doesn't take the other two with it.
+- **A refresh landing mid-flight re-lays** the still-pending changes over the new server rows, so a row you just typed doesn't blink out and back.
+- **Optimistic rows carry a negative placeholder id** until the server issues a real one. They render dimmed (`.opt-pending`, `aria-busy`) with their id-dependent controls held back, and admin actions refuse to act on them.
+- **Text is never lost.** A failed post, comment, reply, DM, poll or match report puts what was typed back in the field it came from.
+- **Refreshes are coalesced.** Post-write confirmations and `postgres_changes` events share one debounced pass, so a busy minute in the feed costs one refetch rather than one per row touched. That pass fetches all fifteen tables in parallel.
+
+If the target stack has React Query / SWR / RTK Query, this maps directly onto their optimistic-mutation primitives (`onMutate` + `onError` rollback + coalesced invalidation) — don't reimplement the bookkeeping by hand.
+
 ## Design Tokens
 
 ### Colors (CSS custom properties in the source)
