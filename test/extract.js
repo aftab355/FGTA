@@ -26,8 +26,10 @@ function loadBall(){
                       code+'\nreturn {'+names.join(',')+'};')();
 }
 function loadScore(){
-  const code=region('SCORE-CORE');
-  const names=['scGameLengths','scRuns','scSplit','scFrame'];
+  const code=region('SCORE-CORE')+'\n'+region('SCORE-ASSIGN');
+  const names=['scGameLengths','scRuns','scSplit','scFrame','scExpectedGames',
+               'scExpectedRuns','scPartition','scPickSplit','scGameOdds','scHoldOf','scHoldToPoint',
+               'scSetOrders','scBestOrder','scScore'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
 module.exports={region,loadCore,loadScore,loadBall,APP};

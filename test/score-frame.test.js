@@ -12,56 +12,7 @@
 const {loadScore}=require('./extract.js');
 const {scFrame}=loadScore();
 
-/* ---- a match, under the rules the tracker scores by ---- */
-function playMatch(R, hold){
-  let server='a', endA='near';
-  let setsA=0,setsB=0, gamesA=0,gamesB=0, ptsA=0,ptsB=0;
-  let tb=false, tbA=0, tbB=0;
-  const ends=[], gameOf=[];
-  let game=1, guard=0, tiebreaks=0;
-
-  const serverNow=()=>{
-    if(!tb) return server;
-    const p=tbA+tbB;
-    return (Math.floor((p+1)/2)%2===1) ? (server==='a'?'b':'a') : server;
-  };
-  const serveEnd=()=>{
-    const sv=serverNow();
-    /* inside a tiebreak the ends change every six points, which is exactly
-       why a tiebreak breaks the two-game pattern */
-    const flip = tb && (Math.floor((tbA+tbB)/6)%2===1);
-    const a = flip ? (endA==='near'?'far':'near') : endA;
-    return sv==='a' ? a : (a==='near'?'far':'near');
-  };
-  const closeGame=(win,wasTb)=>{
-    if(wasTb){ if(win==='a') gamesA=7; else gamesB=7; tiebreaks++; }
-    else { if(win==='a') gamesA++; else gamesB++; }
-    ptsA=ptsB=tbA=tbB=0; tb=false;
-    server = server==='a'?'b':'a';
-    if(((gamesA+gamesB)%2)===1) endA = endA==='near'?'far':'near';
-    if(gamesA===6 && gamesB===6 && !wasTb){ tb=true; game++; return; }
-    const done = wasTb || ((gamesA>=6||gamesB>=6) && Math.abs(gamesA-gamesB)>=2);
-    if(done){ if(win==='a') setsA++; else setsB++; gamesA=gamesB=0; }
-    game++;
-  };
-
-  while(setsA<2 && setsB<2 && guard++<4000){
-    ends.push(serveEnd()==='near'?1:-1);
-    gameOf.push(game);
-    const sv=serverNow();
-    const winner = (R()<hold) ? sv : (sv==='a'?'b':'a');
-    if(tb){
-      if(winner==='a') tbA++; else tbB++;
-      if((tbA>=7||tbB>=7) && Math.abs(tbA-tbB)>=2) closeGame(tbA>tbB?'a':'b', true);
-    } else {
-      if(winner==='a') ptsA++; else ptsB++;
-      if((ptsA>=4||ptsB>=4) && Math.abs(ptsA-ptsB)>=2) closeGame(ptsA>ptsB?'a':'b', false);
-    }
-  }
-  const bounds=[];
-  for(let i=1;i<gameOf.length;i++) if(gameOf[i]!==gameOf[i-1]) bounds.push(i);
-  return {ends, bounds, points:ends.length, games:gameOf[gameOf.length-1], tiebreaks};
-}
+const {playMatch}=require('./simulate.js');
 
 let seed=20260904;
 const R=()=>((seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff);
