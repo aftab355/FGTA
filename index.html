@@ -4326,6 +4326,18 @@
   .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
   .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
 
+  .ac-render{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
+    color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft)}
+  .ac-render b{color:var(--ink)}
+  .ac-render-run{background:rgba(75,227,255,.06);border-color:rgba(75,227,255,.26)}
+  .ac-render-done{background:rgba(0,214,143,.07);border-color:rgba(0,214,143,.28)}
+  .ac-render-done b{color:var(--win)}
+  .ac-render-h{font-weight:700;color:var(--ink);margin-bottom:8px}
+  .ac-render-b{margin-top:8px;font-size:12px;color:var(--dim)}
+
+  .pt-serve{display:inline-block;margin-right:6px;font-size:9px;vertical-align:middle;
+    color:var(--pending);text-shadow:0 0 6px rgba(255,177,0,.7)}
+
   .ac-busy-p{margin:9px 0 0}
 
   .ac-warn{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
@@ -8049,6 +8061,10 @@
             <input id="ptA" data-ac="players" placeholder="player 1" autocomplete="off">
             <input id="ptB" data-ac="players" placeholder="player 2" autocomplete="off">
           </div>
+          <select id="ptServe" style="margin-top:10px">
+            <option value="a">player 1 serves first</option>
+            <option value="b">player 2 serves first</option>
+          </select>
           <div class="pt-well" style="margin-top:12px" data-pt-target-mount></div>
           <button class="btn" style="margin-top:14px" onclick="ptStart()">Start tracking</button>
         </div>
@@ -10121,6 +10137,10 @@ function ptDefaultState(a,b){
        are plain fields on PT so undo/redo, the localStorage draft and the
        submit payload all carry them for free. */
     rallies:[], video:null,
+    /* Who serves the FIRST point of the current game — see SERVE below.
+       On PT like everything else, so undo/redo, the draft and the submit
+       payload carry it without a second code path. */
+    server:"a",
     /* where this game gets filed on submit — see WHERE A TRACKED GAME IS
        FILED. Set from the standing preference in ptStart; on PT rather than
        module-level so the localStorage draft carries it. */
@@ -10138,6 +10158,7 @@ function ptStart(){
   const a=($("ptA").value||"").trim(), b=($("ptB").value||"").trim();
   if(!a||!b||a.toLowerCase()===b.toLowerCase()){ toast("Pick two different players",true); return; }
   PT=ptDefaultState(a,b); ptHistory=[]; ptFuture=[];
+  const sv=$("ptServe"); PT.server = (sv && sv.value==='b') ? 'b' : 'a';
   /* the match carries the target it was started under, so resuming a draft
      doesn't quietly re-file it under whatever was picked for a later game */
   PT.target=ptTarget;
@@ -10155,6 +10176,56 @@ window.ptStart=ptStart;
 function ptPointLabel(pa,pb){
   return [String(pa), String(pb)];
 }
+
+/* ============================================================
+   SERVE — who is on it, and which court they are standing in.
+
+   The tracker did not model this at all: PT had no server, no point carried
+   one, and the Predict tab said so in its own copy — "service is assumed to
+   alternate starting with player 1" — because the data had never carried it.
+   That assumption is now a measurement.
+
+   It matters for three separate reasons, in increasing order of interest:
+
+   1. Every real scoreboard shows who is serving. The overlay could not.
+   2. The serve/return split the Predict tab recurses over stops being an
+      assumption about game parity and becomes what actually happened —
+      which is the difference between a model and a guess when somebody
+      starts a set receiving.
+   3. It is the checkable half of reconstructing a score from footage nobody
+      reffed. See docs/scoring.md: the server alternates every game and the
+      serve court alternates every point, both deterministically, so a
+      sequence of serve positions read off a video is not a weak hint about
+      who won — it is a CONSTRAINT that a candidate point sequence either
+      satisfies or does not.
+
+   PT.server is who serves the first point of the current game, and it simply
+   alternates. A tiebreak counts as one game for that purpose, which is not a
+   special case dressed up as one: the rule "whoever received first in the
+   tiebreak serves the first game of the next set" is exactly what strict
+   alternation produces. Inside a tiebreak the serve does move differently —
+   one point, then two at a time — and that is the only place the arithmetic
+   is not simply "the player whose turn it is". */
+function ptServerNow(state){
+  const S=state||PT;
+  if(!S || !S.server) return null;
+  if(!S.tiebreak) return S.server;
+  const p=(S.tbA||0)+(S.tbB||0);
+  /* first point to the player whose turn it was, then in pairs: the flip
+     happens after points 1, 3, 5, … */
+  const flipped=Math.floor((p+1)/2)%2===1;
+  return flipped ? (S.server==='a'?'b':'a') : S.server;
+}
+/* Deuce court on an even number of points played, ad court on an odd one —
+   true in a game and in a tiebreak alike. This is the per-POINT observable;
+   ptServerNow is the per-GAME one. */
+function ptServeCourt(state){
+  const S=state||PT;
+  if(!S) return null;
+  const p=S.tiebreak?((S.tbA||0)+(S.tbB||0)):((S.ptsA||0)+(S.ptsB||0));
+  return p%2===0?'deuce':'ad';
+}
+window.ptServerNow=ptServerNow; window.ptServeCourt=ptServeCourt;
 
 function ptCloseSet(winSide){
   const setScore = `${PT.gamesA}-${PT.gamesB}`;
@@ -10187,6 +10258,9 @@ function ptCloseGame(winSide, wasTiebreak){
   PT._flash={side:winSide, name:winSide==='a'?PT.a:PT.b, gameNum:PT.gamesA+PT.gamesB, t:Date.now()};
   sfx('gameWin');
   PT.ptsA=0; PT.ptsB=0; PT.tiebreak=false; PT.tbA=0; PT.tbB=0;
+  /* before the tiebreak branch below returns, so the tiebreak inherits the
+     rotated server as the player who serves its first point */
+  PT.server = PT.server==='b' ? 'a' : 'b';
   if(!wasTiebreak && PT.gamesA===6 && PT.gamesB===6){
     PT.tiebreak=true;
     PT.log.unshift(`6 games all → tiebreak to 7`);
@@ -10424,6 +10498,9 @@ function ptLogRally(pre, side, isAce){
     b: pre.tiebreak?`${pre.tbA}-${pre.tbB}`:`${pre.ptsA}-${pre.ptsB}`
   };
   if(pre.tiebreak) r.tb=1;
+  /* sv/ct are read off the PRE-point state, which is the state the point was
+     actually played under — same reason the score `b` is */
+  r.sv=ptServerNow(pre); r.ct=ptServeCourt(pre);
   if(isAce) r.ace=1;
   if(ptWouldWinGame('a',pre)||ptWouldWinGame('b',pre)) r.gp=1;
   if(ptIsMatchPoint('a',pre)||ptIsMatchPoint('b',pre)) r.mp=1;
@@ -10796,7 +10873,7 @@ function renderTracker(){
     <div class="pt-board">
       ${flash?`<div class="pt-game-banner">🎾 Game ${flash.gameNum} — ${esc(flash.name)}</div>`:''}
       <div class="pt-side${flash&&flash.side==='a'?' pt-game-win':''}" style="--ac:${cA}">
-        <div class="pt-name">${esc(PT.a)}</div>
+        <div class="pt-name">${(()=>{const sv=ptServerNow();return !decided&&sv==='a'?`<span class="pt-serve" title="serving from the ${ptServeCourt()==='ad'?'ad':'deuce'} court">●</span>`:'';})()}${esc(PT.a)}</div>
         <div class="pt-sets">${PT.setsA}</div>
         <div class="pt-games">${PT.gamesA} games</div>
         <div class="pt-point">${lbl[0]!==""?lbl[0]:'&nbsp;'}</div>
@@ -10809,7 +10886,7 @@ function renderTracker(){
         <div class="pt-sets-row">${setsChips}</div>
       </div>
       <div class="pt-side${flash&&flash.side==='b'?' pt-game-win':''}" style="--ac:${cB}">
-        <div class="pt-name">${esc(PT.b)}</div>
+        <div class="pt-name">${(()=>{const sv=ptServerNow();return !decided&&sv==='b'?`<span class="pt-serve" title="serving from the ${ptServeCourt()==='ad'?'ad':'deuce'} court">●</span>`:'';})()}${esc(PT.b)}</div>
         <div class="pt-sets">${PT.setsB}</div>
         <div class="pt-games">${PT.gamesB} games</div>
         <div class="pt-point">${lbl[1]!==""?lbl[1]:'&nbsp;'}</div>
@@ -11675,12 +11752,18 @@ const AC_SR=16000;                  // decode rate: a strike is broadband, 8kHz 
 const AC_TUNE_KEY="fgta_autocut_tune";
 const AC_DEF={sens:1.2, maxGap:2.5, minHits:2, lead:1.5, tail:1.5, min:2,
               minGapMs:120, winMs:1500, floorFrac:0.30, envFrac:0.18,
-              hardFrac:0.45, aceFrac:0.72};
+              hardFrac:0.45, aceFrac:0.72, noiseSig:4};
 /* Only the six that are worth a person's time are on sliders. The rest are
    properties of the detector rather than of a court, and moving them is
    how you break it. */
 const AC_TUNE_UI=[
-  ['sens',    'Sensitivity', 0.2, 4,   0.1, 'lower finds more, and more junk'],
+  /* Named "Sensitivity" until it caused the obvious accident: the value is a
+     threshold — it multiplies the local standard deviation a peak has to beat
+     — so turning "sensitivity" UP made the detector LESS sensitive. Two of the
+     three places that explained it got the direction backwards as a result,
+     including the one a person reads while staring at a cut that found four
+     times too much. The stored key is unchanged; only the trap is gone. */
+  ['sens',    'Threshold',   0.2, 4,   0.1, 'higher is fussier, so fewer strikes'],
   ['maxGap',  'Max gap',     1,   6,   0.1, 'longest pause still inside one rally'],
   ['minHits', 'Min strikes', 1,   5,   1,   'fewer than this is not a rally'],
   ['lead',    'Lead-in',     0,   6,   0.5, 'kept before the first strike'],
@@ -11730,6 +11813,54 @@ function acPercentile(arr,p){
    the clusters bridge the gaps, and the "cut" is the whole recording. A
    racket strike is not merely a local maximum; it is one of the loudest
    transients in the file. Hence the two absolute floors alongside. */
+/* ---- telling silence from strikes -------------------------------------
+   The floors above are a fixed fraction of the 99.5th percentile of the whole
+   recording, and that is the wrong shape of rule. Where the 99.5th percentile
+   sits depends on how much of the recording is rallies: a match with long
+   gaps, or a clip with one rally in it, drags it down until court ambience
+   clears the bar. Measured on a fixture with six rallies in 63 seconds — 30
+   strikes played, 35 found inside the rallies, and 117 more found in the
+   silence between them. Finding strikes was never the problem; rejecting
+   silence was, and no setting of the sensitivity slider fixed it, because the
+   slider moves a threshold anchored to the wrong thing.
+
+   OTSU'S METHOD DOES NOT WORK HERE, which is worth writing down because it is
+   the obvious answer. The peak strengths really are two populations — quiet
+   ones from wind and traffic, loud ones from a racket, separated by a factor
+   of twelve on that fixture — and Otsu is the standard way to split something
+   bimodal. But Otsu maximises between-class variance weighted by the two
+   class SIZES, and here the classes are 30 strikes against 2000 noise peaks.
+   With a 1.5% minority the weighting drags the threshold deep inside the
+   majority: it returned a cut of 0.043 when strikes sit at 2.6, and changed
+   nothing.
+
+   So anchor to the NOISE instead of to the strikes. The noise is the majority
+   by a wide margin in any recording of a sport played with gaps in it, so its
+   centre and spread are estimated well; the strikes are sparse, and how far
+   up a percentile they land is exactly the density-dependence that broke the
+   old floor. A strike is then a peak some robust deviations above the typical
+   peak — median and MAD, in log space because the two populations are
+   separated multiplicatively.
+
+   It still defers rather than overriding: the floor used is whichever of this
+   and the old one is higher, so nothing that was already being rejected
+   starts getting through. */
+function acNoiseFloor(peaks, sigmas){
+  const xs=[];
+  for(let i=0;i<peaks.length;i++) if(peaks[i]>0) xs.push(Math.log(peaks[i]));
+  if(xs.length<48) return null;
+  xs.sort((a,b)=>a-b);
+  const med=xs[xs.length>>1];
+  const dev=new Float64Array(xs.length);
+  for(let i=0;i<xs.length;i++) dev[i]=Math.abs(xs[i]-med);
+  dev.sort();
+  const mad=dev[dev.length>>1];
+  if(!(mad>1e-6)) return null;
+  const sd=mad*1.4826;                       // MAD to a sigma-equivalent
+  return {floor:Math.exp(med+(sigmas==null?4:sigmas)*sd), typical:Math.exp(med),
+          sd, peaks:xs.length, loudest:Math.exp(xs[xs.length-1])};
+}
+
 function acPickOnsets(o, env, opt, hopMs, map){
   /* hopMs and map are how a streamed envelope (BIG FILES, below) says "my
      frames are 12.5ms of media each, and here is where the element's own
@@ -11741,7 +11872,33 @@ function acPickOnsets(o, env, opt, hopMs, map){
   const ps=new Float64Array(n+1), ps2=new Float64Array(n+1);
   for(let i=0;i<n;i++){ ps[i+1]=ps[i]+o[i]; ps2[i+1]=ps2[i]+o[i]*o[i]; }
   const oRef=acPercentile(o,0.995), envRef=acPercentile(env,0.995);
-  const oFloor=oRef*opt.floorFrac, envFloor=envRef*opt.envFrac;
+  let oFloor=oRef*opt.floorFrac;
+  const envFloor=envRef*opt.envFrac;
+
+  /* Every local maximum, then the split between the quiet ones and the loud
+     ones. Peaks rather than frames: most frames are the flat bits between
+     peaks and they would swamp the histogram with a mode that means nothing. */
+  const peaks=[];
+  for(let i=1;i<n-1;i++) if(o[i]>o[i-1] && o[i]>=o[i+1] && o[i]>0) peaks.push(o[i]);
+  const split=acNoiseFloor(peaks, opt.noiseSig);
+  if(split){
+    /* A floor that finds nothing is not a floor. If raising it this far would
+       leave almost no peaks standing, the assumption behind it — that the
+       loud population is the strikes — is not holding on this recording, so
+       leave the old one alone rather than return an empty cut.
+
+       How much room there is between the two matters: measured across the two
+       fixtures, four sigmas leaves the quietest real strike well clear while
+       six wipes one of them out entirely. Four is where both have margin,
+       and this guard is what catches a recording where they do not. */
+    let above=0;
+    for(let p=0;p<peaks.length;p++) if(peaks[p]>=split.floor) above++;
+    split.above=above;
+    split.applied = above>=4 && split.floor>oFloor;
+    if(split.applied) oFloor=split.floor;
+  }
+  if(split) split.used=oFloor;
+
   const minGap=Math.max(1,Math.round(opt.minGapMs/hop));
   const out=[]; let last=-1e9;
   for(let i=1;i<n-1;i++){
@@ -11755,6 +11912,7 @@ function acPickOnsets(o, env, opt, hopMs, map){
     out.push({t: map?acMapTime(map,i):i*hop/1000, lvl:env[i]/(envRef||1)});
     last=i;
   }
+  out.split=split;      // for the panel to say what it decided, and why
   return out;
 }
 function acCluster(hits, opt){
@@ -11866,6 +12024,9 @@ const AV_DEF={
      court over. */
   wMot:0.62, wBoth:0.38, wSync:0.35,
   syncWin:0.18,     // ± seconds counted as "at" a strike
+  serveLead:0.70,   // seconds before first contact that count as the serve
+  serveTail:0.50,   // and after
+  serveSep:0.45,    // log-ratio gap between the ends that counts as certain
   bothFrac:0.12,    // a half is "busy" at this fraction of the reference level
   quiet:0.85,       // if not even the BEST clip clears this, the pass declares itself blind
   minW:5            // narrower than this many cells and left-vs-right means nothing
@@ -11930,7 +12091,7 @@ function avROI(grid,n,opt){
   let peak=0;
   for(let c=0;c<AV_CELLS;c++) if(tot[c]>peak) peak=tot[c];
   if(peak<=0) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
-                      mid:AV_GX>>1, w:AV_GX, coreW:0, cellCount:0, empty:true};
+                      mid:AV_GX>>1, midY:AV_GY>>1, w:AV_GX, coreW:0, cellCount:0, empty:true};
 
   /* Above-threshold cells, then FLOOD FILL them into blobs rather than
      taking a bounding box over the lot. A bounding box is what the first
@@ -12020,7 +12181,7 @@ function avROI(grid,n,opt){
      evenly over the frame, which is what noise looks like and what tennis
      does not */
   if(!count) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
-                     mid:AV_GX>>1, w:0, coreW:0, cellCount:0, empty:true};
+                     mid:AV_GX>>1, midY:AV_GY>>1, w:0, coreW:0, cellCount:0, empty:true};
 
   /* the midline splits the court's own motion mass in half, rather than
      sitting at the middle of the frame — the camera is never centred */
@@ -12029,7 +12190,14 @@ function avROI(grid,n,opt){
   for(let c=0;c<AV_CELLS;c++){ if(!grown[c]) continue; const x=c%AV_GX; colMass[x]+=tot[c]; m2+=tot[c]; }
   let acc=0, mid=x0;
   for(let x=x0;x<=x1;x++){ acc+=colMass[x]; if(acc>=m2/2){ mid=x; break; } }
-  return {cells:grown,x0,x1,y0,y1,mid,w:x1-x0+1,coreW,cellCount:count,empty:false};
+  /* The near/far split is GEOMETRIC, unlike the left/right one, and that is
+     deliberate. Splitting by motion mass works across the court because the
+     two halves are the same distance away; up the court it does not, because
+     perspective makes the near player several times larger in frame and their
+     mass would drag the line to the far baseline. The midpoint of the court's
+     own rows separates two players standing at opposite ends of it. */
+  const midY=Math.floor((y0+y1)/2);
+  return {cells:grown,x0,x1,y0,y1,mid,midY,w:x1-x0+1,coreW,cellCount:count,empty:false};
 }
 
 /* ---- the three series everything else is measured from ---------------- */
@@ -12042,30 +12210,63 @@ function avSeries(grid,n,roi){
   /* the two halves are separated by a one-cell dead band, so a player
      standing on the midline is not counted as both of them */
   const O=new Float64Array(n);
-  let nA=0,nL=0,nR=0,nO=0;
+  /* N/F are the same idea up the court instead of across it: the end nearest
+     the camera and the end away from it. Same dead band — but NOT the same
+     average.
+
+     L and R can be means over their cells because the two sides of a court
+     are the same distance from the camera. The two ENDS are not. A player at
+     the far baseline is about two cells wide at this working size, so a mean
+     over the twenty-odd cells of the far half buries them under the
+     background and the far end reads as constant whatever they do. The first
+     version did exactly that: the far signal vanished, the measurement
+     collapsed into "was the near player quiet", and it had no zero crossing
+     left to decide anything with.
+
+     So each end is the mean of its BUSIEST FEW cells. A distant player
+     concentrates what motion they make; taking the top of the distribution
+     keeps them and taking three of them rather than one keeps a single noisy
+     cell from being the whole reading. */
+  const N=new Float64Array(n), F=new Float64Array(n);
+  const AV_TOPK=3;
+  const topMean=(vals,cnt)=>{
+    if(!cnt) return 0;
+    let a=-1,b=-1,c=-1;
+    for(let i=0;i<cnt;i++){
+      const v=vals[i];
+      if(v>a){ c=b; b=a; a=v; } else if(v>b){ c=b; b=v; } else if(v>c){ c=v; }
+    }
+    const k=Math.min(AV_TOPK,cnt);
+    return (a+(k>1?b:0)+(k>2?c:0))/k;
+  };
+  const nBuf=new Float64Array(AV_CELLS), fBuf=new Float64Array(AV_CELLS);
+  let nA=0,nL=0,nR=0,nO=0,nN=0,nF=0;
   for(let c=0;c<AV_CELLS;c++){
     if(!roi.cells[c]){ nO++; continue; }
     nA++;
-    const x=c%AV_GX;
+    const x=c%AV_GX, y=(c/AV_GX)|0;
     if(x<roi.mid) nL++; else if(x>roi.mid) nR++;
+    if(y>roi.midY) nN++; else if(y<roi.midY) nF++;
   }
   for(let k=0;k<n;k++){
     const base=k*AV_CELLS;
-    let a=0,l=0,r=0,ou=0;
+    let a=0,l=0,r=0,ou=0,cn=0,cf=0;
     for(let c=0;c<AV_CELLS;c++){
       const v=grid[base+c];
       if(!roi.cells[c]){ ou+=v; continue; }
       a+=v;
-      const x=c%AV_GX;
+      const x=c%AV_GX, y=(c/AV_GX)|0;
       if(x<roi.mid) l+=v; else if(x>roi.mid) r+=v;
+      if(y>roi.midY) nBuf[cn++]=v; else if(y<roi.midY) fBuf[cf++]=v;
     }
     m[k]=nA?a/nA:0; L[k]=nL?l/nL:0; R[k]=nR?r/nR:0; O[k]=nO?ou/nO:0;
+    N[k]=topMean(nBuf,cn); F[k]=topMean(fBuf,cf);
   }
   /* If the court came out as the whole frame there is no outside to compare
      against, so the recording's own quietest moments stand in for one. */
   const floor = nO ? 0 : avPct(m,0.05);
-  return {m,L,R,O, ref:avPct(m,0.9), noise:avPct(m,0.10),
-          roiW:roi.coreW, cells:nA, outCells:nO, floor};
+  return {m,L,R,O,N,F, ref:avPct(m,0.9), noise:avPct(m,0.10),
+          roiW:roi.coreW, cells:nA, outCells:nO, nearCells:nN, farCells:nF, floor};
 }
 
 /* ---- C: is the movement locked to the strikes? ------------------------
@@ -12137,6 +12338,65 @@ function avMeasure(seg,T,dt,S,strikes,opt){
   const mine=strikes.filter(t=>t>=seg.start&&t<=seg.end);
   const C=avSync(T,S.m,lo,hi,mine,o.syncWin);
 
+  /* WHICH END THE SERVE CAME FROM.
+
+     Unlike lastSide this is not a hint. Who served is not an outcome to be
+     guessed at — it is a fact the rules then constrain, hard: the server
+     alternates every game and the serve court alternates every point, so a
+     sequence of these either satisfies the rotation or does not. See
+     docs/scoring.md.
+
+     EACH END IS MEASURED AGAINST ITSELF. The first version compared the
+     near end's SHARE of the motion at contact against its share over the
+     whole clip, which sounds equivalent and is not. Perspective makes the
+     near player several times larger in frame, so their share sits near the
+     ceiling all rally: a near serve can push it up barely at all while a far
+     serve pulls it down a long way. The measurement came out asymmetric,
+     every clip was labelled "far", and three of six were right by accident.
+
+     So instead: how much busier is the near end during the serve than during
+     the rest of its own rally, against the same question asked of the far
+     end. Both ratios are dimensionless and each cancels its own end's size,
+     so what is left is the thing actually being asked — at contact the
+     striker is tossing and swinging while the receiver waits, and once the
+     rally is going both are moving. */
+  let serveEnd=0, serveConf=0, serveShift=0, seenShift=false;
+  if(mine.length && (S.nearCells||0)>0 && (S.farCells||0)>0){
+    const t1=mine[0];
+    let a=lo,b=lo;
+    for(let k=lo;k<hi;k++){
+      if(T[k] < t1-o.serveLead) a=k+1;
+      if(T[k] <= t1+o.serveTail) b=k+1;
+    }
+    if(b>a && (hi-lo)-(b-a) >= 3){
+      let sN=0,sF=0,rN=0,rF=0,ns=0,nr=0;
+      for(let k=lo;k<hi;k++){
+        if(k>=a && k<b){ sN+=S.N[k]; sF+=S.F[k]; ns++; }
+        else { rN+=S.N[k]; rF+=S.F[k]; nr++; }
+      }
+      if(ns&&nr){
+        const eps=1e-6;
+        const dN=(sN/ns+eps)/(rN/nr+eps), dF=(sF/ns+eps)/(rF/nr+eps);
+        serveShift=Math.log(dN)-Math.log(dF);
+        seenShift=true;
+      }
+      /* The DECISION is not made here, because zero is not the boundary and
+         there is no reason it should be. The two ends are not symmetric: a
+         far serve makes the near player — the big one — go still, which is an
+         enormous change, while a near serve stills the far player, who was
+         contributing little either way. Measured on a real clip the far
+         serves came out around -1 to -2 and the near ones within 0.02 of
+         zero. Splitting at zero got one of those three wrong; splitting at a
+         constant fitted to this recording would be worthless on the next one.
+
+         What IS fixed is the camera. Its geometry does not change through a
+         recording, so the asymmetry it causes is a constant offset and the
+         only thing varying between clips is which end served. That makes the
+         shifts bimodal, and the split is found from the recording's own
+         distribution in avApply — where all the clips are visible at once. */
+    }
+  }
+
   /* which half was still moving as it ended — a hint about who was last on
      the ball, never more than a hint (see the docs: last to touch it is
      exactly the ambiguous case) */
@@ -12153,7 +12413,7 @@ function avMeasure(seg,T,dt,S,strikes,opt){
 
   return {seen:true, lo, hi, samples:hi-lo, A, B, C, level:mean, out, ratio,
           motion:ref?mean/ref:0, quiet:ratio<1.3,
-          lastSide, shake, strikes:mine.length};
+          lastSide, serveEnd, serveConf, serveShift, seenShift, shake, strikes:mine.length};
 }
 
 /* ---- the verdict ------------------------------------------------------ */
@@ -12184,9 +12444,34 @@ function avScore(mm,opt,useBoth){
       nothing at all — a distant static camera, a dark clip, a locked-off
       wide shot where nobody is more than a few pixels. The pass reports
       itself inconclusive and drops NOTHING. */
+/* Where the serve shifts split into two ends. One pass over the sorted
+   values for the widest gap: with a fixed camera the clips fall into two
+   groups and the gap between them is the boundary. Deliberately refuses
+   rather than guesses — a recording where every serve came from the same end
+   has no gap to find, and neither does one where the camera cannot tell them
+   apart, and both should come back "don't know" instead of a coin flip. */
+function avServeSplit(vals, minGap){
+  if(vals.length<3) return null;
+  const s=vals.slice().sort((a,b)=>a-b);
+  let gap=0, at=-1;
+  for(let i=1;i<s.length;i++){ const g=s[i]-s[i-1]; if(g>gap){ gap=g; at=i; } }
+  if(at<1 || gap<minGap) return null;
+  return {cut:(s[at]+s[at-1])/2, gap, far:at, near:s.length-at};
+}
+
 function avApply(segs,T,dt,S,strikes,opt){
   const o={...AV_DEF,...(opt||{})};
   const raw=segs.map(s=>avMeasure(s,T,dt,S,strikes,o));
+
+  const shifts=raw.filter(r=>r.seen&&r.seenShift).map(r=>r.serveShift);
+  const split=avServeSplit(shifts, o.serveSep);
+  if(split){
+    for(const r of raw){
+      if(!r.seen||!r.seenShift) continue;
+      r.serveEnd = r.serveShift>split.cut ? 1 : -1;
+      r.serveConf = avClamp(Math.abs(r.serveShift-split.cut)/(split.gap/2),0,1);
+    }
+  }
   const seen=raw.filter(r=>r.seen);
   /* B is only meaningful if there IS a left and a right to compare. A court
      three cells wide is a camera parked behind one player: the far one is a
@@ -12206,7 +12491,7 @@ function avApply(segs,T,dt,S,strikes,opt){
   const best = confs.length?avPct(confs,0.9):0;
   const inconclusive = !confs.length || best < o.quiet;
   return {
-    per:out, useBoth, wide, inconclusive,
+    per:out, useBoth, wide, inconclusive, serve:split,
     scanned:seen.length, total:segs.length,
     best, median: confs.length?avMedian(confs):0,
     drops: inconclusive?0:out.filter(r=>r.conf!=null&&r.conf<o.thresh).length
@@ -12939,6 +13224,291 @@ async function acStreamAudio(url, opt){
   }
 }
 
+
+/* ============================================================
+   RENDERING THE CUT IN THE PAGE — a video file out, not a script.
+
+   The ffmpeg export stays, and for a big source it is still the right answer:
+   it runs at whatever the machine can manage rather than at real time, and it
+   writes an MP4. But it asks somebody to open a terminal, and "drop a video
+   in, get a video back" is what the feature is for.
+
+   HOW, given a page cannot transcode. It does not have to: the browser can
+   already decode this file (it is playing it) and can already encode video
+   (MediaRecorder). So the render is a playback — seek to a kept clip, play it,
+   draw each decoded frame to a canvas, record the canvas — with the recorder
+   PAUSED across the seeks between clips, which is what joins them into one
+   continuous piece with the dead time gone.
+
+   Consequences, all of them stated in the panel rather than discovered:
+
+   - It runs at real time, because it is playback. Twelve minutes of rallies
+     takes twelve minutes. The ffmpeg script does not, and the panel says so
+     next to the button.
+   - It re-encodes, to WebM (VP8/VP9 + Opus), because that is what
+     MediaRecorder writes. The ffmpeg route gives MP4.
+   - Audio is tapped with a MediaElementAudioSourceNode rather than by
+     capturing the element's own stream, because muting the element to keep
+     the room quiet would mute the recording too. Connected to a
+     MediaStreamDestination and nothing else, it is silent by construction.
+   - Frames go through a canvas rather than straight from the element,
+     because that is where a burnt-in scoreboard will have to be drawn
+     (docs/scoring.md) and re-plumbing it later would be worse.
+
+   Where the browser allows it the file is streamed to disk as it is made, so
+   an hour of tennis does not have to fit in a tab first; otherwise it is held
+   and handed over at the end, with the size said out loud beforehand.
+   ============================================================ */
+
+const AC_RENDER_MAX_H=720;        // downscale anything taller; 4K would encode slower than real time
+const AC_RENDER_KEY="fgta_autocut_render";
+
+function acRenderSupported(){
+  return typeof MediaRecorder!=='undefined' &&
+         typeof HTMLCanvasElement!=='undefined' &&
+         !!HTMLCanvasElement.prototype.captureStream &&
+         !!(window.AudioContext||window.webkitAudioContext);
+}
+function acRenderMime(){
+  const want=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for(const m of want) if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+
+function acRenderCancel(){ const A=AC; if(A&&A.render) A.render.cancel=true; }
+window.acRenderCancel=acRenderCancel;
+
+function acRenderPaint(){
+  const A=AC; if(!A||!A.render) return;
+  const bar=document.getElementById('acRenderBar'), lbl=document.getElementById('acRenderLabel');
+  if(bar) bar.style.width=Math.round((A.render.progress||0)*100)+'%';
+  if(lbl) lbl.textContent=A.render.note||'';
+}
+
+async function acRenderCut(){
+  const A=AC;
+  if(!A || A.kind!=='video') return;
+  const list=acKept();
+  if(!list.length){ toast('Nothing ticked to render',true); return; }
+  if(!acRenderSupported()){ toast('This browser cannot record video in the page',true); return; }
+  const mime=acRenderMime();
+  if(!mime){ toast('This browser has no video encoder available',true); return; }
+
+  const total=list.reduce((a,s)=>a+s.dur,0);
+  A.render={busy:true, progress:0, cancel:false, done:null, error:null,
+            note:'opening the video…', seconds:total, started:Date.now()};
+  renderAutoCut();
+
+  const el=document.createElement('video');
+  el.preload='auto'; el.playsInline=true; el.setAttribute('playsinline','');
+  el.style.cssText='position:fixed;left:-10000px;width:2px;height:2px;opacity:0';
+  document.body.appendChild(el);
+  el.src=A.url;
+
+  let ctx=null, rec=null, writable=null, chunks=[];
+  const cleanup=()=>{
+    try{ rec && rec.state!=='inactive' && rec.stop(); }catch(e){}
+    try{ el.pause(); el.removeAttribute('src'); el.load(); el.remove(); }catch(e){}
+    try{ ctx && ctx.close(); }catch(e){}
+  };
+
+  try{
+    await Promise.race([
+      new Promise(r=>el.addEventListener('loadedmetadata',r,{once:true})),
+      new Promise((_,j)=>setTimeout(()=>j(new Error('this file would not open for playback')),20000))
+    ]);
+    const vw=el.videoWidth||1280, vh=el.videoHeight||720;
+    const scale=Math.min(1, AC_RENDER_MAX_H/(vh||720));
+    const W=Math.max(2, Math.round(vw*scale/2)*2), H=Math.max(2, Math.round(vh*scale/2)*2);
+
+    const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const g=cv.getContext('2d',{alpha:false});
+    g.fillStyle='#000'; g.fillRect(0,0,W,H);
+
+    /* captureStream(0) plus requestFrame: one output frame per decoded frame,
+       rather than the canvas being sampled on a timer that knows nothing about
+       when the source actually produced anything */
+    const cstream=cv.captureStream(0);
+    const vtrack=cstream.getVideoTracks()[0];
+
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    ctx=new Ctx();
+    try{ await ctx.resume(); }catch(e){}
+    const asrc=ctx.createMediaElementSource(el);
+    const adest=ctx.createMediaStreamDestination();
+    asrc.connect(adest);                       // and nowhere else, so the room stays quiet
+
+    const stream=new MediaStream([vtrack, ...adest.stream.getAudioTracks()]);
+    const bits=Math.min(8000000, Math.max(1200000, Math.round(W*H*0.11)));
+    rec=new MediaRecorder(stream,{mimeType:mime, videoBitsPerSecond:bits});
+
+    /* stream it to disk if the browser will let us, so length stops being a
+       memory question */
+    if(window.showSaveFilePicker){
+      try{
+        const fh=await window.showSaveFilePicker({suggestedName:acSlug()+'-cut.webm',
+          types:[{description:'WebM video', accept:{'video/webm':['.webm']}}]});
+        writable=await fh.createWritable();
+      }catch(e){ writable=null; }         // cancelled the picker, or not allowed: hold it instead
+    }
+    const pending=[];
+    rec.ondataavailable=(e)=>{
+      if(!e.data || !e.data.size) return;
+      if(writable) pending.push(writable.write(e.data)); else chunks.push(e.data);
+    };
+    const recStopped=new Promise(r=>{ rec.onstop=r; });
+    rec.start(1000);
+    rec.pause();
+
+    let done=0;
+    for(let i=0;i<list.length;i++){
+      if(A.render.cancel || AC!==A) break;
+      const clip=list[i];
+      A.render.note=`clip ${i+1} of ${list.length} — seeking`;
+      acRenderPaint();
+      await new Promise(r=>{
+        let over=false;
+        const fin=()=>{ if(over) return; over=true; el.removeEventListener('seeked',fin); r(); };
+        el.addEventListener('seeked',fin); setTimeout(fin,5000);
+        try{ el.currentTime=clip.start; }catch(e){ fin(); }
+      });
+      if(A.render.cancel || AC!==A) break;
+
+      rec.resume();
+      await new Promise(res=>{
+        let over=false;
+        const stop=()=>{ if(over) return; over=true; try{ el.pause(); }catch(e){} res(); };
+        const guard=setTimeout(stop, (clip.dur+12)*1000);
+        const step=(now,meta)=>{
+          if(over) return;
+          const t=meta&&isFinite(meta.mediaTime)?meta.mediaTime:el.currentTime;
+          if(A.render.cancel || AC!==A || t>=clip.end){ clearTimeout(guard); stop(); return; }
+          g.drawImage(el,0,0,W,H);
+          if(vtrack.requestFrame) vtrack.requestFrame();
+          const at=done+Math.max(0,t-clip.start);
+          A.render.progress=Math.min(1, at/total);
+          const el2=(Date.now()-A.render.started)/1000;
+          A.render.note=`clip ${i+1} of ${list.length} — ${Math.round(A.render.progress*100)}%` +
+            (A.render.progress>0.02?` · about ${acEta(el2/A.render.progress-el2)} left`:'');
+          acRenderPaint();
+          if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        };
+        if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        else {
+          /* no per-frame callback: fall back to a timer at 25fps, which is
+             worse and still a video */
+          const iv=setInterval(()=>{
+            if(over) return;
+            const t=el.currentTime;
+            if(A.render.cancel || AC!==A || t>=clip.end){ clearInterval(iv); clearTimeout(guard); stop(); return; }
+            g.drawImage(el,0,0,W,H);
+            if(vtrack.requestFrame) vtrack.requestFrame();
+            A.render.progress=Math.min(1,(done+Math.max(0,t-clip.start))/total);
+            acRenderPaint();
+          },40);
+        }
+        el.addEventListener('ended',()=>{ clearTimeout(guard); stop(); },{once:true});
+        const p=el.play();
+        if(p&&p.catch) p.catch(()=>{ clearTimeout(guard); stop(); });
+      });
+      rec.pause();
+      done+=clip.dur;
+    }
+
+    A.render.note='finishing the file…'; acRenderPaint();
+    try{ rec.state!=='inactive' && rec.stop(); }catch(e){}
+    await recStopped;
+    await Promise.all(pending);
+
+    const cancelled=A.render.cancel;
+    if(writable){
+      try{ await writable.close(); }catch(e){}
+      cleanup();
+      if(AC!==A) return;
+      A.render={busy:false, saved:true, cancelled, seconds:done,
+                wall:Math.round((Date.now()-A.render.started)/1000)};
+      renderAutoCut();
+      return;
+    }
+    const blob=new Blob(chunks,{type:mime});
+    cleanup();
+    if(AC!==A) return;
+    A.render={busy:false, blob, url:URL.createObjectURL(blob), bytes:blob.size,
+              cancelled, seconds:done, wall:Math.round((Date.now()-A.render.started)/1000)};
+    renderAutoCut();
+  }catch(e){
+    cleanup();
+    if(AC!==A) return;
+    A.render={busy:false, error:(e&&e.message)||'the render failed'};
+    renderAutoCut();
+  }
+}
+window.acRenderCut=acRenderCut;
+
+function acRenderSave(){
+  const A=AC; if(!A||!A.render||!A.render.url) return;
+  const a=document.createElement('a');
+  a.href=A.render.url; a.download=acSlug()+'-cut.webm';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+window.acRenderSave=acRenderSave;
+function acRenderClear(){ const A=AC; if(!A) return;
+  if(A.render&&A.render.url){ try{ URL.revokeObjectURL(A.render.url); }catch(e){} }
+  A.render=null; renderAutoCut(); }
+window.acRenderClear=acRenderClear;
+
+function acRenderPanel(){
+  const A=AC;
+  if(!A || A.kind!=='video') return '';
+  const list=acKept();
+  const total=list.reduce((a,s)=>a+s.dur,0);
+  const R=A.render;
+
+  if(R && R.busy){
+    return `<div class="ac-render ac-render-run">
+      <div class="ac-render-h">Rendering ${list.length} clip${list.length===1?'':'s'} — ${rrClock(total)}</div>
+      <div class="ac-bar"><div class="ac-bar-fill" id="acRenderBar" style="width:${Math.round((R.progress||0)*100)}%"></div></div>
+      <div class="ac-bar-label" id="acRenderLabel">${esc(R.note||'')}</div>
+      <div class="ac-render-b">This is playback, so it takes as long as the rallies do. Leave the tab
+        in front — a backgrounded tab throttles both the video and the encoder.</div>
+      <button class="mini" onclick="acRenderCancel()">stop</button>
+    </div>`;
+  }
+  if(R && R.error){
+    return `<div class="ac-render"><b>The render failed.</b> ${esc(R.error)}
+      The ffmpeg script below still works.
+      <button class="mini" onclick="acRenderClear()">try again</button></div>`;
+  }
+  if(R && R.saved){
+    return `<div class="ac-render ac-render-done"><b>Saved${R.cancelled?' — what was rendered before you stopped':''}.</b>
+      ${rrClock(R.seconds)} of tennis, written straight to the file you picked in ${acEta(R.wall)}.
+      <button class="mini" onclick="acRenderClear()">render again</button></div>`;
+  }
+  if(R && R.url){
+    return `<div class="ac-render ac-render-done">
+      <b>Done${R.cancelled?' — stopped early':''}.</b> ${rrClock(R.seconds)} of tennis,
+      ${(R.bytes/1048576).toFixed(0)} MB, in ${acEta(R.wall)}.
+      <div class="rr-exports" style="margin-top:10px">
+        <button class="mini" onclick="acRenderSave()">⬇ save the video</button>
+        <button class="mini" onclick="acRenderClear()">render again</button>
+      </div>
+    </div>`;
+  }
+  if(!acRenderSupported()){
+    return `<div class="ac-render"><b>This browser cannot make the video here.</b>
+      It has no MediaRecorder, so use the ffmpeg script below.</div>`;
+  }
+  return `<div class="ac-render">
+    <b>Or get the video itself, from here.</b> Plays the kept clips through and records them into one
+    file — no terminal, nothing uploaded. It runs at <b>real time</b>, so ${rrClock(total)} of rallies
+    takes about ${acEta(total)}, and it writes WebM rather than MP4. The ffmpeg script below is faster
+    and gives you an MP4; this is for when you just want the file.
+    <div class="rr-exports" style="margin-top:10px">
+      <button class="mini" onclick="acRenderCut()" ${list.length?'':'disabled'}>▶ render the video here</button>
+    </div>
+  </div>`;
+}
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -12947,6 +13517,8 @@ function acReset(){
   const A=AC;
   if(!A) return;
   if(A.timer) clearInterval(A.timer);
+  if(A.render && A.render.url){ try{ URL.revokeObjectURL(A.render.url); }catch(e){} }
+  if(A.render) A.render.cancel=true;      // a render in flight checks AC too, but say it plainly
   if(A.url){ try{ URL.revokeObjectURL(A.url); }catch(e){} }
   AC=null;
 }
@@ -13059,7 +13631,7 @@ async function acLoad(file){
          them — and so the picture cannot re-drop something they put back.
          how/hopMs/map: which way in this file took, and what its envelope
          frames mean — see BIG FILES. */
-      av:null, hits:null, user:{},
+      av:null, hits:null, user:{}, render:null,
       how:file.size>AC_MEM_BYTES?'stream':'memory', hopMs:AC_HOP_MS, map:null,
       stream:null, fellBack:null};
   renderAutoCut();
@@ -13118,6 +13690,7 @@ function acRecompute(){
   const A=AC; if(!A || !A.o) return;
   const hits=acPickOnsets(A.o, A.env, A.tune, A.hopMs, A.map);
   A.strikes=hits.length;
+  A.split=hits.split||null;
   A.hits=hits;
   A.segs=acSegments(acCluster(hits,A.tune), A.tune, A.duration);
   /* Order matters here. The picture pre-drops, and THEN a person's own
@@ -13287,6 +13860,15 @@ function acExportJson(){
       : 'ball-strike onset detection over the recording\'s own audio',
     timebase:'seconds into the source file',
     settings:{...A.tune},
+    /* what the detector decided a strike had to beat, and what it based that
+       on — see "telling silence from strikes" */
+    strikeFloor: A.split ? {
+      typicalPeak:Math.round(A.split.typical*10000)/10000,
+      loudestPeak:Math.round(A.split.loudest*1000)/1000,
+      noiseAnchored:Math.round(A.split.floor*1000)/1000,
+      applied:!!A.split.applied, used:Math.round(A.split.used*1000)/1000,
+      peaksAboveIt:A.split.above, peaksSeen:A.split.peaks
+    } : null,
     picture: !(A.av && A.av.scan && !A.av.error) ? null : {
       used:!!A.av.tune.on,
       inconclusive:!!(A.av.res && A.av.res.inconclusive),
@@ -13316,6 +13898,11 @@ function acExportJson(){
         courtVsFrame:Math.round(s.v.ratio*100)/100,
         bothHalves:Math.round(s.v.B*100)/100,
         strikeAlignment:Math.round(s.v.C*100)/100,
+        /* serveEnd is +1 for the end nearest the camera, -1 for the far end,
+           0 for undecided; serveConfidence is how far the balance tipped.
+           Unlike lastSide this is an input to the score, not a hint about
+           it — see docs/scoring.md. */
+        serveEnd:s.v.serveEnd, serveConfidence:Math.round(s.v.serveConf*100)/100,
         lastSide:Math.round(s.v.lastSide*100)/100,
         cameraShiftPx:Math.round(s.v.shake*100)/100,
         frames:s.v.samples, note:s.v.reason
@@ -13463,8 +14050,20 @@ function renderAutoCut(){
           : `It listens for struck balls, so a court in use next to yours sounds precisely like
              yours${A.kind==='video'?' until the picture is looked at as well.':', and there is no audio-only fix for that.'}`
         } Tap ✓ to drop anything that isn't your rally; only the ticked ones are exported.
-        <span class="ac-warn-n">${A.strikes} strikes detected, ${A.duration>0?Math.round(A.strikes/(A.duration/60)):0} per minute
-          — a real singles match runs about 15–25.${A.stream?`
+        <span class="ac-warn-n">${(()=>{
+          const per=A.duration>0?Math.round(A.strikes/(A.duration/60)):0;
+          const head=`${A.strikes} strikes detected, ${per} per minute — a real singles match runs about 15–25.`;
+          /* The number on its own was not enough. Somebody looking at 99 a
+             minute already knows it is wrong; what they need is the direction,
+             next to the figure, in the units of the slider they are about to
+             move. */
+          if(per>32) return head+` That is far too many — almost everything is being called a rally, so
+            the cut removes next to nothing. Raise Threshold under Detection settings until this lands
+            in the band, a few tenths at a time.`;
+          if(per>0 && per<8 && A.duration>60) return head+` That is too few — rallies are being missed.
+            Lower Threshold under Detection settings.`;
+          return head;
+        })()}${A.stream?`
           Played through at ${A.stream.rate}× in ${acEta(A.stream.wall)} rather than loaded, because the file
           is ${(A.file.size/1073741824).toFixed(1)} GB.${A.stream.stalls?` ${A.stream.stalls} stall${A.stream.stalls===1?'':'s'} on the way —
           corrected against the player's own clock.`:''}`:''}</span>
@@ -13480,8 +14079,9 @@ function renderAutoCut(){
         <summary>Detection settings</summary>
         <div class="rr-fold-b">
           <p>Re-running these is instant — the recording is only decoded once, and moving a
-             slider just regroups what was already heard. <b>Sensitivity</b> is the one to
-             reach for: too many clips means lower it, missed rallies means raise it.</p>
+             slider just regroups what was already heard. <b>Threshold</b> is the one to
+             reach for, and the strikes-per-minute figure above tells you which way:
+             too many strikes means raise it, missed rallies means lower it.</p>
           ${tuneRows}
           <button class="mini" onclick="acResetTune()">reset to defaults</button>
           ${A.kind==='video' && A.av && A.av.scan && !A.av.error ? `
@@ -13502,6 +14102,8 @@ function renderAutoCut(){
               </label>`).join('')}` : ''}
         </div>
       </details>
+
+      ${acRenderPanel()}
 
       <div class="rr-exports">
         <button class="mini" onclick="acExportFfmpeg()" ${list.length?'':'disabled'}>⬇ ffmpeg script</button>
@@ -15036,7 +15638,10 @@ function ptAnnounceToChannel(){
 function ptSyncPayload(){
   if(typeof PT==='undefined' || !PT) return null;
   const {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB}=PT;
-  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB};
+  /* server is sent RESOLVED rather than as PT.server, so the overlay does not
+     have to reimplement the tiebreak rotation to draw a dot */
+  return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB,
+          server:ptServerNow(), serveCourt:ptServeCourt()};
 }
 function ptSyncBroadcastIfLive(){
   const S=PTStream;

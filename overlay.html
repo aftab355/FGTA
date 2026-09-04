@@ -65,6 +65,9 @@
     align-items:center;height:calc(46*var(--u))}
   .row+.row{border-top:var(--u) solid var(--hair)}
   .flag{width:calc(6*var(--u));height:100%;background:var(--ac)}
+  .srv{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:transparent;transition:background .18s,box-shadow .18s}
+  .srv.on{background:#ffe600;box-shadow:0 0 10px rgba(255,230,0,.85)}
+
   .nm{padding:0 calc(16*var(--u)) 0 calc(14*var(--u));font-size:calc(20*var(--u));font-weight:700;
     letter-spacing:calc(1*var(--u));color:#fff;text-transform:uppercase;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis}
@@ -209,8 +212,15 @@ function rowHTML(side, s) {
   const ptCell = decided
     ? `<span class="pts" style="--ac:${s.winner === side ? "var(--gold)" : "var(--dim)"}">${isA ? s.setsA : s.setsB}</span>`
     : `<span class="pts" style="--ac:${ac}">${pt}</span>`;
+  /* The serving dot. Every tennis broadcast has one and this overlay did not,
+     because until now nothing upstream knew who was serving. The payload sends
+     it already resolved (the tiebreak rotation is not the same as the game
+     one), so there is nothing to work out here. Older hosts send no `server`
+     at all, and then no dot is drawn rather than a wrong one. */
+  const serving = !decided && s.server === side;
   return `<div class="row" style="--ac:${ac}">
       <span class="flag"></span>
+      <span class="srv${serving ? " on" : ""}"></span>
       <span class="nm">${esc(shortName(name))}</span>
       <span class="setbox">${done}${cur}</span>
       ${ptCell}
