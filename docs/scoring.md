@@ -131,8 +131,51 @@ it are served by the same player.** The first version of that test filtered
 the tiebreak out and then demanded the remaining games alternate, which fails
 on correct behaviour.
 
-So route B's foundation exists. What it still needs is the vision half:
-`firstSide`, serve-court detection, and the reconstructor.
+So route B's foundation exists.
+
+### Which end the serve came from, from the picture
+
+Built and measured. `serveEnd` is +1 for the end nearest the camera, -1 for
+the far end, exported per clip. It took three attempts and the two dead ends
+are the same mistake in different clothes:
+
+1. **Near-share at contact against near-share over the clip.** Perspective
+   puts the near player's share near the ceiling all rally, so a near serve
+   can push it up barely at all while a far serve pulls it down a long way.
+   Every clip came back "far"; three of six were right by accident.
+2. **Each end against its own baseline** — how much busier is the near end
+   during the serve than during the rest of its own rally, versus the same
+   question of the far end. Right idea, but the far end was a *mean over its
+   cells*, and a player at the far baseline is about two cells wide, so they
+   were buried under twenty cells of background and the far signal vanished.
+3. **Each end as the mean of its busiest few cells.** A distant player
+   concentrates what motion they make. This works.
+
+The decision is then made **across the recording, not clip by clip**, because
+zero is not the boundary and there is no reason it should be: a far serve
+stills the near player, who is large, which is an enormous change; a near
+serve stills the far player, who was contributing little either way. Measured,
+far serves land around -1 to -2 and near ones within 0.05 of zero. The camera
+geometry does not change through a recording, so that asymmetry is a constant
+offset and the shifts come out bimodal — the split is the widest gap in the
+sorted values. A recording with no gap wide enough (every serve from one end,
+or a camera that cannot tell) returns "don't know" rather than a coin flip.
+
+`test/serve-vision.test.js` asks this of a real decoded video with a court in
+perspective: six rallies, ends near/near/far/far/near/far, **6 of 6 correct**,
+split found at -0.5 with a gap of 0.9 either side.
+
+What is still missing is the reconstructor itself.
+
+### One thing to check before trusting any of it
+
+A camera fixed behind one baseline **cannot** see the server nearest it every
+game. Ends change after every odd game while the serve changes every game, so
+the serving end moves in pairs: near, near, far, far, near, near. Anyone
+reading their own footage as "the server is always closest" is either moving
+the camera between games, or has only looked at a couple of games. It matters,
+because a reconstructor built on the wrong one of those mislabels half the
+match and does it confidently.
 
 ---
 

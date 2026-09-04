@@ -11940,6 +11940,9 @@ const AV_DEF={
      court over. */
   wMot:0.62, wBoth:0.38, wSync:0.35,
   syncWin:0.18,     // ± seconds counted as "at" a strike
+  serveLead:0.70,   // seconds before first contact that count as the serve
+  serveTail:0.50,   // and after
+  serveSep:0.45,    // log-ratio gap between the ends that counts as certain
   bothFrac:0.12,    // a half is "busy" at this fraction of the reference level
   quiet:0.85,       // if not even the BEST clip clears this, the pass declares itself blind
   minW:5            // narrower than this many cells and left-vs-right means nothing
@@ -12004,7 +12007,7 @@ function avROI(grid,n,opt){
   let peak=0;
   for(let c=0;c<AV_CELLS;c++) if(tot[c]>peak) peak=tot[c];
   if(peak<=0) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
-                      mid:AV_GX>>1, w:AV_GX, coreW:0, cellCount:0, empty:true};
+                      mid:AV_GX>>1, midY:AV_GY>>1, w:AV_GX, coreW:0, cellCount:0, empty:true};
 
   /* Above-threshold cells, then FLOOD FILL them into blobs rather than
      taking a bounding box over the lot. A bounding box is what the first
@@ -12094,7 +12097,7 @@ function avROI(grid,n,opt){
      evenly over the frame, which is what noise looks like and what tennis
      does not */
   if(!count) return {cells:new Uint8Array(AV_CELLS), x0:0,x1:AV_GX-1,y0:0,y1:AV_GY-1,
-                     mid:AV_GX>>1, w:0, coreW:0, cellCount:0, empty:true};
+                     mid:AV_GX>>1, midY:AV_GY>>1, w:0, coreW:0, cellCount:0, empty:true};
 
   /* the midline splits the court's own motion mass in half, rather than
      sitting at the middle of the frame — the camera is never centred */
@@ -12103,7 +12106,14 @@ function avROI(grid,n,opt){
   for(let c=0;c<AV_CELLS;c++){ if(!grown[c]) continue; const x=c%AV_GX; colMass[x]+=tot[c]; m2+=tot[c]; }
   let acc=0, mid=x0;
   for(let x=x0;x<=x1;x++){ acc+=colMass[x]; if(acc>=m2/2){ mid=x; break; } }
-  return {cells:grown,x0,x1,y0,y1,mid,w:x1-x0+1,coreW,cellCount:count,empty:false};
+  /* The near/far split is GEOMETRIC, unlike the left/right one, and that is
+     deliberate. Splitting by motion mass works across the court because the
+     two halves are the same distance away; up the court it does not, because
+     perspective makes the near player several times larger in frame and their
+     mass would drag the line to the far baseline. The midpoint of the court's
+     own rows separates two players standing at opposite ends of it. */
+  const midY=Math.floor((y0+y1)/2);
+  return {cells:grown,x0,x1,y0,y1,mid,midY,w:x1-x0+1,coreW,cellCount:count,empty:false};
 }
 
 /* ---- the three series everything else is measured from ---------------- */
@@ -12116,30 +12126,63 @@ function avSeries(grid,n,roi){
   /* the two halves are separated by a one-cell dead band, so a player
      standing on the midline is not counted as both of them */
   const O=new Float64Array(n);
-  let nA=0,nL=0,nR=0,nO=0;
+  /* N/F are the same idea up the court instead of across it: the end nearest
+     the camera and the end away from it. Same dead band — but NOT the same
+     average.
+
+     L and R can be means over their cells because the two sides of a court
+     are the same distance from the camera. The two ENDS are not. A player at
+     the far baseline is about two cells wide at this working size, so a mean
+     over the twenty-odd cells of the far half buries them under the
+     background and the far end reads as constant whatever they do. The first
+     version did exactly that: the far signal vanished, the measurement
+     collapsed into "was the near player quiet", and it had no zero crossing
+     left to decide anything with.
+
+     So each end is the mean of its BUSIEST FEW cells. A distant player
+     concentrates what motion they make; taking the top of the distribution
+     keeps them and taking three of them rather than one keeps a single noisy
+     cell from being the whole reading. */
+  const N=new Float64Array(n), F=new Float64Array(n);
+  const AV_TOPK=3;
+  const topMean=(vals,cnt)=>{
+    if(!cnt) return 0;
+    let a=-1,b=-1,c=-1;
+    for(let i=0;i<cnt;i++){
+      const v=vals[i];
+      if(v>a){ c=b; b=a; a=v; } else if(v>b){ c=b; b=v; } else if(v>c){ c=v; }
+    }
+    const k=Math.min(AV_TOPK,cnt);
+    return (a+(k>1?b:0)+(k>2?c:0))/k;
+  };
+  const nBuf=new Float64Array(AV_CELLS), fBuf=new Float64Array(AV_CELLS);
+  let nA=0,nL=0,nR=0,nO=0,nN=0,nF=0;
   for(let c=0;c<AV_CELLS;c++){
     if(!roi.cells[c]){ nO++; continue; }
     nA++;
-    const x=c%AV_GX;
+    const x=c%AV_GX, y=(c/AV_GX)|0;
     if(x<roi.mid) nL++; else if(x>roi.mid) nR++;
+    if(y>roi.midY) nN++; else if(y<roi.midY) nF++;
   }
   for(let k=0;k<n;k++){
     const base=k*AV_CELLS;
-    let a=0,l=0,r=0,ou=0;
+    let a=0,l=0,r=0,ou=0,cn=0,cf=0;
     for(let c=0;c<AV_CELLS;c++){
       const v=grid[base+c];
       if(!roi.cells[c]){ ou+=v; continue; }
       a+=v;
-      const x=c%AV_GX;
+      const x=c%AV_GX, y=(c/AV_GX)|0;
       if(x<roi.mid) l+=v; else if(x>roi.mid) r+=v;
+      if(y>roi.midY) nBuf[cn++]=v; else if(y<roi.midY) fBuf[cf++]=v;
     }
     m[k]=nA?a/nA:0; L[k]=nL?l/nL:0; R[k]=nR?r/nR:0; O[k]=nO?ou/nO:0;
+    N[k]=topMean(nBuf,cn); F[k]=topMean(fBuf,cf);
   }
   /* If the court came out as the whole frame there is no outside to compare
      against, so the recording's own quietest moments stand in for one. */
   const floor = nO ? 0 : avPct(m,0.05);
-  return {m,L,R,O, ref:avPct(m,0.9), noise:avPct(m,0.10),
-          roiW:roi.coreW, cells:nA, outCells:nO, floor};
+  return {m,L,R,O,N,F, ref:avPct(m,0.9), noise:avPct(m,0.10),
+          roiW:roi.coreW, cells:nA, outCells:nO, nearCells:nN, farCells:nF, floor};
 }
 
 /* ---- C: is the movement locked to the strikes? ------------------------
@@ -12211,6 +12254,65 @@ function avMeasure(seg,T,dt,S,strikes,opt){
   const mine=strikes.filter(t=>t>=seg.start&&t<=seg.end);
   const C=avSync(T,S.m,lo,hi,mine,o.syncWin);
 
+  /* WHICH END THE SERVE CAME FROM.
+
+     Unlike lastSide this is not a hint. Who served is not an outcome to be
+     guessed at — it is a fact the rules then constrain, hard: the server
+     alternates every game and the serve court alternates every point, so a
+     sequence of these either satisfies the rotation or does not. See
+     docs/scoring.md.
+
+     EACH END IS MEASURED AGAINST ITSELF. The first version compared the
+     near end's SHARE of the motion at contact against its share over the
+     whole clip, which sounds equivalent and is not. Perspective makes the
+     near player several times larger in frame, so their share sits near the
+     ceiling all rally: a near serve can push it up barely at all while a far
+     serve pulls it down a long way. The measurement came out asymmetric,
+     every clip was labelled "far", and three of six were right by accident.
+
+     So instead: how much busier is the near end during the serve than during
+     the rest of its own rally, against the same question asked of the far
+     end. Both ratios are dimensionless and each cancels its own end's size,
+     so what is left is the thing actually being asked — at contact the
+     striker is tossing and swinging while the receiver waits, and once the
+     rally is going both are moving. */
+  let serveEnd=0, serveConf=0, serveShift=0, seenShift=false;
+  if(mine.length && (S.nearCells||0)>0 && (S.farCells||0)>0){
+    const t1=mine[0];
+    let a=lo,b=lo;
+    for(let k=lo;k<hi;k++){
+      if(T[k] < t1-o.serveLead) a=k+1;
+      if(T[k] <= t1+o.serveTail) b=k+1;
+    }
+    if(b>a && (hi-lo)-(b-a) >= 3){
+      let sN=0,sF=0,rN=0,rF=0,ns=0,nr=0;
+      for(let k=lo;k<hi;k++){
+        if(k>=a && k<b){ sN+=S.N[k]; sF+=S.F[k]; ns++; }
+        else { rN+=S.N[k]; rF+=S.F[k]; nr++; }
+      }
+      if(ns&&nr){
+        const eps=1e-6;
+        const dN=(sN/ns+eps)/(rN/nr+eps), dF=(sF/ns+eps)/(rF/nr+eps);
+        serveShift=Math.log(dN)-Math.log(dF);
+        seenShift=true;
+      }
+      /* The DECISION is not made here, because zero is not the boundary and
+         there is no reason it should be. The two ends are not symmetric: a
+         far serve makes the near player — the big one — go still, which is an
+         enormous change, while a near serve stills the far player, who was
+         contributing little either way. Measured on a real clip the far
+         serves came out around -1 to -2 and the near ones within 0.02 of
+         zero. Splitting at zero got one of those three wrong; splitting at a
+         constant fitted to this recording would be worthless on the next one.
+
+         What IS fixed is the camera. Its geometry does not change through a
+         recording, so the asymmetry it causes is a constant offset and the
+         only thing varying between clips is which end served. That makes the
+         shifts bimodal, and the split is found from the recording's own
+         distribution in avApply — where all the clips are visible at once. */
+    }
+  }
+
   /* which half was still moving as it ended — a hint about who was last on
      the ball, never more than a hint (see the docs: last to touch it is
      exactly the ambiguous case) */
@@ -12227,7 +12329,7 @@ function avMeasure(seg,T,dt,S,strikes,opt){
 
   return {seen:true, lo, hi, samples:hi-lo, A, B, C, level:mean, out, ratio,
           motion:ref?mean/ref:0, quiet:ratio<1.3,
-          lastSide, shake, strikes:mine.length};
+          lastSide, serveEnd, serveConf, serveShift, seenShift, shake, strikes:mine.length};
 }
 
 /* ---- the verdict ------------------------------------------------------ */
@@ -12258,9 +12360,34 @@ function avScore(mm,opt,useBoth){
       nothing at all — a distant static camera, a dark clip, a locked-off
       wide shot where nobody is more than a few pixels. The pass reports
       itself inconclusive and drops NOTHING. */
+/* Where the serve shifts split into two ends. One pass over the sorted
+   values for the widest gap: with a fixed camera the clips fall into two
+   groups and the gap between them is the boundary. Deliberately refuses
+   rather than guesses — a recording where every serve came from the same end
+   has no gap to find, and neither does one where the camera cannot tell them
+   apart, and both should come back "don't know" instead of a coin flip. */
+function avServeSplit(vals, minGap){
+  if(vals.length<3) return null;
+  const s=vals.slice().sort((a,b)=>a-b);
+  let gap=0, at=-1;
+  for(let i=1;i<s.length;i++){ const g=s[i]-s[i-1]; if(g>gap){ gap=g; at=i; } }
+  if(at<1 || gap<minGap) return null;
+  return {cut:(s[at]+s[at-1])/2, gap, far:at, near:s.length-at};
+}
+
 function avApply(segs,T,dt,S,strikes,opt){
   const o={...AV_DEF,...(opt||{})};
   const raw=segs.map(s=>avMeasure(s,T,dt,S,strikes,o));
+
+  const shifts=raw.filter(r=>r.seen&&r.seenShift).map(r=>r.serveShift);
+  const split=avServeSplit(shifts, o.serveSep);
+  if(split){
+    for(const r of raw){
+      if(!r.seen||!r.seenShift) continue;
+      r.serveEnd = r.serveShift>split.cut ? 1 : -1;
+      r.serveConf = avClamp(Math.abs(r.serveShift-split.cut)/(split.gap/2),0,1);
+    }
+  }
   const seen=raw.filter(r=>r.seen);
   /* B is only meaningful if there IS a left and a right to compare. A court
      three cells wide is a camera parked behind one player: the far one is a
@@ -12280,7 +12407,7 @@ function avApply(segs,T,dt,S,strikes,opt){
   const best = confs.length?avPct(confs,0.9):0;
   const inconclusive = !confs.length || best < o.quiet;
   return {
-    per:out, useBoth, wide, inconclusive,
+    per:out, useBoth, wide, inconclusive, serve:split,
     scanned:seen.length, total:segs.length,
     best, median: confs.length?avMedian(confs):0,
     drops: inconclusive?0:out.filter(r=>r.conf!=null&&r.conf<o.thresh).length
@@ -13390,6 +13517,11 @@ function acExportJson(){
         courtVsFrame:Math.round(s.v.ratio*100)/100,
         bothHalves:Math.round(s.v.B*100)/100,
         strikeAlignment:Math.round(s.v.C*100)/100,
+        /* serveEnd is +1 for the end nearest the camera, -1 for the far end,
+           0 for undecided; serveConfidence is how far the balance tipped.
+           Unlike lastSide this is an input to the score, not a hint about
+           it — see docs/scoring.md. */
+        serveEnd:s.v.serveEnd, serveConfidence:Math.round(s.v.serveConf*100)/100,
         lastSide:Math.round(s.v.lastSide*100)/100,
         cameraShiftPx:Math.round(s.v.shake*100)/100,
         frames:s.v.samples, note:s.v.reason
