@@ -11805,7 +11805,7 @@ const AC_SR=16000;                  // decode rate: a strike is broadband, 8kHz 
 const AC_TUNE_KEY="fgta_autocut_tune";
 const AC_DEF={sens:1.2, maxGap:2.5, minHits:2, lead:1.5, tail:1.5, min:2,
               minGapMs:120, winMs:1500, floorFrac:0.30, envFrac:0.18,
-              hardFrac:0.45, aceFrac:0.72, noiseSig:4};
+              hardFrac:0.45, aceFrac:0.72, noiseSig:4, minRate:6};
 /* Only the six that are worth a person's time are on sliders. The rest are
    properties of the detector rather than of a court, and moving them is
    how you break it. */
@@ -11833,7 +11833,11 @@ function acTune(){
 }
 function acSaveTune(t){ try{ localStorage.setItem(AC_TUNE_KEY, JSON.stringify(t)); }catch(e){} }
 
-/* ---- the detector (pure, over a Float32Array) --------------------------- */
+/* ---- the detector (pure, over a Float32Array) ---------------------------
+   Sentinel-delimited like the picture core, and for the same reason: the
+   tests pull this region out of index.html and run it, so they cannot drift
+   from what ships. Move a sentinel and they throw. */
+/* ==== AC-CORE-START ==== */
 function acEnvelope(x, sr){
   const hop=Math.max(1,Math.round(sr*AC_HOP_MS/1000));
   const n=Math.floor(x.length/hop);
@@ -11933,7 +11937,63 @@ function acPickOnsets(o, env, opt, hopMs, map){
      peaks and they would swamp the histogram with a mode that means nothing. */
   const peaks=[];
   for(let i=1;i<n-1;i++) if(o[i]>o[i-1] && o[i]>=o[i+1] && o[i]>0) peaks.push(o[i]);
-  const split=acNoiseFloor(peaks, opt.noiseSig);
+
+  /* HOW HIGH TO SET IT IS NOT A CONSTANT.
+
+     Four robust deviations was picked because it was where two synthetic
+     fixtures both had margin. Real footage is neither of them, and on a
+     24-minute match it threw away all but two rallies — eight seconds of
+     tennis out of twenty-four minutes, which is the same mistake as the one
+     it was built to fix, pointing the other way.
+
+     A fixed number cannot be right for every recording, so the number is not
+     fixed. The bar is chosen by WHAT IT LEAVES BEHIND: the strictest setting
+     that still leaves a plausible number of strikes a minute. A real singles
+     match runs 15-25; well under ten means rallies are being lost whatever
+     the arithmetic thinks of the noise, and far above forty means something
+     other than a racket is being counted.
+
+     THE SEARCH ONLY EVER COMES DOWN, and the reason is worth writing down
+     because the obvious improvement is wrong. Bracketing from both ends —
+     "the strictest bar that lands in a plausible band" — sounds better and
+     measurably is not: on a clean recording it settles half a deviation
+     ABOVE what was needed, because 18 strikes a minute is just as much "in
+     band" as 32, and it got there by throwing away four strikes in ten. Five
+     rallies came out as ten clips.
+
+     Being in a plausible band is not the same as not losing anything. The two
+     failures are not symmetric either: an extra clip is one tap to drop, a
+     lost rally is gone. So the rule is the strictest bar that still keeps
+     ENOUGH, starting from the configured setting and coming down — and if
+     even the loosest keeps too little, it gives up and leaves the old floor
+     alone rather than invent a bar to hit a target.
+
+     What this does not fix, and does not pretend to, is a recording that is
+     not tennis: a camera left running in a noisy place has loud peaks and no
+     strikes, and no bar drawn from the noise can tell them apart when there
+     is nothing else there. The strikes-per-minute figure is what catches
+     that, and the panel says so in words. */
+  const seconds=Math.max(1, n*hop/1000);
+  const minRate=opt.minRate==null?6:opt.minRate;
+  const top=opt.noiseSig==null?4:opt.noiseSig;
+  let split=null;
+  for(let sg=top; sg>=1.5; sg-=0.5){
+    const cand=acNoiseFloor(peaks, sg);
+    if(!cand) break;
+    let above=0;
+    for(let p=0;p<peaks.length;p++) if(peaks[p]>=cand.floor) above++;
+    cand.sigmas=sg; cand.above=above; cand.perMin=above/(seconds/60);
+    if(!split) split=cand;                       /* the strictest, as a fallback */
+    if(cand.perMin>=minRate){ split=cand; break; }
+  }
+  if(split){
+    split.relaxed = split.sigmas!==top;
+    split.chosen = split.perMin>=minRate ? (split.relaxed?'relaxed until it kept enough':'strict was enough')
+                                         : 'nothing kept enough';
+    split.gaveUp = !(split.perMin>=minRate);
+    split.perMin=Math.round(split.perMin);
+    if(split.gaveUp) split.floor=0;
+  }
   if(split){
     /* A floor that finds nothing is not a floor. If raising it this far would
        leave almost no peaks standing, the assumption behind it — that the
@@ -11944,10 +12004,7 @@ function acPickOnsets(o, env, opt, hopMs, map){
        fixtures, four sigmas leaves the quietest real strike well clear while
        six wipes one of them out entirely. Four is where both have margin,
        and this guard is what catches a recording where they do not. */
-    let above=0;
-    for(let p=0;p<peaks.length;p++) if(peaks[p]>=split.floor) above++;
-    split.above=above;
-    split.applied = above>=4 && split.floor>oFloor;
+    split.applied = !split.gaveUp && split.above>=4 && split.floor>oFloor;
     if(split.applied) oFloor=split.floor;
   }
   if(split) split.used=oFloor;
@@ -12006,6 +12063,7 @@ function acSegments(runs, opt, duration){
     .map((s,i)=>({n:i+1, start:s.start, end:s.end, dur:s.end-s.start,
                   hits:s.hits, peak:s.peak, keep:true}));
 }
+/* ==== AC-CORE-END ==== */
 
 
 /* ============================================================
@@ -12506,10 +12564,33 @@ function avScore(mm,opt,useBoth){
 function avServeSplit(vals, minGap){
   if(vals.length<3) return null;
   const s=vals.slice().sort((a,b)=>a-b);
-  let gap=0, at=-1;
-  for(let i=1;i<s.length;i++){ const g=s[i]-s[i-1]; if(g>gap){ gap=g; at=i; } }
-  if(at<1 || gap<minGap) return null;
-  return {cut:(s[at]+s[at-1])/2, gap, far:at, near:s.length-at};
+  /* The widest gap is the obvious rule and it is knife-edge. Measured on one
+     run: shifts of -1.95 -1.80 -0.93 -0.09 0.00 +0.07, where the real
+     boundary is after -0.93 with a gap of 0.84 — and the gap between -1.80
+     and -0.93 is 0.87. Three hundredths decided it, wrongly, and a far serve
+     came back as a near one.
+
+     Two clusters that minimise the spread WITHIN them is the right question,
+     and in one dimension it is not a heuristic: sort, try every split point,
+     take the least total. On that same run it picks the correct boundary, and
+     it does so because a cluster running from -1.95 to -0.93 is plainly worse
+     than one running from -0.09 to +0.07. */
+  let best=-1, bestSS=Infinity, bestMeans=null;
+  for(let at=1; at<s.length; at++){
+    let m1=0,m2=0;
+    for(let i=0;i<at;i++) m1+=s[i];
+    for(let i=at;i<s.length;i++) m2+=s[i];
+    m1/=at; m2/=(s.length-at);
+    let ss=0;
+    for(let i=0;i<at;i++) ss+=(s[i]-m1)*(s[i]-m1);
+    for(let i=at;i<s.length;i++) ss+=(s[i]-m2)*(s[i]-m2);
+    if(ss<bestSS){ bestSS=ss; best=at; bestMeans=[m1,m2]; }
+  }
+  if(best<1) return null;
+  const sep=bestMeans[1]-bestMeans[0];
+  if(sep<minGap) return null;                    /* one group, not two */
+  return {cut:(s[best]+s[best-1])/2, gap:sep, spread:bestSS,
+          far:best, near:s.length-best};
 }
 
 function avApply(segs,T,dt,S,strikes,opt){
@@ -15009,18 +15090,32 @@ function acRecompute(){
 function acKept(){ return (AC && AC.segs || []).filter(s=>s.keep); }
 
 /* ---- playback: the same seek-past-the-dead-time trick, on a local file --- */
+/* Every render rewrites the panel's innerHTML, which destroys the <video> and
+   builds a new one. Re-pointing the new element at the file is not enough:
+   with preload="metadata" it has decoded nothing, so it sits at zero showing
+   BLACK until something seeks it. The mount path always seeked; the re-bind
+   path did not, so it only had to be re-rendered once to go black and stay
+   there — and the picture, ball and score panels re-render constantly.
+
+   So there is one path now, and it always ends in a seek. */
 function acMountVideo(){
   const A=AC; if(!A) return;
   const v=document.getElementById('acVideo');
   if(!v) return;
+  const fresh = v!==A.video || v.src!==A.url;
   A.video=v;
+  if(!fresh){ acSeek(A.idx); return; }
   v.src=A.url;
-  v.addEventListener('loadedmetadata',()=>{
-    if(AC!==A) return;
-    if(!A.duration) { A.duration=v.duration; acRecompute(); }
+  const ready=()=>{
+    if(AC!==A || A.video!==v) return;
+    if(!A.duration && isFinite(v.duration) && v.duration>0){ A.duration=v.duration; acRecompute(); }
     acSeek(A.idx);
-    renderAutoCut();
-  },{once:true});
+  };
+  if(v.readyState>=1) ready();
+  else v.addEventListener('loadedmetadata',ready,{once:true});
+  /* a seek can be refused while the browser is still opening the file; the
+     first decoded frame is the other chance to land on the right one */
+  v.addEventListener('loadeddata',()=>{ if(AC===A && A.video===v) acSeek(A.idx); },{once:true});
 }
 function acSeek(i){
   const A=AC, list=acKept(), s=list[i];
@@ -15360,12 +15455,19 @@ function renderAutoCut(){
              minute already knows it is wrong; what they need is the direction,
              next to the figure, in the units of the slider they are about to
              move. */
-          if(per>32) return head+` That is far too many — almost everything is being called a rally, so
+          const sp=A.split;
+          const chose = sp && sp.applied
+            ? ` The bar for a strike was set ${sp.sigmas} deviations above the typical peak${
+                sp.relaxed?` (moved from ${A.tune.noiseSig==null?4:A.tune.noiseSig} — ${sp.chosen})`:''} — ${sp.above} peaks cleared it.`
+            : (sp && sp.gaveUp
+               ? ` No noise-based bar helped here: even the loosest one left under ${A.tune.minRate==null?6:A.tune.minRate} strikes a minute, so the plain floor is being used.`
+               : ``);
+          if(per>32) return head+chose+` That is far too many — almost everything is being called a rally, so
             the cut removes next to nothing. Raise Threshold under Detection settings until this lands
             in the band, a few tenths at a time.`;
-          if(per>0 && per<8 && A.duration>60) return head+` That is too few — rallies are being missed.
+          if(per>0 && per<8 && A.duration>60) return head+chose+` That is too few — rallies are being missed.
             Lower Threshold under Detection settings.`;
-          return head;
+          return head+chose;
         })()}${A.stream?`
           Played through at ${A.stream.rate}× in ${acEta(A.stream.wall)} rather than loaded, because the file
           is ${(A.file.size/1073741824).toFixed(1)} GB.${A.stream.stalls?` ${A.stream.stalls} stall${A.stream.stalls===1?'':'s'} on the way —
@@ -15416,11 +15518,7 @@ function renderAutoCut(){
       </div>
     </div>`;
 
-  if(A.kind==='video' && !A.video) acMountVideo();
-  else if(A.video){
-    const v=document.getElementById('acVideo');
-    if(v && v!==A.video){ A.video=v; v.src=A.url; }
-  }
+  if(A.kind==='video' && document.getElementById('acVideo')) acMountVideo();
   const ul=document.getElementById('acList'), act=ul&&ul.querySelector('.ac-row.on');
   if(ul&&act){
     const top=act.offsetTop, bot=top+act.offsetHeight;

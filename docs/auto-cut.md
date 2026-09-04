@@ -67,9 +67,38 @@ old one is higher, and if raising it that far would leave almost no peaks
 standing it is not applied at all, because a floor that finds nothing is not
 a floor.
 
-Four sigmas rather than five or six because that is where both fixtures have
-margin — six wipes out a real strike on one of them. `node test/onsets.test.js`
-prints the whole sweep.
+### And then four sigmas was wrong too
+
+Four was where both fixtures had margin. Real footage is neither of them: on a
+24-minute match it left **two rallies and eight seconds**, 99% of the
+recording cut. Which is the same mistake as the one it replaced, pointing the
+other way — a number calibrated on the recordings that happened to be
+available.
+
+So it is not a number any more. The bar is chosen by **what it leaves
+behind**: the strictest setting that still keeps a plausible number of strikes
+a minute, starting at four and coming down. A real singles match runs 15–25;
+well under ten means rallies are being lost, whatever the arithmetic thinks of
+the noise.
+
+The obvious improvement is wrong and the code says so. Bracketing from both
+ends — *the strictest bar that lands in a plausible band* — sounds better and
+measurably is not: on a clean recording it settles half a deviation **above**
+what was needed, because 18 strikes a minute is as much "in band" as 32, and
+it gets there by throwing away four strikes in ten. Five rallies came out as
+ten clips. Being in a plausible band is not the same as not losing anything,
+and the two failures are not symmetric: an extra clip is one tap to drop, a
+lost rally is gone.
+
+What it does not fix, and does not pretend to, is a recording that is not
+tennis. A camera left running somewhere noisy has loud peaks and no strikes,
+and no bar drawn from the noise can separate them when there is nothing else
+there. The strikes-per-minute figure catches that, and the panel says so in
+words.
+
+`node test/floor.test.js` runs three recordings that are nothing like each
+other — strikes towering over the ambience, strikes barely clearing it, and no
+tennis at all — and `node test/onsets.test.js` prints the sweep.
 
 ### Two things that took a second attempt
 

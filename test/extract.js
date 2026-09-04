@@ -18,6 +18,12 @@ function loadCore(){
                'avROI','avSeries','avCorr','avStrikeTrain','avSync','avMeasure','avScore','avApply'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
+function loadAudio(){
+  const code=region('AC-CORE');
+  const names=['acEnvelope','acOnsetStrength','acPercentile','acNoiseFloor',
+               'acPickOnsets','acCluster','acSegments'];
+  return new Function('const AC_HOP_MS=10;\n'+code+'\nreturn {'+names.join(',')+'};')();
+}
 function loadBall(){
   const code=region('AV-BALL');
   const names=['abGaps','abTails','abWindows','abBlobs','abTrack','abExtend','abBridge'];
@@ -32,4 +38,4 @@ function loadScore(){
                'scSetOrders','scBestOrder','scScore'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
-module.exports={region,loadCore,loadScore,loadBall,APP};
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,APP};
