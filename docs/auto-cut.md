@@ -37,6 +37,40 @@ The pipeline, all of it in the page:
    properly struck ball in the group.
 6. **Pad** first strike to last, into a clip.
 
+### How loud is loud enough
+
+Not a fraction of a percentile of the whole recording, which is what this
+used to be and what made it fail. Where the 99.5th percentile sits depends on
+how much of the recording is rallies, so a match with long gaps drags it down
+until court ambience clears the bar. Measured on a fixture with six rallies in
+63 seconds: **30 strikes played, 35 found inside the rallies, and 117 more
+found in the silence between them.** Finding strikes was never the problem.
+Rejecting silence was — and no setting of the sensitivity slider fixed it,
+because the slider moves a threshold that was anchored to the wrong thing.
+Phantom strikes in a gap are not cosmetic: two of them inside `maxGap` weld a
+rally to its neighbour, and a handful turn a whole match into one clip.
+
+Otsu's method is the obvious fix and does not work here. The peaks genuinely
+are two populations, twelve times apart, but Otsu weights by class *size* and
+here that is 30 strikes against 2,000 noise peaks — with a 1.5% minority the
+threshold lands deep inside the majority. It returned 0.043 where strikes sit
+at 2.6.
+
+So the floor is anchored to the **noise** instead. Noise is the majority by a
+wide margin in any recording of a sport played with gaps in it, so its centre
+and spread are well estimated; the strikes are sparse, and how far up a
+percentile they land is exactly the density-dependence that broke the old
+rule. A strike is a peak four robust deviations above the typical peak —
+median and MAD, in log space, since the two populations are separated
+multiplicatively. And it defers: the floor used is whichever of this and the
+old one is higher, and if raising it that far would leave almost no peaks
+standing it is not applied at all, because a floor that finds nothing is not
+a floor.
+
+Four sigmas rather than five or six because that is where both fixtures have
+margin — six wipes out a real strike on one of them. `node test/onsets.test.js`
+prints the whole sweep.
+
 ### Two things that took a second attempt
 
 **An adaptive threshold alone cuts nothing.** Local mean + k·sd sounds
@@ -65,6 +99,14 @@ once:
 | false positives | **0–1 per 20 minutes** |
 | cut | **54–57%** of the runtime removed |
 | speed | ~200 ms of analysis per hour of audio |
+
+And against two recorded fixtures with real soundtracks, after the floor above
+was fixed — the second of which used to come back as a single clip:
+
+| | played | detected | in the dead time | clips |
+|---|---|---|---|---|
+| flat court, quiet | 31 | 31 | **0** | 4 of 4 |
+| perspective, noisy ambience | 30 | 30 | **0** | 6 of 6 |
 
 Synthetic audio is not real audio. Those numbers say the method is sound,
 not that your footage will behave. That's exactly why every threshold is on
@@ -161,6 +203,25 @@ cut script it produces runs against your original file unchanged. The one
 thing you give up is the picture check, which needs the video.
 
 ---
+
+## Getting the video back
+
+**`▶ render the video here`** — plays the kept clips through and records them
+into one file, in the page. No terminal, nothing uploaded, and what you get
+is a video you can save.
+
+It runs at **real time**, because it is playback: twelve minutes of rallies
+takes twelve minutes. Leave the tab in front while it goes, since a
+backgrounded tab throttles both the video and the encoder. The output is
+**WebM** (VP9 or VP8 with Opus), because that is what a browser's recorder
+writes — if you need MP4, use the ffmpeg script.
+
+Where the browser allows it the file is written straight to disk as it is
+made, so length stops being a question of what fits in a tab. Otherwise it is
+held in memory and handed over at the end.
+
+Stopping it early keeps what has been rendered so far rather than throwing it
+away.
 
 ## Exports
 

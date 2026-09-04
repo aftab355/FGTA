@@ -4326,6 +4326,15 @@
   .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
   .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
 
+  .ac-render{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
+    color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft)}
+  .ac-render b{color:var(--ink)}
+  .ac-render-run{background:rgba(75,227,255,.06);border-color:rgba(75,227,255,.26)}
+  .ac-render-done{background:rgba(0,214,143,.07);border-color:rgba(0,214,143,.28)}
+  .ac-render-done b{color:var(--win)}
+  .ac-render-h{font-weight:700;color:var(--ink);margin-bottom:8px}
+  .ac-render-b{margin-top:8px;font-size:12px;color:var(--dim)}
+
   .pt-serve{display:inline-block;margin-right:6px;font-size:9px;vertical-align:middle;
     color:var(--pending);text-shadow:0 0 6px rgba(255,177,0,.7)}
 
@@ -11743,7 +11752,7 @@ const AC_SR=16000;                  // decode rate: a strike is broadband, 8kHz 
 const AC_TUNE_KEY="fgta_autocut_tune";
 const AC_DEF={sens:1.2, maxGap:2.5, minHits:2, lead:1.5, tail:1.5, min:2,
               minGapMs:120, winMs:1500, floorFrac:0.30, envFrac:0.18,
-              hardFrac:0.45, aceFrac:0.72};
+              hardFrac:0.45, aceFrac:0.72, noiseSig:4};
 /* Only the six that are worth a person's time are on sliders. The rest are
    properties of the detector rather than of a court, and moving them is
    how you break it. */
@@ -11804,6 +11813,54 @@ function acPercentile(arr,p){
    the clusters bridge the gaps, and the "cut" is the whole recording. A
    racket strike is not merely a local maximum; it is one of the loudest
    transients in the file. Hence the two absolute floors alongside. */
+/* ---- telling silence from strikes -------------------------------------
+   The floors above are a fixed fraction of the 99.5th percentile of the whole
+   recording, and that is the wrong shape of rule. Where the 99.5th percentile
+   sits depends on how much of the recording is rallies: a match with long
+   gaps, or a clip with one rally in it, drags it down until court ambience
+   clears the bar. Measured on a fixture with six rallies in 63 seconds — 30
+   strikes played, 35 found inside the rallies, and 117 more found in the
+   silence between them. Finding strikes was never the problem; rejecting
+   silence was, and no setting of the sensitivity slider fixed it, because the
+   slider moves a threshold anchored to the wrong thing.
+
+   OTSU'S METHOD DOES NOT WORK HERE, which is worth writing down because it is
+   the obvious answer. The peak strengths really are two populations — quiet
+   ones from wind and traffic, loud ones from a racket, separated by a factor
+   of twelve on that fixture — and Otsu is the standard way to split something
+   bimodal. But Otsu maximises between-class variance weighted by the two
+   class SIZES, and here the classes are 30 strikes against 2000 noise peaks.
+   With a 1.5% minority the weighting drags the threshold deep inside the
+   majority: it returned a cut of 0.043 when strikes sit at 2.6, and changed
+   nothing.
+
+   So anchor to the NOISE instead of to the strikes. The noise is the majority
+   by a wide margin in any recording of a sport played with gaps in it, so its
+   centre and spread are estimated well; the strikes are sparse, and how far
+   up a percentile they land is exactly the density-dependence that broke the
+   old floor. A strike is then a peak some robust deviations above the typical
+   peak — median and MAD, in log space because the two populations are
+   separated multiplicatively.
+
+   It still defers rather than overriding: the floor used is whichever of this
+   and the old one is higher, so nothing that was already being rejected
+   starts getting through. */
+function acNoiseFloor(peaks, sigmas){
+  const xs=[];
+  for(let i=0;i<peaks.length;i++) if(peaks[i]>0) xs.push(Math.log(peaks[i]));
+  if(xs.length<48) return null;
+  xs.sort((a,b)=>a-b);
+  const med=xs[xs.length>>1];
+  const dev=new Float64Array(xs.length);
+  for(let i=0;i<xs.length;i++) dev[i]=Math.abs(xs[i]-med);
+  dev.sort();
+  const mad=dev[dev.length>>1];
+  if(!(mad>1e-6)) return null;
+  const sd=mad*1.4826;                       // MAD to a sigma-equivalent
+  return {floor:Math.exp(med+(sigmas==null?4:sigmas)*sd), typical:Math.exp(med),
+          sd, peaks:xs.length, loudest:Math.exp(xs[xs.length-1])};
+}
+
 function acPickOnsets(o, env, opt, hopMs, map){
   /* hopMs and map are how a streamed envelope (BIG FILES, below) says "my
      frames are 12.5ms of media each, and here is where the element's own
@@ -11815,7 +11872,33 @@ function acPickOnsets(o, env, opt, hopMs, map){
   const ps=new Float64Array(n+1), ps2=new Float64Array(n+1);
   for(let i=0;i<n;i++){ ps[i+1]=ps[i]+o[i]; ps2[i+1]=ps2[i]+o[i]*o[i]; }
   const oRef=acPercentile(o,0.995), envRef=acPercentile(env,0.995);
-  const oFloor=oRef*opt.floorFrac, envFloor=envRef*opt.envFrac;
+  let oFloor=oRef*opt.floorFrac;
+  const envFloor=envRef*opt.envFrac;
+
+  /* Every local maximum, then the split between the quiet ones and the loud
+     ones. Peaks rather than frames: most frames are the flat bits between
+     peaks and they would swamp the histogram with a mode that means nothing. */
+  const peaks=[];
+  for(let i=1;i<n-1;i++) if(o[i]>o[i-1] && o[i]>=o[i+1] && o[i]>0) peaks.push(o[i]);
+  const split=acNoiseFloor(peaks, opt.noiseSig);
+  if(split){
+    /* A floor that finds nothing is not a floor. If raising it this far would
+       leave almost no peaks standing, the assumption behind it — that the
+       loud population is the strikes — is not holding on this recording, so
+       leave the old one alone rather than return an empty cut.
+
+       How much room there is between the two matters: measured across the two
+       fixtures, four sigmas leaves the quietest real strike well clear while
+       six wipes one of them out entirely. Four is where both have margin,
+       and this guard is what catches a recording where they do not. */
+    let above=0;
+    for(let p=0;p<peaks.length;p++) if(peaks[p]>=split.floor) above++;
+    split.above=above;
+    split.applied = above>=4 && split.floor>oFloor;
+    if(split.applied) oFloor=split.floor;
+  }
+  if(split) split.used=oFloor;
+
   const minGap=Math.max(1,Math.round(opt.minGapMs/hop));
   const out=[]; let last=-1e9;
   for(let i=1;i<n-1;i++){
@@ -11829,6 +11912,7 @@ function acPickOnsets(o, env, opt, hopMs, map){
     out.push({t: map?acMapTime(map,i):i*hop/1000, lvl:env[i]/(envRef||1)});
     last=i;
   }
+  out.split=split;      // for the panel to say what it decided, and why
   return out;
 }
 function acCluster(hits, opt){
@@ -13140,6 +13224,291 @@ async function acStreamAudio(url, opt){
   }
 }
 
+
+/* ============================================================
+   RENDERING THE CUT IN THE PAGE — a video file out, not a script.
+
+   The ffmpeg export stays, and for a big source it is still the right answer:
+   it runs at whatever the machine can manage rather than at real time, and it
+   writes an MP4. But it asks somebody to open a terminal, and "drop a video
+   in, get a video back" is what the feature is for.
+
+   HOW, given a page cannot transcode. It does not have to: the browser can
+   already decode this file (it is playing it) and can already encode video
+   (MediaRecorder). So the render is a playback — seek to a kept clip, play it,
+   draw each decoded frame to a canvas, record the canvas — with the recorder
+   PAUSED across the seeks between clips, which is what joins them into one
+   continuous piece with the dead time gone.
+
+   Consequences, all of them stated in the panel rather than discovered:
+
+   - It runs at real time, because it is playback. Twelve minutes of rallies
+     takes twelve minutes. The ffmpeg script does not, and the panel says so
+     next to the button.
+   - It re-encodes, to WebM (VP8/VP9 + Opus), because that is what
+     MediaRecorder writes. The ffmpeg route gives MP4.
+   - Audio is tapped with a MediaElementAudioSourceNode rather than by
+     capturing the element's own stream, because muting the element to keep
+     the room quiet would mute the recording too. Connected to a
+     MediaStreamDestination and nothing else, it is silent by construction.
+   - Frames go through a canvas rather than straight from the element,
+     because that is where a burnt-in scoreboard will have to be drawn
+     (docs/scoring.md) and re-plumbing it later would be worse.
+
+   Where the browser allows it the file is streamed to disk as it is made, so
+   an hour of tennis does not have to fit in a tab first; otherwise it is held
+   and handed over at the end, with the size said out loud beforehand.
+   ============================================================ */
+
+const AC_RENDER_MAX_H=720;        // downscale anything taller; 4K would encode slower than real time
+const AC_RENDER_KEY="fgta_autocut_render";
+
+function acRenderSupported(){
+  return typeof MediaRecorder!=='undefined' &&
+         typeof HTMLCanvasElement!=='undefined' &&
+         !!HTMLCanvasElement.prototype.captureStream &&
+         !!(window.AudioContext||window.webkitAudioContext);
+}
+function acRenderMime(){
+  const want=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for(const m of want) if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+
+function acRenderCancel(){ const A=AC; if(A&&A.render) A.render.cancel=true; }
+window.acRenderCancel=acRenderCancel;
+
+function acRenderPaint(){
+  const A=AC; if(!A||!A.render) return;
+  const bar=document.getElementById('acRenderBar'), lbl=document.getElementById('acRenderLabel');
+  if(bar) bar.style.width=Math.round((A.render.progress||0)*100)+'%';
+  if(lbl) lbl.textContent=A.render.note||'';
+}
+
+async function acRenderCut(){
+  const A=AC;
+  if(!A || A.kind!=='video') return;
+  const list=acKept();
+  if(!list.length){ toast('Nothing ticked to render',true); return; }
+  if(!acRenderSupported()){ toast('This browser cannot record video in the page',true); return; }
+  const mime=acRenderMime();
+  if(!mime){ toast('This browser has no video encoder available',true); return; }
+
+  const total=list.reduce((a,s)=>a+s.dur,0);
+  A.render={busy:true, progress:0, cancel:false, done:null, error:null,
+            note:'opening the video…', seconds:total, started:Date.now()};
+  renderAutoCut();
+
+  const el=document.createElement('video');
+  el.preload='auto'; el.playsInline=true; el.setAttribute('playsinline','');
+  el.style.cssText='position:fixed;left:-10000px;width:2px;height:2px;opacity:0';
+  document.body.appendChild(el);
+  el.src=A.url;
+
+  let ctx=null, rec=null, writable=null, chunks=[];
+  const cleanup=()=>{
+    try{ rec && rec.state!=='inactive' && rec.stop(); }catch(e){}
+    try{ el.pause(); el.removeAttribute('src'); el.load(); el.remove(); }catch(e){}
+    try{ ctx && ctx.close(); }catch(e){}
+  };
+
+  try{
+    await Promise.race([
+      new Promise(r=>el.addEventListener('loadedmetadata',r,{once:true})),
+      new Promise((_,j)=>setTimeout(()=>j(new Error('this file would not open for playback')),20000))
+    ]);
+    const vw=el.videoWidth||1280, vh=el.videoHeight||720;
+    const scale=Math.min(1, AC_RENDER_MAX_H/(vh||720));
+    const W=Math.max(2, Math.round(vw*scale/2)*2), H=Math.max(2, Math.round(vh*scale/2)*2);
+
+    const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const g=cv.getContext('2d',{alpha:false});
+    g.fillStyle='#000'; g.fillRect(0,0,W,H);
+
+    /* captureStream(0) plus requestFrame: one output frame per decoded frame,
+       rather than the canvas being sampled on a timer that knows nothing about
+       when the source actually produced anything */
+    const cstream=cv.captureStream(0);
+    const vtrack=cstream.getVideoTracks()[0];
+
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    ctx=new Ctx();
+    try{ await ctx.resume(); }catch(e){}
+    const asrc=ctx.createMediaElementSource(el);
+    const adest=ctx.createMediaStreamDestination();
+    asrc.connect(adest);                       // and nowhere else, so the room stays quiet
+
+    const stream=new MediaStream([vtrack, ...adest.stream.getAudioTracks()]);
+    const bits=Math.min(8000000, Math.max(1200000, Math.round(W*H*0.11)));
+    rec=new MediaRecorder(stream,{mimeType:mime, videoBitsPerSecond:bits});
+
+    /* stream it to disk if the browser will let us, so length stops being a
+       memory question */
+    if(window.showSaveFilePicker){
+      try{
+        const fh=await window.showSaveFilePicker({suggestedName:acSlug()+'-cut.webm',
+          types:[{description:'WebM video', accept:{'video/webm':['.webm']}}]});
+        writable=await fh.createWritable();
+      }catch(e){ writable=null; }         // cancelled the picker, or not allowed: hold it instead
+    }
+    const pending=[];
+    rec.ondataavailable=(e)=>{
+      if(!e.data || !e.data.size) return;
+      if(writable) pending.push(writable.write(e.data)); else chunks.push(e.data);
+    };
+    const recStopped=new Promise(r=>{ rec.onstop=r; });
+    rec.start(1000);
+    rec.pause();
+
+    let done=0;
+    for(let i=0;i<list.length;i++){
+      if(A.render.cancel || AC!==A) break;
+      const clip=list[i];
+      A.render.note=`clip ${i+1} of ${list.length} — seeking`;
+      acRenderPaint();
+      await new Promise(r=>{
+        let over=false;
+        const fin=()=>{ if(over) return; over=true; el.removeEventListener('seeked',fin); r(); };
+        el.addEventListener('seeked',fin); setTimeout(fin,5000);
+        try{ el.currentTime=clip.start; }catch(e){ fin(); }
+      });
+      if(A.render.cancel || AC!==A) break;
+
+      rec.resume();
+      await new Promise(res=>{
+        let over=false;
+        const stop=()=>{ if(over) return; over=true; try{ el.pause(); }catch(e){} res(); };
+        const guard=setTimeout(stop, (clip.dur+12)*1000);
+        const step=(now,meta)=>{
+          if(over) return;
+          const t=meta&&isFinite(meta.mediaTime)?meta.mediaTime:el.currentTime;
+          if(A.render.cancel || AC!==A || t>=clip.end){ clearTimeout(guard); stop(); return; }
+          g.drawImage(el,0,0,W,H);
+          if(vtrack.requestFrame) vtrack.requestFrame();
+          const at=done+Math.max(0,t-clip.start);
+          A.render.progress=Math.min(1, at/total);
+          const el2=(Date.now()-A.render.started)/1000;
+          A.render.note=`clip ${i+1} of ${list.length} — ${Math.round(A.render.progress*100)}%` +
+            (A.render.progress>0.02?` · about ${acEta(el2/A.render.progress-el2)} left`:'');
+          acRenderPaint();
+          if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        };
+        if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        else {
+          /* no per-frame callback: fall back to a timer at 25fps, which is
+             worse and still a video */
+          const iv=setInterval(()=>{
+            if(over) return;
+            const t=el.currentTime;
+            if(A.render.cancel || AC!==A || t>=clip.end){ clearInterval(iv); clearTimeout(guard); stop(); return; }
+            g.drawImage(el,0,0,W,H);
+            if(vtrack.requestFrame) vtrack.requestFrame();
+            A.render.progress=Math.min(1,(done+Math.max(0,t-clip.start))/total);
+            acRenderPaint();
+          },40);
+        }
+        el.addEventListener('ended',()=>{ clearTimeout(guard); stop(); },{once:true});
+        const p=el.play();
+        if(p&&p.catch) p.catch(()=>{ clearTimeout(guard); stop(); });
+      });
+      rec.pause();
+      done+=clip.dur;
+    }
+
+    A.render.note='finishing the file…'; acRenderPaint();
+    try{ rec.state!=='inactive' && rec.stop(); }catch(e){}
+    await recStopped;
+    await Promise.all(pending);
+
+    const cancelled=A.render.cancel;
+    if(writable){
+      try{ await writable.close(); }catch(e){}
+      cleanup();
+      if(AC!==A) return;
+      A.render={busy:false, saved:true, cancelled, seconds:done,
+                wall:Math.round((Date.now()-A.render.started)/1000)};
+      renderAutoCut();
+      return;
+    }
+    const blob=new Blob(chunks,{type:mime});
+    cleanup();
+    if(AC!==A) return;
+    A.render={busy:false, blob, url:URL.createObjectURL(blob), bytes:blob.size,
+              cancelled, seconds:done, wall:Math.round((Date.now()-A.render.started)/1000)};
+    renderAutoCut();
+  }catch(e){
+    cleanup();
+    if(AC!==A) return;
+    A.render={busy:false, error:(e&&e.message)||'the render failed'};
+    renderAutoCut();
+  }
+}
+window.acRenderCut=acRenderCut;
+
+function acRenderSave(){
+  const A=AC; if(!A||!A.render||!A.render.url) return;
+  const a=document.createElement('a');
+  a.href=A.render.url; a.download=acSlug()+'-cut.webm';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+window.acRenderSave=acRenderSave;
+function acRenderClear(){ const A=AC; if(!A) return;
+  if(A.render&&A.render.url){ try{ URL.revokeObjectURL(A.render.url); }catch(e){} }
+  A.render=null; renderAutoCut(); }
+window.acRenderClear=acRenderClear;
+
+function acRenderPanel(){
+  const A=AC;
+  if(!A || A.kind!=='video') return '';
+  const list=acKept();
+  const total=list.reduce((a,s)=>a+s.dur,0);
+  const R=A.render;
+
+  if(R && R.busy){
+    return `<div class="ac-render ac-render-run">
+      <div class="ac-render-h">Rendering ${list.length} clip${list.length===1?'':'s'} — ${rrClock(total)}</div>
+      <div class="ac-bar"><div class="ac-bar-fill" id="acRenderBar" style="width:${Math.round((R.progress||0)*100)}%"></div></div>
+      <div class="ac-bar-label" id="acRenderLabel">${esc(R.note||'')}</div>
+      <div class="ac-render-b">This is playback, so it takes as long as the rallies do. Leave the tab
+        in front — a backgrounded tab throttles both the video and the encoder.</div>
+      <button class="mini" onclick="acRenderCancel()">stop</button>
+    </div>`;
+  }
+  if(R && R.error){
+    return `<div class="ac-render"><b>The render failed.</b> ${esc(R.error)}
+      The ffmpeg script below still works.
+      <button class="mini" onclick="acRenderClear()">try again</button></div>`;
+  }
+  if(R && R.saved){
+    return `<div class="ac-render ac-render-done"><b>Saved${R.cancelled?' — what was rendered before you stopped':''}.</b>
+      ${rrClock(R.seconds)} of tennis, written straight to the file you picked in ${acEta(R.wall)}.
+      <button class="mini" onclick="acRenderClear()">render again</button></div>`;
+  }
+  if(R && R.url){
+    return `<div class="ac-render ac-render-done">
+      <b>Done${R.cancelled?' — stopped early':''}.</b> ${rrClock(R.seconds)} of tennis,
+      ${(R.bytes/1048576).toFixed(0)} MB, in ${acEta(R.wall)}.
+      <div class="rr-exports" style="margin-top:10px">
+        <button class="mini" onclick="acRenderSave()">⬇ save the video</button>
+        <button class="mini" onclick="acRenderClear()">render again</button>
+      </div>
+    </div>`;
+  }
+  if(!acRenderSupported()){
+    return `<div class="ac-render"><b>This browser cannot make the video here.</b>
+      It has no MediaRecorder, so use the ffmpeg script below.</div>`;
+  }
+  return `<div class="ac-render">
+    <b>Or get the video itself, from here.</b> Plays the kept clips through and records them into one
+    file — no terminal, nothing uploaded. It runs at <b>real time</b>, so ${rrClock(total)} of rallies
+    takes about ${acEta(total)}, and it writes WebM rather than MP4. The ffmpeg script below is faster
+    and gives you an MP4; this is for when you just want the file.
+    <div class="rr-exports" style="margin-top:10px">
+      <button class="mini" onclick="acRenderCut()" ${list.length?'':'disabled'}>▶ render the video here</button>
+    </div>
+  </div>`;
+}
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -13148,6 +13517,8 @@ function acReset(){
   const A=AC;
   if(!A) return;
   if(A.timer) clearInterval(A.timer);
+  if(A.render && A.render.url){ try{ URL.revokeObjectURL(A.render.url); }catch(e){} }
+  if(A.render) A.render.cancel=true;      // a render in flight checks AC too, but say it plainly
   if(A.url){ try{ URL.revokeObjectURL(A.url); }catch(e){} }
   AC=null;
 }
@@ -13260,7 +13631,7 @@ async function acLoad(file){
          them — and so the picture cannot re-drop something they put back.
          how/hopMs/map: which way in this file took, and what its envelope
          frames mean — see BIG FILES. */
-      av:null, hits:null, user:{},
+      av:null, hits:null, user:{}, render:null,
       how:file.size>AC_MEM_BYTES?'stream':'memory', hopMs:AC_HOP_MS, map:null,
       stream:null, fellBack:null};
   renderAutoCut();
@@ -13319,6 +13690,7 @@ function acRecompute(){
   const A=AC; if(!A || !A.o) return;
   const hits=acPickOnsets(A.o, A.env, A.tune, A.hopMs, A.map);
   A.strikes=hits.length;
+  A.split=hits.split||null;
   A.hits=hits;
   A.segs=acSegments(acCluster(hits,A.tune), A.tune, A.duration);
   /* Order matters here. The picture pre-drops, and THEN a person's own
@@ -13488,6 +13860,15 @@ function acExportJson(){
       : 'ball-strike onset detection over the recording\'s own audio',
     timebase:'seconds into the source file',
     settings:{...A.tune},
+    /* what the detector decided a strike had to beat, and what it based that
+       on — see "telling silence from strikes" */
+    strikeFloor: A.split ? {
+      typicalPeak:Math.round(A.split.typical*10000)/10000,
+      loudestPeak:Math.round(A.split.loudest*1000)/1000,
+      noiseAnchored:Math.round(A.split.floor*1000)/1000,
+      applied:!!A.split.applied, used:Math.round(A.split.used*1000)/1000,
+      peaksAboveIt:A.split.above, peaksSeen:A.split.peaks
+    } : null,
     picture: !(A.av && A.av.scan && !A.av.error) ? null : {
       used:!!A.av.tune.on,
       inconclusive:!!(A.av.res && A.av.res.inconclusive),
@@ -13721,6 +14102,8 @@ function renderAutoCut(){
               </label>`).join('')}` : ''}
         </div>
       </details>
+
+      ${acRenderPanel()}
 
       <div class="rr-exports">
         <button class="mini" onclick="acExportFfmpeg()" ${list.length?'':'disabled'}>⬇ ffmpeg script</button>
