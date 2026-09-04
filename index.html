@@ -4326,6 +4326,28 @@
   .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
   .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
 
+  .sc-form{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .sc-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sc-f{display:flex;flex-direction:column;gap:4px}
+  .sc-f span{font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--dim);
+    font-family:'JetBrains Mono',monospace}
+  .sc-list{margin-top:10px;max-height:280px;overflow-y:auto;border:1px solid var(--line-soft);
+    border-radius:var(--r-sm);background:var(--bg)}
+  .sc-row{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;cursor:pointer;
+    text-align:left;background:none;border:none;border-bottom:1px solid var(--line-soft);
+    color:var(--muted);font-size:12px}
+  .sc-row:last-child{border-bottom:none}
+  .sc-row:hover{background:var(--panel)}
+  .sc-doubt{background:rgba(255,177,0,.09)}
+  .sc-doubt .sc-conf{color:var(--pending)}
+  .sc-fixed{background:rgba(0,214,143,.08)}
+  .sc-fixed .sc-conf{color:var(--win)}
+  .sc-n{flex:0 0 22px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim)}
+  .sc-srv{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sc-pts{flex:0 0 52px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim)}
+  .sc-win{flex:0 0 84px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sc-conf{flex:0 0 34px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px}
+
   .ac-render{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
     color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft)}
   .ac-render b{color:var(--ink)}
@@ -12765,6 +12787,196 @@ async function avScanVideo(url, windows, opt){
 
 
 
+
+/* ---- the score panel --------------------------------------------------- */
+const SC_KEY="fgta_autocut_score";
+
+function scParseLine(txt){
+  const out=[];
+  const re=/(\d+)\s*[-–:]\s*(\d+)/g;
+  let m;
+  while((m=re.exec(String(txt||'')))){
+    const a=+m[1], b=+m[2];
+    if(a>20||b>20) return null;
+    out.push([a,b]);
+  }
+  return out.length?out:null;
+}
+function scEnds(A){
+  return (A.segs||[]).map(s=> s.v && s.v.seen && (s.v.serveEnd===1||s.v.serveEnd===-1)
+                              ? s.v.serveEnd : 0);
+}
+function scReady(A){
+  if(!A || A.kind!=='video' || !A.segs || A.segs.length<4) return false;
+  const e=scEnds(A);
+  return e.filter(x=>x!==0).length >= e.length*0.8;
+}
+function scRemember(k,v){
+  const A=AC; if(!A) return;
+  A.score=A.score||{};
+  A.score[k]=v;
+  try{
+    const keep={line:A.score.line, firstServer:A.score.firstServer,
+                firstEnd:A.score.firstEnd, a:A.score.a, b:A.score.b};
+    localStorage.setItem(SC_KEY, JSON.stringify(keep));
+  }catch(e){}
+}
+window.scRemember=scRemember;
+function scLoad(){
+  try{ return JSON.parse(localStorage.getItem(SC_KEY)||'{}'); }catch(e){ return {}; }
+}
+
+function scRun(){
+  const A=AC; if(!A) return;
+  const S=A.score||{};
+  const line=scParseLine(S.line);
+  if(!line){ toast('Type the final score, like 6-4 3-6 7-5',true); return; }
+  const rallies=A.segs.map(s=>({start:s.start, end:s.end}));
+  const frame=scFrame(scEnds(A));
+  const res=scScore(rallies, frame, line, {
+    firstServer:S.firstServer==='b'?'b':'a',
+    firstEnd:S.firstEnd==='far'?'far':'near'
+  });
+  A.score={...S, line:S.line, result:res, frame, flips:{}};
+  renderAutoCut();
+}
+window.scRun=scRun;
+
+/* A person overruling a game is the point of the whole panel, so their
+   decision outranks the reconstruction and survives re-running it. */
+function scFlip(i){
+  const A=AC; if(!A||!A.score||!A.score.result) return;
+  const g=A.score.result.games[i]; if(!g||!g.winner) return;
+  g.winner = g.winner==='a'?'b':'a';
+  g.held = g.winner===g.server;
+  g.fixed = true;
+  A.score.flips[i]=g.winner;
+  scRebuildBoard(A);
+  renderAutoCut();
+}
+window.scFlip=scFlip;
+
+/* the running score, recomputed after a person changes a game */
+function scRebuildBoard(A){
+  const R=A.score&&A.score.result; if(!R) return;
+  const board=[]; let sA=0,sB=0;
+  for(const set of R.sets){
+    let a=0,b=0;
+    for(const g of set.games){
+      const pts=g.points||0;
+      for(let p=0;p<pts;p++){
+        board.push({rally:g.from+p, setsA:sA, setsB:sB, gamesA:a, gamesB:b,
+                    point:p+1, points:pts, server:g.server, end:g.end,
+                    winner:g.winner||null, tiebreak:!!g.tiebreak,
+                    pts: pts===4 && g.winner && !g.tiebreak
+                         ? (g.winner===g.server ? [['0','15','30','40'][p],'0']
+                                                : ['0',['0','15','30','40'][p]])
+                         : null});
+      }
+      if(g.winner==='a') a++; else if(g.winner==='b') b++;
+    }
+    if(set.gA>set.gB) sA++; else sB++;
+  }
+  R.board=board;
+}
+
+function scClear(){ const A=AC; if(A){ A.score={...(A.score||{}), result:null}; renderAutoCut(); } }
+window.scClear=scClear;
+
+function scBoardAt(A, rally){
+  const R=A&&A.score&&A.score.result;
+  if(!R||!R.board) return null;
+  return R.board[rally]||null;
+}
+
+function scPanel(){
+  const A=AC;
+  if(!A || A.kind!=='video' || !A.segs || !A.segs.length) return '';
+  const S=A.score||scLoad();
+  if(!A.score) A.score=S;
+
+  if(!scReady(A)){
+    return `<div class="av-band av-band-off">
+      <b>Score tracking needs the picture pass first.</b> It works out where the games are from
+      which END each rally was served from, so it needs that measured for most of the clips —
+      run the picture check above, and make sure it found the court.</div>`;
+  }
+
+  const R=S.result;
+  const nameA=esc(S.a||'Player 1'), nameB=esc(S.b||'Player 2');
+
+  const form=`
+    <div class="sc-form">
+      <label class="sc-f"><span>Final score</span>
+        <input id="scLine" value="${esc(S.line||'')}" placeholder="6-4 3-6 7-5"
+          oninput="scRemember('line',this.value)"></label>
+      <div class="sc-two">
+        <label class="sc-f"><span>Player 1</span>
+          <input value="${esc(S.a||'')}" placeholder="name" oninput="scRemember('a',this.value)"></label>
+        <label class="sc-f"><span>Player 2</span>
+          <input value="${esc(S.b||'')}" placeholder="name" oninput="scRemember('b',this.value)"></label>
+      </div>
+      <div class="sc-two">
+        <label class="sc-f"><span>Served first</span>
+          <select onchange="scRemember('firstServer',this.value)">
+            <option value="a" ${S.firstServer!=='b'?'selected':''}>Player 1</option>
+            <option value="b" ${S.firstServer==='b'?'selected':''}>Player 2</option>
+          </select></label>
+        <label class="sc-f"><span>From the end</span>
+          <select onchange="scRemember('firstEnd',this.value)">
+            <option value="near" ${S.firstEnd!=='far'?'selected':''}>nearest the camera</option>
+            <option value="far" ${S.firstEnd==='far'?'selected':''}>away from it</option>
+          </select></label>
+      </div>
+    </div>`;
+
+  if(!R){
+    return `<div class="av-band av-band-off">
+      <b>Work out the score.</b> The clips say how many points each game had and the picture says
+      which end served them; the rules do the rest. Type the final score — the one thing nobody
+      needs a camera to know — and it fills in the games.
+      <span class="av-band-n">It will not invent individual points. Who won a point is not on the
+        recording: winner and unforced error look identical from one camera. Games and sets are
+        what comes back, and a point score only where a game went to love.</span>
+      ${form}
+      <button class="mini" onclick="scRun()">▶ work out the score</button>
+    </div>`;
+  }
+
+  const doubt=R.games.map((g,i)=>({i,c:g.confidence==null?1:g.confidence}))
+                     .filter(x=>x.c<0.9).sort((a,b)=>a.c-b.c).slice(0,5);
+  const flagged=new Set(doubt.map(x=>x.i));
+  const rows=R.games.map((g,i)=>{
+    const w = g.winner==='a'?nameA : g.winner==='b'?nameB : '—';
+    const cls = g.fixed?' sc-fixed' : (flagged.has(i)?' sc-doubt':'');
+    return `<button class="sc-row${cls}" onclick="scFlip(${i})"
+      title="${g.winner?'tap to give this game to the other player':'not reconstructed'}">
+      <span class="sc-n">${i+1}</span>
+      <span class="sc-srv">${g.server==='a'?nameA:nameB} serving${g.tiebreak?' · TB':''}</span>
+      <span class="sc-pts">${g.points==null?'?':g.points+' pts'}</span>
+      <span class="sc-win">${w}</span>
+      <span class="sc-conf">${g.confidence==null?'':(g.fixed?'set':Math.round(g.confidence*100)+'%')}</span>
+    </button>`;
+  }).join('');
+
+  const sets=R.sets.map(s=>`${s.gA}-${s.gB}`).join('  ');
+  return `<div class="av-band av-band-on">
+    <b>${R.totalGames} games worked out${R.unknown?`, ${R.unknown} it could not`:''}.</b>
+    ${sets}
+    ${R.notes.length?`<span class="av-band-n">${R.notes.map(esc).join(' · ')}</span>`:''}
+    <span class="av-band-n">Lengths come from the clips and are exact. Winners are the likeliest
+      reading of the scoreline — ${doubt.length?`the ${doubt.length} marked below are the ones it is
+      least sure of, so check those first`:`and it is confident about all of them`}. Tap any game to
+      hand it to the other player.</span>
+    <div class="sc-list">${rows}</div>
+    ${form}
+    <div class="rr-exports" style="margin-top:10px">
+      <button class="mini" onclick="scRun()">↺ redo from the score</button>
+      <button class="mini" onclick="scClear()">start again</button>
+    </div>
+  </div>`;
+}
+
 /* ---- the ball pass, wired to the auto-cut ------------------------------ */
 function abPaint(){
   const A=AC; if(!A||!A.ball) return;
@@ -13449,6 +13661,58 @@ async function acRenderCut(){
     const g=cv.getContext('2d',{alpha:false});
     g.fillStyle='#000'; g.fillRect(0,0,W,H);
 
+    /* THE SCOREBOARD, BURNT IN. This is why the render goes through a canvas
+       at all rather than recording the video element directly. It draws only
+       what was actually worked out — sets and games, and a point score only
+       for a game won to love, because those are the only points with one
+       reading. Everywhere else it shows which point of the game it is, which
+       the rally count does give exactly, rather than a plausible-looking
+       30-15 that nobody measured. */
+    const board=(A.score&&A.score.result&&A.score.result.board)||null;
+    const nameA=(A.score&&A.score.a)||'Player 1', nameB=(A.score&&A.score.b)||'Player 2';
+    /* Sized against 720p, but the floor used to be 1 — which on a 320x180
+       clip drew a 720p-sized bug covering two fifths of the frame. It scales
+       down now, with a floor low enough to stay proportionate and high enough
+       to stay readable. */
+    const s=Math.max(0.42, Math.min(2.2, H/720));
+    const bugFont=(w,px)=>`${w} ${Math.round(px*s)}px 'JetBrains Mono',ui-monospace,monospace`;
+    const drawBug=(row)=>{
+      if(!row) return;
+      const padX=14*s, padY=10*s, lh=26*s;
+      g.font=bugFont(700,17);
+      const nw=Math.max(g.measureText(nameA).width, g.measureText(nameB).width);
+      const boxW=nw+padX*3+86*s, boxH=lh*2+padY*2;
+      const x0=18*s, y0=H-boxH-18*s;
+      g.globalAlpha=0.82; g.fillStyle='#0a0814';
+      g.fillRect(x0,y0,boxW,boxH);
+      g.globalAlpha=1;
+      g.strokeStyle='rgba(255,45,120,.85)'; g.lineWidth=Math.max(2,2.5*s);
+      g.strokeRect(x0,y0,boxW,boxH);
+      const line=(i,name,sets,games,pt,serving)=>{
+        const y=y0+padY+lh*i+lh*0.72;
+        if(serving){
+          g.fillStyle='#ffe600';
+          g.beginPath(); g.arc(x0+padX*0.55, y-5*s, 3.4*s, 0, 7); g.fill();
+        }
+        g.fillStyle='#e8e6f0'; g.font=bugFont(700,17);
+        g.fillText(name, x0+padX, y);
+        g.fillStyle='#8a8296'; g.font=bugFont(500,16);
+        g.fillText(String(sets), x0+boxW-70*s, y);
+        g.fillStyle='#4be3ff';
+        g.fillText(String(games), x0+boxW-46*s, y);
+        g.fillStyle='#ff2d78'; g.font=bugFont(700,16);
+        g.fillText(String(pt), x0+boxW-24*s, y);
+      };
+      const ptA = row.pts ? row.pts[0] : (row.tiebreak?'TB':String(row.point));
+      const ptB = row.pts ? row.pts[1] : (row.tiebreak?'':'');
+      line(0,nameA,row.setsA,row.gamesA,ptA,row.server==='a');
+      line(1,nameB,row.setsB,row.gamesB,row.pts?ptB:'',row.server==='b');
+      if(!row.pts && !row.tiebreak){
+        g.fillStyle='#5a5468'; g.font=bugFont(400,11);
+        g.fillText('point '+row.point+' of '+row.points, x0+padX, y0+boxH-4*s);
+      }
+    };
+
     /* captureStream(0) plus requestFrame: one output frame per decoded frame,
        rather than the canvas being sampled on a timer that knows nothing about
        when the source actually produced anything */
@@ -13488,6 +13752,9 @@ async function acRenderCut(){
     for(let i=0;i<list.length;i++){
       if(A.render.cancel || AC!==A) break;
       const clip=list[i];
+      /* which rally this clip is, so the burnt-in board can follow the score */
+      const rallyIndex=A.segs.indexOf(clip);
+      const row = board && rallyIndex>=0 ? board[rallyIndex]||null : null;
       A.render.note=`clip ${i+1} of ${list.length} — seeking`;
       acRenderPaint();
       await new Promise(r=>{
@@ -13508,6 +13775,7 @@ async function acRenderCut(){
           const t=meta&&isFinite(meta.mediaTime)?meta.mediaTime:el.currentTime;
           if(A.render.cancel || AC!==A || t>=clip.end){ clearTimeout(guard); stop(); return; }
           g.drawImage(el,0,0,W,H);
+          drawBug(row);
           if(vtrack.requestFrame) vtrack.requestFrame();
           const at=done+Math.max(0,t-clip.start);
           A.render.progress=Math.min(1, at/total);
@@ -13526,6 +13794,7 @@ async function acRenderCut(){
             const t=el.currentTime;
             if(A.render.cancel || AC!==A || t>=clip.end){ clearInterval(iv); clearTimeout(guard); stop(); return; }
             g.drawImage(el,0,0,W,H);
+            drawBug(row);
             if(vtrack.requestFrame) vtrack.requestFrame();
             A.render.progress=Math.min(1,(done+Math.max(0,t-clip.start))/total);
             acRenderPaint();
@@ -13624,9 +13893,12 @@ function acRenderPanel(){
   }
   return `<div class="ac-render">
     <b>Or get the video itself, from here.</b> Plays the kept clips through and records them into one
-    file — no terminal, nothing uploaded. It runs at <b>real time</b>, so ${rrClock(total)} of rallies
-    takes about ${acEta(total)}, and it writes WebM rather than MP4. The ffmpeg script below is faster
-    and gives you an MP4; this is for when you just want the file.
+    file — no terminal, nothing uploaded. ${A.score&&A.score.result&&A.score.result.board
+      ? `<b>The scoreboard goes on it</b>, from the games worked out above.`
+      : `Work out the score above first and it gets burnt into the picture.`}
+    It runs at <b>real time</b>, so ${rrClock(total)} of rallies takes about ${acEta(total)}, and it
+    writes WebM rather than MP4. The ffmpeg script below is faster and gives you an MP4, without
+    the scoreboard.
     <div class="rr-exports" style="margin-top:10px">
       <button class="mini" onclick="acRenderCut()" ${list.length?'':'disabled'}>▶ render the video here</button>
     </div>
@@ -14179,6 +14451,351 @@ async function avBallScan(url, gaps, opt){
   }catch(e){ cleanup(); throw e; }
 }
 
+
+/* ==== SCORE-ASSIGN-START ====
+   FROM STRUCTURE TO AN ACTUAL SCORE.
+
+   scFrame above says where the games are. This says what the score was, and
+   it gets there by being honest about which parts are measured and which are
+   deduced:
+
+     MEASURED   how many rallies, and where each one starts and ends
+                which end each was served from  (the picture)
+                therefore: where the games are, to a pair
+     DEDUCED    which candidate split inside a pair is the real one
+     GIVEN      the final scoreline, which whoever played always knows
+     SOLVED     who won each game, from the scoreline and the rotation
+     NEVER      who won each individual point
+
+   The last line matters. Winner and unforced error are the same event from
+   one camera, so points inside a game are not recoverable and nothing here
+   invents them. What comes out is games and sets — which is what a scoreboard
+   shows for all but the current game — plus the point number within the game,
+   which the rally count does give exactly.
+
+   The one place a point score IS recoverable is a game won to love: four
+   points, one winner, so 15-0 30-0 40-0 game is the only reading. Those are
+   filled in and the rest are shown as "point 3", rather than picking a
+   plausible-looking 30-15 out of the air. */
+
+/* WHAT THE SCORELINE PREDICTS THE ENDS WOULD HAVE LOOKED LIKE.
+
+   scFrame's note above says every run of same-end rallies is exactly two
+   games. That is very nearly true and it is not true, and the exception is
+   not rare: ends change after every odd game OF A SET, so a set that finishes
+   on an odd game total changes ends at the end of it AND again after game one
+   of the next set — two flips one game apart. Measured over sixty simulated
+   matches: 348 runs of two games, 27 of three, and 16 of one, every one of
+   the odd ones sitting on a set that ended 6-1, 6-3, 7-5 and so on.
+
+   Assuming pairs regardless left most matches one game short and refusing to
+   reconstruct at all. So the pairs assumption is dropped: the scoreline
+   already says how many games each set had, and from that plus who served
+   first the server and end of EVERY game follow deterministically. Generate
+   that, group it into runs, and you know how many games each observed run has
+   to contain — two usually, one or three where the sets say so. */
+function scExpectedGames(scoreline, firstServer, firstEnd){
+  const out=[];
+  let server=firstServer==='b'?'b':'a';
+  let endA=firstEnd==='far'?'far':'near';
+  scoreline.forEach(([gA,gB],si)=>{
+    const G=gA+gB;
+    for(let k=1;k<=G;k++){
+      const far = endA==='near'?'far':'near';
+      out.push({set:si, gameInSet:k, server,
+                end: server==='a'?endA:far,
+                tiebreak: (gA===7&&gB===6||gB===7&&gA===6) && k===G});
+      server = server==='a'?'b':'a';
+      if(k%2===1) endA = endA==='near'?'far':'near';
+    }
+  });
+  return out;
+}
+
+/* Those games, grouped into the runs of one end a camera would see. */
+function scExpectedRuns(games){
+  const runs=[];
+  for(const g of games){
+    const last=runs[runs.length-1];
+    if(last && last.end===g.end && !last.games[last.games.length-1].tiebreak && !g.tiebreak)
+      last.games.push(g);
+    else runs.push({end:g.end, games:[g]});
+  }
+  return runs;
+}
+
+/* Every way n rallies divide into k games of legal length. */
+function scPartition(n, k, cap){
+  const out=[];
+  const lens=scGameLengths(n);
+  const walk=(left, parts)=>{
+    if(out.length>=(cap||400)) return;
+    if(parts.length===k){ if(left===0) out.push(parts.slice()); return; }
+    for(const L of lens){
+      if(L>left) break;
+      parts.push(L); walk(left-L, parts); parts.pop();
+    }
+  };
+  walk(n, []);
+  return out;
+}
+
+/* Which split of a pair is real, when the arithmetic leaves more than one.
+   Players take longer between GAMES than between points — they collect balls
+   and walk back — so the longest pause inside a run is where the game changed
+   hands. It is a tiebreaker on candidates the rules already allowed, never a
+   reason to pick something illegal. */
+function scPickSplit(candidates, from, rallies){
+  if(!candidates || !candidates.length) return null;
+  if(candidates.length===1) return candidates[0];
+  let best=null, bestScore=-Infinity;
+  for(const cand of candidates){
+    /* score a candidate by how long the pauses are at the boundaries it
+       proposes — the real one puts them where people were collecting balls */
+    let at=from, total=0, n=0;
+    for(let i=0;i<cand.length-1;i++){
+      at+=cand[i];
+      const prev=rallies[at-1], next=rallies[at];
+      if(prev&&next){ total+=next.start-prev.end; n++; }
+    }
+    const score = n?total/n:0;
+    if(score>bestScore){ bestScore=score; best=cand; }
+  }
+  return best||candidates[0];
+}
+
+/* Every way a set of G games could have finished gA-gB, as a sequence of
+   which side won each game — legal, and ending exactly when it ended. */
+function scSetOrders(G, gA, gB, cap){
+  const out=[];
+  const limit=cap||20000;
+  const done=(a,b,i)=>{
+    if(a>=6 && a-b>=2) return true;
+    if(b>=6 && b-a>=2) return true;
+    if(a===7 && b===6) return true;
+    if(b===7 && a===6) return true;
+    return false;
+  };
+  const walk=(i,a,b,seq)=>{
+    if(out.length>=limit) return;
+    if(i===G){ if(a===gA && b===gB && done(a,b,i)) out.push(seq.slice()); return; }
+    if(done(a,b,i)) return;                       // the set was already over
+    if(a<gA){ seq.push('a'); walk(i+1,a+1,b,seq); seq.pop(); }
+    if(b<gB){ seq.push('b'); walk(i+1,a,b+1,seq); seq.pop(); }
+  };
+  walk(0,0,0,[]);
+  return out;
+}
+
+/* How likely a game of exactly n points was won by the server, given their
+   chance of winning a point on serve.
+
+   A flat hold rate throws away something already measured: HOW LONG the game
+   was. A game won to love is four points in a row, which is much likelier for
+   the stronger side than the weaker; a game that went to deuce was close by
+   definition and says almost nothing. Using the length turns each game from
+   one bit of prior into a real observation.
+
+   The arithmetic is the standard game model. To love, p^4. To fifteen, four
+   orderings of one dropped point. To thirty, ten. Six points all is deuce —
+   twenty orderings — and from there whoever wins two in a row, which is where
+   the extra pairs of points come from. Receiver's chances are the same
+   expressions with p and q swapped, because the game does not care who is
+   holding the racket. */
+function scGameOdds(n, p){
+  const q=1-p;
+  const forSide=(a)=>{                       // a = that side's point-win chance
+    const b=1-a;
+    if(n===4) return Math.pow(a,4);
+    if(n===5) return 4*Math.pow(a,4)*b;
+    if(n===6) return 10*Math.pow(a,4)*b*b;
+    if(n>=8 && n%2===0){
+      const deuce=20*Math.pow(a,3)*Math.pow(b,3);
+      const extra=(n-6)/2;                   // pairs played after 3-3
+      const swaps=Math.pow(2*a*b, extra-1);  // that many exchanged pairs
+      return deuce*swaps*a*a;
+    }
+    return 0;
+  };
+  const s=forSide(p), r=forSide(q);
+  const tot=s+r;
+  return tot>0 ? {server:s/tot, receiver:r/tot} : {server:0.5, receiver:0.5};
+}
+
+/* Hold rate in, point-win chance out. The app knows how often each player
+   holds — the Predict tab computes exactly that — but scGameOdds wants the
+   per-POINT figure, and the relationship between them is the game model run
+   forwards. So run it backwards: the mapping is monotonic, so twenty steps of
+   bisection lands it to four decimal places.
+
+   This matters more than it looks. Told nothing, the reconstruction assumes
+   both players are the same and can only fall back on "the server usually
+   wins", which decides nothing when a set has to contain a fixed number of
+   breaks anyway. Told that one player holds 78% and the other 58%, it knows
+   which of them the breaks probably belong to. */
+function scHoldOf(p){
+  const q=1-p;
+  const base=Math.pow(p,4) + 4*Math.pow(p,4)*q + 10*Math.pow(p,4)*q*q;
+  const deuce=20*Math.pow(p,3)*Math.pow(q,3);
+  const fromDeuce=(p*p)/(p*p+q*q||1);
+  return base + deuce*fromDeuce;
+}
+function scHoldToPoint(hold){
+  if(!(hold>0.02 && hold<0.98)) return 0.62;
+  let lo=0.05, hi=0.95;
+  for(let i=0;i<24;i++){
+    const mid=(lo+hi)/2;
+    if(scHoldOf(mid)<hold) lo=mid; else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+
+/* Of those orderings, the one these two players were most likely to have
+   produced — from each game's length and who was serving it, not from a flat
+   prior that treats a love game and a deuce game as the same evidence. */
+function scBestOrder(orders, games, pA, pB){
+  const lls=new Float64Array(orders.length);
+  let best=null, bestLL=-Infinity, bi=-1;
+  for(let j=0;j<orders.length;j++){
+    const o=orders[j];
+    let ll=0;
+    for(let i=0;i<o.length;i++){
+      const g=games[i], sv=g.server;
+      const odds=scGameOdds(g.points, sv==='a'?pA:pB);
+      const held = o[i]===sv;
+      ll += Math.log(Math.max(1e-9, held?odds.server:odds.receiver));
+    }
+    lls[j]=ll;
+    if(ll>bestLL){ bestLL=ll; best=o; bi=j; }
+  }
+  /* HOW SURE, PER GAME. Picking the single likeliest ordering and stopping
+     there tells somebody the score and not which parts of it to distrust.
+     Summing the weight of every valid ordering that has a given game going
+     one way does: it is a proper marginal, and it is what lets the panel say
+     "these three are the ones to check" instead of asking for all twenty-odd
+     to be read through.
+
+     It is worth being blunt that no amount of arithmetic here recovers the
+     missing information. Who won a point is not on the recording. What this
+     does is put the doubt where it belongs. */
+  const conf=new Array(games.length).fill(0.5);
+  if(orders.length){
+    let tot=0;
+    const w=new Float64Array(orders.length);
+    for(let j=0;j<orders.length;j++){ w[j]=Math.exp(lls[j]-bestLL); tot+=w[j]; }
+    for(let i=0;i<games.length;i++){
+      let a=0;
+      for(let j=0;j<orders.length;j++) if(orders[j][i]==='a') a+=w[j];
+      const pa=tot>0?a/tot:0.5;
+      conf[i]= best[i]==='a' ? pa : 1-pa;
+    }
+  }
+  return {order:best, confidence:conf, logLikelihood:bestLL, considered:orders.length};
+}
+
+/* The whole thing. rallies: [{start,end}] in order. frame: scFrame's output.
+   scoreline: [[6,4],[3,6],[7,5]]. */
+function scScore(rallies, frame, scoreline, opt){
+  const o=opt||{};
+  /* points won on serve, not games held — see scGameOdds. 0.62 is an
+     ordinary club figure and is what the Predict tab measures per player. */
+  const pA = o.pA!=null ? o.pA : (o.holdA!=null ? scHoldToPoint(o.holdA) : 0.62);
+  const pB = o.pB!=null ? o.pB : (o.holdB!=null ? scHoldToPoint(o.holdB) : 0.62);
+  const firstServer=o.firstServer==='b'?'b':'a';
+  const firstEnd=o.firstEnd==='far'?'far':'near';
+
+  /* 1. what the scoreline says the shape of the match was */
+  const expGames=scExpectedGames(scoreline, firstServer, firstEnd);
+  const expRuns=scExpectedRuns(expGames);
+  const notes=[];
+  if(frame.runs.length!==expRuns.length){
+    notes.push('the scoreline describes '+expRuns.length+' stretches of one end and '+
+               frame.runs.length+' were seen — either the final score is wrong, or clips '+
+               'are missing, or a rally was split in two');
+  }
+
+  /* 2. fit the rallies to it, run by run */
+  const games=[];
+  const n=Math.min(frame.runs.length, expRuns.length);
+  let gi=0;
+  for(let i=0;i<n;i++){
+    const run=frame.runs[i], exp=expRuns[i];
+    const need=exp.games.length;
+    const meta=(k)=>({server:exp.games[k].server, end:exp.games[k].end,
+                      set:exp.games[k].set, gameInSet:exp.games[k].gameInSet,
+                      tiebreak:!!exp.games[k].tiebreak, run:i});
+    if(run.state==='tiebreak'||run.state==='beside-tiebreak'||run.state==='illegal'){
+      for(let k=0;k<need;k++) games.push({points:null, unknown:true, ...meta(k)});
+      continue;
+    }
+    const parts=scPartition(run.n, need);
+    if(!parts.length){
+      notes.push('the stretch at '+(rallies[run.from]?Math.round(rallies[run.from].start)+'s':'run '+i)+
+                 ' has '+run.n+' rallies, which cannot be '+need+' legal game'+(need===1?'':'s'));
+      for(let k=0;k<need;k++) games.push({points:null, unknown:true, ...meta(k)});
+      continue;
+    }
+    const pick=scPickSplit(parts, run.from, rallies);
+    pick.forEach((pts,k)=>games.push({points:pts, ...meta(k), certain:parts.length===1,
+                                      options:parts.length}));
+  }
+  let at=0;
+  for(const g of games){ g.from=at; g.to=at+(g.points||0)-1; at+=(g.points||0); }
+
+  /* 3. who won each game, set by set */
+  const sets=[];
+  let solved=0;
+  scoreline.forEach(([gA,gB],si)=>{
+    const mine=games.filter(g=>g.set===si);
+    const set={gA,gB,games:mine};
+    sets.push(set);
+    if(!mine.length) return;
+    const orders=scSetOrders(mine.length, gA, gB);
+    if(!orders.length){ set.impossible=true;
+      notes.push('set '+(si+1)+' cannot have finished '+gA+'-'+gB+' in '+mine.length+' games');
+      return; }
+    const pick=scBestOrder(orders, mine, pA, pB);
+    set.considered=orders.length;
+    mine.forEach((g,k)=>{ g.winner=pick.order[k]; g.held=(g.winner===g.server);
+                          g.confidence=pick.confidence[k]; solved++; });
+  });
+
+  /* 4. the score standing before every rally */
+  const board=[];
+  let sA=0,sB=0;
+  for(const set of sets){
+    let a=0,b=0;
+    for(const g of set.games){
+      const pts=g.points||0;
+      for(let p=0;p<pts;p++){
+        board.push({rally:g.from+p, setsA:sA, setsB:sB, gamesA:a, gamesB:b,
+                    point:p+1, points:pts, server:g.server, end:g.end,
+                    winner:g.winner||null, tiebreak:!!g.tiebreak,
+                    /* only a love game has one reading, so only a love game
+                       gets a point score rather than a point number */
+                    pts: pts===4 && g.winner && !g.tiebreak
+                         ? (g.winner===g.server
+                            ? [['0','15','30','40'][p], '0']
+                            : ['0', ['0','15','30','40'][p]])
+                         : null});
+      }
+      if(g.winner==='a') a++; else if(g.winner==='b') b++;
+    }
+    if(set.gA>set.gB) sA++; else sB++;
+  }
+
+  const unknown=games.filter(g=>g.unknown).length;
+  const rallied=games.reduce((s,g)=>s+(g.points||0),0);
+  if(rallied && rallies.length && rallied!==rallies.length)
+    notes.push(rallies.length+' clips but '+rallied+' points accounted for');
+  return {games, sets, board, notes, note:notes[0]||null,
+          ok: !unknown && !notes.length,
+          solved, totalGames:games.length, unknown,
+          tiebreaks:games.filter(g=>g.tiebreak).length,
+          ambiguous:games.filter(g=>g.options>1).length};
+}
+/* ==== SCORE-ASSIGN-END ==== */
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -14301,7 +14918,7 @@ async function acLoad(file){
          them — and so the picture cannot re-drop something they put back.
          how/hopMs/map: which way in this file took, and what its envelope
          frames mean — see BIG FILES. */
-      av:null, hits:null, user:{}, render:null, ball:null, bridged:0,
+      av:null, hits:null, user:{}, render:null, ball:null, bridged:0, score:null,
       how:file.size>AC_MEM_BYTES?'stream':'memory', hopMs:AC_HOP_MS, map:null,
       stream:null, fellBack:null};
   renderAutoCut();
@@ -14725,6 +15342,7 @@ function renderAutoCut(){
 
       ${avBand()}
       ${abBand()}
+      ${scPanel()}
 
       <div class="ac-warn">
         <b>Give this a once-over before you trust it.</b> ${

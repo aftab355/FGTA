@@ -218,14 +218,82 @@ reasoning:
   regardless was worth exactly three wrong boundaries in two thousand, every
   one of them the last game of a match.
 
-### What would move it past 41%
+### And then it was built
 
-The serve **court**, not the serve end. It alternates every single point,
-resets to deuce at the start of each game, and would count the points in each
-game directly rather than leaving the pair to be split by arithmetic. That is
-a left/right measurement at the moment of contact rather than a near/far one,
-and it is the obvious next thing — it is the difference between knowing the
-skeleton and knowing every game.
+The 41% figure above is what the serve ends give you **on their own**. Adding
+the two things that were always going to be needed — the final scoreline, and
+the fact that people take longer between games than between points — closes
+most of the rest.
+
+**A correction first.** The note above says every run of same-end rallies is
+exactly two games. That is very nearly true and it is not true, and the
+exception is not rare. Ends change after every odd game *of a set*, so a set
+finishing on an odd game total changes ends at the end of it **and** again
+after game one of the next — two flips one game apart. Measured over sixty
+matches: 348 runs of two games, 27 of three, 16 of one, every odd one sitting
+on a set that ended 6-1, 6-3, 7-5. Assuming pairs regardless left most matches
+a game short and refusing to reconstruct at all.
+
+So the pairs assumption is gone. The scoreline says how many games each set
+had; with who served first that fixes the server and end of **every** game
+deterministically, which says how many games each observed run must contain —
+two usually, one or three where the sets say so.
+
+Then, per run, the rally count divides into that many legal game lengths.
+Where more than one division is legal, the longest pause decides: people
+collect balls and walk back between games, and the clip timings already record
+that.
+
+Who won each game is the one bit per game that no camera supplies. It comes
+from enumerating every ordering that finishes the set exactly as the scoreline
+says, and weighting each by how likely these two players were to produce it —
+using **each game's length**, not a flat hold rate. A game won to love is four
+points in a row and says a great deal; a game that went to deuce was close by
+definition and says almost nothing.
+
+### Measured, over 200 simulated matches
+
+| | |
+|---|---|
+| game lengths | **2,077 of 2,077 — 100%** |
+| game winners | 1,799 of 2,077 — **87%** |
+| the scoreboard at any given rally | 76% |
+| games a person has to correct | **3.1 per match**, out of ~23 |
+| matches needing a note | **0** |
+
+87% is close to the ceiling for what is measurable, and it is worth saying why
+rather than promising to improve it. Per game, the length gives a posterior of
+about 0.74 (a deuce game) to 0.89 (a love game), and the set score then forces
+the count exactly. The missing information — who won each *point* — is not on
+the recording and no arithmetic recovers it.
+
+So instead of pretending, it says which games it doubts. The confidence per
+game is a proper marginal over every valid ordering, and **checking the five
+least confident games catches 76% of the mistakes**. That is the difference
+between reading twenty-three games and reading five.
+
+### What it will not do
+
+**It does not invent points.** Games and sets come back exactly once the games
+are confirmed; the point score comes back only for a game won to love, where
+four points and one winner leaves 15-0 30-0 40-0 as the only reading.
+Everywhere else the burnt-in board shows *which point of the game* it is —
+which the rally count does give exactly — rather than a plausible-looking
+30-15 that nobody measured.
+
+**Tiebreaks are reported, not reconstructed.** Inside one the serve moves
+every two points while the ends change every six, so the end alternates in
+twos and the run structure the whole method rests on does not hold. The burst
+is unmistakable and both its neighbours are flagged with it.
+
+### Using it
+
+**Matches → Auto-cut**, on a video, after the picture pass has found the serve
+ends. Type the final score, the two names, and who served first from which
+end. It fills in the games, marks the ones it is least sure of, and any game
+is one tap to hand to the other player.
+
+Then **▶ render the video here** burns the board into the picture.
 
 ---
 
@@ -255,17 +323,18 @@ actually is: matches nobody reffed.
 
 ---
 
-## Recommendation
+## Where this ended up
 
-1. **Is there a scoreboard in shot?** If yes, build A. It is the only route
-   that ends with a score nobody had to confirm, and it is the least code.
-2. **If not,** build the server field in the point tracker first. It is small,
-   it is useful on its own, it fixes a stated assumption in the Predict tab,
-   and it is the foundation route B needs.
-3. **Then** `firstSide` and ends-change detection in the picture pass, and a
-   reconstructor that proposes a scoreline for a human to confirm a game at a
-   time.
-4. **Never** C.
+Route B, built. The server and the court ends are in the point tracker, the
+serving end is measured from the picture, and the reconstruction turns those
+into games — 100% of the lengths, 87% of the winners, and a list of which ones
+to check. The scoreboard is burnt into the exported video.
+
+Route A — reading a scoreboard that is physically in shot — remains the better
+answer *if you have a board*, because it needs no confirmation from anybody. It
+was not built because there is no board in this footage.
+
+Route C is still the one to skip.
 
 ## The sport is tennis, and that helps more than it sounds
 
