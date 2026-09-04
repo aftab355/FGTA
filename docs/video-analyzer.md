@@ -200,6 +200,32 @@ rather than a guess at both.
 
 ---
 
+## Big files
+
+The picture pass never had a size problem: it seeks around the file through a
+`<video>` element and reads back frames, so a 10 GB recording costs it
+nothing extra. It was the *audio* pass that had the ceiling, and that is gone
+— see [Big files](auto-cut.md#big-files) for what replaced it.
+
+Two things follow that are worth knowing here.
+
+**Speed costs different things on the two passes.** The audio pass sizes its
+envelope hop in *media* time, so playing at 4× produces frames four times
+faster rather than four times coarser — its limit is that the audio itself
+stops resampling cleanly past about 4×. The picture pass is the opposite: its
+resolution *is* how many frames the browser bothers to present, so playing
+faster genuinely gives it less to look at. That is why they run at different
+rates, and why the picture pass measures what it actually got after every
+window and slows down if it isn't enough.
+
+**Playing through arrives about 40–60 ms late** against the player's own
+clock, consistently, at 1× and 4× respectively. It is left uncorrected: it is
+a fortieth of the default lead-in padding, and a constant fitted to one
+synthetic file in one browser is not a correction, it is a guess with a
+number on it.
+
+---
+
 ## What it is measured against
 
 Two suites, neither of which is real footage.
@@ -208,6 +234,7 @@ Two suites, neither of which is real footage.
 node test/vision-core.test.js     # no dependencies
 node test/make-fixture.js         # ~1 min, needs playwright + chromium
 node test/vision-video.test.js
+node test/bigfile.test.js
 ```
 
 **`vision-core.test.js`** runs the judgement over synthetic motion tensors
@@ -225,9 +252,17 @@ the plan it was built from. The audio hears all four candidates including the
 one with an empty court behind it; the picture scores the three real rallies
 0.90–0.95 and the next-court clip 0.32, and drops it.
 
-Both suites read the code **out of `index.html`** between the `AV-CORE`
+**`bigfile.test.js`** runs the same recording through *both* read paths —
+loaded whole, and played through at 1×, 4×, 8× and 16× — and compares the
+strike times. It also hooks `Blob.prototype.arrayBuffer` to prove the
+streamed path never reads the file into memory, which is the entire claim.
+This is the test that set the default rate: it is where the 33-vs-31 at 4×
+and 288-vs-31 at 16× come from, and it fails if the shipped default is ever
+raised past what was measured as faithful.
+
+The logic tests read the code **out of `index.html`** between the `AV-CORE`
 sentinels rather than from a copy, so they cannot drift from what ships. Move
-a sentinel and they throw.
+a sentinel and they throw. The two browser tests drive the real page.
 
 **Synthetic footage is not real footage.** Those numbers say the method is
 sound and the safety valves fire; they say nothing about your camera, your

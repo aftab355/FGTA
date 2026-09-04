@@ -120,17 +120,39 @@ reviewing at all.
 
 ### Big files
 
-Decoding needs the whole file in memory, so past about 1.2 GB the tab won't
-survive it and the app says so instead of hanging. The detector only ever
-listens to the audio, so give it just the audio:
+**There is no size limit any more.** A 10 GB recording is fine; so is a
+40 GB one. What matters now is how *long* it runs, not how large it is.
+
+Under about 1.2 GB the file is read whole and decoded in one go — exact, and
+it takes seconds. Over that, it can't be: decoding needs the entire file
+resident plus the decoded samples, and a tab does not survive it. So a big
+file is **played through instead of loaded**. Nothing is ever held in memory,
+nothing is uploaded, and the strike detection is the same detection — the
+envelope is measured in the recording's own time, so playing it faster does
+not make it coarser.
+
+The cost is time. It runs at **4×**, so about a quarter of the length of the
+recording: a 40-minute match in ten minutes, a three-hour one in forty-five.
+Leave the tab in front while it goes — browsers throttle audio in background
+tabs.
+
+Why 4× and not 40×: playing faster degrades the *audio*, not the timing. Past
+about 4× a 6 ms click stops resampling cleanly and the detector starts
+hearing strikes nobody played — measured at 31 real strikes heard as 33 at
+4×, 36–49 at 8×, and 288 at 16×. The numbers and the test that produces them
+are in [Watching the picture](video-analyzer.md#big-files).
+
+**The fast route is still the fast route.** The detector only ever listens,
+so give it just the audio:
 
 ```bash
 ffmpeg -i match.mov -vn -ac 1 -ar 16000 -c:a aac -b:a 48k audio.m4a
 ```
 
-A few seconds, a few MB. Drop `audio.m4a` in instead — the timings come out
-identical because it shares a clock with the video, so the cut script it
-produces runs against your original file unchanged.
+A few seconds, a few MB, no waiting. Drop `audio.m4a` in instead — the
+timings come out identical because it shares a clock with the video, so the
+cut script it produces runs against your original file unchanged. The one
+thing you give up is the picture check, which needs the video.
 
 ---
 

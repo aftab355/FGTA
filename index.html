@@ -4326,6 +4326,8 @@
   .av-sw{display:flex;align-items:center;gap:6px;font-weight:400;font-size:11.5px;color:var(--muted)}
   .av-tune-p{margin:0 0 10px;font-size:12px;line-height:1.65;color:var(--muted)}
 
+  .ac-busy-p{margin:9px 0 0}
+
   .ac-warn{margin-top:12px;padding:11px 13px;border-radius:var(--r-sm);font-size:12.5px;line-height:1.7;
     color:var(--muted);background:rgba(255,177,0,.08);border:1px solid rgba(255,177,0,.28)}
   .ac-warn b{color:var(--pending)}
@@ -11666,7 +11668,9 @@ window.renderReel=renderReel;
 
 const AC_HOP_MS=10;                 // envelope frame, ms
 const AC_SR=16000;                  // decode rate: a strike is broadband, 8kHz of it is plenty
-const AC_MAX_BYTES=1200*1024*1024;  // past this, decoding is likelier to die than succeed
+/* The old ceiling lived here as a refusal. It is now AC_MEM_BYTES, and it
+   picks which way in the file takes rather than turning it away — see BIG
+   FILES below. */
 
 const AC_TUNE_KEY="fgta_autocut_tune";
 const AC_DEF={sens:1.2, maxGap:2.5, minHits:2, lead:1.5, tail:1.5, min:2,
@@ -11726,14 +11730,19 @@ function acPercentile(arr,p){
    the clusters bridge the gaps, and the "cut" is the whole recording. A
    racket strike is not merely a local maximum; it is one of the loudest
    transients in the file. Hence the two absolute floors alongside. */
-function acPickOnsets(o, env, opt){
+function acPickOnsets(o, env, opt, hopMs, map){
+  /* hopMs and map are how a streamed envelope (BIG FILES, below) says "my
+     frames are 12.5ms of media each, and here is where the element's own
+     clock says frame 4000 actually was". The in-memory path passes neither
+     and gets the arithmetic it always got. */
+  const hop=hopMs||AC_HOP_MS;
   const n=o.length;
-  const W=Math.max(3,Math.round(opt.winMs/AC_HOP_MS));
+  const W=Math.max(3,Math.round(opt.winMs/hop));
   const ps=new Float64Array(n+1), ps2=new Float64Array(n+1);
   for(let i=0;i<n;i++){ ps[i+1]=ps[i]+o[i]; ps2[i+1]=ps2[i]+o[i]*o[i]; }
   const oRef=acPercentile(o,0.995), envRef=acPercentile(env,0.995);
   const oFloor=oRef*opt.floorFrac, envFloor=envRef*opt.envFrac;
-  const minGap=Math.max(1,Math.round(opt.minGapMs/AC_HOP_MS));
+  const minGap=Math.max(1,Math.round(opt.minGapMs/hop));
   const out=[]; let last=-1e9;
   for(let i=1;i<n-1;i++){
     if(o[i]<=o[i-1] || o[i]<o[i+1]) continue;          // local maximum only
@@ -11743,7 +11752,7 @@ function acPickOnsets(o, env, opt){
     const sd=Math.sqrt(Math.max(0,(ps2[b]-ps2[a])/cnt-mean*mean));
     if(o[i] < mean+opt.sens*sd) continue;
     if(i-last < minGap) continue;
-    out.push({t:i*AC_HOP_MS/1000, lvl:env[i]/(envRef||1)});
+    out.push({t: map?acMapTime(map,i):i*hop/1000, lvl:env[i]/(envRef||1)});
     last=i;
   }
   return out;
@@ -12613,6 +12622,323 @@ function avBand(){
 }
 
 
+
+/* ============================================================
+   BIG FILES — hearing a recording that will not fit in memory.
+
+   The fast path above reads the whole file with file.arrayBuffer() and hands
+   it to decodeAudioData. That is exact and takes seconds, and it is also why
+   this used to refuse anything over about 1.2GB: decodeAudioData needs the
+   entire file resident, plus the decoded samples, and a tab does not survive
+   that. A 10GB recording is not an unusual thing to have — 4K at 50Mbps
+   reaches it in under half an hour — so refusing it was the wrong answer.
+
+   WHAT DOESN'T WORK. Slicing the file and decoding the pieces: a slice of an
+   MP4 is not a decodable MP4, and the audio is interleaved with the video
+   throughout. Demuxing in the page to lift out the (small) audio track needs
+   a real demuxer — mp4box.js and WebCodecs — which is a build-step-shaped
+   dependency for a site that deliberately has neither, and covers MP4/MOV
+   only.
+
+   WHAT DOES. The browser already has a demuxer and a decoder, wired to an
+   element that streams: <video>. Playing the file through a
+   MediaElementAudioSourceNode gives the samples an audio graph can see,
+   at whatever rate the element is played, and NOTHING IS EVER HELD IN
+   MEMORY — the element reads the blob as it goes and the envelope is
+   accumulated on the fly. The cost is that it happens in something like real
+   time; the fix for that is playbackRate, and the fix for playbackRate is
+   below.
+
+   THE TWO THINGS THAT MAKE IT CORRECT RATHER THAN APPROXIMATE.
+
+   1. preservesPitch = false. Left at its default, a browser playing at 8x
+      time-stretches with WSOLA, which works by dropping and duplicating
+      short windows — precisely the operation that destroys a 5ms transient,
+      which is the entire thing being detected. Turned off, the audio is
+      plainly resampled: 8 seconds of court squeezed into one second of
+      samples, every strike still exactly where it was, just narrower.
+
+   2. The hop is measured in MEDIA time, not wall time. One envelope frame is
+      AC_HOP_MS of the recording however fast it is being played, because the
+      hop is sized in samples as sampleRate * AC_HOP_MS / 1000 / rate. Play
+      it faster and the frames come out faster; they do not come out coarser.
+      This is why speed costs almost nothing here, unlike the picture pass
+      where speed really does cost resolution.
+
+   AND THE ONE THING THAT MAKES IT HONEST. Wall time and media time only stay
+   in lockstep while playback is continuous. A stall — the element waiting on
+   the disk — produces silence that the audio graph faithfully turns into
+   envelope frames, and every strike after it would be reported late by the
+   length of the stall. So the element's own currentTime is sampled twice a
+   second alongside the frame count, and strike times are read off that table
+   rather than off the ideal arithmetic. If nothing stalls the two agree
+   exactly; if something does, the table is right and the arithmetic is not.
+   ============================================================ */
+
+const AC_MEM_BYTES=1200*1024*1024;   // above this, decodeAudioData is a coin flip
+/* Media seconds per wall second. Measured, not guessed — test/bigfile.test.js
+   runs the same recording through both paths and compares:
+
+     1x   31 strikes vs 31 loaded, +40ms bias
+     4x   33 strikes vs 31 loaded, +60ms bias      <- default
+     8x   36-49 strikes vs 31 loaded, +76ms bias  (varies run to run)
+     16x  288 strikes vs 31 loaded
+
+   The envelope's resolution does not suffer from speed — the hop is sized in
+   media time — but the AUDIO does. Resampled far enough, a 6ms click stops
+   being one clean transient, and past about 4x the detector starts hearing
+   strikes that were never played. Four is where it is still faithful.
+
+   The bias is playing-through arriving slightly late against the element's
+   own clock. It is left uncorrected: it is a fortieth of the lead-in padding,
+   and a constant fitted to one synthetic file in one browser is not a
+   correction, it is a guess with a number on it. */
+const AC_STREAM_RATE=4;
+const AC_MARK_MS=250;                // closest two marks are allowed to be, in media ms
+
+/* The envelope, computed in the audio thread. Same first-difference-then-RMS
+   as acEnvelope() above — a crude high-pass that keeps clicks and flattens
+   wind and voices — just arriving 128 samples at a time instead of all at
+   once. */
+function acEnvWorkletSource(){
+  return `
+class FgtaEnvelope extends AudioWorkletProcessor {
+  constructor(opt){
+    super();
+    this.hop=(opt.processorOptions&&opt.processorOptions.hop)||480;
+    this.acc=0; this.n=0; this.prev=0;
+    /* Small batches on purpose. A big buffer is cheaper but it makes the
+       frame count on the main thread lag the player's clock by however long
+       the buffer holds — at 4096 frames that is forty seconds of media, and
+       every mark pairing a stale count with a fresh time is a mark that
+       lies. 32 frames posts a few times a second at 1x and a few dozen at
+       8x, which is nothing, and keeps the two clocks within a message of
+       each other. */
+    this.buf=new Float32Array(32); this.k=0;
+    this.port.onmessage=(e)=>{ if(e.data==='flush'){ this.send(); this.port.postMessage('done'); } };
+  }
+  send(){ if(this.k){ this.port.postMessage(this.buf.slice(0,this.k)); this.k=0; } }
+  push(v){ this.buf[this.k++]=v; if(this.k>=this.buf.length) this.send(); }
+  process(inputs){
+    const ch=inputs[0]&&inputs[0][0];
+    const n=ch?ch.length:128;
+    for(let i=0;i<n;i++){
+      const s=ch?ch[i]:0;
+      const d=s-this.prev; this.prev=s;
+      this.acc+=d*d; this.n++;
+      if(this.n>=this.hop){ this.push(Math.sqrt(this.acc/this.n)); this.acc=0; this.n=0; }
+    }
+    return true;
+  }
+}
+registerProcessor('fgta-envelope', FgtaEnvelope);
+`;
+}
+
+/* Media time for envelope frame i, from the marks rather than from
+   multiplication. Linear between marks, and the nominal slope outside them. */
+function acMapTime(map,i){
+  if(!map||!map.n) return i*map.hopMs/1000;
+  const idx=map.idx, t=map.t, n=map.n;
+  if(i<=idx[0]) return Math.max(0, t[0]-(idx[0]-i)*map.hopMs/1000);
+  if(i>=idx[n-1]) return t[n-1]+(i-idx[n-1])*map.hopMs/1000;
+  let lo=0, hi=n-1;
+  while(hi-lo>1){ const mid=(lo+hi)>>1; if(idx[mid]<=i) lo=mid; else hi=mid; }
+  const span=idx[hi]-idx[lo];
+  if(span<=0) return t[lo];
+  return t[lo]+(t[hi]-t[lo])*((i-idx[lo])/span);
+}
+
+/* Some files do not admit how long they are until asked twice — anything
+   written by a recorder that did not know where it would stop (MediaRecorder
+   output, an interrupted capture) reports Infinity. Seeking past the end
+   makes the browser work it out and then say so. */
+function acProbeDuration(el){
+  return new Promise(res=>{
+    let over=false;
+    const good=()=>isFinite(el.duration)&&el.duration>0&&el.duration<8.64e6;
+    const fin=()=>{
+      if(over) return; over=true;
+      el.removeEventListener('durationchange',look);
+      el.removeEventListener('seeked',look);
+      clearTimeout(tm);
+      const d=good()?el.duration:0;
+      try{ el.currentTime=0; }catch(e){}
+      res(d);
+    };
+    const look=()=>{ if(good()) fin(); };
+    el.addEventListener('durationchange',look);
+    el.addEventListener('seeked',look);
+    const tm=setTimeout(fin,10000);
+    try{ el.currentTime=1e101; }catch(e){ fin(); }
+  });
+}
+
+async function acStreamAudio(url, opt){
+  const o=opt||{};
+  const onProgress=o.onProgress||function(){};
+  const cancelled=o.cancelled||function(){ return false; };
+
+  const el=document.createElement('video');
+  el.preload='auto'; el.playsInline=true; el.setAttribute('playsinline','');
+  el.style.cssText='position:fixed;left:-10000px;width:2px;height:2px;opacity:0';
+  document.body.appendChild(el);
+  el.src=url;
+
+  let ctx=null, node=null, src=null, gain=null;
+  const cleanup=()=>{
+    try{ el.pause(); }catch(e){}
+    try{ node&&node.disconnect(); src&&src.disconnect(); gain&&gain.disconnect(); }catch(e){}
+    try{ ctx&&ctx.close(); }catch(e){}
+    try{ el.removeAttribute('src'); el.load(); }catch(e){}
+    try{ el.remove(); }catch(e){}
+  };
+
+  try{
+    await Promise.race([
+      new Promise(r=>el.addEventListener('loadedmetadata',r,{once:true})),
+      new Promise((_,j)=>setTimeout(()=>j(new Error('This file could not be opened for playback.')),20000))
+    ]);
+    let duration=isFinite(el.duration)&&el.duration>0?el.duration:0;
+    if(!duration){
+      duration=await acProbeDuration(el);
+      if(!duration) await new Promise(r=>{
+        const f=()=>{ el.removeEventListener('seeked',f); r(); };
+        el.addEventListener('seeked',f); setTimeout(f,2000);
+        try{ el.currentTime=0; }catch(e){ f(); }
+      });
+    }
+    /* Still unknown is not fatal: play until it ends and find out. Only the
+       progress bar and the estimate suffer. */
+    const known=duration>0;
+
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) throw new Error('This browser has no audio graph to listen with.');
+    ctx=new Ctx();
+    try{ await ctx.resume(); }catch(e){}
+    const sr=ctx.sampleRate;
+
+    const rate=Math.max(1,Math.min(16, o.rate||AC_STREAM_RATE));
+    const hop=Math.max(8, Math.round(sr*AC_HOP_MS/1000/rate));
+    const hopMs=hop*1000*rate/sr;      // what that integer hop really works out as
+
+    /* Grows rather than being sized once: an unknown duration has nothing to
+       size against, and a file that stalls a lot produces more frames than
+       its length says it should. */
+    let env=new Float32Array(known?Math.ceil(duration*1000/hopMs)+8192:1<<20);
+    let n=0;
+    const room=(k)=>{
+      if(n+k<=env.length) return;
+      let len=env.length;
+      while(len<n+k) len*=2;
+      const bigger=new Float32Array(len); bigger.set(env.subarray(0,n)); env=bigger;
+    };
+
+    const useWorklet = !!(ctx.audioWorklet && window.AudioWorkletNode);
+    src=ctx.createMediaElementSource(el);
+    gain=ctx.createGain(); gain.gain.value=0;   // a node the graph does not pull is a node
+    gain.connect(ctx.destination);              // that never runs, so it is wired up silent
+
+    let flushed=null;
+    if(useWorklet){
+      const blob=new Blob([acEnvWorkletSource()],{type:'text/javascript'});
+      const modUrl=URL.createObjectURL(blob);
+      try{ await ctx.audioWorklet.addModule(modUrl); }
+      finally{ setTimeout(()=>URL.revokeObjectURL(modUrl),1000); }
+      node=new AudioWorkletNode(ctx,'fgta-envelope',{processorOptions:{hop},
+        numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1]});
+      node.port.onmessage=(e)=>{
+        if(e.data==='done'){ if(flushed) flushed(); return; }
+        const d=e.data;
+        room(d.length);
+        for(let i=0;i<d.length;i++) env[n++]=d[i];
+        mark();
+      };
+    } else {
+      /* Safari without AudioWorklet. Deprecated, runs on the main thread, and
+         still better than telling somebody their recording is too big. */
+      node=ctx.createScriptProcessor(4096,1,1);
+      let acc=0,cnt=0,prev=0;
+      node.onaudioprocess=(e)=>{
+        const ch=e.inputBuffer.getChannelData(0);
+        for(let i=0;i<ch.length;i++){
+          const d=ch[i]-prev; prev=ch[i];
+          acc+=d*d; cnt++;
+          if(cnt>=hop){ room(1); env[n++]=Math.sqrt(acc/cnt); acc=0; cnt=0; }
+        }
+        mark();
+      };
+    }
+    src.connect(node); node.connect(gain);
+
+    /* Pin the frame count to the element's own clock — at the moment a batch
+       of frames ARRIVES, not on a timer of its own. The frames in that batch
+       were produced by audio the element has just played, so its currentTime
+       is what they mean. A separate interval would be sampling two clocks
+       that are only related through the message queue. */
+    const mIdx=[], mT=[];
+    let lastMark=-1e9;
+    const mark=()=>{
+      const t=el.currentTime;
+      if(t-lastMark<AC_MARK_MS/1000) return;
+      lastMark=t; mIdx.push(n); mT.push(t);
+    };
+
+    el.playbackRate=rate;
+    el.preservesPitch=false;
+    el.mozPreservesPitch=false; el.webkitPreservesPitch=false;
+
+    const t0=Date.now();
+    let stalls=0;
+    el.addEventListener('waiting',()=>{ stalls++; });
+    el.addEventListener('stalled',()=>{ stalls++; });
+
+    await new Promise((res,rej)=>{
+      let over=false;
+      const done=(err)=>{ if(over) return; over=true; clearInterval(tick); err?rej(err):res(); };
+      el.addEventListener('ended',()=>done(),{once:true});
+      el.addEventListener('error',()=>done(new Error('Playback failed part-way through this file.')),{once:true});
+      const budget=known?(duration/rate)*1000*4+60000:3600000;
+      const tick=setInterval(()=>{
+        if(cancelled()) return done();
+        if(Date.now()-t0>budget) return done(new Error('This file played too slowly to get through.'));
+        const p=known?Math.min(1,el.currentTime/duration):null;
+        const left=(p!=null&&p>0.02)?Math.round(((Date.now()-t0)/p)*(1-p)/1000):null;
+        onProgress(p,left,el.currentTime);
+        if(known && el.currentTime>=duration-0.08) done();
+      },300);
+      const pr=el.play();
+      if(pr&&pr.catch) pr.catch(e=>done(new Error(
+        'The browser would not play this file back to listen to it'+
+        (e&&e.name==='NotAllowedError'?' without being asked again — tap the page and retry.':'.'))));
+    });
+
+    if(useWorklet){
+      await new Promise(r=>{ flushed=r; node.port.postMessage('flush'); setTimeout(r,1500); });
+    }
+    mIdx.push(n); mT.push(el.currentTime);
+    const el0Time=el.currentTime;      // where it actually got to, before teardown
+
+    const wasCancelled=cancelled();
+    cleanup();
+    if(wasCancelled) return {cancelled:true};
+
+    let peak=0;
+    for(let i=0;i<n;i++) if(env[i]>peak) peak=env[i];
+    if(!n || peak<=0) throw new Error(
+      'The file played through but no sound reached the analyser — the recording may have no '+
+      'audio track, or this browser refuses to hand over audio played at speed.');
+
+    return {env:env.subarray(0,n), n, hopMs, rate, stalls,
+            duration: known?duration:(el0Time||n*hopMs/1000),
+            wall:Math.round((Date.now()-t0)/1000),
+            map:{idx:Int32Array.from(mIdx), t:Float64Array.from(mT), n:mIdx.length, hopMs}};
+  }catch(e){
+    cleanup();
+    throw e;
+  }
+}
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -12660,6 +12986,67 @@ function acProgress(pct, note){
   if(lbl) lbl.textContent=note;
 }
 
+function acEta(sec){
+  if(sec==null||!isFinite(sec)) return '';
+  if(sec<90) return Math.max(5,Math.round(sec/5)*5)+' seconds';
+  const m=Math.round(sec/60);
+  if(m<60) return m+' minute'+(m===1?'':'s');
+  const h=Math.floor(m/60);
+  return h+'h '+(m-h*60)+'m';
+}
+
+/* Read it all, decode it in one go. Exact, and seconds rather than minutes —
+   the right thing for any file that fits. Decode at 16k mono:
+   decodeAudioData resamples to the context's rate, which is the difference
+   between 230MB of samples for an hour and three gigabytes of them. */
+async function acDecodeInMemory(file){
+  acProgress(0.05,'reading the file…');
+  await acBreathe();
+  const buf=await file.arrayBuffer();
+  acProgress(0.2,'decoding the audio…');
+  await acBreathe();
+  const Ctx=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  if(!Ctx) throw new Error('this browser cannot decode audio in the page');
+  const ctx=new Ctx(1,1,AC_SR);
+  const audio=await ctx.decodeAudioData(buf);
+  let x;
+  if(audio.numberOfChannels===1) x=audio.getChannelData(0);
+  else{
+    const L=audio.getChannelData(0), R=audio.getChannelData(1);
+    x=new Float32Array(L.length);
+    for(let i=0;i<L.length;i++) x[i]=(L[i]+R[i])/2;
+  }
+  acProgress(0.5,'looking for ball strikes…');
+  await acBreathe();
+  return {env:acEnvelope(x, audio.sampleRate), hopMs:AC_HOP_MS,
+          duration:audio.duration, map:null, how:'memory'};
+}
+
+/* Play it through instead. Nothing is ever resident, so file size stops
+   being the question and length starts being it. See BIG FILES above. */
+async function acDecodeStreamed(file){
+  const A=AC;
+  acProgress(0.05,'opening the recording…');
+  const r=await acStreamAudio(A.url,{
+    rate:AC_STREAM_RATE,
+    onProgress:(p,left,at)=>{
+      if(AC!==A) return;
+      if(p==null){
+        acProgress(0.5, 'listening through the recording — '+rrClock(at||0)+' in '+
+                        '(this file does not say how long it is)');
+        return;
+      }
+      acProgress(0.05+p*0.82,
+        'listening through the recording — '+Math.round(p*100)+'%'+
+        (left!=null?' · about '+acEta(left)+' left':''));
+    },
+    cancelled:()=>AC!==A
+  });
+  if(AC!==A || !r || r.cancelled) return null;
+  return {env:r.env, hopMs:r.hopMs, duration:r.duration, map:r.map, how:'stream',
+          rate:r.rate, stalls:r.stalls, wall:r.wall};
+}
+
 async function acLoad(file){
   acReset();
   const isVideo=/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file.name);
@@ -12669,45 +13056,46 @@ async function acLoad(file){
       /* av: the picture pass (null until it runs). hits: strike times, which
          the picture pass correlates against. user: keep/drop decisions a
          person made, kept by start time so retuning cannot silently undo
-         them — and so the picture cannot re-drop something they put back. */
-      av:null, hits:null, user:{}};
+         them — and so the picture cannot re-drop something they put back.
+         how/hopMs/map: which way in this file took, and what its envelope
+         frames mean — see BIG FILES. */
+      av:null, hits:null, user:{},
+      how:file.size>AC_MEM_BYTES?'stream':'memory', hopMs:AC_HOP_MS, map:null,
+      stream:null, fellBack:null};
   renderAutoCut();
   try{
-    if(file.size>AC_MAX_BYTES) throw new Error('TOOBIG');
-    acProgress(0.05,'reading the file…');
-    await acBreathe();
-    const buf=await file.arrayBuffer();
-
-    acProgress(0.2,'decoding the audio…');
-    await acBreathe();
-    /* Decode at 16k mono. decodeAudioData resamples to the context's rate,
-       which is the difference between 230MB of samples for an hour and
-       three gigabytes of them. */
-    const Ctx=window.OfflineAudioContext||window.webkitOfflineAudioContext;
-    if(!Ctx) throw new Error('This browser cannot decode audio in the page.');
-    const ctx=new Ctx(1,1,AC_SR);
-    const audio=await ctx.decodeAudioData(buf);
-    if(!AC) return;                                  // cleared while decoding
-    let x;
-    if(audio.numberOfChannels===1) x=audio.getChannelData(0);
+    let got;
+    if(AC.how==='stream') got=await acDecodeStreamed(file);
     else{
-      const L=audio.getChannelData(0), R=audio.getChannelData(1);
-      x=new Float32Array(L.length);
-      for(let i=0;i<L.length;i++) x[i]=(L[i]+R[i])/2;
+      try{ got=await acDecodeInMemory(file); }
+      catch(e){
+        /* A file the in-memory path chokes on is very often one the <video>
+           element plays without complaint — it is a big allocation away from
+           the ceiling, or a container decodeAudioData will not take. Falling
+           back beats a dead end, and costs only the time it takes. */
+        if(!AC) return;
+        if(AC.kind!=='video' || !window.AudioContext) throw e;
+        AC.how='stream'; AC.fellBack=(e&&e.message)||'the in-memory decode failed';
+        renderAutoCut();
+        got=await acDecodeStreamed(file);
+      }
     }
-    AC.duration=audio.duration;
+    if(!AC) return;                                  // cleared while decoding
+    if(!got){ acClear(); return; }                   // cancelled
 
-    acProgress(0.5,'looking for ball strikes…');
+    AC.duration=got.duration;
+    AC.hopMs=got.hopMs;
+    AC.map=got.map;
+    AC.how=got.how;
+    AC.stream=got.how==='stream'
+      ? {rate:got.rate, stalls:got.stalls, wall:got.wall, frames:got.env.length} : null;
+
+    acProgress(0.9,'measuring…');
     await acBreathe();
-    const env=acEnvelope(x, audio.sampleRate);
-    if(!AC) return;
-    acProgress(0.75,'measuring…');
-    await acBreathe();
-    const o=acOnsetStrength(env);
     /* Both curves are kept so retuning is instant: changing a slider
        re-picks and re-clusters over these rather than decoding again. */
-    AC.env=env; AC.o=o;
-    acProgress(0.9,'grouping into rallies…');
+    AC.env=got.env; AC.o=acOnsetStrength(got.env);
+    acProgress(0.95,'grouping into rallies…');
     await acBreathe();
     acRecompute();
     AC.busy=false;
@@ -12721,15 +13109,14 @@ async function acLoad(file){
   }catch(e){
     if(!AC) return;
     AC.busy=false;
-    AC.error = e && e.message==='TOOBIG' ? 'TOOBIG'
-      : ('That file could not be decoded here — '+((e&&e.message)||'unknown error')+'.');
+    AC.error='That file could not be read here — '+((e&&e.message)||'unknown error')+'.';
     renderAutoCut();
   }
 }
 
 function acRecompute(){
   const A=AC; if(!A || !A.o) return;
-  const hits=acPickOnsets(A.o, A.env, A.tune);
+  const hits=acPickOnsets(A.o, A.env, A.tune, A.hopMs, A.map);
   A.strikes=hits.length;
   A.hits=hits;
   A.segs=acSegments(acCluster(hits,A.tune), A.tune, A.duration);
@@ -12868,6 +13255,7 @@ function acNotes(){
       : [`Checked against the picture: ${A.av.res.drops} clip(s) had strikes but no matching`,
          `movement on court and were pre-dropped. picture=` +
            AV_TUNE_UI.map(([k])=>`${k}=${A.av.tune[k]}`).join(' ')]) : []),
+    ...(A.stream?[`Read by playing it through at ${A.stream.rate}x (${(A.file.size/1073741824).toFixed(1)} GB, too big to load).`]:[]),
     `Settings: ` + AC_TUNE_UI.map(([k])=>`${k}=${A.tune[k]}`).join(' '),
     ``,
     `These timings are seconds into ${A.file.name} itself, so this script wants that`,
@@ -12890,7 +13278,10 @@ function acExportJson(){
   const A=AC, list=acKept(); if(!A||!list.length) return;
   rrDownload(acSlug()+'-cutlist.json', JSON.stringify({
     generator:'FGTA auto-cut', version:2,
-    source:{name:A.file.name, bytes:A.file.size, seconds:Math.round(A.duration)},
+    source:{name:A.file.name, bytes:A.file.size, seconds:Math.round(A.duration),
+            read:A.how, envelopeHopMs:Math.round(A.hopMs*100)/100,
+            ...(A.stream?{playbackRate:A.stream.rate, stalls:A.stream.stalls,
+                          secondsToRead:A.stream.wall}:{})},
     method: A.av && A.av.res && !A.av.error && A.av.tune.on
       ? 'ball-strike onset detection over the audio, each candidate then checked against the picture'
       : 'ball-strike onset detection over the recording\'s own audio',
@@ -12959,21 +13350,23 @@ function renderAutoCut(){
     return;
   }
 
-  if(A.error==='TOOBIG' || (A.error && /decoded/.test(A.error))){
+  if(A.error){
     box.innerHTML=`
       <div class="ac-panel">
-        <div class="ac-err-h">${A.error==='TOOBIG'?'That file is too big to decode in a browser tab':'That file could not be decoded here'}</div>
+        <div class="ac-err-h">That file could not be read here</div>
         <div class="ac-err-b">
-          ${A.error==='TOOBIG'
-            ? `<b>${esc(A.file.name)}</b> is ${(A.file.size/1073741824).toFixed(1)} GB. Decoding needs
-               the whole thing in memory at once, which a tab will not survive.`
-            : esc(A.error)}
-          <p>The detector only ever listens to the audio, so give it just the audio. One
-             command, a few seconds, and the result is a few MB:</p>
+          ${esc(A.error)}
+          <p>Size alone is no longer a reason for this — anything too big to hold in memory gets
+             played through instead of loaded, so a 10GB recording is a question of how long it
+             runs, not how large it is. What is left are files this browser cannot play at all,
+             and files with no audio track.</p>
+          <p>Either way there is a way round it, and it is the fast one regardless: the detector
+             only ever listens, so give it just the audio. One command, a few seconds, and the
+             result is a few MB:</p>
           <pre class="ac-cmd">ffmpeg -i ${esc(A.file.name)} -vn -ac 1 -ar 16000 -c:a aac -b:a 48k audio.m4a</pre>
-          <p>Drop <code>audio.m4a</code> in here instead. The timings come out identical
-             because it shares a clock with the video — so the cut script it produces runs
-             against your original file unchanged.</p>
+          <p>Drop <code>audio.m4a</code> in here instead. The timings come out identical because
+             it shares a clock with the video — so the cut script it produces runs against your
+             original file unchanged. You lose the picture check, which needs the video.</p>
         </div>
         <button class="mini" onclick="acClear()">try another file</button>
       </div>`;
@@ -12981,14 +13374,29 @@ function renderAutoCut(){
   }
 
   if(A.busy){
+    const gb=A.file.size/1073741824;
     box.innerHTML=`
       <div class="ac-panel">
         <div class="ac-busy-h">Analysing ${esc(A.file.name)}</div>
         <div class="ac-bar"><div class="ac-bar-fill" id="acBar" style="width:${Math.round((A.progress||0)*100)}%"></div></div>
         <div class="ac-bar-label" id="acBarLabel">${esc(A.note||'')}</div>
-        <div class="ac-busy-b">Long footage takes a while to decode — it is the decoding, not
-          the detecting. The page is still alive; this is deliberately done in slices so it
-          doesn't look frozen.</div>
+        ${A.how==='stream' ? `
+          <div class="ac-busy-b">
+            <b>${gb>=1?gb.toFixed(1)+' GB':(A.file.size/1048576).toFixed(0)+' MB'} is too much to hold in
+            memory, so this one is being played through at ${AC_STREAM_RATE}× instead of loaded.</b>
+            ${A.fellBack?`(The quick way was tried first and didn't take: ${esc(A.fellBack)}.)`:''}
+            Nothing is held, nothing is uploaded, and the accuracy is the same — the envelope is
+            measured in the recording's own time, not the clock's. It just takes roughly the
+            length of the recording divided by ${AC_STREAM_RATE}.
+            <p class="ac-busy-p">If that is too long, cancel and give it the audio track on its own
+              instead — a few seconds and a few MB, and the timings come out identical:</p>
+            <pre class="ac-cmd">ffmpeg -i ${esc(A.file.name)} -vn -ac 1 -ar 16000 -c:a aac -b:a 48k audio.m4a</pre>
+            <p class="ac-busy-p">Leave this tab in front while it runs — browsers throttle audio in
+              background tabs, and that would stretch it out.</p>
+          </div>`
+        : `<div class="ac-busy-b">Long footage takes a while to decode — it is the decoding, not
+            the detecting. The page is still alive; this is deliberately done in slices so it
+            doesn't look frozen.</div>`}
         <button class="mini" onclick="acClear()">cancel</button>
       </div>`;
     return;
@@ -13056,7 +13464,10 @@ function renderAutoCut(){
              yours${A.kind==='video'?' until the picture is looked at as well.':', and there is no audio-only fix for that.'}`
         } Tap ✓ to drop anything that isn't your rally; only the ticked ones are exported.
         <span class="ac-warn-n">${A.strikes} strikes detected, ${A.duration>0?Math.round(A.strikes/(A.duration/60)):0} per minute
-          — a real singles match runs about 15–25.</span>
+          — a real singles match runs about 15–25.${A.stream?`
+          Played through at ${A.stream.rate}× in ${acEta(A.stream.wall)} rather than loaded, because the file
+          is ${(A.file.size/1073741824).toFixed(1)} GB.${A.stream.stalls?` ${A.stream.stalls} stall${A.stream.stalls===1?'':'s'} on the way —
+          corrected against the player's own clock.`:''}`:''}</span>
       </div>
 
       <div class="ac-bulk">
