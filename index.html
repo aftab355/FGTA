@@ -8701,12 +8701,12 @@
           <div><label>Elo</label>
             <select id="tnElo">
               <option value="true">Games count toward the ladder</option>
-              <option value="false">Exhibition — no Elo effect</option>
+              <option value="false">Exhibition — no Elo (still counts for stats)</option>
             </select></div>
           <div><label>Start date <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional)</span></label>
             <input id="tnStartDate" type="date"></div>
         </div>
-        <div class="pred-hint" id="tnFormatHint" style="margin-top:8px">Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder.</div>
+        <div class="pred-hint" id="tnFormatHint" style="margin-top:8px">Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder, though the games still feed form, rivalries, records and the prediction models.</div>
         <div class="pred-hint" style="margin-top:8px">Leave the start date blank to open it right away. Set a future date and it shows as an upcoming promo card until then.</div>
         <button class="btn" onclick="createTournament()">Create tournament</button>
       </div>
@@ -9306,6 +9306,65 @@ function tournamentCountsElo(t){
 function countsForElo(m){
   if(!m.tournament_id) return true;
   return tournamentCountsElo(tournaments.find(t=>t.id===m.tournament_id));
+}
+
+/* ============================================================
+   WHAT AN EVENT DOES TO EVERYTHING ELSE
+
+   Not the same question, and for most of this app's life it was
+   answered as though it were: one flag decided both what a game
+   was worth on the ladder AND whether the game had happened at
+   all. An exhibition therefore vanished — no form, no streak, no
+   head-to-head, no rivalry, nothing in the records, and no data
+   for any of the models. The FF Cup is three weeks of the year's
+   best-attended tennis, and the app was throwing all of it away.
+
+   So the two questions are now asked separately:
+
+     countsForElo(m)      does this move the ladder?
+     countsForAnalysis(m) did this happen?
+
+   The ladder keeps its old, narrow answer, because a rating is a
+   reward and the cup was deliberately made exhibition. Everything
+   that is a DESCRIPTION of what happened — form, streaks, h2h,
+   rivalries, records, activity, the fixture list — and every
+   PREDICTIVE model that is not the ladder itself now reads the
+   wider set, because a cup game is a real game between two real
+   players and dropping it makes every one of those worse.
+
+   The line between the two is "is this the ladder's own rating?".
+   computeStandings, the rating timeline, the reigns, the dynamic
+   K, ratingSeries and the two tools that rewrite ladder history
+   (butterfly, alternate timelines) stay on countsForElo — they
+   have to reproduce the ladder to the point, or a profile and a
+   chart of the same player disagree. Everything else moved.
+
+   counts_stats is the escape hatch for an event that genuinely
+   should not be described either — a handicap night, a joke
+   format, a testing event. It is optional: no column, no flag,
+   and every event counts, which is the behaviour anybody would
+   expect. See docs/tournament-stats.sql to add it.
+   ============================================================ */
+/* what an event is worth, in one phrase, wherever it is shown */
+function tournEloLabel(t){
+  if(tournamentCountsElo(t)) return "games count toward the ladder";
+  return tournamentCountsStats(t)
+    ? "exhibition \u2014 no Elo, but it counts for stats and predictions"
+    : "exhibition \u2014 no Elo, and kept out of the stats";
+}
+
+function tournamentCountsStats(t){
+  if(!t) return true;              // no event = a plain ladder game
+  return t.counts_stats !== false;
+}
+
+/* does this match count toward stats, records and the models? */
+function countsForAnalysis(m){
+  if(!m.tournament_id) return true;
+  const t = tournaments.find(x=>x.id===m.tournament_id);
+  /* an event that has been deleted out from under its games leaves the
+     games behind; they were still played, so they still count here */
+  return t ? tournamentCountsStats(t) : true;
 }
 
 const $ = id => document.getElementById(id);
@@ -10939,7 +10998,8 @@ function ptTargetPickerHTML(){
   } else {
     const elo = tournamentCountsElo(t)
       ? `<b class="pt-target-elo">also moves Elo</b>`
-      : `<b class="pt-target-noelo">does not touch Elo</b>`;
+      : `<b class="pt-target-noelo">does not touch Elo</b>${
+          tournamentCountsStats(t) ? `, but still counts for stats` : ``}`;
     const round = (PT && PT.a && PT.b) ? eventRoundFor(t, PT.a, PT.b) : null;
     note = `Files under <b>${esc(t.name)}</b> — ${elo}.`;
     if(round) note += ` Slots into <b>${esc(roundLabel(round))}</b> in the draw.`;
@@ -16198,7 +16258,7 @@ function initGalaxy(){
   const ctx=canvas.getContext("2d"); ctx.scale(2,2);
   const maxR=Math.max(...standings.map(p=>p.rating));
   const links={};
-  matches.filter(m=>m.status==="approved"&&countsForElo(m)).forEach(m=>{
+  matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)).forEach(m=>{
     const k=[m.p1,m.p2].sort().join("|"); links[k]=(links[k]||0)+1;
   });
   const nodes=standings.map((p,i)=>({
@@ -18361,7 +18421,7 @@ window.initPredict = initPredict;
 /* ---- 1. League health: who needs chasing, what's unbalanced ---- */
 function computeHealth(){
   const standings = computeStandings().filter(p=>p.games>0);
-  const approved = matches.filter(m=>m.status==="approved"&&countsForElo(m));
+  const approved = matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const NOW=Date.now(), DAY=86400000;
   const last={};
   for(const m of approved){
@@ -18750,7 +18810,7 @@ function computeSOS(){
 
   const out = standings.map(p=>{
     // same filter pattern computeProfile()'s h2h enumeration uses: this player's approved, elo-counting games
-    const games = matches.filter(m => m.status==="approved" && countsForElo(m) &&
+    const games = matches.filter(m => m.status==="approved" && countsForAnalysis(m) &&
       (m.p1.toLowerCase()===p.name.toLowerCase() || m.p2.toLowerCase()===p.name.toLowerCase()));
     const opponents = games.map(m => m.p1.toLowerCase()===p.name.toLowerCase() ? m.p2 : m.p1);
     const oppRatings = opponents.map(o => ratingByName[o.toLowerCase()] ?? START);
@@ -19219,11 +19279,15 @@ function computeProfile(name){
   const games = matches.filter(m=>m.status==="approved" &&
       (m.p1.toLowerCase()===name.toLowerCase()||m.p2.toLowerCase()===name.toLowerCase()))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  // only elo-counting games drive form/streaks/h2h so they match the ladder record
-  const eloGames = games.filter(countsForElo);
+  /* form, streaks and head-to-head describe what this player has actually
+     done, so they count every game an event doesn't hold back — the cup
+     included. The W-L record in the header above still comes from the
+     ladder standings, so the two can differ during an exhibition; that is
+     the point of the split, not a bug. */
+  const statGames = games.filter(countsForAnalysis);
 
   // per-game outcome from this player's perspective -> W/L/D sequence
-  const seq = eloGames.map(m=>{
+  const seq = statGames.map(m=>{
     const iAmP1 = m.p1.toLowerCase()===name.toLowerCase();
     const o = Number(m.outcome);
     if(o===0.5) return "D";
@@ -19243,7 +19307,7 @@ function computeProfile(name){
 
   // head to head vs each opponent
   const h2h={};
-  for(const m of eloGames){
+  for(const m of statGames){
     const iAmP1=m.p1.toLowerCase()===name.toLowerCase();
     const opp = iAmP1?m.p2:m.p1;
     const o=Number(m.outcome);
@@ -19498,7 +19562,7 @@ function renderProfile(p){
     <div class="sec-label" style="margin-top:26px">Activity</div>
     <div class="panel">${(()=>{
       const NOW=Date.now(), DAY=86400000;
-      const mine=matches.filter(m=>m.status==="approved"&&countsForElo(m)&&(m.p1===p.name||m.p2===p.name))
+      const mine=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)&&(m.p1===p.name||m.p2===p.name))
         .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
       if(!mine.length) return '<div class="c-empty">No games recorded.</div>';
       const lastT=new Date(mine[0].created_at).getTime();
@@ -21200,7 +21264,7 @@ function tnFormatHint(){
   if(!sel || !box) return;
   const f = sel.value;
   if(f === "robin2"){
-    box.textContent = "Robin+ runs a group stage into a 4-player bracket. With five or more it's a two-games-each ring that cuts to the top 4, and a tied qualification line is settled with a 1v1 rather than a tiebreak column. With exactly four, nobody can be cut, so everyone plays everyone twice and the table seeds the bracket. It's an exhibition by default — nothing in it moves the ladder.";
+    box.textContent = "Robin+ runs a group stage into a 4-player bracket. With five or more it's a two-games-each ring that cuts to the top 4, and a tied qualification line is settled with a 1v1 rather than a tiebreak column. With exactly four, nobody can be cut, so everyone plays everyone twice and the table seeds the bracket. It's an exhibition by default — nothing in it moves the ladder, though the games still feed form, rivalries, records and the prediction models.";
   } else if(f === "hybrid"){
     box.textContent = "Hybrid seeds off the live ladder: the top 3 auto-qualify, seeds 4 and 5 play in for the last spot, then semis into a final.";
   } else if(f === "knockout"){
@@ -23237,7 +23301,7 @@ function renderRobinPlus(t){
         not on a tiebreak column). With four, nobody can be cut, so the group turns into everyone-plays-everyone-twice
         and the table seeds the bracket instead. ${tournamentCountsElo(t)
           ? 'Every game here <b>counts toward the ladder</b>.'
-          : 'Exhibition by default: nothing here moves the ladder.'}</div>
+          : 'Exhibition by default: nothing here moves the ladder \u2014 but it is still real tennis, so it counts toward form, head-to-head, the records and every prediction model.'}</div>
       </div>
       ${rpRosterPanel(t, state)}
       ${localOnly}`;
@@ -23853,7 +23917,8 @@ function cupMarqueeHtml(t, variant){
   if(t){
     const played = tournGames(t.id).length;
     if(played) facts.push(`<span class="cup-fact"><b>${played}</b> played</span>`);
-    facts.push(`<span class="cup-fact">${esc(tournamentCountsElo(t)?"Counts for Elo":"Exhibition")}</span>`);
+    facts.push(`<span class="cup-fact">${esc(tournamentCountsElo(t) ? "Counts for Elo"
+      : tournamentCountsStats(t) ? "No Elo \u00b7 counts for stats" : "Exhibition")}</span>`);
   }
 
   /* the run-in badge. It leads the head row rather than trailing it: in the
@@ -24026,7 +24091,7 @@ function renderTournamentDetail(id){
     box.innerHTML = `
       <div class="sec-label" style="margin-top:26px">${esc(t.name)} <span class="tag p">upcoming</span></div>
       <div class="panel promo-panel">
-        <div class="pred-hint">${tournFormatLabel(t)} · ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'}</div>
+        <div class="pred-hint">${tournFormatLabel(t)} · ${tournEloLabel(t)}</div>
         <div class="promo-countdown">Starts ${tournStartLabel(t)}</div>
         <div class="pred-hint">${t.format==='robin2'
           ? 'Everyone plays two group games, the top 4 qualify, then semis into a final. A tied qualification line is settled in a 1v1. Build the field now \u2014 the draw is made when you\u2019re ready.'
@@ -24046,7 +24111,7 @@ function renderTournamentDetail(id){
         ${t.status==='completed'?`<span class="pred-tag">\ud83c\udfc6 ${esc(t.champion||'')}</span>`:''}
       </div>
       <div class="panel" style="margin-bottom:14px">
-        <div class="pred-hint">${tournFormatLabel(t)} \u00b7 ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'} \u00b7 ${t.status}</div>
+        <div class="pred-hint">${tournFormatLabel(t)} \u00b7 ${tournEloLabel(t)} \u00b7 ${t.status}</div>
       </div>
       ${renderRobinPlus(t)}
       ${isAdmin && t.status!=='completed' && games.length===0 ? tournEditControls(t) : ''}`;
@@ -24058,7 +24123,7 @@ function renderTournamentDetail(id){
       ${t.status==='completed'?`<span class="pred-tag">🏆 ${esc(t.champion||'')}</span>`:''}
     </div>
     <div class="panel">
-      <div class="pred-hint">${tournFormatLabel(t)} · ${tournamentCountsElo(t)?'games count toward the ladder':'exhibition (no Elo effect)'} · ${t.status}</div>
+      <div class="pred-hint">${tournFormatLabel(t)} · ${tournEloLabel(t)} · ${t.status}</div>
     </div>
     ${t.format==='hybrid' ? renderHybridBracket(t, games) : ''}
     <div class="panel" style="margin-top:14px">
@@ -24169,7 +24234,7 @@ window.deleteTournament = deleteTournament;
    rating engine discards: pre-game odds, swings, expectation
    ============================================================ */
 function computeLeagueStats(){
-  const approved = matches.filter(m=>m.status==="approved" && countsForElo(m))
+  const approved = matches.filter(m=>m.status==="approved" && countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const P={};
   const ensure=n=>P[n]||(P[n]={name:n,rating:START,games:0,w:0,l:0,d:0,
@@ -24652,7 +24717,7 @@ function renderStats(){
   // rivalry grid
   const names = standings.map(s=>s.name);
   const cell = {};
-  for(const m of matches.filter(x=>x.status==="approved" && countsForElo(x))){
+  for(const m of matches.filter(x=>x.status==="approved" && countsForAnalysis(x))){
     const o=Number(m.outcome);
     const key=(w,l)=>w+"|"+l;
     if(o===1){cell[key(m.p1,m.p2)]=(cell[key(m.p1,m.p2)]||0)+1;}
@@ -24701,7 +24766,7 @@ function computeFixtures(){
 
   // last meeting per pair
   const lastMeet = {}; // "A|B" sorted -> {date, winner}
-  for(const m of matches.filter(x=>x.status==="approved" && countsForElo(x))){
+  for(const m of matches.filter(x=>x.status==="approved" && countsForAnalysis(x))){
     const key=[m.p1,m.p2].sort().join("|");
     const t=new Date(m.created_at).getTime();
     if(!lastMeet[key]||t>lastMeet[key].t){
@@ -24876,7 +24941,7 @@ function computeGlicko(){
   const RD0=50, RDMIN=6, q=Math.LN10/DIVISOR;
   const P={};
   const ensure=n=>P[n]||(P[n]={name:n,r:START,rd:RD0,games:0});
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const step=(r,rd,ropp,rdopp,s)=>{
     const g=1/Math.sqrt(1+3*q*q*rdopp*rdopp/(Math.PI*Math.PI));
@@ -25636,7 +25701,7 @@ function markDMsSeen(){ try{ localStorage.setItem("fgta_dm_seen",Date.now()); }c
    ============================================================ */
 function weeklyRecap(){
   const WEEK=7*86400000, now=Date.now();
-  const recent=matches.filter(m=>m.status==="approved"&&countsForElo(m)&&now-new Date(m.created_at).getTime()<=WEEK);
+  const recent=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)&&now-new Date(m.created_at).getTime()<=WEEK);
   if(!recent.length) return null;
   const L=computeLeagueStats();
   const pw=playerOfWeek();
@@ -25725,7 +25790,7 @@ window.closeHelp=closeHelp;
    RIVALRY PAGES
    ============================================================ */
 function rivalryData(a,b){
-  const games=matches.filter(m=>m.status==="approved"&&countsForElo(m)
+  const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)
     &&((m.p1===a&&m.p2===b)||(m.p1===b&&m.p2===a)))
     .sort((x,y)=>new Date(x.created_at)-new Date(y.created_at));
   let aw=0,bw=0,dr=0, aSets=0,bSets=0;
@@ -25805,7 +25870,7 @@ window.renderRivalry=renderRivalry;
 function renderTopRivalries(){
   const el=$("topRivalries"); if(!el) return;
   const seen={};
-  matches.filter(m=>m.status==="approved"&&countsForElo(m)).forEach(m=>{
+  matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)).forEach(m=>{
     const k=[m.p1,m.p2].sort().join("|");
     seen[k]=(seen[k]||0)+1;
   });
@@ -26561,7 +26626,7 @@ function renderMoments(){
    ============================================================ */
 function playerOfWeek(){
   const WEEK=7*86400000, now=Date.now();
-  const recent=matches.filter(m=>m.status==="approved"&&countsForElo(m)
+  const recent=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)
     && now-new Date(m.created_at).getTime()<=WEEK*2);
   if(!recent.length) return null;
   const sc={};
@@ -26922,10 +26987,23 @@ function cycleSurface(){
 }
 window.cycleSurface=cycleSurface;
 
+/* THE MODEL BACKTEST, not the ladder's history. It replays Elo's own maths
+   over every game that counts for analysis — exhibitions included — and
+   records what the model would have said before each one. That is a wider
+   set than computeStandings() walks, deliberately: this is here to measure
+   and improve a predictor, and a predictor learns from every game that was
+   played. The ratings in the log are therefore the model's, not the
+   ladder's, and during an exhibition event the two drift apart. Anything
+   that has to quote a ladder rating reads computeStandings(); anything
+   scoring a prediction reads this.
+
+   The three logs — this, predictionLogFull() and glickoPredictionLog() —
+   must always walk the SAME set of matches, because fitEnsembleWeights()
+   joins them by match id. Change the filter here, change it in all three. */
 function predictionLog(){
   const P={}, log=[];
   const ensure=n=>(P[n]===undefined?(P[n]=START):P[n]);
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const KT=kTracker();
   for(const m of approved){
@@ -26949,11 +27027,12 @@ function predictionLog(){
    running last-5 result sequence, running peak-so-far, running mean rating of
    players with games>0 so far) — there is no lookahead. The real Elo update is
    still applied after scoring each match so ratings driving the next iteration
-   stay identical to predictionLog()/computeStandings(). */
+   stay identical to predictionLog()'s. Same match set as predictionLog() and
+   glickoPredictionLog() — the ensemble joins the three by match id. */
 function predictionLogFull(){
   const P={}, games={}, seqs={}, peaks={}, log=[];
   const ensure=n=>{ if(P[n]===undefined){ P[n]=START; games[n]=0; seqs[n]=[]; peaks[n]=START; } };
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
 
   const KT=kTracker();
@@ -26989,7 +27068,7 @@ function predictionLogFull(){
     const Sa=Number(m.outcome);
     log.push({m, p:Ea, pFull, actual:Sa, rA:P[m.p1], rB:P[m.p2]});
 
-    // apply the real Elo update — identical math to predictionLog()/computeStandings()
+    // apply the real Elo update — identical math to predictionLog()
     const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
     const a=P[m.p1], b=P[m.p2];
     P[m.p1]=a+kA*(Sa-Ea);
@@ -27016,7 +27095,7 @@ function glickoPredictionLog(){
   const RD0=50, RDMIN=6, q=Math.LN10/DIVISOR;
   const P={};
   const ensure=n=>P[n]||(P[n]={name:n,r:START,rd:RD0,games:0});
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const step=(r,rd,ropp,rdopp,s)=>{
     const g=1/Math.sqrt(1+3*q*q*rdopp*rdopp/(Math.PI*Math.PI));
@@ -27597,7 +27676,7 @@ function strengthOfSchedule(){
   const rmap={}; standings.forEach(p=>rmap[p.name]=p.rating);
   const acc={};
   const ens=n=>acc[n]||(acc[n]={name:n,oppSum:0,games:0,beat:0,beatSum:0});
-  matches.filter(m=>m.status==="approved"&&countsForElo(m)).forEach(m=>{
+  matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)).forEach(m=>{
     const a=ens(m.p1), b=ens(m.p2);
     a.oppSum+=rmap[m.p2]||START; a.games++;
     b.oppSum+=rmap[m.p1]||START; b.games++;
@@ -27894,7 +27973,7 @@ function renderProExtra(){
    BRADLEY–TERRY — maximum-likelihood strength (MM algorithm)
    ============================================================ */
 function bradleyTerry(){
-  const games=matches.filter(m=>m.status==="approved"&&countsForElo(m));
+  const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const names=[...new Set(games.flatMap(m=>[m.p1,m.p2]))];
   if(names.length<2||games.length<1) return null;
   // wins (draws = half to each) and pair counts
@@ -27961,7 +28040,7 @@ function renderBradleyTerry(){
    ============================================================ */
 function bootstrapRatings(B){
   B=B||800;
-  const games=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   if(games.length<3) return null;
   const names=[...new Set(games.flatMap(m=>[m.p1,m.p2]))];
@@ -28017,7 +28096,7 @@ function renderBootstrap(){
    PAGERANK — dominance over the directed win graph
    ============================================================ */
 function pageRankDominance(){
-  const games=matches.filter(m=>m.status==="approved"&&countsForElo(m));
+  const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const names=[...new Set(games.flatMap(m=>[m.p1,m.p2]))];
   if(names.length<2) return null;
   const idx={}; names.forEach((n,i)=>idx[n]=i);
@@ -28315,7 +28394,7 @@ function computeDominanceRatios(){
 
 function computeRecencyElo(halflifeDays){
   halflifeDays=halflifeDays||45;
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m));
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const now=Date.now();
   const P={};
   const ensure=n=>P[n]||(P[n]={name:n,sumW:0,sumWR:0,games:0});
@@ -28339,7 +28418,7 @@ function computeGlicko2(){
   const SCALE=DIVISOR/Math.LN10, TAU=0.5, EPS=0.000001, RD0=350, RDMIN=30, SIGMA0=0.06;
   const P={};
   const ensure=n=>P[n]||(P[n]={name:n,r:START,rd:RD0,sigma:SIGMA0,games:0});
-  const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
+  const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const g=phi=>1/Math.sqrt(1+3*phi*phi/(Math.PI*Math.PI));
   const Efn=(mu,muj,phij)=>1/(1+Math.exp(-g(phij)*(mu-muj)));
