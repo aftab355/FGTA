@@ -5,7 +5,9 @@
              silent from 9s to 15s — the far-side returns nobody's microphone
              picked up. Audio alone must cut this into two clips.
      26-33s  A real gap. Nobody is playing, nothing is moving, no ball.
-     33-42s  A second rally.
+     33-42s  A second rally whose LAST five seconds are silent. Audio alone
+             must end it around 38, five seconds early, with nothing after it
+             to bridge to.
 
    A pass that joins clips whenever there is a gap would join 26-33 too and be
    wrong. A pass that joins nothing leaves the first rally in halves. Only
@@ -17,7 +19,11 @@ const fs=require('fs'), path=require('path');
 const OUT=path.join(__dirname,'fixtures','ball.webm');
 
 const RALLIES=[{start:3,end:20},{start:33,end:42}];
-const SILENT=[{start:9,end:15}];          // ball still in play, no audible strikes
+/* Two separate ways a rally goes quiet:
+     9-15s   the MIDDLE of a rally — needs the two halves bridging
+     37-42s  the END of one — needs the clip stretching, and there is no later
+             clip to bridge to, which is exactly the case that started this */
+const SILENT=[{start:9,end:15},{start:37,end:42}];
 const DUR=46;
 function strikes(){
   const o=[]; let s=8123;
@@ -108,5 +114,5 @@ const STRIKES=strikes();
   fs.writeFileSync(path.join(__dirname,'fixtures','ball-truth.json'),
     JSON.stringify({rallies:RALLIES, silent:SILENT, strikes:STRIKES, duration:DUR},null,1));
   console.log('  wrote '+OUT+'  '+(fs.statSync(OUT).size/1024).toFixed(0)+' KB, '+
-              STRIKES.length+' audible strikes, one rally silent from 9s to 15s');
+              STRIKES.length+' audible strikes; silent 9-15s (mid-rally) and 37-42s (end of one)');
 })().catch(e=>{console.error(e);process.exit(1);});

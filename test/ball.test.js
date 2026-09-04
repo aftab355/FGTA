@@ -47,7 +47,7 @@ if(!fs.existsSync(path.join(FIX,'ball.webm'))){
     while(Date.now()-t0<120000){ if(AC && !AC.busy) break; await new Promise(r=>setTimeout(r,250)); }
     if(AC.error) return {err:AC.error};
     const before=AC.segs.map(s=>[Math.round(s.start*10)/10, Math.round(s.end*10)/10]);
-    const gaps=abGaps(AC.segs, AC.duration)
+    const gaps=abWindows(AC.segs, AC.duration)
                  .map(g=>[Math.round(g.start*10)/10, Math.round(g.end*10)/10]);
 
     avBallRun();
@@ -57,7 +57,7 @@ if(!fs.existsSync(path.join(FIX,'ball.webm'))){
     if(B.error) return {err:B.error, before, gaps};
     return {before, gaps,
       after:AC.segs.map(s=>[Math.round(s.start*10)/10, Math.round(s.end*10)/10]),
-      bridged:AC.bridged,
+      bridged:AC.bridged, stretched:AC.stretched,
       spans:(B.spans||[]).map(s=>[Math.round(s.start*10)/10, Math.round(s.end*10)/10]),
       frames:B.frames, seconds:Math.round(B.seconds), wall:B.wall, method:B.method};
   });
@@ -69,10 +69,11 @@ if(!fs.existsSync(path.join(FIX,'ball.webm'))){
   console.log('\n# the ball, in the gaps');
   if(out.err){ console.log('  ERROR '+out.err); process.exit(1); }
   console.log('  by ear alone:   '+out.before.map(s=>s[0]+'-'+s[1]).join('  '));
-  console.log('  gaps looked at: '+out.gaps.map(s=>s[0]+'-'+s[1]).join('  '));
+  console.log('  watched:        '+out.gaps.map(s=>s[0]+'-'+s[1]).join('  '));
   console.log('  ball found in:  '+(out.spans.length?out.spans.map(s=>s[0]+'-'+s[1]).join('  '):'nothing'));
   console.log('  after:          '+out.after.map(s=>s[0]+'-'+s[1]).join('  '));
-  console.log('  '+out.frames+' frames over '+out.seconds+'s of gap in '+out.wall+'s ('+out.method+')');
+  console.log('  '+out.frames+' frames over '+out.seconds+'s in '+out.wall+'s ('+out.method+
+              ')   stretched '+out.stretched+', joined '+out.bridged);
 
   const covers=(list,a,b)=>list.some(s=>s[0]<=a+1.2 && s[1]>=b-1.2);
   ok(out.before.length>2,'by ear the silent rally is split','audio gave '+out.before.length+' clips');
@@ -86,6 +87,15 @@ if(!fs.existsSync(path.join(FIX,'ball.webm'))){
      out.after.map(s=>s[0]+'-'+s[1]).join(' '));
   ok(out.after.length===2,'and the two real rallies stay two clips',
      out.after.length+' clips: '+out.after.map(s=>s[0]+'-'+s[1]).join(' '));
+
+  /* the case the complaint described: a rally that runs on into silence with
+     nothing after it to bridge to */
+  const second=out.after[out.after.length-1];
+  ok(out.before[out.before.length-1][1] < 40,
+     'by ear the second rally stops early', 'ended '+out.before[out.before.length-1][1]+'s');
+  ok(second && second[1] >= 40.5,'the ball stretches it out to where the point really ended',
+     second?('ends '+second[1]+'s, wanted >=40.5'):'no clip');
+  ok(out.stretched>0,'and the panel says a clip was stretched','stretched='+out.stretched);
 
   console.log('\n'+pass+' passed, '+fail+' failed');
   process.exit(fail?1:0);

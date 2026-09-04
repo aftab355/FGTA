@@ -20,9 +20,9 @@ function loadCore(){
 }
 function loadBall(){
   const code=region('AV-BALL');
-  const names=['abGaps','abBlobs','abTrack','abBridge'];
+  const names=['abGaps','abTails','abWindows','abBlobs','abTrack','abExtend','abBridge'];
   return new Function('const AB_W=256,AB_H=144,AB_PIX=16,AB_MIN=2,AB_MAX=70,AB_BOX=18,'+
-                      'AB_GATE=40,AB_MINSTEP=2.2,AB_MINLEN=3,AB_MAXGAP=9,AB_PAD=1.0;\n'+
+                      'AB_GATE=40,AB_MINSTEP=2.2,AB_MINLEN=3,AB_MAXGAP=9,AB_PAD=1.0,AB_REACH=5;\n'+
                       code+'\nreturn {'+names.join(',')+'};')();
 }
 function loadScore(){

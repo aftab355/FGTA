@@ -12778,8 +12778,8 @@ window.abCancel=abCancel;
 async function avBallRun(){
   const A=AC;
   if(!A || A.kind!=='video' || !A.segs || A.segs.length<2) return;
-  const gaps=abGaps(A.segs, A.duration);
-  if(!gaps.length){ toast('No gaps short enough to be a rally carrying on',true); return; }
+  const gaps=abWindows(A.segs, A.duration);
+  if(!gaps.length){ toast('Nothing worth watching for the ball',true); return; }
   const secs=gaps.reduce((a,w)=>a+(w.end-w.start),0);
   A.ball={busy:true, progress:0, cancel:false, note:'opening the video…', seconds:secs,
           started:Date.now()};
@@ -12829,23 +12829,28 @@ function abBand(){
       <button class="mini" onclick="abClear()">try again</button></div>`;
   }
   if(B && B.spans){
+    const did=[];
+    if(A.stretched) did.push(`${A.stretched} clip${A.stretched===1?'':'s'} stretched to where the ball actually stopped`);
+    if(A.bridged) did.push(`${A.bridged} joined back up`);
     return `<div class="av-band av-band-on">
-      <b>${A.bridged||'No'} clip${A.bridged===1?'':'s'} joined back up${A.bridged?'':' — the gaps really were gaps'}.</b>
-      ${A.bridged?`The ball was still in play across ${A.bridged===1?'that gap':'those gaps'}, so what sounded like
-      the end of a rally was the middle of one.`:`Nothing was moving through them that looked like a ball.`}
+      <b>${did.length?did.join(', ')+'.':'Nothing needed changing — the clips already ended where the ball did.'}</b>
+      ${did.length?`What sounded like the end of a rally was the point carrying on with nobody's microphone
+      hearing it.`:``}
       <span class="av-band-n">${B.frames} frames over ${Math.round(B.seconds)}s of gap
         (${B.gaps} of them) in ${acEta(B.wall)} · ${B.spans.length} stretch${B.spans.length===1?'':'es'} of ball found</span>
       <button class="mini" onclick="abClear()">undo this</button>
     </div>`;
   }
-  const gaps=abGaps(A.segs, A.duration);
+  const gaps=abWindows(A.segs, A.duration);
   if(!gaps.length) return '';
   const secs=gaps.reduce((a,w)=>a+(w.end-w.start),0);
   return `<div class="av-band av-band-off">
     <b>Clips ending mid-rally?</b> A far-side return reaches the microphone much quieter than the
     serve did, and a ball can be two seconds in the air — so a rally can go quiet for long enough
-    to look finished. This looks for the ball itself through the ${gaps.length} short gap${gaps.length===1?'':'s'}
-    and joins back up anything that was still in play.
+    to look finished. This looks for the ball itself in the ${gaps.length} stretch${gaps.length===1?'':'es'}
+    where the audio stopped being sure — past the end of each clip, before the start of each, and
+    through the short gaps — then stretches every clip to where the ball really stopped and joins
+    back up anything that never stopped at all.
     <span class="av-band-n">It follows the ball frame by frame, so it runs at normal speed —
       ${acEta(secs)} for the gaps, not for the match. It finds the ball; it does not judge where it landed.</span>
     <button class="mini" onclick="avBallRun()">▶ look for the ball</button>
@@ -13831,6 +13836,7 @@ const AB_MINSTEP=2.2;          // and how far it must, to not be a shivering lea
 const AB_MINLEN=3;             // frames a track needs before it is believed
 const AB_MAXGAP=9;             // seconds; a longer silence is not a rally continuing
 const AB_PAD=1.0;              // seconds either side of a gap that get watched
+const AB_REACH=5;              // how far past a clip's edge to look for the ball still going
 const AB_RATE=1;               // frame by frame means playing at speed is not an option
 
 /* ==== AV-BALL-START ==== */
@@ -13852,6 +13858,41 @@ function abGaps(segs, duration, opt){
     if(gap<=0.05 || gap>maxGap) continue;
     out.push({after:i, start:Math.max(0,list[i].end-pad),
               end:Math.min(duration,list[i+1].start+pad), gap});
+  }
+  return out;
+}
+
+/* The tails, which the gaps miss. A gap only exists between two clips, so
+   bridging alone cannot help the case that started all this: a rally whose
+   LAST few strikes are inaudible. There is no next clip to bridge to — the
+   clip simply stops early and the rest of the point is thrown away. So every
+   clip also gets a window watched just past its end, and one just before its
+   start, whether or not another clip is anywhere near. */
+function abTails(segs, duration, opt){
+  const o=opt||{};
+  const reach=o.reach==null?AB_REACH:o.reach;
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  const out=[];
+  for(let i=0;i<list.length;i++){
+    const s=list[i], prev=list[i-1], next=list[i+1];
+    const tailTo=Math.min(duration, s.end+reach, next?next.start+0.5:Infinity);
+    if(tailTo>s.end+0.2) out.push({start:Math.max(0,s.end-0.5), end:tailTo, tail:i});
+    const leadFrom=Math.max(0, s.start-reach, prev?prev.end-0.5:0);
+    if(leadFrom<s.start-0.2) out.push({start:leadFrom, end:Math.min(duration,s.start+0.5), lead:i});
+  }
+  return out;
+}
+
+/* One list of stretches to watch, with the overlaps taken out — otherwise a
+   short gap and the tails either side of it get played three times. */
+function abWindows(segs, duration, opt){
+  const all=abGaps(segs,duration,opt).concat(abTails(segs,duration,opt))
+              .sort((a,b)=>a.start-b.start);
+  const out=[];
+  for(const w of all){
+    const last=out[out.length-1];
+    if(last && w.start<=last.end+0.05) last.end=Math.max(last.end,w.end);
+    else out.push({start:w.start, end:w.end});
   }
   return out;
 }
@@ -13938,6 +13979,34 @@ function abTrack(frames, opt){
   return {spans, tracks:good.length, considered:done.length};
 }
 
+/* A clip whose end has the ball still travelling past it stopped early: the
+   rally went on, the microphone did not. Push the end out to where the ball
+   actually stops — but never past the next clip, and never so far that the
+   ball span was really the next rally starting. Same in reverse at the start.
+
+   This is the half of the ball pass that answers the original complaint. The
+   bridging below only helps when there is a later clip to join to; this helps
+   when the point simply ran on into silence. */
+function abExtend(segs, spans, duration, opt){
+  const o=opt||{};
+  const near=o.near==null?0.8:o.near;
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  let moved=0;
+  for(let i=0;i<list.length;i++){
+    const s=list[i], prev=list[i-1], next=list[i+1];
+    const limitEnd=Math.min(duration, next?next.start:duration);
+    const limitStart=Math.max(0, prev?prev.end:0);
+    let end=s.end, start=s.start;
+    for(const sp of spans){
+      if(sp.start<=s.end+near && sp.end>s.end) end=Math.max(end, Math.min(sp.end, limitEnd));
+      if(sp.end>=s.start-near && sp.start<s.start) start=Math.min(start, Math.max(sp.start, limitStart));
+    }
+    if(end>s.end+0.15 || start<s.start-0.15){ moved++; }
+    s.end=end; s.start=start; s.dur=s.end-s.start;
+  }
+  return {segs:list, moved};
+}
+
 /* Two clips with the ball in play right through the gap between them are one
    rally that the soundtrack lost the middle of. */
 function abBridge(segs, spans, opt){
@@ -13950,6 +14019,20 @@ function abBridge(segs, spans, opt){
     const last=out[out.length-1];
     if(last){
       const g0=last.end, g1=s.start;
+      /* Touching or overlapping is not a gap to argue about, it is one clip.
+         This case only arises after stretching — a clip pushed out to where
+         the ball stopped can reach the next one — and leaving it out meant a
+         rally came back as two clips that happened to abut, which is worse
+         than either joining or not joining them. */
+      if(g1<=g0+0.05){
+        last.end=Math.max(last.end,s.end);
+        last.dur=last.end-last.start;
+        last.hits+=s.hits;
+        last.peak=Math.max(last.peak,s.peak);
+        last.bridged=(last.bridged||0)+1;
+        merged++;
+        continue;
+      }
       if(g1>g0){
         let covered=0;
         for(const sp of spans) covered+=Math.max(0, Math.min(g1,sp.end)-Math.max(g0,sp.start));
@@ -14284,8 +14367,13 @@ function acRecompute(){
      through the gap between them are one rally the soundtrack lost the middle
      of. Joining them here rather than later means the picture pass and the
      review list both see the rally, not the two halves. */
-  A.bridged=0;
+  A.bridged=0; A.stretched=0;
   if(A.ball && A.ball.spans && A.ball.spans.length){
+    /* stretch first, then join: a clip pushed out to where the ball really
+       stopped may now reach the next one, and then there is no gap left to
+       argue about */
+    const ex=abExtend(A.segs, A.ball.spans, A.duration);
+    A.segs=ex.segs; A.stretched=ex.moved;
     const br=abBridge(A.segs, A.ball.spans);
     A.segs=br.segs; A.bridged=br.merged;
   }

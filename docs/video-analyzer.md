@@ -272,6 +272,28 @@ list.
 
 ---
 
+## The ball
+
+There is a third pass, and it is the only one that looks for the ball. It
+lives with auto-cut rather than here because what it does is fix the cut —
+see [When the clip ends mid-rally](auto-cut.md#when-the-clip-ends-mid-rally).
+
+The division of labour is worth stating plainly, because "analyses the video"
+covers three quite different things:
+
+| pass | detail | speed | what it answers |
+|---|---|---|---|
+| picture | 96×54, a 16×9 grid | up to 12× | did anything move on *your* court while those strikes were heard |
+| serve end | the same map | the same | which end this rally was served from |
+| ball | 256×144, every frame | 1× | was the ball in play through this gap |
+
+The ball pass is the expensive one, which is why it is opt-in and why it only
+watches the stretches where the audio stopped being sure. It is also the only
+one that could in principle grow into something that knows where the ball
+landed — and deliberately has not, because that needs the ball located to
+centimetres from several calibrated cameras, and this is one phone on a
+tripod.
+
 ## What it will get wrong
 
 - **A camera far enough back that the players barely register.** The ratio

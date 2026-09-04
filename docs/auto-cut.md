@@ -238,19 +238,27 @@ either side, and skips any gap long enough to be obviously between rallies.
 On a match with forty rallies that is a few minutes of footage rather than
 forty — and it is exactly the footage the audio was unsure about.
 
-Two clips with the ball in play right through the gap between them get joined
-back into the one rally they always were.
+It then does two things, and the second is the one the complaint was actually
+about:
 
-Measured on a fixture built so nothing else could solve it — one rally whose
-soundtrack goes silent for six seconds while the ball keeps moving, and a real
-twelve-second gap with nobody playing:
+- **Stretches every clip** to where the ball really stopped. A rally whose
+  *last* strikes are inaudible has no later clip to join to — it simply ends
+  early and the rest of the point is thrown away. So the video just past each
+  clip's end gets watched whether or not anything follows it.
+- **Joins clips back up** when the ball was in play right through the gap
+  between them — one rally the soundtrack lost the middle of.
+
+Measured on a fixture built so nothing else could solve it: one rally that
+goes silent in the *middle*, a second that goes silent for its last five
+seconds with nothing after it, and a real thirteen-second gap where nobody is
+playing.
 
 | | |
 |---|---|
-| by ear alone | `2.7-10.3` `14.2-20.5` `32.7-42.7` — the rally in halves |
-| ball found in | `9.4-15.1` — right through the silence |
-| after | `2.7-20.5` `32.7-42.7` — the rally whole, the real gap untouched |
-| cost | 174 frames over 6s of gap, in 6s |
+| by ear alone | `2.6-10.3` `14.1-20.5` `32.6-38.8` — first rally in halves, second five seconds short |
+| ball found in | `9.3-15.1` and `38.3-42` — through the silence, and past the end |
+| after | `2.6-20.5` `32.6-42` — both rallies whole, the real gap untouched |
+| cost | 741 frames over 25s of video, in 26s |
 
 ### What it is *not* the fix for
 
