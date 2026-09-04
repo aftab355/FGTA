@@ -204,6 +204,64 @@ thing you give up is the picture check, which needs the video.
 
 ---
 
+## When the clip ends mid-rally
+
+The complaint that produced this section: *it ends the clip the moment someone
+returns a serve.*
+
+Audio can do that, and no threshold fixes it. A far-side return reaches the
+microphone much quieter than the serve did. A ball can be two seconds in the
+air. Put those together and a rally goes quiet for longer than `maxGap`, so
+the cluster closes and the clip stops in the middle of the point. **The
+information needed to keep it open is not in the soundtrack at all** — the
+rally is still going, and the ball is still moving.
+
+So on a video there is a second button: **▶ look for the ball**.
+
+It finds small fast-moving things and links them into short tracks. A player
+is a blob of hundreds of pixels that moves a few pixels a frame; a ball is a
+handful of pixels that moves tens. Everything of the wrong size is thrown
+away before linking, and what survives has to keep travelling in a consistent
+direction for three frames before it counts as anything.
+
+**What it is not.** It does not do line calls, does not know where the ball
+bounced, and cannot tell you who won a point. Those need the ball located to
+within centimetres from several calibrated cameras. It answers exactly one
+question — *was the ball in play during this gap?* — and answers it well.
+
+**Why it is affordable.** A ball has to be followed frame by frame: at a
+tenth of a second it has already crossed a quarter of the court and changed
+direction, so this pass cannot be played fast the way the others are. That
+would be ruinous over a whole match, so **it does not watch a whole match**.
+It watches only the gaps between clips the audio already found, plus a second
+either side, and skips any gap long enough to be obviously between rallies.
+On a match with forty rallies that is a few minutes of footage rather than
+forty — and it is exactly the footage the audio was unsure about.
+
+Two clips with the ball in play right through the gap between them get joined
+back into the one rally they always were.
+
+Measured on a fixture built so nothing else could solve it — one rally whose
+soundtrack goes silent for six seconds while the ball keeps moving, and a real
+twelve-second gap with nobody playing:
+
+| | |
+|---|---|
+| by ear alone | `2.7-10.3` `14.2-20.5` `32.7-42.7` — the rally in halves |
+| ball found in | `9.4-15.1` — right through the silence |
+| after | `2.7-20.5` `32.7-42.7` — the rally whole, the real gap untouched |
+| cost | 174 frames over 6s of gap, in 6s |
+
+### What it is *not* the fix for
+
+Before building it I checked whether the strike floor was the culprit, on a
+fixture with the dynamic range real tennis has — a serve at full level, near
+groundstrokes at three quarters, far-side returns at half, and the odd soft
+touch at a third. It finds **all 38 of them, at every threshold setting, with
+nothing in the dead time**. So quiet strikes were not being lost to the floor.
+That is what `test/dynamics.test.js` is for, and it is worth keeping precisely
+because it rules something out.
+
 ## Getting the video back
 
 **`▶ render the video here`** — plays the kept clips through and records them
