@@ -165,17 +165,67 @@ or a camera that cannot tell) returns "don't know" rather than a coin flip.
 perspective: six rallies, ends near/near/far/far/near/far, **6 of 6 correct**,
 split found at -0.5 with a gap of 0.9 either side.
 
-What is still missing is the reconstructor itself.
+### From serve ends back to games
 
-### One thing to check before trusting any of it
+The camera is on a tripod and never moves, which settles the question above:
+**a fixed camera cannot see the server nearest it every game.** Ends change
+after every odd game while the serve changes every game, so the serving end
+moves in pairs — near, near, far, far — a period of four that runs unbroken
+through set boundaries. (A set ending on an odd game total changes ends
+immediately; one ending on an even total changes after game one of the next
+set. That is the same rule saying the same thing, so the pattern never
+stutters.)
 
-A camera fixed behind one baseline **cannot** see the server nearest it every
-game. Ends change after every odd game while the serve changes every game, so
-the serving end moves in pairs: near, near, far, far, near, near. Anyone
-reading their own footage as "the server is always closest" is either moving
-the camera between games, or has only looked at a couple of games. It matters,
-because a reconstructor built on the wrong one of those mislabels half the
-match and does it confidently.
+Which gives the one structural fact everything else hangs off:
+
+> **Every run of consecutive same-end rallies is exactly two games.**
+
+Splitting a run of *n* rallies into two games is then arithmetic, because a
+game cannot be any length it likes. It ends at 4, 5, 6, 8, 10, 12 … points
+and never at 7 or 9 — three-all is deuce, so the game runs to 5-3 at eight
+points rather than 5-2 at seven. A run of 8 can only be 4+4; a run of 9 can
+only be 4+5 or 5+4.
+
+`scFrame()` does this, and `test/score-frame.test.js` measures it over 200
+simulated matches — 33,218 points, 5,586 games:
+
+| | |
+|---|---|
+| game boundaries located | **2,185 of 5,386 (41%)** |
+| boundaries claimed that were not real | **0** |
+| tiebreaks spotted | **145 of 145** |
+| runs left unexplained | **0** |
+
+**Read that honestly.** Forty-one per cent is essentially *every pair
+boundary* and almost nothing else: the split inside a pair is pinned only 195
+times in 2,880 runs — about 7%, the cases that come to exactly 8 and can only
+be 4+4. What the ends buy is the skeleton, with zero false positives. They do
+not buy the individual games.
+
+Two things it had to be taught, both found by measurement rather than
+reasoning:
+
+- **A tiebreak looks like nothing else and contaminates both neighbours.**
+  Inside one the serve moves every two points while the ends change every six,
+  so the end alternates in twos — a burst of very short runs where the rest of
+  a match gives runs of eight to twelve. That burst is the signature. Its
+  first point also shares an end with the two games before it and its last can
+  share one with the game after, so both neighbouring runs have tiebreak
+  points glued to a real game and are set aside rather than counted.
+- **The last run of a match can be one game, not two.** A final run of 8
+  reads as 4+4 and equally as one game of 8 — deuce, then 5-3. Both are real,
+  so the last run is only certain when one of them is. Assuming a pair
+  regardless was worth exactly three wrong boundaries in two thousand, every
+  one of them the last game of a match.
+
+### What would move it past 41%
+
+The serve **court**, not the serve end. It alternates every single point,
+resets to deuce at the start of each game, and would count the points in each
+game directly rather than leaving the pair to be split by arithmetic. That is
+a left/right measurement at the moment of contact rather than a near/far one,
+and it is the obvious next thing — it is the difference between knowing the
+skeleton and knowing every game.
 
 ---
 

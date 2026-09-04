@@ -10141,6 +10141,13 @@ function ptDefaultState(a,b){
        On PT like everything else, so undo/redo, the draft and the submit
        payload carry it without a second code path. */
     server:"a",
+    /* Which end of the court player A is standing at, from a fixed camera's
+       point of view. Ends change after every odd-numbered game of a set — and
+       that one rule is the whole of it, including at set boundaries: a set
+       ending on an odd game total has just changed, one ending on an even
+       total changes after game one of the next set, which is what "change
+       after odd games" already says. See docs/scoring.md. */
+    endA:"near",
     /* where this game gets filed on submit — see WHERE A TRACKED GAME IS
        FILED. Set from the standing preference in ptStart; on PT rather than
        module-level so the localStorage draft carries it. */
@@ -10219,6 +10226,25 @@ function ptServerNow(state){
 /* Deuce court on an even number of points played, ad court on an odd one —
    true in a game and in a tiebreak alike. This is the per-POINT observable;
    ptServerNow is the per-GAME one. */
+/* Which END the serve comes from — the thing a camera on a tripod can
+   actually see, and the reason any of this is reconstructable. It is NOT
+   "whoever is nearest": the server alternates every game while the ends
+   change after every odd game, so the serving end moves in PAIRS —
+   near, near, far, far, near, near — with a period of four games that runs
+   unbroken through set boundaries.
+
+   A tiebreak is the exception, because ends change every six points inside
+   one, so the end moves mid-game there and the pattern above does not hold. */
+function ptServeEnd(state){
+  const S=state||PT;
+  if(!S || !S.endA) return null;
+  const sv=ptServerNow(S);
+  if(!sv) return null;
+  const far = S.endA==='near' ? 'far' : 'near';
+  return sv==='a' ? S.endA : far;
+}
+window.ptServeEnd=ptServeEnd;
+
 function ptServeCourt(state){
   const S=state||PT;
   if(!S) return null;
@@ -10261,6 +10287,11 @@ function ptCloseGame(winSide, wasTiebreak){
   /* before the tiebreak branch below returns, so the tiebreak inherits the
      rotated server as the player who serves its first point */
   PT.server = PT.server==='b' ? 'a' : 'b';
+  /* and the ends, after every odd game of the set. gamesA/gamesB have already
+     been incremented above and ptCloseSet has not run yet, so this is the
+     count within the set that just had a game added to it. A tiebreak arrives
+     here as game 13, which is odd, which is correct. */
+  if(((PT.gamesA+PT.gamesB)%2)===1) PT.endA = PT.endA==='near' ? 'far' : 'near';
   if(!wasTiebreak && PT.gamesA===6 && PT.gamesB===6){
     PT.tiebreak=true;
     PT.log.unshift(`6 games all → tiebreak to 7`);
@@ -10500,7 +10531,7 @@ function ptLogRally(pre, side, isAce){
   if(pre.tiebreak) r.tb=1;
   /* sv/ct are read off the PRE-point state, which is the state the point was
      actually played under — same reason the score `b` is */
-  r.sv=ptServerNow(pre); r.ct=ptServeCourt(pre);
+  r.sv=ptServerNow(pre); r.ct=ptServeCourt(pre); r.en=ptServeEnd(pre);
   if(isAce) r.ace=1;
   if(ptWouldWinGame('a',pre)||ptWouldWinGame('b',pre)) r.gp=1;
   if(ptIsMatchPoint('a',pre)||ptIsMatchPoint('b',pre)) r.mp=1;
@@ -12733,6 +12764,99 @@ async function avScanVideo(url, windows, opt){
 /* ==== AV-SCAN-END ==== */
 
 
+
+/* ---- the ball pass, wired to the auto-cut ------------------------------ */
+function abPaint(){
+  const A=AC; if(!A||!A.ball) return;
+  const bar=document.getElementById('abBar'), lbl=document.getElementById('abLabel');
+  if(bar) bar.style.width=Math.round((A.ball.progress||0)*100)+'%';
+  if(lbl) lbl.textContent=A.ball.note||'';
+}
+function abCancel(){ const A=AC; if(A&&A.ball) A.ball.cancel=true; }
+window.abCancel=abCancel;
+
+async function avBallRun(){
+  const A=AC;
+  if(!A || A.kind!=='video' || !A.segs || A.segs.length<2) return;
+  const gaps=abWindows(A.segs, A.duration);
+  if(!gaps.length){ toast('Nothing worth watching for the ball',true); return; }
+  const secs=gaps.reduce((a,w)=>a+(w.end-w.start),0);
+  A.ball={busy:true, progress:0, cancel:false, note:'opening the video…', seconds:secs,
+          started:Date.now()};
+  renderAutoCut();
+  try{
+    const r=await avBallScan(A.url, gaps, {
+      onProgress:(p,f)=>{
+        if(AC!==A||!A.ball) return;
+        A.ball.progress=p;
+        A.ball.note='watching the gaps for the ball — '+Math.round(p*100)+'% · '+f+' frames';
+        abPaint();
+      },
+      cancelled:()=>AC!==A || !A.ball || A.ball.cancel
+    });
+    if(AC!==A) return;
+    if(A.ball.cancel || r.cancelled){ A.ball=null; renderAutoCut(); return; }
+    A.ball={busy:false, spans:r.spans, frames:r.frames, seconds:secs, gaps:gaps.length,
+            wall:Math.round((Date.now()-A.ball.started)/1000), method:r.method};
+    acRecompute();
+    renderAutoCut();
+  }catch(e){
+    if(AC!==A) return;
+    A.ball={busy:false, error:(e&&e.message)||'the ball pass failed'};
+    renderAutoCut();
+  }
+}
+window.avBallRun=avBallRun;
+function abClear(){ const A=AC; if(!A) return; A.ball=null; acRecompute(); renderAutoCut(); }
+window.abClear=abClear;
+
+function abBand(){
+  const A=AC;
+  if(!A || A.kind!=='video' || !A.segs || A.segs.length<2) return '';
+  const B=A.ball;
+  if(B && B.busy){
+    return `<div class="av-band av-band-run">
+      <div class="av-band-h">Looking for the ball</div>
+      <div class="ac-bar"><div class="ac-bar-fill" id="abBar" style="width:${Math.round((B.progress||0)*100)}%"></div></div>
+      <div class="ac-bar-label" id="abLabel">${esc(B.note||'')}</div>
+      <div class="av-band-b">A ball has to be followed frame by frame, so this one plays at normal
+        speed — which is why it only watches the gaps between clips and not the match.</div>
+      <button class="mini" onclick="abCancel()">skip it</button>
+    </div>`;
+  }
+  if(B && B.error){
+    return `<div class="av-band av-band-off"><b>The ball pass failed.</b> ${esc(B.error)}
+      <button class="mini" onclick="abClear()">try again</button></div>`;
+  }
+  if(B && B.spans){
+    const did=[];
+    if(A.stretched) did.push(`${A.stretched} clip${A.stretched===1?'':'s'} stretched to where the ball actually stopped`);
+    if(A.bridged) did.push(`${A.bridged} joined back up`);
+    return `<div class="av-band av-band-on">
+      <b>${did.length?did.join(', ')+'.':'Nothing needed changing — the clips already ended where the ball did.'}</b>
+      ${did.length?`What sounded like the end of a rally was the point carrying on with nobody's microphone
+      hearing it.`:``}
+      <span class="av-band-n">${B.frames} frames over ${Math.round(B.seconds)}s of gap
+        (${B.gaps} of them) in ${acEta(B.wall)} · ${B.spans.length} stretch${B.spans.length===1?'':'es'} of ball found</span>
+      <button class="mini" onclick="abClear()">undo this</button>
+    </div>`;
+  }
+  const gaps=abWindows(A.segs, A.duration);
+  if(!gaps.length) return '';
+  const secs=gaps.reduce((a,w)=>a+(w.end-w.start),0);
+  return `<div class="av-band av-band-off">
+    <b>Clips ending mid-rally?</b> A far-side return reaches the microphone much quieter than the
+    serve did, and a ball can be two seconds in the air — so a rally can go quiet for long enough
+    to look finished. This looks for the ball itself in the ${gaps.length} stretch${gaps.length===1?'':'es'}
+    where the audio stopped being sure — past the end of each clip, before the start of each, and
+    through the short gaps — then stretches every clip to where the ball really stopped and joins
+    back up anything that never stopped at all.
+    <span class="av-band-n">It follows the ball frame by frame, so it runs at normal speed —
+      ${acEta(secs)} for the gaps, not for the match. It finds the ball; it does not judge where it landed.</span>
+    <button class="mini" onclick="avBallRun()">▶ look for the ball</button>
+  </div>`;
+}
+
 /* ---- the pass, wired into the auto-cut -------------------------------- */
 const AV_TUNE_KEY="fgta_autocut_vision";
 const AV_TUNE_UI=[
@@ -13509,6 +13633,552 @@ function acRenderPanel(){
   </div>`;
 }
 
+
+/* ============================================================
+   FROM SERVE ENDS BACK TO GAMES.
+
+   A camera on a tripod behind one baseline sees the serving end move in
+   pairs — near, near, far, far — because the server alternates every game
+   while the ends change after every odd one. That period of four runs
+   unbroken through set boundaries (a set ending on an odd total changes
+   immediately; one ending on an even total changes after game one of the
+   next set, which is the same rule saying the same thing), so:
+
+     EVERY RUN OF CONSECUTIVE SAME-END RALLIES IS EXACTLY TWO GAMES.
+
+   That is the whole trick, and it is worth being clear about what it does
+   and does not buy. It does not say who won anything. It says where the
+   games are — and it says it from a measurement (which end served) that is
+   large, slow and checkable, rather than from a guess about outcomes.
+
+   Splitting a run of n rallies into two games is then arithmetic, because a
+   game cannot be any length it likes. It ends at 4, 5, 6, 8, 10, 12 …
+   points and never at 7 or 9: three-all is deuce, so the game runs to 5-3
+   at eight points rather than 5-2 at seven. A run of 8 can only be 4+4. A
+   run of 9 can only be 4+5 or 5+4. Most runs come back with one or two
+   candidates, and the ones that do not are marked rather than guessed at.
+
+   A TIEBREAK BREAKS IT, and is reported rather than absorbed: ends change
+   every six points inside one, so the serving end moves mid-game and the run
+   containing it is not two games at all.
+   ============================================================ */
+
+/* ==== SCORE-CORE-START ==== */
+/* Point totals a game can legally end on. Not 7, not 9 — see above. */
+function scGameLengths(max){
+  const out=[];
+  for(const n of [4,5,6]) if(n<=max) out.push(n);
+  for(let n=8;n<=max;n+=2) out.push(n);
+  return out;
+}
+
+/* Consecutive rallies served from the same end. An unreadable clip (the
+   picture could not tell) does not silently join its neighbours: it ends the
+   run it is in and starts the next one flagged, because a run built across a
+   guess is a run whose length is wrong. */
+function scRuns(ends){
+  const runs=[];
+  let cur=null;
+  for(let i=0;i<ends.length;i++){
+    const e=ends[i];
+    if(e!==1 && e!==-1){
+      if(cur){ cur.to=i-1; runs.push(cur); cur=null; }
+      if(runs.length) runs[runs.length-1].brokenAfter=true;
+      continue;
+    }
+    if(!cur || cur.end!==e){
+      if(cur){ cur.to=i-1; runs.push(cur); }
+      cur={end:e, from:i, to:i};
+    }
+    cur.to=i;
+  }
+  if(cur) runs.push(cur);
+  return runs.map(r=>({...r, n:r.to-r.from+1}));
+}
+
+/* Every way a run of n rallies is two legal games. */
+function scSplit(n){
+  const out=[];
+  for(const g of scGameLengths(n-4)) if(scGameLengths(n).indexOf(n-g)>=0) out.push([g,n-g]);
+  return out;
+}
+
+/* The frame: where the games are, and how sure we are of each.
+
+   `firstServer` and `firstEnd`, if given, name who served the opening game
+   and from which end — one sentence from whoever was there. They do not help
+   locate the boundaries, but they turn "game 7" into "B serving from the far
+   end", which is what the rest of a reconstruction needs. */
+/* A TIEBREAK LOOKS LIKE NOTHING ELSE, and has to be found before anything
+   else is believed. Inside one the serve moves every two points while the
+   ends only change every six, so the serving end alternates in twos: a burst
+   of very short runs where every other stretch of the match gives runs of
+   eight to twelve. That burst is the signature.
+
+   It also contaminates BOTH its neighbours, and symmetrically. A tiebreak's
+   first point is served from the same end as the two games before it, so those
+   points join the preceding run; its last points can share an end with the
+   first game of the next set, so they join the following one. Either way the
+   run has tiebreak points glued to a real game and its length means nothing —
+   so both neighbours are marked rather than reported as a game count that is
+   quietly two points out. Leaving the trailing one unmarked was worth three
+   wrong boundaries in two thousand, which is three too many for something
+   that is supposed to only claim what it can stand behind.
+
+   The rest of the match either side is unaffected and still reads. */
+function scMarkTiebreaks(runs){
+  const out=[];
+  let i=0;
+  while(i<runs.length){
+    let j=i;
+    while(j<runs.length && runs[j].n<=2) j++;
+    if(j-i>=4){
+      if(out.length) out[out.length-1].nearTiebreak=true;
+      out.push({end:0, from:runs[i].from, to:runs[j-1].to,
+                n:runs[j-1].to-runs[i].from+1, tiebreak:true});
+      i=j;
+      if(i<runs.length){ out.push({...runs[i], nearTiebreak:true}); i++; }
+    } else { out.push({...runs[i]}); i++; }
+  }
+  return out;
+}
+
+function scFrame(ends, opt){
+  const o=opt||{};
+  const runs=scMarkTiebreaks(scRuns(ends));
+  const out=[];
+  let gameNo=1;
+  for(let i=0;i<runs.length;i++){
+    const r=runs[i];
+    const last=i===runs.length-1;
+    /* Every run is two games — EXCEPT the last, where the match can simply
+       have ended after the first of the pair. That matters more than it
+       sounds: a final run of 8 reads as 4+4, which is a legal pair, and it
+       also reads as one game of 8, which is deuce and then 5-3. Both are
+       real, so the last run is only certain when one of them is. Treating it
+       as a pair regardless was worth three wrong boundaries in two thousand,
+       every one of them the last game of a match. */
+    let opts = r.tiebreak||r.nearTiebreak ? [] : scSplit(r.n);
+    if(last && !r.tiebreak && !r.nearTiebreak && scGameLengths(r.n).indexOf(r.n)>=0){
+      opts = opts.concat([[r.n]]);
+    }
+    let state, games=null;
+    if(r.tiebreak){ state='tiebreak'; games=[r.n]; }
+    else if(r.nearTiebreak){ state='beside-tiebreak'; }
+    else if(opts.length===1){ state = opts[0].length===1?'partial':'certain'; games=opts[0]; }
+    else if(opts.length>1) state='ambiguous';
+    else state='illegal';
+    out.push({...r, index:i, firstGame:gameNo, splits:opts, games, state,
+              tiebreakLikely: state==='illegal' && r.n>=7});
+    gameNo += games ? games.length : 2;
+  }
+  const certain=out.filter(r=>r.state==='certain').length;
+  const ambiguous=out.filter(r=>r.state==='ambiguous').length;
+  const illegal=out.filter(r=>r.state==='illegal').length;
+  const tiebreaks=out.filter(r=>r.state==='tiebreak').length;
+  const flagged=out.filter(r=>r.state==='tiebreak'||r.state==='beside-tiebreak').length;
+  return {
+    runs:out,
+    pairs:out.length,
+    games:gameNo-1,
+    certain, ambiguous, illegal, tiebreaks, flagged,
+    /* how many game boundaries are pinned exactly: the ones between pairs are
+       free, the one inside a pair needs the split to be unique */
+    boundariesKnown: out.length + certain,
+    boundariesTotal: out.length + out.length,
+    firstServer:o.firstServer||null, firstEnd:o.firstEnd||null
+  };
+}
+/* ==== SCORE-CORE-END ==== */
+
+
+/* ============================================================
+   THE BALL — for the gaps the audio is not sure about.
+
+   The complaint that produced this: the cut ends the moment somebody returns
+   a serve. Audio can do that. A far-side return arrives at the microphone
+   much quieter than the serve did, a ball can be in the air for two seconds
+   between strikes, and maxGap closes the cluster on the silence. Nothing
+   about a louder or quieter threshold fixes it, because the information is
+   not in the soundtrack at all: THE RALLY IS STILL GOING AND THE BALL IS
+   STILL MOVING.
+
+   WHAT THIS IS AND IS NOT. It finds small fast-moving things and links them
+   into short tracks. It does not do line calls, it does not know where the
+   ball bounced, and it cannot tell you who won a point — those need the ball
+   located to within centimetres from several calibrated cameras, which is
+   what Hawk-Eye is and what one phone on a tripod is not. What it answers is
+   one question, and answers it well: WAS THE BALL IN PLAY DURING THIS GAP?
+
+   WHY IT IS AFFORDABLE. A ball has to be followed frame by frame — at a
+   tenth of a second it has already crossed a quarter of the court and changed
+   direction — so this pass cannot be played fast the way the others are. That
+   would be ruinous over a whole match, so it does not watch a whole match. It
+   watches ONLY THE GAPS between clips the audio already found, plus a second
+   either side, and skips any gap long enough to be obviously between rallies.
+   On a match with forty rallies that is a few minutes of footage rather than
+   forty, and it is exactly the footage the audio was unsure about.
+
+   HOW A BALL IS TOLD FROM A PLAYER. By size and speed, at a resolution where
+   the difference is unmissable: a player is a blob of hundreds of pixels that
+   moves a few pixels a frame, a ball is a handful of pixels that moves tens.
+   Everything of the wrong size is dropped before linking, and what survives
+   has to keep moving in a consistent direction for three frames before it
+   counts as anything.
+   ============================================================ */
+
+const AB_W=256, AB_H=144;      // ball-sized detail needs more than the motion grid has
+const AB_PIX=16;               // per-pixel difference that counts as moved
+const AB_MIN=2, AB_MAX=70;     // a ball's blob, in pixels, with motion blur
+const AB_BOX=18;               // and no bigger than this across
+const AB_GATE=40;              // how far a ball may travel between frames
+const AB_MINSTEP=2.2;          // and how far it must, to not be a shivering leaf
+const AB_MINLEN=3;             // frames a track needs before it is believed
+const AB_MAXGAP=9;             // seconds; a longer silence is not a rally continuing
+const AB_PAD=1.0;              // seconds either side of a gap that get watched
+const AB_REACH=5;              // how far past a clip's edge to look for the ball still going
+const AB_RATE=1;               // frame by frame means playing at speed is not an option
+
+/* ==== AV-BALL-START ==== */
+/* The gaps worth looking at: between one clip and the next, padded, and only
+   when short enough that a rally could still have been going. */
+function abGaps(segs, duration, opt){
+  const o=opt||{};
+  /* gapMax, not maxGap. The audio tune already has a maxGap and it means the
+     opposite end of the same idea — the longest pause still INSIDE one rally,
+     2.5s. Handing this function that object silently capped every gap at 2.5s,
+     which is shorter than any gap between rallies, so it returned none and the
+     whole pass did nothing while reporting no error at all. */
+  const maxGap=o.gapMax==null?AB_MAXGAP:o.gapMax;
+  const pad=o.gapPad==null?AB_PAD:o.gapPad;
+  const out=[];
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  for(let i=0;i<list.length-1;i++){
+    const gap=list[i+1].start-list[i].end;
+    if(gap<=0.05 || gap>maxGap) continue;
+    out.push({after:i, start:Math.max(0,list[i].end-pad),
+              end:Math.min(duration,list[i+1].start+pad), gap});
+  }
+  return out;
+}
+
+/* The tails, which the gaps miss. A gap only exists between two clips, so
+   bridging alone cannot help the case that started all this: a rally whose
+   LAST few strikes are inaudible. There is no next clip to bridge to — the
+   clip simply stops early and the rest of the point is thrown away. So every
+   clip also gets a window watched just past its end, and one just before its
+   start, whether or not another clip is anywhere near. */
+function abTails(segs, duration, opt){
+  const o=opt||{};
+  const reach=o.reach==null?AB_REACH:o.reach;
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  const out=[];
+  for(let i=0;i<list.length;i++){
+    const s=list[i], prev=list[i-1], next=list[i+1];
+    const tailTo=Math.min(duration, s.end+reach, next?next.start+0.5:Infinity);
+    if(tailTo>s.end+0.2) out.push({start:Math.max(0,s.end-0.5), end:tailTo, tail:i});
+    const leadFrom=Math.max(0, s.start-reach, prev?prev.end-0.5:0);
+    if(leadFrom<s.start-0.2) out.push({start:leadFrom, end:Math.min(duration,s.start+0.5), lead:i});
+  }
+  return out;
+}
+
+/* One list of stretches to watch, with the overlaps taken out — otherwise a
+   short gap and the tails either side of it get played three times. */
+function abWindows(segs, duration, opt){
+  const all=abGaps(segs,duration,opt).concat(abTails(segs,duration,opt))
+              .sort((a,b)=>a.start-b.start);
+  const out=[];
+  for(const w of all){
+    const last=out[out.length-1];
+    if(last && w.start<=last.end+0.05) last.end=Math.max(last.end,w.end);
+    else out.push({start:w.start, end:w.end});
+  }
+  return out;
+}
+
+/* Blobs in a difference mask. Flood fill, 4-connected, with everything of the
+   wrong size thrown away as it is found rather than collected first. */
+function abBlobs(mask, W, H, seen, stack, cands){
+  cands.length=0;
+  seen.fill(0);
+  for(let p=0;p<mask.length;p++){
+    if(!mask[p] || seen[p]) continue;
+    let sp=0, area=0, sx=0, sy=0;
+    let x0=W, x1=-1, y0=H, y1=-1;
+    stack[sp++]=p; seen[p]=1;
+    while(sp){
+      const q=stack[--sp];
+      const x=q%W, y=(q/W)|0;
+      area++; sx+=x; sy+=y;
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      if(area>AB_MAX*4) continue;                 // a player: stop growing it
+      if(x>0     && mask[q-1] && !seen[q-1]){ seen[q-1]=1; if(sp<stack.length) stack[sp++]=q-1; }
+      if(x<W-1   && mask[q+1] && !seen[q+1]){ seen[q+1]=1; if(sp<stack.length) stack[sp++]=q+1; }
+      if(y>0     && mask[q-W] && !seen[q-W]){ seen[q-W]=1; if(sp<stack.length) stack[sp++]=q-W; }
+      if(y<H-1   && mask[q+W] && !seen[q+W]){ seen[q+W]=1; if(sp<stack.length) stack[sp++]=q+W; }
+    }
+    if(area<AB_MIN || area>AB_MAX) continue;
+    if((x1-x0+1)>AB_BOX || (y1-y0+1)>AB_BOX) continue;
+    cands.push({x:sx/area, y:sy/area, area});
+  }
+  return cands;
+}
+
+/* Link candidates across frames. A track extends to whichever candidate best
+   matches where it was going; a track with no velocity yet accepts anything
+   within the gate. Three frames of consistent travel makes it a ball. */
+function abTrack(frames, opt){
+  const o=opt||{};
+  const gate=o.gate==null?AB_GATE:o.gate;
+  const minStep=o.minStep==null?AB_MINSTEP:o.minStep;
+  const minLen=o.minLen==null?AB_MINLEN:o.minLen;
+  let live=[];
+  const done=[];
+  for(let f=0;f<frames.length;f++){
+    const {t,cands}=frames[f];
+    const used=new Array(cands.length).fill(false);
+    const next=[];
+    for(const tr of live){
+      if(f-tr.lastFrame>2){ done.push(tr); continue; }     // lost it
+      const px = tr.vx!=null ? tr.x+tr.vx*(f-tr.lastFrame) : tr.x;
+      const py = tr.vy!=null ? tr.y+tr.vy*(f-tr.lastFrame) : tr.y;
+      let best=-1, bestd=gate;
+      for(let i=0;i<cands.length;i++){
+        if(used[i]) continue;
+        const d=Math.hypot(cands[i].x-px, cands[i].y-py);
+        if(d<bestd){ bestd=d; best=i; }
+      }
+      if(best<0){ next.push(tr); continue; }
+      const c=cands[best];
+      const step=Math.hypot(c.x-tr.x, c.y-tr.y);
+      used[best]=true;
+      tr.vx=c.x-tr.x; tr.vy=c.y-tr.y;
+      tr.x=c.x; tr.y=c.y; tr.lastFrame=f; tr.end=t;
+      if(step>=minStep) tr.moves++;
+      tr.n++;
+      next.push(tr);
+    }
+    for(let i=0;i<cands.length;i++){
+      if(used[i]) continue;
+      next.push({x:cands[i].x, y:cands[i].y, vx:null, vy:null,
+                 start:t, end:t, lastFrame:f, n:1, moves:0});
+    }
+    live=next;
+  }
+  done.push(...live);
+  /* a real one keeps moving; a flickering highlight on a fence does not */
+  const good=done.filter(tr=>tr.n>=minLen && tr.moves>=minLen-1);
+  good.sort((a,b)=>a.start-b.start);
+  const spans=[];
+  for(const tr of good){
+    const last=spans[spans.length-1];
+    if(last && tr.start<=last.end+0.30){ last.end=Math.max(last.end,tr.end); last.tracks++; }
+    else spans.push({start:tr.start, end:tr.end, tracks:1});
+  }
+  return {spans, tracks:good.length, considered:done.length};
+}
+
+/* A clip whose end has the ball still travelling past it stopped early: the
+   rally went on, the microphone did not. Push the end out to where the ball
+   actually stops — but never past the next clip, and never so far that the
+   ball span was really the next rally starting. Same in reverse at the start.
+
+   This is the half of the ball pass that answers the original complaint. The
+   bridging below only helps when there is a later clip to join to; this helps
+   when the point simply ran on into silence. */
+function abExtend(segs, spans, duration, opt){
+  const o=opt||{};
+  const near=o.near==null?0.8:o.near;
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  let moved=0;
+  for(let i=0;i<list.length;i++){
+    const s=list[i], prev=list[i-1], next=list[i+1];
+    const limitEnd=Math.min(duration, next?next.start:duration);
+    const limitStart=Math.max(0, prev?prev.end:0);
+    let end=s.end, start=s.start;
+    for(const sp of spans){
+      if(sp.start<=s.end+near && sp.end>s.end) end=Math.max(end, Math.min(sp.end, limitEnd));
+      if(sp.end>=s.start-near && sp.start<s.start) start=Math.min(start, Math.max(sp.start, limitStart));
+    }
+    if(end>s.end+0.15 || start<s.start-0.15){ moved++; }
+    s.end=end; s.start=start; s.dur=s.end-s.start;
+  }
+  return {segs:list, moved};
+}
+
+/* Two clips with the ball in play right through the gap between them are one
+   rally that the soundtrack lost the middle of. */
+function abBridge(segs, spans, opt){
+  const o=opt||{};
+  const cover=o.cover==null?0.7:o.cover;
+  if(!spans || !spans.length) return {segs, merged:0};
+  const list=segs.slice().sort((a,b)=>a.start-b.start);
+  const out=[]; let merged=0;
+  for(const s of list){
+    const last=out[out.length-1];
+    if(last){
+      const g0=last.end, g1=s.start;
+      /* Touching or overlapping is not a gap to argue about, it is one clip.
+         This case only arises after stretching — a clip pushed out to where
+         the ball stopped can reach the next one — and leaving it out meant a
+         rally came back as two clips that happened to abut, which is worse
+         than either joining or not joining them. */
+      if(g1<=g0+0.05){
+        last.end=Math.max(last.end,s.end);
+        last.dur=last.end-last.start;
+        last.hits+=s.hits;
+        last.peak=Math.max(last.peak,s.peak);
+        last.bridged=(last.bridged||0)+1;
+        merged++;
+        continue;
+      }
+      if(g1>g0){
+        let covered=0;
+        for(const sp of spans) covered+=Math.max(0, Math.min(g1,sp.end)-Math.max(g0,sp.start));
+        if(covered >= (g1-g0)*cover){
+          last.end=Math.max(last.end,s.end);
+          last.dur=last.end-last.start;
+          last.hits+=s.hits;
+          last.peak=Math.max(last.peak,s.peak);
+          last.bridged=(last.bridged||0)+1;
+          merged++;
+          continue;
+        }
+      }
+    }
+    out.push({...s});
+  }
+  out.forEach((s,i)=>{ s.n=i+1; });
+  return {segs:out, merged};
+}
+/* ==== AV-BALL-END ==== */
+
+/* The pass itself: every frame of the gaps, at playback speed, looking for
+   something ball-sized that keeps going. */
+async function avBallScan(url, gaps, opt){
+  const o=opt||{};
+  const onProgress=o.onProgress||function(){};
+  const cancelled=o.cancelled||function(){ return false; };
+
+  const el=document.createElement('video');
+  el.muted=true; el.defaultMuted=true; el.playsInline=true; el.preload='auto';
+  el.setAttribute('playsinline','');
+  el.style.cssText='position:fixed;left:-10000px;width:2px;height:2px;opacity:0';
+  document.body.appendChild(el);
+  el.src=url;
+  const cleanup=()=>{ try{ el.pause(); el.removeAttribute('src'); el.load(); el.remove(); }catch(e){} };
+
+  try{
+    await Promise.race([
+      new Promise(r=>el.addEventListener('loadedmetadata',r,{once:true})),
+      new Promise((_,j)=>setTimeout(()=>j(new Error('this video would not open')),15000))
+    ]);
+    const cv=document.createElement('canvas'); cv.width=AB_W; cv.height=AB_H;
+    const g=cv.getContext('2d',{willReadFrequently:true});
+    const A=new Uint8Array(AB_W*AB_H), B=new Uint8Array(AB_W*AB_H);
+    const mask=new Uint8Array(AB_W*AB_H), seen=new Uint8Array(AB_W*AB_H);
+    const stack=new Int32Array(1<<16);
+    const colA=new Float32Array(AB_W), colB=new Float32Array(AB_W);
+    const rowA=new Float32Array(AB_H), rowB=new Float32Array(AB_H);
+    const cands=[];
+
+    const prof=(src,col,row)=>{
+      col.fill(0);
+      for(let y=0;y<AB_H;y++){ let r=0; const o2=y*AB_W;
+        for(let x=0;x<AB_W;x++){ const v=src[o2+x]; r+=v; col[x]+=v; } row[y]=r; }
+    };
+    const shift=(a,b,max)=>{
+      let best=0,bestv=Infinity; const n=a.length, need=n*0.6;
+      for(let d=-max;d<=max;d++){
+        let sum=0,cnt=0;
+        const lo=Math.max(0,-d), hi=Math.min(n,n-d);
+        for(let i=lo;i<hi;i++){ sum+=Math.abs(a[i+d]-b[i]); cnt++; }
+        if(cnt<need) continue;
+        const v=sum/cnt; if(v<bestv){ bestv=v; best=d; }
+      }
+      return best;
+    };
+
+    const all=[];
+    let scanned=0, frames=0;
+    const total=gaps.reduce((a,w)=>a+(w.end-w.start),0)||1;
+
+    for(let wi=0; wi<gaps.length; wi++){
+      if(cancelled()) break;
+      const w=gaps[wi];
+      const seq=[];
+      let prev=null, useA=true;
+
+      await new Promise(r=>{
+        let over=false;
+        const fin=()=>{ if(over) return; over=true; el.removeEventListener('seeked',fin); r(); };
+        el.addEventListener('seeked',fin); setTimeout(fin,5000);
+        try{ el.currentTime=w.start; }catch(e){ fin(); }
+      });
+      if(cancelled()) break;
+      el.playbackRate=AB_RATE;
+
+      await new Promise(res=>{
+        let over=false;
+        const stop=()=>{ if(over) return; over=true; try{ el.pause(); }catch(e){} res(); };
+        const guard=setTimeout(stop, ((w.end-w.start)/AB_RATE)*1000*3+8000);
+        const step=(now,meta)=>{
+          if(over) return;
+          const t=meta&&isFinite(meta.mediaTime)?meta.mediaTime:el.currentTime;
+          if(cancelled() || t>=w.end){ clearTimeout(guard); stop(); return; }
+          const cur=useA?A:B;
+          g.drawImage(el,0,0,AB_W,AB_H);
+          const d=g.getImageData(0,0,AB_W,AB_H).data;
+          for(let i=0,p=0;i<cur.length;i++,p+=4) cur[i]=(d[p]*77+d[p+1]*150+d[p+2]*29)>>8;
+          if(prev){
+            prof(prev,colA,rowA); prof(cur,colB,rowB);
+            const dx=shift(colA,colB,6), dy=shift(rowA,rowB,6);
+            mask.fill(0);
+            for(let y=0;y<AB_H;y++){
+              const sy=y+dy; if(sy<0||sy>=AB_H) continue;
+              const o1=y*AB_W, o2=sy*AB_W;
+              for(let x=0;x<AB_W;x++){
+                const sx=x+dx; if(sx<0||sx>=AB_W) continue;
+                const diff=cur[o1+x]-prev[o2+sx];
+                if((diff<0?-diff:diff)>=AB_PIX) mask[o1+x]=1;
+              }
+            }
+            abBlobs(mask,AB_W,AB_H,seen,stack,cands);
+            seq.push({t, cands:cands.map(c=>({x:c.x,y:c.y,area:c.area}))});
+            frames++;
+          }
+          prev=cur; useA=!useA;
+          if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        };
+        if(el.requestVideoFrameCallback) el.requestVideoFrameCallback(step);
+        else { clearTimeout(guard); stop(); }
+        el.addEventListener('ended',()=>{ clearTimeout(guard); stop(); },{once:true});
+        const p=el.play();
+        if(p&&p.catch) p.catch(()=>{ clearTimeout(guard); stop(); });
+      });
+
+      const r=abTrack(seq, o);
+      all.push(...r.spans);
+      scanned+=(w.end-w.start);
+      onProgress(Math.min(1,scanned/total), frames);
+      await new Promise(r2=>setTimeout(r2,0));
+    }
+
+    cleanup();
+    all.sort((a,b)=>a.start-b.start);
+    const spans=[];
+    for(const s of all){
+      const last=spans[spans.length-1];
+      if(last && s.start<=last.end+0.05) last.end=Math.max(last.end,s.end);
+      else spans.push({...s});
+    }
+    return {spans, frames, seconds:total,
+            method: el.requestVideoFrameCallback?'frames':'unsupported',
+            cancelled:cancelled()};
+  }catch(e){ cleanup(); throw e; }
+}
+
 /* ---- state ------------------------------------------------------------- */
 let AC=null;   /* {file,url,kind,duration,onsets,tune,segs,idx,playing,video,timer,
                    busy,progress,error,note} */
@@ -13631,7 +14301,7 @@ async function acLoad(file){
          them — and so the picture cannot re-drop something they put back.
          how/hopMs/map: which way in this file took, and what its envelope
          frames mean — see BIG FILES. */
-      av:null, hits:null, user:{}, render:null,
+      av:null, hits:null, user:{}, render:null, ball:null, bridged:0,
       how:file.size>AC_MEM_BYTES?'stream':'memory', hopMs:AC_HOP_MS, map:null,
       stream:null, fellBack:null};
   renderAutoCut();
@@ -13693,6 +14363,20 @@ function acRecompute(){
   A.split=hits.split||null;
   A.hits=hits;
   A.segs=acSegments(acCluster(hits,A.tune), A.tune, A.duration);
+  /* Before anything judges the clips: two of them with the ball in play right
+     through the gap between them are one rally the soundtrack lost the middle
+     of. Joining them here rather than later means the picture pass and the
+     review list both see the rally, not the two halves. */
+  A.bridged=0; A.stretched=0;
+  if(A.ball && A.ball.spans && A.ball.spans.length){
+    /* stretch first, then join: a clip pushed out to where the ball really
+       stopped may now reach the next one, and then there is no gap left to
+       argue about */
+    const ex=abExtend(A.segs, A.ball.spans, A.duration);
+    A.segs=ex.segs; A.stretched=ex.moved;
+    const br=abBridge(A.segs, A.ball.spans);
+    A.segs=br.segs; A.bridged=br.merged;
+  }
   /* Order matters here. The picture pre-drops, and THEN a person's own
      keep/drop decisions are laid on top — so a clip somebody put back stays
      back through any number of retunes, and the picture never overrules a
@@ -14040,6 +14724,7 @@ function renderAutoCut(){
             exports runs against the video.</div>`}
 
       ${avBand()}
+      ${abBand()}
 
       <div class="ac-warn">
         <b>Give this a once-over before you trust it.</b> ${
@@ -15641,7 +16326,7 @@ function ptSyncPayload(){
   /* server is sent RESOLVED rather than as PT.server, so the overlay does not
      have to reimplement the tiebreak rotation to draw a dot */
   return {a,b,setsA,setsB,gamesA,gamesB,ptsA,ptsB,tiebreak,tbA,tbB,sets,winner,draw,startedAt,endedAt,streakSide,streakCount,acesA,acesB,
-          server:ptServerNow(), serveCourt:ptServeCourt()};
+          server:ptServerNow(), serveCourt:ptServeCourt(), serveEnd:ptServeEnd()};
 }
 function ptSyncBroadcastIfLive(){
   const S=PTStream;

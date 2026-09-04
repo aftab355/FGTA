@@ -33,7 +33,7 @@ const MIME={'.html':'text/html','.js':'text/javascript','.json':'application/jso
 
     const seen=[];
     const play=(side)=>{
-      seen.push({server:ptServerNow(), court:ptServeCourt(),
+      seen.push({server:ptServerNow(), court:ptServeCourt(), end:ptServeEnd(),
                  gA:PT.gamesA, gB:PT.gamesB, tb:!!PT.tiebreak,
                  tbA:PT.tbA, tbB:PT.tbB, sets:PT.sets.length});
       ptPoint(side);
@@ -53,7 +53,7 @@ const MIME={'.html':'text/html','.js':'text/javascript','.json':'application/jso
     ptUndo(); const mid=ptServerNow(); ptRedo(); const after=ptServerNow();
 
     return {seen, tbFirstServer, afterTb, undo:{before,mid,after},
-            rallies:PT.rallies.map(r=>({sv:r.sv, ct:r.ct, g:r.g, tb:r.tb||0})),
+            rallies:PT.rallies.map(r=>({sv:r.sv, ct:r.ct, en:r.en, g:r.g, tb:r.tb||0})),
             hasDot: /pt-serve/.test(document.getElementById('ptLive').innerHTML),
             payload: (typeof ptSyncPayload==='function') ? ptSyncPayload() : null};
   });
@@ -113,9 +113,33 @@ const MIME={'.html':'text/html','.js':'text/javascript','.json':'application/jso
   ok(out.afterTb.sets===1 && out.afterTb.setScore && out.afterTb.setScore.a===7,
      'the set closed 7-6', JSON.stringify(out.afterTb.setScore));
 
+  /* 5b. the serving END — what a camera on a tripod sees. Ends change after
+     every odd game while the server changes every game, so the serving end
+     moves in PAIRS. docs/scoring.md's whole reconstruction rests on that, so
+     it is pinned against the shipped tracker rather than assumed. */
+  const gameEnds=[];
+  {
+    let key=null;
+    for(const s of out.seen){
+      const k=s.sets+'/'+s.gA+'-'+s.gB+'/'+(s.tb?'tb':'g');
+      if(k!==key){ key=k; gameEnds.push({end:s.end, tb:s.tb}); }
+    }
+  }
+  const plainEnds=gameEnds.filter(g=>!g.tb).map(g=>g.end);
+  ok(plainEnds.length>6 && plainEnds.every(e=>e==='near'||e==='far'),
+     'every game has a serving end', plainEnds.length+' games');
+  const pairs=[];
+  for(let i=0;i<plainEnds.length;i+=2) pairs.push(plainEnds.slice(i,i+2));
+  ok(pairs.every(p=>p.length<2||p[0]===p[1]),
+     'the serving end holds for two games at a time', plainEnds.join(','));
+  const full=pairs.filter(p=>p.length===2);
+  ok(full.every((p,i)=>i===0||p[0]!==full[i-1][0]),
+     'and flips between pairs', plainEnds.join(','));
+
   // 5. every point carries it
-  ok(out.rallies.length>0 && out.rallies.every(r=>(r.sv==='a'||r.sv==='b') && (r.ct==='deuce'||r.ct==='ad')),
-     'every logged point records who served and from which court',
+  ok(out.rallies.length>0 && out.rallies.every(r=>(r.sv==='a'||r.sv==='b') &&
+       (r.ct==='deuce'||r.ct==='ad') && (r.en==='near'||r.en==='far')),
+     'every logged point records who served, from which court, and at which end',
      out.rallies.length+' points');
 
   // 6. undo/redo carries the server, because it lives on PT
