@@ -11680,7 +11680,13 @@ const AC_DEF={sens:1.2, maxGap:2.5, minHits:2, lead:1.5, tail:1.5, min:2,
    properties of the detector rather than of a court, and moving them is
    how you break it. */
 const AC_TUNE_UI=[
-  ['sens',    'Sensitivity', 0.2, 4,   0.1, 'lower finds more, and more junk'],
+  /* Named "Sensitivity" until it caused the obvious accident: the value is a
+     threshold — it multiplies the local standard deviation a peak has to beat
+     — so turning "sensitivity" UP made the detector LESS sensitive. Two of the
+     three places that explained it got the direction backwards as a result,
+     including the one a person reads while staring at a cut that found four
+     times too much. The stored key is unchanged; only the trap is gone. */
+  ['sens',    'Threshold',   0.2, 4,   0.1, 'higher is fussier, so fewer strikes'],
   ['maxGap',  'Max gap',     1,   6,   0.1, 'longest pause still inside one rally'],
   ['minHits', 'Min strikes', 1,   5,   1,   'fewer than this is not a rally'],
   ['lead',    'Lead-in',     0,   6,   0.5, 'kept before the first strike'],
@@ -13463,8 +13469,20 @@ function renderAutoCut(){
           : `It listens for struck balls, so a court in use next to yours sounds precisely like
              yours${A.kind==='video'?' until the picture is looked at as well.':', and there is no audio-only fix for that.'}`
         } Tap ✓ to drop anything that isn't your rally; only the ticked ones are exported.
-        <span class="ac-warn-n">${A.strikes} strikes detected, ${A.duration>0?Math.round(A.strikes/(A.duration/60)):0} per minute
-          — a real singles match runs about 15–25.${A.stream?`
+        <span class="ac-warn-n">${(()=>{
+          const per=A.duration>0?Math.round(A.strikes/(A.duration/60)):0;
+          const head=`${A.strikes} strikes detected, ${per} per minute — a real singles match runs about 15–25.`;
+          /* The number on its own was not enough. Somebody looking at 99 a
+             minute already knows it is wrong; what they need is the direction,
+             next to the figure, in the units of the slider they are about to
+             move. */
+          if(per>32) return head+` That is far too many — almost everything is being called a rally, so
+            the cut removes next to nothing. Raise Threshold under Detection settings until this lands
+            in the band, a few tenths at a time.`;
+          if(per>0 && per<8 && A.duration>60) return head+` That is too few — rallies are being missed.
+            Lower Threshold under Detection settings.`;
+          return head;
+        })()}${A.stream?`
           Played through at ${A.stream.rate}× in ${acEta(A.stream.wall)} rather than loaded, because the file
           is ${(A.file.size/1073741824).toFixed(1)} GB.${A.stream.stalls?` ${A.stream.stalls} stall${A.stream.stalls===1?'':'s'} on the way —
           corrected against the player's own clock.`:''}`:''}</span>
@@ -13480,8 +13498,9 @@ function renderAutoCut(){
         <summary>Detection settings</summary>
         <div class="rr-fold-b">
           <p>Re-running these is instant — the recording is only decoded once, and moving a
-             slider just regroups what was already heard. <b>Sensitivity</b> is the one to
-             reach for: too many clips means lower it, missed rallies means raise it.</p>
+             slider just regroups what was already heard. <b>Threshold</b> is the one to
+             reach for, and the strikes-per-minute figure above tells you which way:
+             too many strikes means raise it, missed rallies means lower it.</p>
           ${tuneRows}
           <button class="mini" onclick="acResetTune()">reset to defaults</button>
           ${A.kind==='video' && A.av && A.av.scan && !A.av.error ? `

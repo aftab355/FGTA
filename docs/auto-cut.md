@@ -106,17 +106,23 @@ app that could receive a video.
    exported. With a video you get a preview that plays the kept rallies
    back-to-back, skipping everything else.
 4. **Retune if needed** — instant, because the recording is only decoded
-   once. **Sensitivity** is the one to reach for: too many clips, lower it;
-   missed rallies, raise it.
+   once. **Threshold** is the one to reach for, and the strikes-per-minute
+   figure tells you which way: too many strikes, raise it; missed rallies,
+   lower it. (This slider was called *Sensitivity* and this instruction was
+   the wrong way round, which is the worst possible combination — the value
+   is a threshold, so turning it up makes the detector fussier, not keener.)
 5. **Export.**
 
 ### Strikes per minute
 
 The panel reports how many strikes it heard per minute. A real singles match
-runs about **15–25**. Far above that and it's hearing the next court or
-picking up noise — lower the sensitivity. Far below and it's missing the
-ball — raise it. It's the fastest way to tell whether a result is worth
-reviewing at all.
+runs about **15–25**. Far above that and it's hearing the next court, the
+wind, a hall's reverb or a crowd — raise Threshold. Far below and it's
+missing the ball — lower it. It's the fastest way to tell whether a result is
+worth reviewing at all, and it is worth doing *before* looking at the clip
+list: at four times the expected rate, strikes land closer together than
+`maxGap`, so every rally merges into its neighbours and you get a handful of
+enormous "rallies" several minutes long instead of a cut.
 
 ### Big files
 
