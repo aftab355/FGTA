@@ -260,8 +260,10 @@ If the target stack has React Query / SWR / RTK Query, this maps directly onto t
 --shadow: 0 24px 60px -28px rgba(0,0,0,.6) — soft, diffuse, no hard offset
 
 ### Typography
-- UI/body font: system font stack with **Outfit** as the fallback custom font — -apple-system, BlinkMacSystemFont, "Segoe UI", 'Outfit', sans-serif
-- Monospace/label font: **JetBrains Mono** — used for all uppercase labels, stats, scores, timestamps, badges, and anything data-like (contrast against the humanist body font)
+Three tokens, and **every `font-family` in the stylesheet reads one of them** — `--font-body`, `--font-mono`, `--font-display`. Nothing names a typeface directly any more, which is what lets the Admin Studio retype the whole site without a rule being rewritten. `--font-display` is unclaimed by default and resolves to the body face until something points at it.
+
+- UI/body font (`--font-body`): system font stack with **Outfit** as the fallback custom font — -apple-system, BlinkMacSystemFont, "Segoe UI", 'Outfit', sans-serif
+- Monospace/label font (`--font-mono`): **JetBrains Mono** — used for all uppercase labels, stats, scores, timestamps, badges, and anything data-like (contrast against the humanist body font)
 - Base body size 16px, line-height 1.6
 - Section labels: 11px, JetBrains Mono, 600 weight, 1.5px letter-spacing, uppercase, --muted
 - Row/player names: 15–16px, 600–700 weight, body font
@@ -269,6 +271,27 @@ If the target stack has React Query / SWR / RTK Query, this maps directly onto t
 
 ### Spacing
 No formal scale — panels use 14–20px internal padding, sections stack with margin-top: 34px (26px on mobile), grids use 8–14px gaps. Recreate with whatever spacing scale the target design system already has, snapping to the nearest step.
+
+## Admin Studio — changing the site without changing the code
+
+Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site** opens a docked editor, and **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
+
+What it reaches:
+
+- **Colours and shape** — every design token listed above, grouped and explained, with six complete palettes as starting points. Studio colours outrank the FF Cup skin and the live weather themes, both of which redeclare the palette on `<body>`.
+- **Typography** — the three font tokens, plus scale, line height, tracking and weight. Google families are fetched only once one is chosen.
+- **Copy** — click any element and retype it. Icons, counters and badges beside the words stay where they are.
+- **Layout** — rename, reorder and hide nav tabs; reorder and hide the sections of any view. The section list is discovered live, so a panel added to a view later shows up with no work.
+- **Per-element styling** — colour, size, weight, padding, radius, border and a free-text declaration box for one specific element.
+- **New content** — "blocks": admin-authored HTML anchored above, below or inside any element. Scripts, iframes and inline handlers are stripped.
+- **Features** — particle effects, sound, transitions, the intro, the HUD grid, weather theming, cursor tilt, the podium, stadium mode, the install prompt.
+- **Raw CSS** — applied last, so it wins.
+
+Edits are a **draft** until published: they live in your browser, survive a reload, and nobody else sees them. Every publish is versioned, recorded in `site_config_history`, and restorable from the History tab.
+
+The design that makes this survivable in an app that re-prints most of its UI from templates: **the config compiles to a stylesheet**, so hiding, reordering, restyling and theming cannot be clobbered by `innerHTML` and cost nothing per frame. Only copy and blocks are written into the DOM, and one coalesced `MutationObserver` re-lays those. The honest limits — a key addresses a *position* in the markup, so overrides on generated list rows follow the position rather than the content — are set out in the doc.
+
+Not running the migration is a supported way to run the site: the app notes the missing table and renders the built-in defaults, which is exactly how it looked before any of this existed.
 
 ## FF Cup event skin (temporary)
 
@@ -336,6 +359,8 @@ No custom illustrations or photography — avatars are generated from initials (
 - overlay.html — the OBS Browser Source that burns the live scoreboard into the broadcast. Standalone by design: it loads nothing from index.html, so an unrelated change to the app can never break the graphic that is going out live.
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
+- docs/admin-studio.md — the in-app site editor: what each tab reaches, how the config compiles to a stylesheet rather than into the DOM, and where the limits are.
+- docs/site-config.sql — the `site_config` + `site_config_history` tables the studio publishes to, their admin-only RLS, the realtime publication, and the one-transaction `publish_site_config()`.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
 - docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
