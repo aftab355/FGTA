@@ -34186,10 +34186,54 @@ const SITE = (function(){
      once on `change`, when the picker is done. */
   function edit(fn, quiet){
     if(!draft) draft = clone(published);
+    snapshot(quiet);
     fn(draft);
     try{ localStorage.setItem(LS_DRAFT, JSON.stringify(draft)); }catch(e){}
     applyAll();
     if(!quiet) paintPanel();
+    if(bar) placeBar();
+  }
+
+  /* ---------- undo ------------------------------------------------------
+     An editor you cannot back out of is an editor nobody experiments in,
+     and experimenting is the entire point of editing visually. So every
+     edit stacks the config as it was before it.
+
+     The coalescing rule matters more than it looks. Dragging a colour
+     swatch fires `input` on every frame and `change` once at the end, and
+     naively stacking all of those would mean forty presses of ⌘Z to undo
+     one drag. So a snapshot is taken only when the PREVIOUS edit was not
+     quiet — i.e. at the moment a continuous gesture starts — and the whole
+     gesture, closing `change` included, collapses to that one entry. */
+  let undoStack = [], redoStack = [], lastWasQuiet = false;
+  const UNDO_MAX = 80;
+
+  function snapshot(quiet){
+    if(!lastWasQuiet){
+      undoStack.push(clone(draft));
+      if(undoStack.length > UNDO_MAX) undoStack.shift();
+      redoStack.length = 0;
+    }
+    lastWasQuiet = !!quiet;
+  }
+
+  function undo(){
+    if(!undoStack.length) return toast("Nothing to undo");
+    redoStack.push(clone(draft || published));
+    draft = undoStack.pop();
+    lastWasQuiet = false;
+    afterTimeTravel();
+  }
+  function redo(){
+    if(!redoStack.length) return toast("Nothing to redo");
+    undoStack.push(clone(draft || published));
+    draft = redoStack.pop();
+    lastWasQuiet = false;
+    afterTimeTravel();
+  }
+  function afterTimeTravel(){
+    try{ localStorage.setItem(LS_DRAFT, JSON.stringify(draft)); }catch(e){}
+    applyAll(); paintPanel(); refreshSelectionUI();
   }
 
   /* ======================================================================
@@ -34223,6 +34267,57 @@ const SITE = (function(){
 
   function resolve(key){
     try{ return document.querySelector(key); }catch(e){ return null; }
+  }
+
+  /* ---------- what to CALL a thing -------------------------------------
+     "#topTabs>button:nth-of-type(4)" is the truth and it is useless to a
+     person deciding whether they clicked the right thing. The selector is
+     still there under Details for anyone who wants it; everywhere a human
+     reads — the hover chip, the toolbar, the inspector heading — gets a
+     name derived from what the element actually is on the page.
+
+     Ordered most-specific first, because the first plausible answer is
+     nearly always the best one: a tab knows it is a tab, a section is
+     named by its own heading, a button by its label. */
+  const ID_NAMES = {
+    board:"Standings table", podium:"Champion podium", feed:"Activity feed",
+    pendingSec:"Pending queue", chartSec:"Ratings chart", activitySec:"Live activity",
+    healthSec:"League health", adminToolsSec:"Admin tools", pastGameSec:"Add a past game",
+    scheduleMatchSec:"Schedule a match", topTabs:"Navigation bar", hudGrid:"Background grid",
+    loadScreen:"Load screen", allMatches:"Match archive", newTournSec:"New event"
+  };
+
+  function niceName(el){
+    if(!el || el.nodeType !== 1) return "";
+    const txt = (s) => (s || "").trim().replace(/\s+/g, " ");
+    const clip = (s, n) => txt(s).length > n ? txt(s).slice(0, n) + "…" : txt(s);
+
+    if(el === document.body) return "The whole page";
+    const view = el.getAttribute && el.getAttribute("data-view");
+    if(view) return "“" + clip(readText(el) || view, 22) + "” tab";
+    if(el.id && ID_NAMES[el.id]) return ID_NAMES[el.id];
+    if(/^view-/.test(el.id || "")) return clip(el.id.replace("view-", ""), 20) + " page";
+
+    const tag = el.tagName.toLowerCase();
+    if(/^h[1-6]$/.test(tag))   return "“" + clip(el.textContent, 26) + "” heading";
+    if(tag === "button")       return "“" + clip(el.textContent, 22) + "” button";
+    if(tag === "a")            return "“" + clip(el.textContent, 22) + "” link";
+    if(tag === "img")          return "Image";
+    if(tag === "input" || tag === "textarea") return "Input field";
+    if(tag === "select")       return "Dropdown";
+    if(tag === "svg" || tag === "canvas") return "Graphic";
+    if(tag === "fgta-block")   return "Your block";
+
+    /* a container is named by the first heading inside it — which is what a
+       person would call that part of the page anyway */
+    const h = el.querySelector("h1,h2,h3,h4,.sec-title");
+    if(h && txt(h.textContent)) return "“" + clip(h.textContent, 24) + "” section";
+
+    const own = txt(el.textContent);
+    if(!el.children.length && own) return "“" + clip(own, 26) + "” text";
+    if(el.children.length > 2 && own) return "Group · " + clip(own, 20);
+    if(own) return "“" + clip(own, 24) + "”";
+    return el.className ? "Block · " + String(el.className).split(" ")[0] : tag;
   }
 
   /* Is this element part of the page's furniture, or a row the app just
@@ -34663,6 +34758,9 @@ const SITE = (function(){
         try{ nodes = document.querySelectorAll(key); }catch(e){ return; }
         if(!nodes.length) return;
         nodes.forEach(el => {
+          /* never write into the element somebody is typing in — that would
+             move the caret out from under them on every keystroke */
+          if(el === inlineEditing || (inlineEditing && el.contains(inlineEditing))) return;
           if(!originals.has(el)) originals.set(el, readText(el));
           writeText(el, val);
         });
@@ -34849,6 +34947,9 @@ const SITE = (function(){
   }
   #studioPanel .sp-in{ display:block!important; width:100%!important }
   #studioPanel .sp-in.w{ width:112px!important }
+  #studioPanel input[type=range]{ width:auto!important; flex:1!important; height:18px!important;
+    padding:0!important; background:transparent!important }
+  #studioPanel details, #studioPanel summary{ display:block!important }
   #studioPanel .sp-sw{ display:block!important; width:36px!important; height:20px!important }
   #studioPanel input[type=color]{ width:34px!important; height:26px!important; padding:0!important }
 
@@ -34941,8 +35042,79 @@ const SITE = (function(){
   .sp-swatches{ display:flex; gap:5px; flex-wrap:wrap; margin-top:6px }
   .sp-swatch{ width:22px; height:22px; border-radius:6px; border:1px solid rgba(255,255,255,.25); cursor:pointer }
 
+  /* the selected thing, named in plain words at the top of the inspector */
+  .sp-sel{ padding:10px 12px; margin-bottom:14px; border-radius:var(--r-sm,12px);
+    background:var(--panel-2,#2c2650); border:1px solid var(--line-soft,rgba(255,255,255,.1)) }
+  .sp-selname{ font-size:13.5px; font-weight:700; color:var(--ink,#fff); margin-bottom:7px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .sp-selacts{ display:flex; gap:6px; flex-wrap:wrap }
+  .sp-dot{ color:var(--accent,#ff2d78); font-size:15px; line-height:0 }
+  .sp-b.sq{ min-width:32px; padding:7px 8px; font-size:14px }
+
+  .sp-row.wrap{ flex-wrap:wrap }
+  .sp-chips{ display:flex; gap:4px; flex-wrap:wrap }
+  .sp-chip{ padding:4px 9px; border-radius:var(--r-pill,999px); cursor:pointer; font-size:11px;
+    font-weight:600; background:transparent; color:var(--muted,#a29cc4);
+    border:1px solid var(--line,rgba(255,255,255,.16)) }
+  .sp-chip:hover{ color:var(--ink,#fff) }
+  .sp-chip.on{ background:var(--accent,#ff2d78); border-color:var(--accent,#ff2d78); color:#fff }
+
+  .sp-range{ flex:1; min-width:80px; accent-color:var(--accent,#ff2d78); cursor:pointer }
+  .sp-val{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important; font-size:10.5px;
+    color:var(--muted,#a29cc4); min-width:44px; text-align:right; flex:0 0 auto }
+
+  .sp-adv{ margin-top:6px; border-top:1px solid var(--line-soft,rgba(255,255,255,.08)); padding-top:10px }
+  .sp-adv summary{ cursor:pointer; font-size:11.5px; font-weight:600; color:var(--dim,#6e6795);
+    list-style:none; padding:4px 0 }
+  .sp-adv summary::-webkit-details-marker{ display:none }
+  .sp-adv summary::before{ content:"▸ " }
+  .sp-adv[open] summary::before{ content:"▾ " }
+  .sp-adv summary:hover{ color:var(--ink,#fff) }
+
+  /* ===== THE FLOATING TOOLBAR ===== */
+  #studioBar{
+    position:fixed; z-index:9450; display:none; align-items:center; gap:2px;
+    padding:4px 5px; border-radius:var(--r-pill,999px);
+    background:var(--panel-2,#2c2650); border:1px solid var(--line,rgba(255,255,255,.2));
+    box-shadow:0 14px 40px -14px rgba(0,0,0,.75)!important;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif!important;
+  }
+  #studioBar .sb-name{
+    font-size:11px; font-weight:600; color:var(--muted,#a29cc4);
+    padding:0 8px 0 5px; max-width:170px; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; border-right:1px solid var(--line-soft,rgba(255,255,255,.12)); margin-right:3px;
+  }
+  #studioBar .sb-b{
+    min-width:28px; height:28px; padding:0 6px; border:0; border-radius:var(--r-pill,999px);
+    background:transparent; color:var(--ink,#f2eefc); cursor:pointer;
+    font-size:13px; font-weight:700; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #studioBar .sb-b:hover{ background:var(--accent,#ff2d78); color:#fff }
+  #studioBar .sb-drag{ cursor:grab }
+  #studioBar.on-hide .sb-hide{ background:var(--accent,#ff2d78); color:#fff }
+  #studioBar .sb-color{
+    width:0; height:0; padding:0; border:0; opacity:0; position:absolute; pointer-events:none;
+  }
+  @media(max-width:700px){ #studioBar .sb-name{ display:none } }
+
+  /* the line that says where a dragged section will land */
+  #studioDrop{
+    position:fixed; z-index:9460; height:3px; display:none; pointer-events:none;
+    background:var(--accent-pop,#2ff2b3); border-radius:2px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 0 14px var(--accent-pop,#2ff2b3)!important;
+  }
+  html[data-fgta-drag], html[data-fgta-drag] *{ cursor:grabbing!important; user-select:none!important }
+
+  /* typing straight into the page */
+  .fgta-inline{
+    outline:2px solid var(--accent-pop,#2ff2b3)!important; outline-offset:2px;
+    border-radius:3px; cursor:text!important; caret-color:var(--accent-pop,#2ff2b3);
+  }
+
   /* what edit mode looks like from the page's side */
   html[data-fgta-pick] *{ cursor:crosshair!important }
+  html[data-fgta-pick] .fgta-inline, html[data-fgta-pick] .fgta-inline *{ cursor:text!important }
   #studioHi{ position:fixed; pointer-events:none; z-index:9400; border:2px solid var(--accent-pop,#2ff2b3);
     border-radius:4px; background:color-mix(in srgb, var(--accent-pop,#2ff2b3) 10%, transparent);
     display:none; transition:.06s }
@@ -34979,6 +35151,11 @@ const SITE = (function(){
     ensureUI();
     editing = true;
     document.documentElement.setAttribute("data-fgta-edit", "1");
+    /* Opening the editor and then having to arm it before anything responds
+       to a click is a step nobody expects. Edit mode means clicking edits;
+       the Pick toggle is there to turn that OFF when you need to navigate,
+       which is the unusual case. */
+    setPick(true);
     paintPanel();
   }
 
@@ -34988,7 +35165,10 @@ const SITE = (function(){
        nobody else can see is exactly the thing you forget you left on, so
        closing on one says so. */
     const pending = dirty() ? countChanges() : 0;
+    if(inlineEditing) commitInline();
     editing = false; setPick(false);
+    if(bar){ bar.remove(); bar = null; }
+    if(dropLine){ dropLine.remove(); dropLine = null; }
     document.documentElement.removeAttribute("data-fgta-edit");
     if(panel) panel.remove();
     [hi, selBox, tagEl].forEach(n => n && n.remove());
@@ -35010,31 +35190,120 @@ const SITE = (function(){
     if(picking){
       document.addEventListener("mousemove", onHover, true);
       document.addEventListener("click", onPick, true);
+      document.addEventListener("dblclick", onPickDbl, true);
     } else {
       document.removeEventListener("mousemove", onHover, true);
       document.removeEventListener("click", onPick, true);
+      document.removeEventListener("dblclick", onPickDbl, true);
+      if(inlineEditing) commitInline();
     }
     paintPanel();
   }
 
-  function inStudio(el){ return !!(el && el.closest && el.closest("#studioPanel")); }
+  /* the studio's own furniture is part of the page it edits, so every pick
+     handler has to know to keep its hands off it */
+  function inStudio(el){
+    return !!(el && el.closest && el.closest("#studioPanel,#studioBar,#studioDrop"));
+  }
 
   function onHover(e){
     const el = e.target;
-    if(!el || el.nodeType !== 1 || inStudio(el)) { hi.style.display = "none"; tagEl.style.display = "none"; return; }
-    box(hi, el);
-    const k = keyFor(el);
-    tagEl.textContent = k ? (k.length > 46 ? "…" + k.slice(-45) : k) : el.tagName.toLowerCase();
-    const r = el.getBoundingClientRect();
+    if(!el || el.nodeType !== 1 || inStudio(el) || el === inlineEditing){
+      hi.style.display = "none"; tagEl.style.display = "none"; return;
+    }
+    /* outline exactly what a click would select, not what is under the
+       pixel — an outline that does not match the result teaches the wrong
+       thing about where clicking lands */
+    const target = pickTarget(el);
+    /* the selection already has an outline and a toolbar naming it; drawing
+       the hover chip on top of that is two labels for one thing */
+    if(target === selected){ hi.style.display = "none"; tagEl.style.display = "none"; return; }
+    box(hi, target);
+    /* the chip says what the thing IS. The selector is still available under
+       Advanced in the inspector for anyone who wants the exact address. */
+    tagEl.textContent = niceName(target);
+    const r = target.getBoundingClientRect();
     tagEl.style.display = "block";
     tagEl.style.left = Math.max(2, r.left) + "px";
-    tagEl.style.top = Math.max(2, r.top - 17) + "px";
+    tagEl.style.top = Math.max(2, r.top - 19) + "px";
+  }
+
+  /* ---------- what a click should actually select ----------------------
+     The deepest node under the cursor is what a devtools inspector picks,
+     and picking it is the single biggest reason an editor feels like a
+     devtools inspector. Clicking a heading and being handed
+     `div > div > span` is not editing a page, it is reading a tree.
+
+     So a click resolves to the nearest thing a person would NAME — a
+     button, a heading, an image, a section, a panel, a run of text — and
+     anonymous wrappers are walked past on the way. Clicking again inside
+     something already selected drills one level in, so the whole tree is
+     still reachable; it just is not where you start. */
+  const NAMEABLE_TAGS = /^(button|a|h1|h2|h3|h4|h5|h6|img|svg|canvas|input|select|textarea|label|li|td|th|fgta-block)$/;
+  const NAMEABLE_CLASS = /\b(panel|card|sec|board|pod|row|stat|block|hero|queue|chip|btn|tile|mount|item)\b/i;
+
+  function nameable(el){
+    if(!el || el.nodeType !== 1 || el === document.body) return false;
+    if(el.id) return true;
+    if(el.hasAttribute("data-view")) return true;
+    if(NAMEABLE_TAGS.test(el.tagName.toLowerCase())) return true;
+    /* a direct child of a view IS a section of that page, whatever it is
+       made of — this is the level the Layout tab already works at */
+    const p = el.parentElement;
+    if(p && /^view-/.test(p.id || "")) return true;
+    if(NAMEABLE_CLASS.test(el.className || "")) return true;
+    /* a leaf that carries words is a thing you can point at and rename */
+    if(!el.children.length && (el.textContent || "").trim()) return true;
+    return false;
+  }
+
+  function pickTarget(raw){
+    if(!raw || raw === document.body) return raw;
+
+    /* already inside the selection: step exactly one level down towards
+       what was clicked, so repeated clicks walk in rather than jumping */
+    if(selected && selected !== raw && selected.contains(raw)){
+      let cur = raw;
+      while(cur.parentElement && cur.parentElement !== selected) cur = cur.parentElement;
+      return cur;
+    }
+
+    let cur = raw;
+    for(let i = 0; i < 10 && cur && cur !== document.body; i++){
+      if(nameable(cur)) return cur;
+      cur = cur.parentElement;
+    }
+    return raw;
   }
 
   function onPick(e){
     if(inStudio(e.target)) return;
+
+    /* Clicks landing inside the text somebody is typing into.
+       A real mouse click here is the caret being placed and must be left
+       alone. A SYNTHESIZED one is a different animal: a focused <button>
+       activates on Space and Enter, and browsers deliver that as a click
+       with detail 0 — so typing a space into an editable nav tab was
+       firing the tab's own onclick and navigating the page out from under
+       the edit. Those never reach the app. */
+    if(inlineEditing && (e.target === inlineEditing || inlineEditing.contains(e.target))){
+      if(e.detail === 0){ e.preventDefault(); e.stopPropagation(); }
+      return;
+    }
+
     e.preventDefault(); e.stopPropagation();
-    select(e.target);
+    select(pickTarget(e.target));
+  }
+
+  /* double-click goes straight to typing, which is what a double-click on
+     text means everywhere else */
+  function onPickDbl(e){
+    if(inStudio(e.target)) return;
+    if(inlineEditing && (e.target === inlineEditing || inlineEditing.contains(e.target))) return;
+    e.preventDefault(); e.stopPropagation();
+    const t = pickTarget(e.target);
+    select(t);
+    if(textHost(t)) startInline();
   }
 
   function box(node, el){
@@ -35045,10 +35314,270 @@ const SITE = (function(){
   }
 
   function select(el){
+    if(inlineEditing) commitInline();
     selected = el;
     tab = "select";
-    if(selBox && el) box(selBox, el);
+    refreshSelectionUI();
     paintPanel();
+  }
+
+  function refreshSelectionUI(){
+    if(!selBox) return;
+    if(selected && selected.isConnected){ box(selBox, selected); placeBar(); }
+    else { selBox.style.display = "none"; if(bar) bar.style.display = "none"; }
+  }
+
+  /* ======================================================================
+     THE FLOATING TOOLBAR — the difference between editing and inspecting
+     ======================================================================
+     A sidebar full of properties is a debugger. What makes a visual editor
+     feel like one is that the controls for the thing you just clicked are
+     ON the thing you just clicked: type here, bigger, bolder, this colour,
+     drag it there. So the six or seven actions that account for nearly
+     every edit live in a pill floating beside the selection, and the panel
+     becomes the place you go for the long tail rather than the place you
+     have to go for everything. */
+  let bar = null, inlineEditing = null, inlineOriginal = "";
+
+  const BAR_BUTTONS = [
+    ["text",  "✎",  "Edit text in place (or just double-click it)"],
+    ["minus", "A−", "Smaller"],
+    ["plus",  "A+", "Bigger"],
+    ["bold",  "B",  "Bold"],
+    ["color", "◑",  "Colour"],
+    ["drag",  "⠿",  "Drag to reorder"],
+    ["hide",  "◎",  "Hide this"],
+    ["up",    "↑",  "Select the thing around it"],
+    ["more",  "⋯",  "All options"]
+  ];
+
+  function ensureBar(){
+    if(bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "studioBar";
+    bar.innerHTML =
+      `<span class="sb-name"></span>` +
+      BAR_BUTTONS.map(([id, glyph, title]) =>
+        `<button class="sb-b sb-${id}" data-bar="${id}" title="${title}">${glyph}</button>`).join("") +
+      `<input type="color" class="sb-color" tabindex="-1" aria-label="Colour">`;
+    document.body.appendChild(bar);
+
+    /* the toolbar sits inside the page it edits, so every pointer event on
+       it has to be kept away from the pick handlers below */
+    ["mousemove","mousedown","mouseup"].forEach(t =>
+      bar.addEventListener(t, e => e.stopPropagation(), true));
+
+    bar.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      const b = e.target.closest("[data-bar]");
+      if(b) barAction(b.getAttribute("data-bar"), b);
+    }, true);
+
+    const swatch = bar.querySelector(".sb-color");
+    swatch.oninput  = () => setDecl("color", swatch.value, true);
+    swatch.onchange = () => setDecl("color", swatch.value);
+
+    bar.querySelector(".sb-drag").addEventListener("pointerdown", startDrag, true);
+    return bar;
+  }
+
+  function placeBar(){
+    if(!editing || !selected || !selected.isConnected){ if(bar) bar.style.display = "none"; return; }
+    const b = ensureBar();
+    b.querySelector(".sb-name").textContent = niceName(selected);
+    b.querySelector(".sb-text").style.display = textHost(selected) ? "" : "none";
+    const parent = selected.parentElement;
+    b.querySelector(".sb-drag").style.display =
+      (parent && parent.children.length > 1 && keyFor(parent)) ? "" : "none";
+    b.classList.toggle("on-hide", !!(cfg().hidden || {})[keyFor(selected) || ""]);
+    b.style.display = "flex";
+
+    const r = selected.getBoundingClientRect();
+    const bw = b.offsetWidth, bh = b.offsetHeight;
+    /* above the selection by preference, below when it is against the top
+       of the viewport, and always clamped inside it — a toolbar you have to
+       scroll to reach is worse than no toolbar */
+    let top = r.top - bh - 8;
+    if(top < 6) top = Math.min(r.bottom + 8, window.innerHeight - bh - 6);
+    let left = r.left + r.width / 2 - bw / 2;
+    left = Math.max(6, Math.min(left, window.innerWidth - bw - 6));
+    b.style.top = Math.max(6, top) + "px";
+    b.style.left = left + "px";
+  }
+
+  function barAction(name){
+    const el = selected; if(!el) return;
+    switch(name){
+      case "text":  return startInline();
+      case "minus": return nudgeSize(-1);
+      case "plus":  return nudgeSize(1);
+      case "bold": {
+        const d = parseDecl((cfg().elcss || {})[keyFor(el)]);
+        return setDecl("font-weight", String(Number(d["font-weight"]) >= 700 ? "" : 700));
+      }
+      case "color": {
+        const sw = bar.querySelector(".sb-color");
+        const cur = getComputedStyle(el).color;
+        sw.value = rgbToHex(cur) || "#ffffff";
+        return sw.click();
+      }
+      case "hide": {
+        const k = keyFor(el); if(!k) return;
+        return edit(c => { c.hidden = c.hidden || {}; if(c.hidden[k]) delete c.hidden[k]; else c.hidden[k] = true; });
+      }
+      case "up":
+        if(el.parentElement && el.parentElement !== document.body) select(el.parentElement);
+        return;
+      case "more":
+        tab = "select"; return paintPanel();
+    }
+  }
+
+  function rgbToHex(s){
+    const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || "");
+    if(!m) return null;
+    return "#" + [1,2,3].map(i => (+m[i]).toString(16).padStart(2, "0")).join("");
+  }
+
+  /* A− / A+ step the rendered size rather than asking for a number: the
+     admin wants "a bit bigger", and reading the computed size means the
+     first press starts from what is actually on screen. */
+  function nudgeSize(dir){
+    const el = selected; if(!el) return;
+    const d = parseDecl((cfg().elcss || {})[keyFor(el)]);
+    const now = parseFloat(d["font-size"]) || parseFloat(getComputedStyle(el).fontSize) || 16;
+    const next = Math.max(8, Math.min(96, Math.round((now + dir * (now < 20 ? 1 : 2)) * 10) / 10));
+    setDecl("font-size", next + "px");
+  }
+
+  /* ---------- typing straight into the page ----------------------------
+     Double-click and the words become editable where they are, with a real
+     caret in the real page. Committing writes the same `text` override the
+     sidebar field writes — this is a different way in, not a different
+     feature. */
+  function startInline(){
+    const el = selected && textHost(selected);
+    if(!el) return toast("That element has no text of its own");
+    if(inlineEditing) commitInline();
+    inlineEditing = el;
+    inlineOriginal = readText(selected);
+    el.setAttribute("contenteditable", "plaintext-only");
+    el.classList.add("fgta-inline");
+    el.focus();
+    try{
+      const r = document.createRange(); r.selectNodeContents(el);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    }catch(e){}
+    el.addEventListener("blur", commitInline, {once:true});
+    el.addEventListener("keydown", inlineKeys);
+    toast("Type to edit · Enter to keep · Esc to cancel");
+  }
+
+  function inlineKeys(e){
+    if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); commitInline(); }
+    else if(e.key === "Escape"){ e.preventDefault(); cancelInline(); }
+    e.stopPropagation();
+  }
+
+  function endInline(){
+    const el = inlineEditing;
+    inlineEditing = null;
+    if(!el) return null;
+    el.removeEventListener("keydown", inlineKeys);
+    el.removeAttribute("contenteditable");
+    el.classList.remove("fgta-inline");
+    return el;
+  }
+
+  function commitInline(){
+    const el = inlineEditing; if(!el) return;
+    const val = (el.textContent || "").trim();
+    endInline();
+    const k = keyFor(selected); if(!k) return;
+    if(val === inlineOriginal) return;
+    edit(c => { c.text = c.text || {}; if(val) c.text[k] = val; else delete c.text[k]; });
+  }
+
+  function cancelInline(){
+    const el = endInline(); if(!el) return;
+    applyingDOM = true;
+    try{ writeText(el, inlineOriginal); } finally { applyingDOM = false; }
+    paintPanel();
+  }
+
+  /* ---------- drag a section to reorder --------------------------------
+     Dragging starts from the toolbar's grip, never from the element, so a
+     plain click still selects and a slip of the hand never rearranges the
+     page. What it commits is the same permutation-of-original-positions the
+     ↑/↓ buttons write, so the CSS-only ordering underneath is unchanged —
+     this is a nicer way to say the same thing. */
+  let dragState = null;
+
+  function startDrag(e){
+    const el = selected, parent = el && el.parentElement;
+    if(!parent) return;
+    const ck = keyFor(parent); if(!ck) return;
+    e.preventDefault(); e.stopPropagation();
+
+    const sibs = Array.prototype.filter.call(parent.children,
+      n => n.id !== "studioPanel" && n.id !== "studioBar" && getComputedStyle(n).display !== "none");
+    dragState = {ck, parent, sibs, target: null};
+    document.documentElement.setAttribute("data-fgta-drag", "1");
+    if(!dropLine){ dropLine = document.createElement("div"); dropLine.id = "studioDrop"; document.body.appendChild(dropLine); }
+    dropLine.style.display = "block";
+    window.addEventListener("pointermove", onDrag, true);
+    window.addEventListener("pointerup", endDrag, true);
+  }
+
+  let dropLine = null;
+
+  function onDrag(e){
+    if(!dragState) return;
+    e.preventDefault();
+    /* the gap whose midpoint is nearest the pointer — measured live so it
+       is correct even while the page scrolls under the drag */
+    let best = null, bestDist = Infinity;
+    dragState.sibs.forEach((n, i) => {
+      const r = n.getBoundingClientRect();
+      [[r.top, i], [r.bottom, i + 1]].forEach(([y, idx]) => {
+        const d = Math.abs(e.clientY - y);
+        if(d < bestDist){ bestDist = d; best = {y, idx, x: r.left, w: r.width}; }
+      });
+    });
+    if(!best) return;
+    dragState.target = best.idx;
+    dropLine.style.top = (best.y - 1) + "px";
+    dropLine.style.left = best.x + "px";
+    dropLine.style.width = best.w + "px";
+  }
+
+  function endDrag(){
+    window.removeEventListener("pointermove", onDrag, true);
+    window.removeEventListener("pointerup", endDrag, true);
+    document.documentElement.removeAttribute("data-fgta-drag");
+    if(dropLine) dropLine.style.display = "none";
+    const st = dragState; dragState = null;
+    if(!st || st.target == null) return;
+
+    const parent = st.parent;
+    const kids = Array.prototype.filter.call(parent.children,
+      n => n.id !== "studioPanel" && n.id !== "studioBar");
+    const domIndex = kids.indexOf(selected);
+    if(domIndex < 0) return;
+
+    const from = visualIndexOf(st.ck, domIndex);
+    /* the drop index counts gaps, so dropping below your own position lands
+       one slot high once you are lifted out of the list */
+    let to = st.target; if(to > from) to--;
+    if(to === from) return;
+
+    edit(c => {
+      const seq = seedOrder(c, st.ck, kids.length);
+      const [moved] = seq.splice(from, 1);
+      seq.splice(to, 0, moved);
+      if(seq.every((v, i) => v === i + 1)) delete c.order[st.ck];
+    });
+    refreshSelectionUI();
   }
 
   /* ---------- panel rendering ---------- */
@@ -35066,7 +35595,9 @@ const SITE = (function(){
         <button class="sp-x" data-act="close" title="Close">✕</button>
       </div>
       <div class="sp-bar">
-        <button class="sp-b ${picking ? "on" : ""}" data-act="pick">${picking ? "◉ Picking" : "◎ Pick element"}</button>
+        <button class="sp-b ${picking ? "on" : ""}" data-act="pick">${picking ? "◉ Pick" : "◎ Pick"}</button>
+        <button class="sp-b sq" data-act="undo" ${undoStack.length ? "" : "disabled"} title="Undo (⌘Z)">↶</button>
+        <button class="sp-b sq" data-act="redo" ${redoStack.length ? "" : "disabled"} title="Redo (⇧⌘Z)">↷</button>
         <button class="sp-b pri" data-act="publish" ${dirty() ? "" : "disabled"}>Publish</button>
         <button class="sp-b" data-act="discard" ${dirty() ? "" : "disabled"}>Discard</button>
         ${dirty() ? `<span class="sp-dirty">${n} unpublished</span>` : ""}
@@ -35109,18 +35640,24 @@ const SITE = (function(){
   }
 
   /* ---------- tab: element inspector ---------- */
+  /* Sliders and swatches wherever a number or a colour is wanted, because
+     "a bit bigger" is a drag, not a typed measurement — and because a field
+     that wants "12px 16px" is a field that assumes you write CSS. Each
+     slider shows its live computed value as its starting point, so the
+     first nudge continues from what is on screen rather than from zero.
+     The typed box is still there for anyone who wants to be exact. */
   const QUICK = [
     ["color",          "Text colour",  "color"],
     ["background",     "Background",   "color"],
-    ["font-size",      "Font size",    "text",  "e.g. 18px"],
-    ["font-weight",    "Weight",       "select", ["", "300","400","500","600","700","800","900"]],
-    ["text-align",     "Align",        "select", ["", "left","center","right"]],
-    ["text-transform", "Case",         "select", ["", "none","uppercase","lowercase","capitalize"]],
-    ["padding",        "Padding",      "text",  "e.g. 12px 16px"],
-    ["margin",         "Margin",       "text",  "e.g. 0 0 20px"],
-    ["border-radius",  "Radius",       "text",  "e.g. 18px"],
-    ["border",         "Border",       "text",  "e.g. 1px solid #fff"],
-    ["opacity",        "Opacity",      "text",  "0 to 1"]
+    ["font-size",      "Size",         "range", {min:8,  max:72,  step:1,   unit:"px"}],
+    ["font-weight",    "Weight",       "chips", ["", "400","500","600","700","800"]],
+    ["text-align",     "Align",        "chips", ["", "left","center","right"]],
+    ["text-transform", "Case",         "chips", ["", "none","uppercase","capitalize"]],
+    ["padding",        "Padding",      "range", {min:0,  max:64,  step:1,   unit:"px"}],
+    ["margin",         "Outer space",  "range", {min:0,  max:80,  step:1,   unit:"px"}],
+    ["border-radius",  "Corners",      "range", {min:0,  max:60,  step:1,   unit:"px"}],
+    ["opacity",        "Opacity",      "range", {min:0,  max:1,   step:0.05, unit:""}],
+    ["border",         "Border",       "text",  "e.g. 1px solid #fff"]
   ];
 
   function parseDecl(css){
@@ -35137,8 +35674,12 @@ const SITE = (function(){
 
   function tabSelect(){
     if(!selected || !selected.isConnected){
-      return `<div class="sp-empty">Turn on <b>Pick element</b>, then click anything on the page — a heading, a button, a whole panel — to edit its words, its colour, its size, or to hide it.
-        <br><br>Pick mode off lets you navigate the site normally with this panel open, so you can go to another tab and carry on editing there.</div>`;
+      return `<div class="sp-empty">
+        <b>Click anything on the page.</b> A heading, a button, a whole panel — a toolbar appears on it with the things you'll want most, and everything else lands here.
+        <br><br><b>Double-click text</b> to type straight into it.
+        <br><b>⌘Z</b> undoes anything.
+        <br>Grab <b>⠿</b> on the toolbar to drag a section somewhere else.
+        <br><br>Need to move around the site instead? Turn <b>Pick</b> off in the bar above and it behaves normally with this panel still open.</div>`;
     }
     const key = keyFor(selected);
     if(!key) return `<div class="sp-empty">That element has no stable address — nothing this studio saves would find it again. Try selecting its parent.</div>`;
@@ -35154,67 +35695,106 @@ const SITE = (function(){
     const canText = !!textHost(selected);
 
     return `
-      <div class="sp-key">${esc2(key)}</div>
-      ${warn ? `<div class="sp-warn">${esc2(warn)}</div>` : ""}
-      <div class="sp-group">
-        <div class="sp-gh">Selection</div>
-        <div class="sp-row">
-          <button class="sp-mini" data-act="sel-parent">↑ Select parent</button>
-          <button class="sp-mini" data-act="sel-scroll">Scroll to</button>
-          <button class="sp-mini" data-act="sel-clear">Clear all edits</button>
+      <div class="sp-sel">
+        <div class="sp-selname">${esc2(niceName(selected))}</div>
+        <div class="sp-selacts">
+          <button class="sp-mini" data-act="sel-parent">↑ Around it</button>
+          <button class="sp-mini" data-act="sel-scroll">Show me</button>
+          <button class="sp-mini" data-act="sel-clear">Undo my edits</button>
         </div>
       </div>
+      ${warn ? `<div class="sp-warn">${esc2(warn)}</div>` : ""}
 
       ${canText ? `
       <div class="sp-group">
         <div class="sp-gh">Words</div>
-        <div class="sp-note">Currently: “${esc2(cur.slice(0, 90))}${cur.length > 90 ? "…" : ""}”</div>
-        <input class="sp-in" data-act="text" placeholder="Leave empty to keep the original" value="${esc2(override == null ? "" : override)}">
+        <input class="sp-in" data-act="text" placeholder="${esc2(cur.slice(0, 60))}" value="${esc2(override == null ? "" : override)}">
+        <div class="sp-note" style="margin-top:6px">Or just double-click it on the page and type. Empty here puts the original back.</div>
       </div>` : `
       <div class="sp-group"><div class="sp-gh">Words</div>
-        <div class="sp-empty">This element is a container — its text lives in its children. Select one of them to retype it.</div>
+        <div class="sp-empty">This is a container — its text lives in the things inside it. Click one of those.</div>
       </div>`}
-
-      <div class="sp-group">
-        <div class="sp-gh">Visibility & position</div>
-        <div class="sp-row"><label>Hidden for everyone</label>
-          <div class="sp-sw ${isHidden ? "on" : ""}" data-act="hide"></div></div>
-        ${canMove ? `<div class="sp-row">
-          <button class="sp-mini" data-act="move-up">↑ Move up</button>
-          <button class="sp-mini" data-act="move-down">↓ Move down</button>
-          <button class="sp-mini" data-act="move-reset">Reset order</button>
-        </div>
-        <div class="sp-note" style="margin-top:6px">Moves this element among its siblings. The container becomes a vertical stack, which can loosen spacing slightly.</div>`
-        : `<div class="sp-empty">Nothing to reorder — this element has no siblings.</div>`}
-      </div>
 
       <div class="sp-group">
         <div class="sp-gh">Style</div>
         ${QUICK.map(q => quickRow(q, decl)).join("")}
-        <div class="sp-gh" style="margin-top:12px">Anything else</div>
+      </div>
+
+      <div class="sp-group">
+        <div class="sp-gh">Show & place</div>
+        <div class="sp-row"><label>Hidden for everyone</label>
+          <div class="sp-sw ${isHidden ? "on" : ""}" data-act="hide"></div></div>
+        ${canMove ? `<div class="sp-row">
+          <button class="sp-mini" data-act="move-up">↑ Up</button>
+          <button class="sp-mini" data-act="move-down">↓ Down</button>
+          <button class="sp-mini" data-act="move-reset">Reset</button>
+        </div>
+        <div class="sp-note" style="margin-top:6px">Or grab <b>⠿</b> on the floating toolbar and drag it where you want.</div>`
+        : `<div class="sp-empty">Nothing to reorder — this has no neighbours.</div>`}
+      </div>
+
+      <details class="sp-adv">
+        <summary>Advanced</summary>
+        <div class="sp-gh" style="margin-top:10px">Any other CSS for this one element</div>
         <input class="sp-in mono" data-act="elcss-raw" placeholder="letter-spacing:.05em;box-shadow:none"
                value="${esc2(joinDecl(omit(decl, QUICK.map(q => q[0]))))}">
-      </div>`;
+        <div class="sp-gh" style="margin-top:12px">Its address in the page</div>
+        <div class="sp-key">${esc2(key)}</div>
+      </details>`;
   }
 
   function omit(o, keys){ const r = {}; Object.keys(o).forEach(k => { if(keys.indexOf(k) < 0) r[k] = o[k]; }); return r; }
 
+  /* what the page is actually rendering for this property right now — the
+     honest starting point for a slider, and what the swatch should open on */
+  /* `background` is a shorthand, and asking for it computed hands back the
+     whole stack — image, position, repeat — which parses to black and made
+     every background swatch open on #000. The colour swatch wants the
+     colour longhand. */
+  const LIVE_ALIAS = {background:"background-color"};
+
+  function liveValue(prop){
+    if(!selected || !selected.isConnected) return "";
+    try{ return getComputedStyle(selected).getPropertyValue(LIVE_ALIAS[prop] || prop).trim(); }
+    catch(e){ return ""; }
+  }
+
   function quickRow(q, decl){
     const [prop, label, kind, extra] = q;
     const v = decl[prop] || "";
+    const set = v !== "";
+
     if(kind === "color"){
-      return `<div class="sp-row"><label>${label}</label>
-        <input type="color" data-css="${prop}" value="${/^#[0-9a-f]{6}$/i.test(v) ? v : "#ffffff"}">
-        <input class="sp-in w mono" data-css-text="${prop}" value="${esc2(v)}" placeholder="inherit"></div>`;
+      const live = rgbToHex(liveValue(prop)) || "#888888";
+      const hex = /^#[0-9a-f]{6}$/i.test(v) ? v : live;
+      return `<div class="sp-row"><label>${label}${set ? dot() : ""}</label>
+        <input type="color" data-css="${prop}" value="${hex}">
+        <button class="sp-mini" data-clear="${prop}" title="Back to the theme's colour">↺</button></div>`;
     }
-    if(kind === "select"){
-      return `<div class="sp-row"><label>${label}</label>
-        <select class="sp-in w" data-css-text="${prop}">${extra.map(o =>
-          `<option value="${o}" ${o === v ? "selected" : ""}>${o || "—"}</option>`).join("")}</select></div>`;
+
+    if(kind === "chips"){
+      return `<div class="sp-row wrap"><label>${label}${set ? dot() : ""}</label>
+        <div class="sp-chips">${extra.map(o =>
+          `<button class="sp-chip ${o === v ? "on" : ""}" data-css-set="${prop}" data-val="${o}">${
+            o === "" ? "auto" : o}</button>`).join("")}</div></div>`;
     }
-    return `<div class="sp-row"><label>${label}</label>
+
+    if(kind === "range"){
+      const {min, max, step, unit} = extra;
+      const now = v !== "" ? parseFloat(v) : parseFloat(liveValue(prop));
+      const val = isFinite(now) ? Math.max(min, Math.min(max, now)) : min;
+      return `<div class="sp-row"><label>${label}${set ? dot() : ""}</label>
+        <input type="range" class="sp-range" data-css-range="${prop}" data-unit="${unit}"
+               min="${min}" max="${max}" step="${step}" value="${val}">
+        <span class="sp-val">${set ? esc2(v) : Math.round(val * 100) / 100 + unit}</span>
+        <button class="sp-mini" data-clear="${prop}" title="Back to the design's own value">↺</button></div>`;
+    }
+
+    return `<div class="sp-row"><label>${label}${set ? dot() : ""}</label>
       <input class="sp-in w mono" data-css-text="${prop}" value="${esc2(v)}" placeholder="${esc2(extra || "")}"></div>`;
   }
+
+  const dot = () => ' <span class="sp-dot" title="You changed this">•</span>';
 
   /* ---------- tab: theme ---------- */
   function tabTheme(){
@@ -35521,6 +36101,24 @@ const SITE = (function(){
       i.onchange = () => setDecl(i.getAttribute("data-css"), i.value);
     });
     panel.querySelectorAll("[data-css-text]").forEach(i => i.onchange = () => setDecl(i.getAttribute("data-css-text"), i.value));
+
+    /* sliders: live as you drag (quiet, so the panel does not rebuild under
+       your thumb), committed once on release */
+    panel.querySelectorAll("[data-css-range]").forEach(i => {
+      const prop = i.getAttribute("data-css-range"), unit = i.getAttribute("data-unit") || "";
+      const readout = i.parentElement.querySelector(".sp-val");
+      const val = () => i.value + unit;
+      i.oninput  = () => { if(readout) readout.textContent = val(); setDecl(prop, val(), true); };
+      i.onchange = () => setDecl(prop, val());
+    });
+    panel.querySelectorAll("[data-css-set]").forEach(b => b.onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      setDecl(b.getAttribute("data-css-set"), b.getAttribute("data-val"));
+    });
+    panel.querySelectorAll("[data-clear]").forEach(b => b.onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      setDecl(b.getAttribute("data-clear"), "");
+    });
     panel.querySelectorAll("[data-type]").forEach(i => i.onchange = () => setType(i.getAttribute("data-type"), i.value));
     panel.querySelectorAll("[data-meta]").forEach(i => i.onchange = () => edit(c => {
       c.meta = c.meta || {};
@@ -35660,6 +36258,8 @@ const SITE = (function(){
     switch(name){
       case "close":    return exitEdit();
       case "pick":     return setPick(!picking);
+      case "undo":     return undo();
+      case "redo":     return redo();
       case "publish":  return publish(prompt("Optional note for the history log (what did you change?)") || null);
       case "discard":  if(confirm("Throw away every unpublished change?")) discard(); return;
 
@@ -35798,16 +36398,26 @@ const SITE = (function(){
 
   /* keep the selection outline glued to the element as the page scrolls or
      the layout shifts under it */
-  window.addEventListener("scroll", () => {
-    if(selected && selected.isConnected && selBox && editing) box(selBox, selected);
-    else if(selBox) selBox.style.display = "none";
-  }, true);
-  window.addEventListener("resize", () => { if(selected && selBox && editing) box(selBox, selected); });
+  window.addEventListener("scroll", () => { if(editing) refreshSelectionUI(); }, true);
+  window.addEventListener("resize", () => { if(editing) refreshSelectionUI(); });
 
-  /* Esc leaves pick mode first and the studio second, so the reflex press
-     after a misclick does not close everything */
   window.addEventListener("keydown", e => {
-    if(e.key !== "Escape" || !editing) return;
+    if(!editing) return;
+
+    /* ⌘Z / Ctrl+Z anywhere in the app, because that is where the hand goes.
+       Not while typing into the panel's own fields or into the page — there
+       the browser's own text undo is the right thing and stealing it would
+       be maddening. */
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || "");
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !inField && !inlineEditing){
+      e.preventDefault();
+      return e.shiftKey ? redo() : undo();
+    }
+
+    if(e.key !== "Escape") return;
+    /* Esc unwinds one layer at a time — typing, then picking, then the
+       studio — so the reflex press after a misstep never closes everything */
+    if(inlineEditing) return cancelInline();
     if(picking) setPick(false); else exitEdit();
   });
 

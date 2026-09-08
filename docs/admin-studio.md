@@ -43,32 +43,53 @@ alone. The new published config is taken quietly underneath it.
 
 ---
 
-## Pick mode
+## How you actually edit
 
-**Pick element** is a mode, not the whole of edit mode.
+Opening the studio arms it. Click something and you are editing it.
 
-- **On**: hovering outlines things and shows the address the studio will
-  save them under; clicking selects instead of doing what the click
-  normally does.
-- **Off**: the site works normally with the panel still open — so you can
-  navigate to the Doubles tab and carry on editing there.
+- **Click** anything — a heading, a button, a whole section. A toolbar
+  appears **on it** with the handful of things you'll want most: type,
+  smaller, bigger, bold, colour, drag, hide.
+- **Double-click text** and type straight into the page, with a real
+  caret in the real page. Enter keeps it, Esc throws it away.
+- **Grab ⠿** on the toolbar and drag a section where you want it. A line
+  shows where it will land.
+- **⌘Z / Ctrl+Z** undoes anything, as many steps back as you like.
+  **⇧⌘Z** redoes. A whole colour drag counts as one step, not forty.
+- **↑ Around it** on the toolbar selects the thing containing what you
+  picked; clicking again inside a selection drills one level in. So the
+  whole tree is reachable — it just isn't where you start.
 
-`Esc` leaves pick mode. `Esc` again closes the studio.
+Clicking selects **the nearest thing a person would name** — a button, a
+heading, a section — not the deepest node under the cursor. That single
+choice is most of the difference between this and a devtools inspector.
+
+**Pick** in the panel's top bar turns click-to-select off, so the site
+behaves normally with the panel still open. That's for navigating to
+another tab to carry on editing there.
+
+`Esc` unwinds one layer at a time: typing, then picking, then the studio.
 
 ---
 
 ## What each tab does
 
 ### Element
-The inspector for whatever you picked.
+Everything for whatever you picked, named in plain words at the top —
+“Standings table”, “‘Report a game’ button” — rather than by its selector.
+The selector is still there, under **Advanced**, for anyone who wants it.
 
 - **Words** — retype it. Icons, counters and badges beside the text are
   left where they are; only the words change. Buttons that wrap their
   label in a span (the mobile bottom bar) are handled.
-- **Visibility** — hide it for everyone.
-- **Position** — move it among its siblings.
-- **Style** — colour, background, size, weight, alignment, case, padding,
-  margin, radius, border, opacity, plus a free-text box for anything else.
+- **Style** — sliders for size, padding, spacing, corners and opacity;
+  swatches for colour; chips for weight, alignment and case. Each starts
+  from what the page is actually rendering, so the first nudge continues
+  from what you can see. **↺** puts the design's own value back, and a **•**
+  marks anything you've changed.
+- **Show & place** — hide it for everyone, or move it among its
+  neighbours (or just drag it with ⠿).
+- **Advanced** — free-text CSS for this one element, and its address.
 
 ### Theme
 Every design token in the stylesheet, grouped and explained. One change
@@ -223,6 +244,7 @@ Every publish is written to the existing admin audit log as well as to
 node test/studio.test.js          # theme, type, nav, order, features, CSS, presets, reload
 node test/studio-pick.test.js     # hover, click-to-select, inspect, restyle, hide, Esc
 node test/studio-blocks.test.js   # add, edit, sanitise, re-render, reload, delete
+node test/studio-direct.test.js   # toolbar, inline typing, undo/redo, drag-to-reorder
 ```
 
 They drive the real file in a real browser against a stubbed Supabase — see

@@ -9,10 +9,10 @@ const ok = reporter();
   await asAdmin(page); await page.evaluate(()=> SITE.openStudio());
   await page.waitForTimeout(250);
 
-  // turn pick mode on
-  await page.evaluate(()=>document.querySelector('[data-act="pick"]').click());
-  await page.waitForTimeout(150);
-  ok('pick attribute set', await page.evaluate(()=>document.documentElement.hasAttribute('data-fgta-pick')));
+  // pick mode is armed by the time the studio is open — opening an editor and
+  // then having to arm it is the step nobody expects
+  ok('pick mode is on as soon as the studio opens',
+     await page.evaluate(()=>document.documentElement.hasAttribute('data-fgta-pick')));
 
   // hover a nav tab -> highlight appears with the right key
   const tabBox = await page.evaluate(()=>{
@@ -23,16 +23,21 @@ const ok = reporter();
   await page.waitForTimeout(120);
   ok('hover highlight is showing', await page.evaluate(()=>
       getComputedStyle(document.getElementById('studioHi')).display!=='none'));
-  ok('key tag names the element', await page.evaluate(()=>
-      document.getElementById('studioTag').textContent.includes('topTabs')));
+  // the chip says what the thing IS, not where it lives
+  const chip = await page.evaluate(()=>document.getElementById('studioTag').textContent);
+  ok('hover chip names the element in plain words', chip.includes('Court'), chip);
+  ok('hover chip is not a CSS selector', !/nth-of-type|#topTabs/.test(chip), chip);
 
   // click it -> selects, does NOT navigate
   const viewBefore = await page.evaluate(()=>typeof activeView!=='undefined'?activeView:null);
   await page.mouse.click(tabBox.x, tabBox.y);
   await page.waitForTimeout(200);
   ok('click did not navigate', await page.evaluate(()=>typeof activeView!=='undefined'?activeView:null)===viewBefore);
-  ok('inspector shows the picked key', await page.evaluate(()=>
-      (document.querySelector('.sp-key')||{}).textContent.includes('topTabs')));
+  const selName = await page.evaluate(()=>((document.querySelector('.sp-selname')||{}).textContent||''));
+  ok('inspector names the selection in plain words', selName.includes('Court'), selName);
+  ok('the selector is still there, demoted to Advanced', await page.evaluate(()=>
+      !!document.querySelector('.sp-adv .sp-key') &&
+      document.querySelector('.sp-adv .sp-key').textContent.includes('topTabs')));
 
   // retype it through the inspector
   await page.evaluate(()=>{
@@ -44,10 +49,10 @@ const ok = reporter();
   ok('picked element retyped', await page.evaluate(()=>
       document.querySelector('.tb-tab[data-view="court"]').textContent.trim()==='Courts & Weather'));
 
-  // restyle it through the quick controls
+  // restyle it with the size slider
   await page.evaluate(()=>{
-    const i=document.querySelector('[data-css-text="font-size"]');
-    i.value='22px'; i.dispatchEvent(new Event('change',{bubbles:true}));
+    const i=document.querySelector('[data-css-range="font-size"]');
+    i.value='22'; i.dispatchEvent(new Event('change',{bubbles:true}));
   });
   await page.waitForTimeout(200);
   ok('per-element style applied', await page.evaluate(()=>
