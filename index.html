@@ -27769,15 +27769,42 @@ function renderKit(){
   try{ fxObserveAnimated(); }catch(e){}
 }
 
+/* The setup notice.
+
+   "Run the migration" is not enough on its own, because the way this
+   actually fails is not the way anybody expects: Supabase runs a SQL editor
+   tab as ONE TRANSACTION, so an error anywhere in what you pasted — even a
+   harmless "already exists" from an unrelated script above it — rolls back
+   everything after it. You are left with no tables and an error message
+   about something else entirely. That is a real thing that happened on this
+   project with a different migration, which is why the paste-ready file
+   exists and why this says to paste it on its own.
+
+   It also names WHICH table is missing, because "the Kit needs two tables"
+   when one of them is already there sends people to re-run a script that
+   was never the problem. */
 function kitNoTableHTML(){
+  const missing = [];
+  if(!kitTables.rackets)     missing.push("rackets");
+  if(!kitTables.string_jobs) missing.push("string_jobs");
+  const what = missing.length === 2
+    ? "needs two tables that aren't there yet"
+    : "is missing one table — <code>" + esc(missing[0] || "string_jobs") + "</code>";
   return '<div class="panel kit-setup">'
-    + '<div class="tool-h">🎽 The Kit needs two tables</div>'
+    + '<div class="tool-h">🎽 The Kit ' + what + '</div>'
     + '<div class="pred-hint">This screen tracks rackets and string jobs, and works out how much '
     + 'tennis has been played on each bed from the matches and practice sessions already on record — '
     + 'so the only thing anybody types is the stringing itself.</div>'
-    + '<div class="pred-hint" style="margin-top:10px">Run <code>docs/kit.sql</code> in the Supabase SQL editor '
-    + 'to create <code>rackets</code> and <code>string_jobs</code>. Nothing else in the app depends on them, '
-    + 'and nothing else changes if you never do.</div>'
+    + '<div class="pred-hint" style="margin-top:10px">Paste <code>docs/kit.min.sql</code> into the '
+    + 'Supabase SQL editor and run it. It creates <code>rackets</code> and <code>string_jobs</code>, '
+    + 'assumes nothing else exists, and is safe to run twice.</div>'
+    + '<div class="pred-hint" style="margin-top:10px"><b>Paste it on its own.</b> Supabase runs an editor '
+    + 'tab as one transaction, so one error anywhere — including an "already exists" from an unrelated '
+    + 'script pasted above it — rolls back everything after it, and you end up with no tables and an '
+    + 'error about something else. Read <code>docs/kit.sql</code> for why any of it is shaped the way '
+    + 'it is.</div>'
+    + '<div class="pred-hint" style="margin-top:10px">Nothing else in the app depends on these, and '
+    + 'nothing else changes if you never run it.</div>'
     + '</div>';
 }
 
