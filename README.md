@@ -274,7 +274,9 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 
 ## Admin Studio — changing the site without changing the code
 
-Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site** opens a docked editor, and **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
+Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site**, then click something and change it. **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
+
+**How it feels to use.** Clicking selects the nearest thing a person would *name* — a button, a heading, a section — not the deepest node under the cursor, and a toolbar appears on it with the things you'll want most. Double-click text and type into the page. Grab ⠿ and drag a section elsewhere. ⌘Z undoes anything (a whole colour drag is one step, not forty). The panel names your selection in plain words and offers sliders and swatches; the CSS selector is demoted to an **Advanced** disclosure.
 
 What it reaches:
 

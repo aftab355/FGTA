@@ -8,10 +8,7 @@ const ok = reporter();
   await asAdmin(page); await page.evaluate(()=> SITE.openStudio());
   await page.waitForTimeout(250);
 
-  // pick the ladder board, then add a block above it
-  await page.evaluate(()=>{
-    document.querySelector('[data-act="pick"]').click();
-  });
+  // pick mode is already on; click the ladder board, then add a block by it
   const p = await page.evaluate(()=>{
     const r=document.querySelector('#board').getBoundingClientRect();
     return {x:r.left+20, y:r.top+10};
