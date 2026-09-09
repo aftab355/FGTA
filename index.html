@@ -331,7 +331,15 @@
      Two fixes, in order of preference. The tabs tighten first, because a bar
      that fits needs no affordance at all; and if a re-skin's typography
      pushes them over anyway, the fade below says so rather than lying. */
-  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;
+  /* `safe center` rather than `center`, and it is not cosmetic. A centred
+     flex container that overflows pushes content past its START edge, and
+     that overflow is UNREACHABLE — you cannot scroll to negative. So at the
+     widths where the ten tabs do not fit, the first tab (Ladder) was
+     clipped on the left with no way to get to it, in a bar that also
+     scrolls. `safe` falls back to flex-start exactly when overflow happens,
+     which is the whole reason the keyword exists. */
+  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;justify-content:safe center;
+    overflow-x:auto;
     scrollbar-width:none;-webkit-overflow-scrolling:touch;position:relative;
     /* the fade is painted by the wrapper below, so scrolled-out content is
        visibly cut rather than silently absent */
@@ -1935,6 +1943,13 @@
   .kit-when b{color:var(--ink);font-weight:700}
   .kit-when i{font-style:normal;color:var(--pending)}
 
+  /* what today's weather does to the bed */
+  .kit-feel{margin-top:8px;padding:7px 10px;border-radius:var(--r-sm);
+    background:var(--panel-2);border:1px solid var(--line-soft);
+    font-size:12.5px;line-height:1.45;color:var(--muted)}
+  .kit-feel b{font-family:var(--font-mono);font-weight:700;color:var(--ink)}
+  .kit-feel-strong{border-color:var(--pending)}
+
   /* provenance — how much of the hours figure was actually measured */
   .kit-prov{margin-top:12px}
   .kit-prov-bar{display:flex;height:4px;border-radius:var(--r-pill);overflow:hidden;background:var(--panel-2)}
@@ -1982,6 +1997,25 @@
   .kit-rrow b{font-weight:600;font-size:14px}
   .kit-rrow i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim);
     display:block;margin-top:2px}
+
+  .kit-bag{display:flex;flex-direction:column}
+  .kit-bagrow{display:grid;grid-template-columns:auto 1fr 90px auto;gap:12px;align-items:center;
+    width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line-soft);
+    padding:10px 0;cursor:pointer;color:var(--ink);font-size:14px}
+  .kit-bagrow:last-child{border-bottom:none}
+  .kit-bagrow:hover{background:var(--panel-2)}
+  .kit-bagrow.on{background:var(--accent-dim)}
+  .kit-bagav{display:flex;align-items:center}
+  .kit-bagmain{min-width:0}
+  .kit-bagmain b{display:block;font-weight:600}
+  .kit-bagmain i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  .kit-bagmeter{height:6px;border-radius:var(--r-pill);background:var(--panel-2);
+    border:1px solid var(--line-soft);overflow:hidden}
+  .kit-bagmeter span{display:block;height:100%;background:var(--kit-c, var(--dim))}
+  .kit-bagscore{font-family:var(--font-mono);font-size:14px;font-weight:700;min-width:26px;text-align:right;
+    color:var(--kit-c, var(--ink))}
+  @media (max-width:640px){ .kit-bagrow{grid-template-columns:auto 1fr 54px auto} }
 
   .kit-note{margin:20px 0 6px;font-size:12.5px;line-height:1.65;color:var(--dim);
     border-left:2px solid var(--line);padding-left:13px}
@@ -27317,6 +27351,66 @@ function kitHoursUntil(job, hours0, days0, target, daysPerHour){
   return (lo + hi) / 2;
 }
 
+
+/* ---------------------------------------------------------------
+   WHAT THE BED FEELS LIKE TODAY, WHICH IS NOT WHAT IT MEASURES.
+
+   A string bed is a polymer under load and polymers stiffen in the
+   cold. The same racket, unchanged since the morning, plays tighter
+   at 4 degrees than it did at 24 — noticeably so, in the direction
+   everybody blames on the balls. So a Kit screen that reports one
+   tension all year is telling the truth and still not answering the
+   question, which is "why is this thing playing like a board today".
+
+   The app already knows the temperature. The ambient background
+   fetches Toronto's weather for the particle layer and the court's
+   busyness model reads the same cached answer, so this costs no
+   request: it is the third reader of a number already on the page.
+
+   The shift is a rule of thumb, like everything else in KIT_STRINGS,
+   and it is expressed as EFFECTIVE POUNDS rather than as a percentage
+   because pounds are the unit anybody discussing this would use.
+   Roughly a pound for every eight or nine degrees away from a mild
+   afternoon, capped, because past the cap nobody is playing tennis
+   and the model has no business extrapolating into weather where the
+   ball does not bounce. Polyester is the stiffest and moves most;
+   natural gut barely notices, which is one of the reasons people
+   play it in the cold. --------------------------------------------- */
+const KIT_WX_REF_C     = 21;    // a mild afternoon: the tension you strung at IS the tension
+const KIT_WX_LB_PER_C  = 0.115; // effective pounds per degree away from it
+const KIT_WX_MAX_LB    = 4;     // and no further, in either direction
+/* how much each material cares, relative to poly */
+const KIT_WX_SENS = {poly:1, hybrid:0.85, kevlar:0.9, syn:0.7, multi:0.6, gut:0.35};
+
+/* Effective pounds ADDED by today's temperature: positive means the bed
+   plays tighter than it measures (cold), negative looser (heat). Zero when
+   there is no reading, because "no weather" must never read as "mild". */
+function kitFeelShift(material, tempC){
+  if(typeof tempC !== "number" || !isFinite(tempC)) return 0;
+  const sens = KIT_WX_SENS[material] == null ? 1 : KIT_WX_SENS[material];
+  const raw = (KIT_WX_REF_C - tempC) * KIT_WX_LB_PER_C * sens;
+  return Math.max(-KIT_WX_MAX_LB, Math.min(KIT_WX_MAX_LB, raw));
+}
+
+/* The sentence that goes under it. Deliberately about what the racket will
+   DO rather than about the number, because the number is the part somebody
+   already has. */
+function kitFeelNote(material, tempC, shift){
+  const d = shift == null ? kitFeelShift(material, tempC) : shift;
+  if(typeof tempC !== "number" || !isFinite(tempC)) return null;
+  const lb = Math.abs(d);
+  if(lb < 0.4) return "Playing about as strung.";
+  const tighter = d > 0;
+  const much = lb >= 2;
+  return Math.round(tempC) + "\u00B0 — playing "
+    + lb.toFixed(1) + " lb " + (tighter ? "tighter" : "looser")
+    + (tighter
+        ? (much ? ". Stiff and short on power; the ball will feel dead off the string."
+                : ". A little stiffer than it measures.")
+        : (much ? ". Livelier and longer; expect the ball to fly."
+                : ". A little softer than it measures."));
+}
+
 /* ---------------------------------------------------------------
    HOURS ON THE STRING — read back out of what the app already has.
 
@@ -27447,7 +27541,7 @@ function kitWeeklyRate(name, data, now){
 }
 
 /* Everything the panel needs about one string job, in one call. */
-function kitAssess(job, data, now){
+function kitAssess(job, data, now, tempC){
   const t = now == null ? Date.now() : now;
   const strung = job && job.strung_at ? new Date(job.strung_at).getTime() : null;
   const days = strung == null ? 0 : Math.max(0, (t - strung) / 86400000);
@@ -27467,6 +27561,12 @@ function kitAssess(job, data, now){
     lossPct: (1 - kitRemaining(job && job.material, hours, days)) * 100,
     score, band: kitBand(score),
     binding: kitBinding(job, hours, days),
+    /* Today's temperature, if the page happens to have one. Optional in
+       every sense: no reading means no shift and no sentence, and nothing
+       else in the assessment changes. It is a PARAMETER rather than a global
+       read so this whole file stays a pure function of its arguments. */
+    feelShift: kitFeelShift(job && job.material, tempC),
+    feelNote: kitFeelNote(job && job.material, tempC),
     /* reported, never priced into the score — see kitPlayability */
     brokenIn: hours >= M.breakIn,
     breakInLeft: Math.max(0, M.breakIn - hours),
@@ -27535,6 +27635,25 @@ function kitCurrentOwner(){
 /* the two collections the model reads its hours out of */
 function kitData(){ return {matches, practice: practiceLog}; }
 
+/* Today's temperature, if the page has one. The ambient background already
+   fetches Toronto's weather for its particle layer and caches it for twenty
+   minutes; the court's busyness model is the second reader of that same
+   answer and this is the third, so it costs no request. Null until it lands,
+   and null forever on a build with the weather layer switched off — which is
+   exactly what kitAssess() treats as "say nothing about the temperature". */
+let kitTempC = null;
+async function kitLoadWeather(){
+  if(typeof window.fgtaGetWeather !== "function") return;
+  try{
+    const wx = await window.fgtaGetWeather();
+    const t = wx && wx.temp;
+    if(typeof t === "number" && isFinite(t)){
+      kitTempC = t;
+      if(activeView === "kit") renderKit();
+    }
+  }catch(e){ /* the Kit works fine without it, which is the point */ }
+}
+
 /* Every job for one owner, newest first, each with its assessment attached
    and each knowing which frame it went into. A job whose racket row has been
    deleted still renders — the string job is the record, the frame is a label. */
@@ -27548,7 +27667,7 @@ function kitJobsFor(owner){
     .sort((a, b) => new Date(b.strung_at || b.created_at) - new Date(a.strung_at || a.created_at))
     /* the "is this the current bed" question is answered a layer up, in
        kitWithHistory(), because it needs the whole list to decide */
-    .map(j => Object.assign({}, kitAssess(j, d), {racket: byId[j.racket_id] || null}));
+    .map(j => Object.assign({}, kitAssess(j, d, null, kitTempC), {racket: byId[j.racket_id] || null}));
 }
 
 /* Freeze a retired job's hours at the moment it was replaced or cut out.
@@ -27580,7 +27699,7 @@ function kitWithHistory(owner){
       off = next ? new Date(next.job.strung_at).getTime() : null;
     }
     if(off == null) return Object.assign({}, a, {current:false});
-    return Object.assign({}, kitAssess(a.job, d, off), {
+    return Object.assign({}, kitAssess(a.job, d, off, kitTempC), {
       racket: a.racket, current:false, retiredAt: off
     });
   });
@@ -27592,6 +27711,7 @@ function kitWithHistory(owner){
 function renderKit(){
   const box = $("kitBody");
   if(!box) return;
+  if(kitTempC == null) kitLoadWeather();      // fire and forget; it re-renders if it lands
   const owner = kitCurrentOwner();
   const owners = kitOwners();
 
@@ -27612,6 +27732,7 @@ function renderKit(){
     + kitFormHTML(owner, mine)
     + (past.length ? kitHistoryHTML(past) : "")
     + kitRacketsHTML(owner, mine)
+    + kitBagCheckHTML(owner)
     + kitFootnoteHTML();
   try{ fxObserveAnimated(); }catch(e){}
 }
@@ -27682,6 +27803,13 @@ function kitLiveHTML(live){
       + '<div class="kit-line">' + esc(a.band.hint) + ' <span>' + esc(why) + '</span></div>'
       + '<div class="kit-when"><b>' + esc(due) + '</b> at ' + a.rate.toFixed(1) + ' h/week'
       +   (a.brokenIn ? '' : ' · <i>still breaking in</i>') + '</div>'
+      /* what it will feel like TODAY, which is not what it measures — see
+         kitFeelShift. Absent entirely when the page has no temperature. */
+      + (a.feelNote
+          ? '<div class="kit-feel' + (Math.abs(a.feelShift) >= 2 ? ' kit-feel-strong' : '') + '">'
+            + '<b>' + (a.feelShift > 0 ? '+' : '') + a.feelShift.toFixed(1) + ' lb</b> '
+            + esc(a.feelNote) + '</div>'
+          : '')
       + kitProvenanceHTML(a)
       + '<div class="kit-card-f">'
       +   '<span>' + esc(kitJobLabel(a.job)) + '</span>'
@@ -27838,6 +27966,42 @@ function kitRacketsHTML(owner, mine){
         + '<input id="krLabel" placeholder="the one with the blue grip" autocomplete="off" maxlength="60">'
         + '</div><button class="btn ghost" style="margin-top:10px;width:auto" onclick="kitAddRacket()">Add a frame</button>' : '')
     + '</div></section>';
+}
+
+/* THE BAG CHECK — everybody's current bed, worst first.
+
+   The per-player screen answers "should I restring". This answers the
+   question the group actually asks each other, which is "whose racket is a
+   disgrace" — and it is the reason the Kit is worth having as a shared page
+   rather than a note on somebody's phone. It also does something useful by
+   accident: a player who has never logged a stringing shows up as absent
+   from a list everybody else is on, which is a better prompt than any empty
+   state on their own screen would be. */
+function kitBagCheckHTML(currentOwner){
+  const owners = kitOwners();
+  if(owners.length < 2) return "";
+  const rows = [];
+  owners.forEach(o => {
+    kitWithHistory(o).filter(a => a.current).forEach(a => rows.push({o, a}));
+  });
+  if(rows.length < 2) return "";
+  rows.sort((x, y) => x.a.score - y.a.score);      // worst first
+  return '<section><div class="sec-label">The bag check</div><div class="panel">'
+    + '<div class="pred-hint">Everybody\'s current bed, worst first. Same model, same hours, '
+    + 'read off the same matches — so this is a comparison rather than an argument.</div>'
+    + '<div class="kit-bag">' + rows.map(({o, a}) => {
+        const mine = o.toLowerCase() === String(currentOwner || "").toLowerCase();
+        return '<button class="kit-bagrow' + (mine ? ' on' : '') + '" onclick="kitSetWho(' + JSON.stringify(o).replace(/"/g, '&quot;') + ')">'
+          + '<span class="kit-bagav">' + (function(){ try{ return avatar(o, 24); }catch(e){ return ""; } })() + '</span>'
+          + '<span class="kit-bagmain"><b>' + esc(o) + '</b>'
+          +   '<i>' + esc(a.material.short) + ' · ' + Math.round(a.days) + 'd · '
+          +   a.hours.toFixed(1) + 'h' + (a.racket ? ' · ' + esc(a.racket.name || "") : '') + '</i></span>'
+          + '<span class="kit-bagmeter"><span style="width:' + Math.max(0, Math.min(100, a.score)).toFixed(0)
+          +   '%" class="kit-' + a.band.key + '"></span></span>'
+          + '<span class="kit-bagscore kit-' + a.band.key + '">' + Math.round(a.score) + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div></div></section>';
 }
 
 function kitFootnoteHTML(){
@@ -31060,10 +31224,36 @@ function renderNews(){
    pulls the accent toward terracotta; hard cools both toward the night
    sessions. Nothing here escapes the green.
    ------------------------------------ */
+/* THESE WERE LEFT BEHIND BY THE RE-SKIN, and the consequence was much
+   larger than a wrong accent colour.
+
+   applySurface() writes accent / dim / tint as INLINE custom properties on
+   <body>, and an inline custom property beats every rule in the stylesheet.
+   The values here were a dark theme's — a near-black purple for --accent-dim
+   and a near-black green for --bg — and they survived the move to the white
+   Championships palette, which landed six commits ago and never came back
+   here. So on every load, with no cup skin running, the app immediately
+   overwrote three of its own design tokens with the previous era's.
+
+   FIFTY-TWO rules paint a background from --bg or --accent-dim. Among them:
+   `input, select`, `.composer textarea` and `.match-filter input`, which is
+   why every text field on a white site rendered as a near-black box; and
+   .pred-tag, .cs-btn.on, .ch-pill.ch-yes, .rx-mine and the rest, which
+   expected a pale tint and got near-black. The accent itself was a light
+   lilac on a page whose entire system is championship green.
+
+   So the three surfaces are re-expressed inside the current palette: a court
+   colour each, all three dark enough to carry white type on a filled accent
+   and to clear WCAG AA as text on the page (7.5:1, 6.2:1, 8.7:1), and a
+   ground that is white or a hair off it rather than a different theme.
+
+   The comment inside applySurface() already knew this shape of bug — it is
+   the reason the ffcup skin deletes these three properties rather than
+   trusting them. This is the same failure without a skin to catch it. */
 const SURFACES = {
-  grass: {name:"Grass", accent:"#B79BE0", dim:"#231E36", tint:"#07281B"},
-  clay:  {name:"Clay",  accent:"#D9A277", dim:"#3A2317", tint:"#1E2417"},
-  hard:  {name:"Hard",  accent:"#8FB6DE", dim:"#1B2C3D", tint:"#08242A"}
+  grass: {name:"Grass", accent:"#00623C", dim:"#E3EFE7", tint:"#FFFFFF"},
+  clay:  {name:"Clay",  accent:"#9C4A21", dim:"#F6EAE2", tint:"#FFFDFB"},
+  hard:  {name:"Hard",  accent:"#1F4E79", dim:"#E5EDF5", tint:"#FCFDFF"}
 };
 function currentSurface(){ try{ return localStorage.getItem("fgta_surface")||"grass"; }catch(e){ return "grass"; } }
 function applySurface(key){

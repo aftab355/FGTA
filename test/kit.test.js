@@ -329,5 +329,51 @@ section('one string job, assessed end to end');
   ok(b && isFinite(b.score), 'and so does an empty one');
 }
 
+section('what the bed feels like today, which is not what it measures');
+{
+  const F = (m, t) => K.kitFeelShift(m, t);
+  ok(F('poly', K.KIT_WX_REF_C) === 0, 'at the reference temperature the bed plays as strung');
+  ok(F('poly', 2) > 0, 'cold makes it play tighter', F('poly', 2).toFixed(2));
+  ok(F('poly', 33) < 0, 'and heat makes it play looser', F('poly', 33).toFixed(2));
+  ok(F('poly', 2) > F('gut', 2),
+     'poly cares about the cold far more than gut does — one of the reasons people play gut in it',
+     F('poly', 2).toFixed(2) + ' vs ' + F('gut', 2).toFixed(2));
+  let mono = true;
+  for(let t = -30; t < 45; t++) if(F('poly', t + 1) > F('poly', t) + 1e-12) mono = false;
+  ok(mono, 'and the shift falls monotonically as it warms up');
+  ok(Math.abs(F('poly', -60)) <= K.KIT_WX_MAX_LB + 1e-9
+     && Math.abs(F('poly', 60)) <= K.KIT_WX_MAX_LB + 1e-9,
+     'weather nobody plays tennis in is capped rather than extrapolated',
+     F('poly', -60).toFixed(2) + ' / ' + F('poly', 60).toFixed(2));
+  /* NO READING MUST NEVER READ AS MILD. A missing temperature and a mild
+     afternoon both produce a shift of zero, so the two are told apart by the
+     note being absent — which is what the card renders on. */
+  ok(F('poly', null) === 0 && F('poly', undefined) === 0 && F('poly', NaN) === 0,
+     'no reading is no shift');
+  ok(K.kitFeelNote('poly', null) === null, 'and no sentence at all');
+  ok(K.kitFeelNote('poly', K.KIT_WX_REF_C) !== null,
+     'while a mild afternoon does get a sentence, saying exactly that',
+     K.kitFeelNote('poly', K.KIT_WX_REF_C));
+  ok(/tighter/.test(K.kitFeelNote('poly', -5)), 'the cold sentence says tighter');
+  ok(/looser/.test(K.kitFeelNote('poly', 34)), 'and the hot one says looser');
+  ok(F('a-string-nobody-has', 2) === F('poly', 2) || F('a-string-nobody-has', 2) > 0,
+     'an unknown material still gets a sensible shift rather than NaN',
+     F('a-string-nobody-has', 2));
+}
+{
+  /* the temperature is a parameter, not a global read, so an assessment
+     without one is identical in every other respect */
+  const job = {owner:'Aftab', material:'poly', tension:52, strung_at: iso(9)};
+  const warm = kitAssess(job, DATA, null, 30);
+  const cold = kitAssess(job, DATA, null, 0);
+  const none = kitAssess(job, DATA);
+  ok(near(warm.score, cold.score) && near(warm.score, none.score),
+     'the temperature changes how it FEELS, never the playability score');
+  ok(cold.feelShift > warm.feelShift, 'but it does change the feel', 
+     cold.feelShift.toFixed(2) + ' vs ' + warm.feelShift.toFixed(2));
+  ok(none.feelShift === 0 && none.feelNote === null,
+     'and an assessment with no reading carries neither');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

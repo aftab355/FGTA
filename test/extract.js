@@ -58,7 +58,9 @@ function loadKit(){
                'KIT_RESTRING_AT','KIT_HORIZON','KIT_RATE_DEFAULT','KIT_MIN_PER_GAME',
                'KIT_MATCH_FALLBACK_MIN','kitTensionClockHours','kitRemaining','kitTension',
                'kitTerms','kitPlayability','kitBinding','kitBand','kitHoursUntil',
-               'kitMatchMinutes','kitPracticeMinutes','kitHoursFor','kitWeeklyRate','kitAssess'];
+               'kitMatchMinutes','kitPracticeMinutes','kitHoursFor','kitWeeklyRate','kitAssess',
+               'KIT_WX_REF_C','KIT_WX_LB_PER_C','KIT_WX_MAX_LB','KIT_WX_SENS',
+               'kitFeelShift','kitFeelNote'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
 

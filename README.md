@@ -237,6 +237,14 @@ A ref who forgets to press stop leaves an eight-hour match on record, so a track
 #### What it is honest about
 The constants are published rules of thumb, not measurements — nobody here owns a tension meter, and the panel says so in a footnote rather than printing a tension to one decimal place and hoping. What the model is good for is **the ordering and the shape**: which bed is further gone than which, and roughly when this one stops being worth playing with.
 
+#### What it feels like today, which is not what it measures
+A string bed is a polymer under load, and polymers stiffen in the cold. The same racket, unchanged since the morning, plays tighter at 4° than it did at 24° — noticeably, in the direction everybody blames on the balls. So a Kit screen reporting one tension all year is telling the truth and still not answering the question, which is *why is this thing playing like a board today*.
+
+The app already knows the temperature: the ambient background fetches Toronto's weather for its particle layer and the court's busyness model reads that same cached answer, so this is the **third reader of a number already on the page** and costs no request. `kitFeelShift()` expresses it in **effective pounds** — the unit anybody discussing this would use — roughly a pound per eight or nine degrees from a mild afternoon, capped, and scaled per material: polyester moves most, natural gut barely notices, which is one of the reasons people play gut in the cold. No reading means no shift *and no sentence*, so "no weather" can never read as "mild".
+
+#### The bag check
+Everybody's current bed, worst first. The per-player screen answers "should I restring"; this answers the question the group actually asks each other, and it is why the Kit is worth having as a shared page rather than a note on somebody's phone. It also does something useful by accident: a player who has never logged a stringing is conspicuously absent from a list everybody else is on.
+
 #### The rest of the screen
 - **Live cards**, one per frame currently strung: band colour as a top rule, a playability meter, tension now vs strung, hours on it, days on the racket, why it is going, and "about 9 days at 3.2 h/week".
 - **The curve**, inline SVG in the app's own chart idiom, with the bed's position on it and the restring line marked.
@@ -279,6 +287,13 @@ There are real reasons to want it on paper: a draw pinned to the clubhouse notic
 - **Entry panels are marked `data-print="hide"`, not guessed at by selector.** An empty text field prints as a filled dark rectangle, and a printed form is not a form — nobody is writing a set score onto paper and handing it back to the website. Printing is for reading a record. A future entry panel opts out by saying so; something inside one that *is* worth printing opts back in with `data-print="keep"`.
 - **`print-color-adjust` is deliberately not forced on.** A reader who turned background graphics off did so on purpose, so nothing carries meaning by colour alone once the fill is gone: rank medals become a rank in a weighted ring, the Kit's band keeps its word as well as its colour, meters keep a border.
 - Links print their URL once; `#` and `javascript:` links do not.
+
+## Two things the re-skin left behind
+The move to the white "Championships" palette landed six commits before this pass and missed two places, both of which had visible consequences.
+
+**`SURFACES` was still the previous era's dark theme.** `applySurface()` writes `accent`, `dim` and `tint` as *inline custom properties on `<body>`*, and an inline custom property beats every rule in the stylesheet — the code's own comment already knew this, which is why the FF Cup skin deletes those three properties rather than trusting them. Without a skin running there was nothing to catch it, so every load overwrote three design tokens with a near-black purple (`--accent-dim`) and a near-black green (`--bg`). **Fifty-two rules paint a background from one of those two**, including `input, select`, `.composer textarea` and `.match-filter input` — which is why every text field on a white site rendered as a dark box — plus `.pred-tag`, `.cs-btn.on`, `.ch-pill.ch-yes` and the rest, which expected a pale tint. The accent itself was a light lilac on a page whose whole system is championship green. The three surfaces are now court colours inside the current palette (7.5:1, 6.2:1, 8.7:1 as text on the page, all carrying white type on a filled accent).
+
+**`justify-content: center` on a bar that overflows.** A centred flex container pushes its overflow past the *start* edge, and that overflow is unreachable — you cannot scroll to negative. So at the widths where ten tabs do not fit, the first tab was clipped on the left with no way to reach it, in a bar that also scrolls. `safe center` falls back to `flex-start` exactly when overflow happens, which is the whole reason the keyword exists.
 
 ## Interactions & Behavior
 - **Undo/redo**: point tracker and admin edit flows keep an action stack; nothing is persisted to Supabase until an explicit Submit.
