@@ -264,6 +264,22 @@ The app grew to ten top-level views, nineteen sub-tabs and well over a hundred a
 - **"More" sheet**: a bottom sheet (slide-up panel + backdrop) listing the remaining views as a 2-column icon grid: Doubles, Training, The Kit, Court, Events, Messages, Search, Surface (cycles court-surface theme), Stadium (ambient stadium-mode toggle), Help. *(Doubles and Training were previously missing from this sheet — a mobile nav bug fixed in this design pass — make sure the target implementation includes every view here.)*
 - A secondary fixed bar sits above the bottom nav: a scrolling "live ticker" of recent results/comments (marquee-style horizontal scroll, pauses on hover/tap).
 
+## Accessibility
+Most of this was already right — a real focus-trap and `aria-modal` on every dialog, one polite live region for the whole app rather than `aria-live` on a rebuilding scoreboard, `:focus-visible` rings that survive every skin, and a full `prefers-reduced-motion` pass. What was missing was the structure a screen reader navigates *by*:
+
+- **No `<h1>` anywhere.** The wordmark was the page's title in every sense except the markup, so heading navigation started at an `h2` inside a panel, or nowhere. It is an `h1` now (with the margin/size resets that stop the browser's defaults rearranging the top bar around it).
+- **No `<main>` landmark, and no skip link.** A keyboard user's first Tab landed on the FF Cup chip and then walked all ten nav tabs before reaching a word of content. The content wrap is `<main id="main">` and there is a standard skip link — off-screen until focused, then the first thing on the page.
+- **22 form controls with no accessible name at all** — every filter on the Matches archive, both scheduler pickers, the casual-session date and type, the tournament format and Elo selectors. Eight had a visible `<label>` that was simply never associated with a `for`; the rest have no visible label because their own option text carries the meaning on screen, so they get an `aria-label` and nothing moves. Three buttons whose text is filled in by script were empty in the markup a screen reader first meets.
+
+## Print
+The whole visual system here is borrowed from a tournament's printed programme — a white ground, near-black green type, gold for what has been won — and it had never been printable. `⌘P` produced the fixed top bar overlapping the first rows, the bottom nav stamped across the footer, the ticker, and the leftovers of every hidden view.
+
+There are real reasons to want it on paper: a draw pinned to the clubhouse noticeboard, the standings for somebody who does not use the site. So there is a proper print sheet rather than a `display:none` sweep — it pins the palette back to the base scheme (the weather themes and cup skin retint everything through *inline* custom properties at runtime, which no print sheet would otherwise beat), removes the chrome, and prints the one view that is open.
+
+- **Entry panels are marked `data-print="hide"`, not guessed at by selector.** An empty text field prints as a filled dark rectangle, and a printed form is not a form — nobody is writing a set score onto paper and handing it back to the website. Printing is for reading a record. A future entry panel opts out by saying so; something inside one that *is* worth printing opts back in with `data-print="keep"`.
+- **`print-color-adjust` is deliberately not forced on.** A reader who turned background graphics off did so on purpose, so nothing carries meaning by colour alone once the fill is gone: rank medals become a rank in a weighted ring, the Kit's band keeps its word as well as its colour, meters keep a border.
+- Links print their URL once; `#` and `javascript:` links do not.
+
 ## Interactions & Behavior
 - **Undo/redo**: point tracker and admin edit flows keep an action stack; nothing is persisted to Supabase until an explicit Submit.
 - **Cursor tilt**: small podium/medal cards (.pod) get a cursor-tracked 3D tilt (perspective(900px) rotateX/rotateY, max 10°, plus a slight lift/scale) on pointer move, resetting smoothly on pointer leave. *Intentionally NOT applied to full-width panels or list rows* — that combination reads as broken "panning" rather than depth, per direct user feedback during this build.

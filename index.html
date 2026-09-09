@@ -296,9 +296,28 @@
      logo and a tournament's name on a board. .18em is wide enough to read as
      engraved and tight enough that FGTA still fits beside the tabs on a
      narrow phone — the ellipsis below is the guard if it ever doesn't. */
+  /* This is an <h1> now — the wordmark was the page's title in every sense
+     except the markup, so heading navigation had nothing to start from. The
+     margin and font-size resets are what stop the browser's own h1 defaults
+     from rearranging the top bar around it. */
   .tb-title{font-family:var(--font-display);font-weight:600;font-size:19px;
+    margin:0;line-height:1.1;
     letter-spacing:.18em;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* The skip link. Off-screen until focused, then the first thing on the
+     page — because a keyboard user's first Tab used to land on the cup chip
+     and then walk all ten nav tabs before reaching a word of content. */
+  .skip-link{position:fixed;top:8px;left:8px;z-index:calc(var(--z-toast) + 1);
+    transform:translateY(-160%);
+    background:var(--on-chrome);color:var(--chrome);text-decoration:none;
+    padding:10px 16px;border-radius:var(--r-pill);font-size:14px;font-weight:600;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,.5);
+    transition:transform .18s cubic-bezier(.16,1,.3,1)}
+  .skip-link:focus{transform:translateY(0)}
+  /* the target takes focus programmatically, so it must not draw a ring
+     around the entire page when it does */
+  main.wrap:focus{outline:none}
   .tb-live{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--on-chrome-dim);letter-spacing:1px;margin-top:3px;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* The bar scrolls, and its scrollbar is hidden — which is right on a phone
@@ -1710,6 +1729,133 @@
   .div-n{font-family:var(--font-mono);font-size:24px;font-weight:600}
   .div-b{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
   .div-cur{font-family:var(--font-mono);font-size:9px;color:var(--accent);margin-top:3px}
+
+
+  /* ================================================================
+     PRINT — the championship on paper, actually on paper.
+
+     The whole visual system here is borrowed from a tournament's
+     printed programme: a white ground, near-black green type, gold
+     for what has been won. It has never been printable. Hitting
+     ⌘P produced the fixed top bar overlapping the first rows, the
+     bottom nav stamped across the footer, a ticker, a weather
+     canvas, and every hidden view's leftovers — on four pages.
+
+     There are real reasons to want it on paper. A draw pinned to
+     the clubhouse noticeboard. The standings for somebody who does
+     not use the site. A scorecard for a match with no phone in it.
+     So this is a proper print sheet rather than a display:none
+     sweep: it removes the app's chrome, unwinds the layouts that
+     only make sense on a screen, and prints the ONE view that is
+     open rather than all eleven.
+
+     `print-color-adjust` is deliberately NOT forced on. A reader
+     who has turned background graphics off has done so on purpose,
+     and everything below stays legible in plain black on white —
+     the rank medals, the band colours and the meters all keep a
+     border or a label so none of them is carrying meaning by
+     colour alone once the fill is gone.
+     ================================================================ */
+  @media print{
+    /* -- the page itself -- */
+    @page{ margin:14mm 12mm; }
+    :root{
+      /* the weather themes and the cup skin retint the whole palette at
+         runtime through inline custom properties; on paper none of that is
+         wanted, so the tokens are pinned back to the base scheme */
+      --bg:#fff; --panel:#fff; --panel-2:#fff;
+      --ink:#111; --muted:#333; --dim:#555;
+      --line:#bbb; --line-soft:#ddd;
+      --accent:#004d2f; --accent-dim:#eef4f0; --accent-glow:transparent;
+      --shadow:none;
+    }
+    html,body{background:#fff !important;color:#111 !important}
+    body{margin:0;font-size:10.5pt;line-height:1.45}
+
+    /* -- everything that is chrome, furniture or motion -- */
+    .topbar,.botbar,.subwrap,.live-ticker-bar,.more-sheet,.util-menu,.skip-link,
+    .toast,.oq-pill,.modal,.cp-card,#tabWipe,.loadscreen,.fxlayer,
+    #wxCanvas,.wx-canvas,.live-mount,.cup-mount,.qa-bar,.presence-bar,
+    .live-marquee,.lm-wrap,#setupNote,.notif-panel,.trophy-case,
+    .moments,.composer,.pt-stream,.galaxy-wrap,.ffcup-chip,
+    .tb-indicator,.physics-ball,.ghost-cursor{ display:none !important }
+    /* Anything whose only job is to be tapped or typed into.
+
+       Inputs go too, and that is a decision rather than an oversight: an
+       empty text field prints as a filled dark rectangle, and a printed form
+       is not a form — nobody is going to write a set score onto paper and
+       hand it back to the website. Printing here is for READING a record.
+       So the entry panels go with them, or their headings would be left
+       standing over nothing. */
+    button,.btn,.mini,.subtab,.tb-tab,.bb-tab,.modal-x,.oq-go,
+    input,select,textarea,
+    [data-print="hide"],
+    .match-filter,.composer,.dm-compose,.ct-report{ display:none !important }
+    /* …except a control that is showing a VALUE somebody is printing */
+    .set-score-built,.ss-built{ display:inline !important }
+    /* the opposite of the above: something inside a hidden section that IS
+       worth printing opts back in */
+    [data-print="keep"]{ display:revert !important }
+
+    /* -- the one view that is open, and only that one -- */
+    [id^="view-"]{ break-inside:auto }
+    /* the app hides views with an inline display:none, which print respects
+       already; this is the belt to that braces, for a view left visible by a
+       half-finished transition */
+    [id^="view-"][style*="display: none"],
+    [id^="view-"][style*="display:none"]{ display:none !important }
+
+    /* -- panels become printed blocks, not cards -- */
+    .panel,.tool-block,.kit-card,.pod,.riv-stat,.stat-card{
+      box-shadow:none !important;border:1px solid var(--line) !important;
+      background:#fff !important;break-inside:avoid;padding:8pt 10pt}
+    .sec-label{break-after:avoid;font-size:9pt;letter-spacing:.12em}
+    h1,h2,h3,.kit-frame,.riv-name{break-after:avoid}
+
+    /* -- the ladder, which is the thing most likely to be printed -- */
+    .row{break-inside:avoid;padding:5pt 0;border-bottom:1px solid var(--line-soft)}
+    /* the medals are a gradient fill on screen; on paper they are a rank in a
+       ring, so a 1st still reads as a 1st with background graphics off */
+    .rank-badge,.rk{background:none !important;color:#111 !important;
+      border:1.2pt solid #111;border-radius:50%;font-weight:700}
+    .row .rank-1 .rank-badge,.rk-1{border-width:2.2pt}
+    .row .rank-2 .rank-badge,.rk-2{border-width:1.6pt}
+
+    /* -- meters and bars: a fill nobody prints, so give them a number -- */
+    .kit-meter,.hype-fill,.odds-bar,.riv-split{border:1px solid var(--line)}
+    .kit-meter span,.odds-bar span{background:#555 !important}
+    /* the Kit's band is a colour AND a word on screen; the word is what
+       survives here, so make sure it is not the thing that got hidden */
+    .kit-verdict{color:#111 !important;font-weight:700}
+    .kit-card:before{display:none}
+
+    /* -- charts -- */
+    svg{max-width:100% !important;break-inside:avoid}
+    .kit-curve,.chart-line{stroke:#111 !important}
+    .kit-dot{fill:#111 !important;stroke:#fff !important}
+    canvas{display:none}          /* nothing here draws print-worthy canvas */
+
+    /* -- links: a URL nobody can click is worth printing once -- */
+    a[href^="http"]:after{content:" (" attr(href) ")";font-size:8pt;color:#555;
+      word-break:break-all}
+    a[href^="#"]:after,a[href^="javascript"]:after{content:""}
+
+    /* -- a footer that says what this is a print of --
+       Deliberately not a page number: counter(page) only resolves inside an
+       @page margin box, which no browser here implements, so an element's
+       ::after renders it as a flat 0. What is actually useful on a
+       noticeboard is where the live version is. -->  */
+    main.wrap:after{
+      content:"FGTA Ladder — the live standings are at fgta.ca";
+      display:block;margin-top:14pt;padding-top:6pt;
+      border-top:1px solid var(--line);
+      font-family:var(--font-mono);font-size:8pt;color:#555}
+
+    /* -- nothing animates on paper -- */
+    *,*:before,*:after{
+      animation:none !important;transition:none !important;
+      text-shadow:none !important;filter:none !important}
+  }
 
   /* ===== THE OUTBOX PILL =====
      A standing state, not an event: "there are things on this phone the
@@ -8452,11 +8598,17 @@
 </div>
 
 <!-- ===== APP SHELL: TOP BAR (lives outside .wrap so transforms on .wrap never break its fixed positioning) ===== -->
+<!-- A keyboard user's first press of Tab landed on the FF Cup chip and then
+     walked every one of the ten nav tabs before reaching any content. This is
+     the standard escape hatch: invisible until it is focused, then the first
+     thing on the page. -->
+<a class="skip-link" href="#main">Skip to the ladder</a>
+
 <header class="topbar">
   <div class="tb-brand">
     <span class="tb-ball"></span>
     <div class="tb-word">
-      <span class="tb-title">FGTA</span>
+      <h1 class="tb-title">FGTA</h1>
       <span class="tb-live" id="tagline">loading…</span>
     </div>
     <span class="ffcup-chip" id="ffcupChip" title="Open the FF Cup" role="button" tabindex="0"
@@ -8621,7 +8773,7 @@
   </div>
 </div>
 
-<div class="wrap">
+<main class="wrap" id="main" tabindex="-1">
   <!-- sub-navigation: segmented control, shown contextually -->
   <div class="subwrap">
     <nav class="subtabs" id="subMatches" style="display:none">
@@ -8823,7 +8975,7 @@
   <div class="col-side">
 
   <!-- REPORT GAME -->
-  <section>
+  <section data-print="hide">
     <div class="sec-label">Report a game</div>
     <div class="panel">
       <div class="grid2">
@@ -8896,7 +9048,7 @@
   </section>
 
   <!-- SCHEDULE A MATCH (admin only) -->
-  <section id="scheduleMatchSec" style="display:none">
+  <section id="scheduleMatchSec" style="display:none" data-print="hide">
     <div class="sec-label">Schedule a match</div>
     <div class="panel">
       <div class="grid2">
@@ -8928,7 +9080,7 @@
   </section>
 
   <!-- MATCHUP ODDS -->
-  <section>
+  <section data-print="hide">
     <div class="sec-label">Matchup odds</div>
     <div class="panel">
       <div class="odds-label">Pick two players to see win probability</div>
@@ -9595,7 +9747,7 @@
   <div id="view-doubles" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
     <div class="live-mount"></div>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Report a doubles match</div>
       <div class="panel">
         <div class="pred-hint">Same ladder engine, scoped to the pairing — a team rating is its own thing, separate from either player's singles Elo.</div>
@@ -9614,7 +9766,7 @@
       <div class="sec-label">Doubles standings <span class="pred-tag">Team rating</span></div>
       <div class="panel" id="doublesStandings"></div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Best pairing suggester</div>
       <div class="panel">
         <div class="pred-hint">Blends each player's singles form into a rough chemistry score for a hypothetical pairing — a starting point, not a guarantee.</div>
@@ -9628,7 +9780,7 @@
   <div id="view-training" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
     <div class="live-mount"></div>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Log a casual session</div>
       <div class="panel">
         <div class="pred-hint">1v1, Kings court, or casual doubles — track who showed up and how long each person actually played. Separate from the competitive ladder.</div>
@@ -9660,7 +9812,7 @@
         <div id="calDayDetail" style="margin-top:12px"></div>
       </div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Weekly availability</div>
       <div class="panel">
         <div class="pred-hint">Set the windows you're usually free — lets the scheduler below find real overlap instead of a group chat back-and-forth.</div>
@@ -9669,7 +9821,7 @@
         <button class="btn ghost" style="margin-top:12px;width:auto" onclick="saveAvailability()">Save availability</button>
       </div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Smart scheduler</div>
       <div class="panel">
         <div class="pred-hint">Finds the windows where both players are actually free.</div>
@@ -9754,7 +9906,7 @@
     <b>⚙ One-time setup</b><br>
     This page isn't connected yet. Open the file and set your <code>SUPABASE_URL</code> and <code>SUPABASE_KEY</code> near the top of the script, run the <code>admin-security.sql</code> migration in your Supabase project, then create your admin login in Authentication → Users.
   </div>
-</div>
+</main><!-- /wrap -->
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- One polite live region for the whole app. Announcing a score by putting
@@ -27627,7 +27779,7 @@ function kitFormHTML(owner, frames){
     + esc(KIT_STRINGS[k].label) + '</option>').join("");
   const opts = frames.map(r =>
     '<option value="' + r.id + '">' + esc(r.name || "Racket") + '</option>').join("");
-  return '<section><div class="sec-label">Log a stringing</div><div class="panel">'
+  return '<section data-print="hide"><div class="sec-label">Log a stringing</div><div class="panel">'
     + '<div class="pred-hint">Everything else — the hours, how often you play, when it comes due — '
     + 'is read off the matches and sessions already recorded. This is the only part nobody else knows.</div>'
     + '<div class="grid2" style="margin-top:12px">'
