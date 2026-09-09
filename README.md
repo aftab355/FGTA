@@ -294,6 +294,26 @@ Every write goes through one helper (`optWrite`) rather than talking to Supabase
 
 If the target stack has React Query / SWR / RTK Query, this maps directly onto their optimistic-mutation primitives (`onMutate` + `onError` rollback + coalesced invalidation) — don't reimplement the bookkeeping by hand.
 
+### …and a failed write is kept, if it never left the phone
+This app is used **courtside**, on a phone, at a public park under a hydro corridor. Every write already failed *honestly* when the signal was gone — and honestly is not the same as usefully, because the person is standing there holding a completed match with nowhere to put it.
+
+So a failure is now sorted into two piles, and **everything else is downstream of getting that sort right** (`oqClassify`):
+
+| | what happened | what to do |
+|---|---|---|
+| **refused** | the server answered, and its answer was no — RLS, a duplicate key, a dangling FK, a column that was never migrated | roll it back and say so, exactly as before. Retrying is pointless and, for a duplicate, worse |
+| **network** | nothing reached the server — no signal, DNS, a captive portal, a 5xx from a proxy, a 429 | keep the change on screen and park the write in the **outbox** |
+
+The classifier is **deliberately biased toward "refused"**, because the two mistakes are not symmetric: a wrongly-queued write retries forever against a server that will never take it and sits in somebody's outbox looking like unsent work, while a wrongly-dropped one loses something the caller has already put back in the form. Anything it does not confidently recognise is a refusal. `test/outbox.test.js` is mostly that asymmetry, written out as the real messages Postgres, PostgREST and four browsers actually produce — including the ordering traps (a 5xx body that mentions "duplicate"; a refusal that mentions "network").
+
+- **A descriptor, not a closure.** `optWrite` takes a `write` function and a function cannot be written to localStorage, so a queueable call passes a plain `{table, op, row, optional, label}` alongside it and the outbox rebuilds the Supabase call from that on the way out. It is **opt-in per call site**: a write nobody has thought about being replayed twenty minutes later, out of order, should fail honestly instead. Currently on: reporting a game, submitting a reffed match, logging a session, logging a stringing.
+- **A reffed match is the worst thing in the app to lose** — two hours of somebody's afternoon, tapped in point by point. `ptSubmit` queues it and lets them put the phone away.
+- Retries on `online`, on the tab coming back, and on a jittered backoff (1.5s → 5min) so a clubhouse of phones rejoining the same wifi do not all fire at once. Serial, stopping at the first thing still not sending — if the signal is gone it is gone for all of them.
+- Items retire by age (a week) and by attempt count, so nothing retries to the heat death.
+- A standing pill ("2 things waiting to send"), not a toast: it is a state, not an event, and it survives a reload — which is the case it exists for, a phone closed at the court and opened again at home.
+
+**One bug this exposed, and it is the reason the outbox is wired before anything else.** `supabase` comes from a CDN `<script>`. When that request fails — which is *precisely the offline case* — the identifier is undefined and `sb = supabase.createClient(...)` threw an uncaught ReferenceError that stopped the script dead. Measured on an offline load: everything defined above that line survived, everything below it never ran. That is the **whole Admin Studio** (`SITE` left in the temporal dead zone, so even `typeof SITE` threw) plus the tail wiring. The client is built inside a `try` now, `sb` stays null, and the app degrades to the offline shell it was already designed to be instead of half-executing.
+
 ## Design Tokens
 
 ### Colors (CSS custom properties in the source)
@@ -466,6 +486,7 @@ No dependencies, no build, no runner: each file is `node test/<name>.test.js` an
 
 - `elo.test.js` — **the rating engine**, which had no coverage at all until now, and is the one piece of this app whose output people argue about. A bug in the feed loses a post and somebody notices within the hour; a bug in here quietly rewrites who is winning and produces a table exactly as plausible as the right one. Covers the margin multiplier, the per-player K, the replay, and — most importantly — **the date gates**. Margin of victory and the dynamic K were both shipped with an explicit promise not to re-score anything already played, and that promise is enforced entirely by two string comparisons; the last section replays a pre-gate season and checks it against a flat-K replay written out by hand, to the point.
 - `kit.test.js` — the string model. The curve has no ground truth available, so what is asserted is its *shape*: monotone in both clocks, bounded at both ends, and each material's two clocks arranged so the one that is supposed to run out first does. The hour readers are a different matter and are tested against real rows, including every way they can be wrong — a ref who never pressed stop, a match tiebreak that reads as a fifteen-game set, a practice row from a deployment that skipped the `players` migration.
+- `outbox.test.js` — the offline queue, and mostly its classifier: the real failure messages from Postgres, PostgREST and four browsers, sorted into "the server said no" and "it never got there".
 - `palette.test.js` — the fuzzy matcher and ranker, held to the ordering promises in the section above.
 - `robin-plus.test.js`, `park-busy.test.js`, `score*.test.js`, `serve*.test.js`, `floor.test.js`, `studio*.test.js` — the draw solver, the busyness model, the score reconstruction, and the Admin Studio.
 - The video tests (`ball`, `bigfile`, `dynamics`, `onsets`, `preview`, `render`, `scoreboard`, `serve-vision`) need fixtures first — run the `test/make-*.js` scripts — and some need a Playwright chromium. They say so and exit 2 rather than failing.

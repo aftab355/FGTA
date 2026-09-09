@@ -79,7 +79,7 @@ function loadElo(opts){
                  'DYNK_SETTLED_K','DYNK_MIN','DYNK_MAX','DYNK_RUST','DYNK_RUST_CAP',
                  'DYNK_FULL_GAMES','DYNK_FORMAT_MIN','dynKApplies','formatReliability','playerK',
                  'matchKPair','kTracker','lastPlayedMap','playerLiveK','preGameRatings',
-                 'matchKOf','winProb','computeStandings'];
+                 'matchKOf','winProb','computeStandings','invalidateStandings'];
   const pre = [
     'const K = ' + (o.K == null ? 32 : o.K) + ';',
     'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
@@ -87,16 +87,30 @@ function loadElo(opts){
     'let ELO_DRIFT = 0;',
     /* the engine reads a module-level `matches`; the test owns it */
     'let matches = arguments[0].matches;',
+    'let tournaments = arguments[0].tournaments || [];',
     'const countsForElo = arguments[0].countsForElo || (() => true);',
     'const countsForAnalysis = arguments[0].countsForAnalysis || (() => true);'
   ].join('\n');
   const api = new Function(pre + '\n' + code +
     '\nreturn {' + names.join(',') +
-    ',setMatches:(m)=>{matches=m;}, drift:()=>ELO_DRIFT,' +
+    ',setMatches:(m)=>{matches=m; invalidateStandings();}, drift:()=>ELO_DRIFT,' +
     ' setDivisor:(d)=>{DIVISOR=d;}, K, START, get DIVISOR(){return DIVISOR;}};')(
-      {matches: o.matches || [], countsForElo: o.countsForElo,
+      {matches: o.matches || [], tournaments: o.tournaments,
+       countsForElo: o.countsForElo,
        countsForAnalysis: o.countsForAnalysis});
   return api;
+}
+
+/* The outbox. The classifier is the interesting part — everything else in
+   the queue hangs off whether a failure is read as "refused" or "never
+   arrived" — and it is pure, so the test hands it errors rather than a
+   network. */
+function loadOutbox(){
+  const code=region('OQ-CORE');
+  const names=['OQ_KEY','OQ_MAX','OQ_MAX_AGE_MS','OQ_MAX_ATTEMPTS','OQ_BACKOFF',
+               'oqBackoff','oqClassify','oqItem','oqExpired','oqParse','oqDue',
+               'oqAfterAttempt','oqSummary'];
+  return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
 
 /* The park-busyness model. It leans on a handful of things that live outside
@@ -192,4 +206,4 @@ function loadEloScope(tournaments){
                       '\nreturn {' + names.join(',') + '};')(tournaments || []);
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,APP};
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadOutbox,APP};

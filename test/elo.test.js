@@ -365,6 +365,59 @@ section('THE DATE GATES — the promise that history is never re-scored');
   ok(near(E(hist).drift(), 0), 'with no drift, because no two Ks ever differed');
 }
 
+section('the memo — sixty-four callers, one replay');
+{
+  /* computeStandings() is called 64 times from index.html and replays the
+     whole league every time. The cache rests on one property of the rest of
+     the app — `matches` is never mutated in place, only replaced — so these
+     check both halves: that a repeat call is the same answer, and that a
+     replaced array really is a different one. */
+  const ms = [];
+  for(let i = 0; i < 60; i++)
+    ms.push(game('P' + (i % 6), 'P' + ((i + 2) % 6), i % 2, '2026-06-' + String((i % 28) + 1).padStart(2, '0')));
+  const e = E(ms);
+  const a = e.computeStandings();
+  const b = e.computeStandings();
+  ok(a.length === b.length && a.every((p, i) => p.name === b[i].name && near(p.rating, b[i].rating)),
+     'a repeat call is the same table');
+  ok(a !== b, 'but a different array, so one caller cannot reorder everybody else\'s');
+  a.sort((x, y) => x.name.localeCompare(y.name));
+  a.reverse();
+  const c = e.computeStandings();
+  ok(c.every((p, i) => p.name === b[i].name),
+     'and a caller that sorts what it was handed does not poison the next call');
+  ok(near(e.drift(), 0), 'the drift comes back with a cache hit, not stale from some other replay');
+
+  /* the invalidation the app actually relies on: a new array */
+  e.setMatches(ms.slice(0, 10));
+  ok(e.computeStandings().length <= 6 && e.computeStandings()[0].games <= 10,
+     'replacing the match array replaces the answer');
+  e.setMatches(ms);
+  ok(e.computeStandings().every((p, i) => near(p.rating, b[i].rating)),
+     'and putting the old one back gives the old table exactly');
+
+  /* and the explicit escape hatch, for a future write path that does mutate */
+  e.invalidateStandings();
+  ok(e.computeStandings().every((p, i) => near(p.rating, b[i].rating)),
+     'a forced invalidation recomputes to the same answer rather than a different one');
+}
+{
+  /* DIVISOR is live-adjustable from the admin divisor preview, so it is part
+     of the key — a cache that ignored it would show the old ladder after the
+     one setting whose entire purpose is to change the ladder */
+  const ms = [game('A', 'B', 1, '2026-06-01'), game('B', 'C', 1, '2026-06-02')];
+  const e = E(ms);
+  const before = e.computeStandings().map(p => p.rating);
+  e.setDivisor(100);
+  const after = e.computeStandings().map(p => p.rating);
+  ok(before.some((v, i) => !near(v, after[i])),
+     'changing the divisor changes the table rather than serving the cached one',
+     before.map(v => v.toFixed(2)).join() + ' -> ' + after.map(v => v.toFixed(2)).join());
+  e.setDivisor(400);
+  ok(e.computeStandings().every((p, i) => near(p.rating, before[i])),
+     'and putting it back puts the table back');
+}
+
 section('the engine does not fall over on the rows it will actually be handed');
 {
   ok(E([]).computeStandings().length === 0, 'an empty league is an empty table');
