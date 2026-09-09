@@ -1,0 +1,12 @@
+# Supabase local config. Only the pieces this project actually uses — the
+# generated file is ~200 lines of defaults, and defaults that are written down
+# are defaults somebody later edits by accident.
+project_id = "fgta"
+
+[functions.recap]
+# The recap is called by pg_cron with a shared secret in a header, not by a
+# signed-in user, so Supabase's own JWT gate would reject it before the
+# function ran. Auth is the RECAP_SECRET check inside index.ts instead — which
+# is why that check treats a missing secret as misconfiguration rather than as
+# permission to run.
+verify_jwt = false
