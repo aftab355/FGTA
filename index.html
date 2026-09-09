@@ -23800,6 +23800,69 @@ async function rpRestoreLeg2(tid){
 }
 window.rpRestoreLeg2 = rpRestoreLeg2;
 
+/* ---------- voiding a single fixture -----------------------------
+   The trim above only ever offers balanced cuts — everyone down to
+   the same number of return games — because it's choosing a schedule
+   still to be played. Sometimes a single game just isn't going to
+   happen (a no-show, a withdrawal) and the rest of the group is
+   already on record: there's nothing left to rebalance, only one
+   fixture to take off the sheet. Voiding does exactly that and
+   nothing more — it doesn't touch anyone else's games, so the group
+   can come out uneven, and the table is drawn from whatever was
+   actually played. Kept separate from state.trim so the return-leg
+   story above stays true (it still means "everyone level"). --------- */
+async function rpVoidFixture(tid, round){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const state = rpRead(t);
+  if(!state) return;
+  const order = state.order || [];
+  const fx = order.find(f => f.round === round);
+  if(!fx) return toast("Nothing to void", true);
+  if(rpGame(tid, round)) return toast(`${fx.p1} vs ${fx.p2} is already on record`, true);
+
+  if(!confirm(`Void ${fx.p1} vs ${fx.p2}? It comes off the group for good — the table is drawn from what's already been played.`)) return;
+
+  const dates = Object.assign({}, state.dates || {});
+  const parkedDate = dates[round] || null;
+  delete dates[round];
+
+  state.order   = order.filter(f => f.round !== round);
+  state.dates   = dates;
+  state.metrics = rpDrrMetrics(state.order, state.roster, rpContext(state.roster));
+  state.voided  = (state.voided || []).concat([{round, p1:fx.p1, p2:fx.p2, leg:fx.leg, date:parkedDate}]);
+
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  rpOpenFixture = null;
+  toast(res.local ? "Voided ✓ (this device only)" : "Voided ✓");
+  renderTournaments(); renderTournamentDetail(tid); renderCupMarquee();
+}
+window.rpVoidFixture = rpVoidFixture;
+
+async function rpRestoreVoid(tid, round){
+  if(!isAdmin) return toast("Admin only", true);
+  const t = tournaments.find(x=>x.id===tid); if(!t) return;
+  const state = rpRead(t);
+  const list = (state && state.voided) || [];
+  const v = list.find(x => x.round === round);
+  if(!v) return toast("Nothing to restore", true);
+  if(!confirm(`Put ${v.p1} vs ${v.p2} back on the sheet?`)) return;
+
+  state.voided = list.filter(x => x.round !== round);
+  state.order  = (state.order || []).concat([{p1:v.p1, p2:v.p2, leg:v.leg, round:v.round}])
+    .sort((a,b)=> rpRoundNo(a.round) - rpRoundNo(b.round));
+  if(v.date){ state.dates = Object.assign({}, state.dates); state.dates[round] = v.date; }
+  state.metrics = rpDrrMetrics(state.order, state.roster, rpContext(state.roster));
+
+  const res = await rpWrite(t, state);
+  if(res.error) return toast(res.error.message, true);
+  rpOpenFixture = null;
+  toast(res.local ? "Restored ✓ (this device only)" : "Restored ✓");
+  renderTournaments(); renderTournamentDetail(tid); renderCupMarquee();
+}
+window.rpRestoreVoid = rpRestoreVoid;
+
 /* ============================================================
    RESULTS, STANDINGS, QUALIFICATION
    ============================================================ */
@@ -25188,7 +25251,25 @@ function rpReportPanel(t, fx, m){
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn ghost" style="margin:0;flex:1" onclick="rpToggleReport(null,${t.id})">Cancel</button>
         ${m?`<button class="btn ghost" style="margin:0;flex:1;color:var(--danger)" onclick="rpUndoResult(${t.id},'${esc(fx.round)}')">Undo result</button>`:""}
+        ${!m && stage==="group"?`<button class="btn ghost" style="margin:0;flex:1;color:var(--danger)" onclick="rpVoidFixture(${t.id},'${esc(fx.round)}')">Won't be played</button>`:""}
       </div>
+    </div>`;
+}
+
+/* voided fixtures, if any: what came off and a way to put each back */
+function rpVoidPanel(t, state){
+  const voided = (state.voided || []).slice();
+  if(!voided.length) return "";
+  const rows = voided.map(v => `
+    <div class="rp-trim-opt">
+      <div class="rp-trim-main"><b>${esc(v.p1)} v ${esc(v.p2)}</b> won't be played</div>
+      ${isAdmin?`<button class="btn ghost rp-trim-go" style="margin:0;width:auto;padding:9px 14px" onclick="rpRestoreVoid(${t.id},'${esc(v.round)}')">Put it back</button>`:""}
+    </div>`).join("");
+  return `
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Voided <span class="count-pill">${voided.length}</span></div>
+      <div class="pred-hint">Taken off the group for good — the table is drawn from what's already been played.</div>
+      ${rows}
     </div>`;
 }
 
@@ -25693,6 +25774,7 @@ function renderRobinPlus(t){
       ${fixtures}
     </div>
 
+    ${rpVoidPanel(t, state)}
     ${rpTrimPanel(t, state)}
     ${rpCalendarPanel(t)}
     ${rpStandingsPanel(t, state, snap)}
