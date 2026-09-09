@@ -39,6 +39,66 @@ function loadScore(){
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
 
+/* The command palette's matcher and ranker. Pure by construction — strings
+   and plain item records in, scores and an order out — so the whole thing
+   loads with no DOM, no app state and no stubs at all. */
+function loadPalette(){
+  const code=region('CP-CORE');
+  const names=['cpNorm','cpIndexable','cpBoundaries','cpFuzzy','cpScore','cpRank',
+               'cpSegments','cpRecencyBoost','CP_W','CP_FIELD','CP_MIN_SCORE',
+               'CP_RECENT_MAX','CP_RECENT_HALFLIFE_MS'];
+  return new Function(code+'\nreturn {'+names.join(',')+'};')();
+}
+
+/* The string-decay model. Pure arithmetic plus three readers over match and
+   practice rows, so the test hands it rows rather than a database. */
+function loadKit(){
+  const code=region('KIT-CORE');
+  const names=['KIT_STRINGS','KIT_MAT','KIT_FLOOR','KIT_BEDIN_DAYS','KIT_BANDS',
+               'KIT_RESTRING_AT','KIT_HORIZON','KIT_RATE_DEFAULT','KIT_MIN_PER_GAME',
+               'KIT_MATCH_FALLBACK_MIN','kitTensionClockHours','kitRemaining','kitTension',
+               'kitTerms','kitPlayability','kitBinding','kitBand','kitHoursUntil',
+               'kitMatchMinutes','kitPracticeMinutes','kitHoursFor','kitWeeklyRate','kitAssess'];
+  return new Function(code+'\nreturn {'+names.join(',')+'};')();
+}
+
+/* The rating engine: margin of victory, the per-player K, and the replay
+   that turns a list of matches into a table. Two regions, because
+   computeStandings() lives a few hundred lines above the constants it uses
+   and moving code to suit a test would be the wrong way round.
+
+   Everything the engine reaches for outside those regions comes in as
+   something the caller controls: the match list, the two event filters, and
+   the three tuning constants. Nothing is stubbed that the engine actually
+   computes. */
+function loadElo(opts){
+  const o = opts || {};
+  const code = region('ELO-ENGINE') + '\n' + region('ELO-STANDINGS');
+  const names = ['MOV_ENABLED','MOV_START','MOV_MIN','MOV_MAX','BLOWOUT_FLOOR_START',
+                 'BLOWOUT_FLOOR_MULT','movMultiplier','DYNK_ENABLED','DYNK_START','DYNK_STEPS',
+                 'DYNK_SETTLED_K','DYNK_MIN','DYNK_MAX','DYNK_RUST','DYNK_RUST_CAP',
+                 'DYNK_FULL_GAMES','DYNK_FORMAT_MIN','dynKApplies','formatReliability','playerK',
+                 'matchKPair','kTracker','lastPlayedMap','playerLiveK','preGameRatings',
+                 'matchKOf','winProb','computeStandings'];
+  const pre = [
+    'const K = ' + (o.K == null ? 32 : o.K) + ';',
+    'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
+    'const START = ' + (o.start == null ? 500 : o.start) + ';',
+    'let ELO_DRIFT = 0;',
+    /* the engine reads a module-level `matches`; the test owns it */
+    'let matches = arguments[0].matches;',
+    'const countsForElo = arguments[0].countsForElo || (() => true);',
+    'const countsForAnalysis = arguments[0].countsForAnalysis || (() => true);'
+  ].join('\n');
+  const api = new Function(pre + '\n' + code +
+    '\nreturn {' + names.join(',') +
+    ',setMatches:(m)=>{matches=m;}, drift:()=>ELO_DRIFT,' +
+    ' setDivisor:(d)=>{DIVISOR=d;}, K, START, get DIVISOR(){return DIVISOR;}};')(
+      {matches: o.matches || [], countsForElo: o.countsForElo,
+       countsForAnalysis: o.countsForAnalysis});
+  return api;
+}
+
 /* The park-busyness model. It leans on a handful of things that live outside
    its region — the competition map built from the court table, the shared
    weather read, the home court's own feed — so they come in as stubs the test
@@ -132,4 +192,4 @@ function loadEloScope(tournaments){
                       '\nreturn {' + names.join(',') + '};')(tournaments || []);
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,APP};
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,APP};

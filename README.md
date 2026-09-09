@@ -205,10 +205,63 @@ Report a doubles match (same Elo engine, scoped to the pairing) and view doubles
 ### 10. Messages (DMs)
 Direct messages between players, two-pane layout (conversation list + thread) collapsing to single-pane on mobile.
 
+### 11. The Kit — rackets, strings, and the hours already on record
+Rackets and string jobs per player, and the one question anybody asks about a string bed: is it still any good?
+
+Every answer to that in circulation is a rule of thumb about a number nobody has — "restring as many times a year as you play per week". It is a proxy for playing **hours**, and a poor one: it cannot tell a season of forty-minute hits from a season of three-set finals, and it quietly assumes the string was fresh in January.
+
+This app does not have to guess at the hours. **It has been recording them all along, for other reasons**, and `kitHoursFor()` reads them back out in three tiers, best first:
+
+| tier | source | how good it is |
+|---|---|---|
+| **tracked** | a point-tracked match carries `rallies`, and inside it the instant the ref started and the instant the match ended | exact, to the second |
+| **scoreline** | any other approved match has a set score, and a set score is a game count | a decent estimate (`KIT_MIN_PER_GAME`) |
+| **practice** | the casual-session form already asks for minutes **per player** | exact, as reported |
+| **assumed** | an approved match with nothing else written down | a flat hour |
+
+A ref who forgets to press stop leaves an eight-hour match on record, so a tracked reading outside `[4, 240]` minutes falls back to its scoreline rather than putting an afternoon on somebody's strings. A match tiebreak written in the sets column (`10-8`) is scored as the short thing it is, not the fifteen-game set it looks like — the same correction the dynamic K makes, for the same reason.
+
+**Every card shows the split**, as a bar and in words ("4.2h timed by a ref · 2.8h logged sessions · 1.6h from scorelines"), and says so plainly when most of its own total was estimated. The hours are the only part of this screen that is real; the reader is entitled to know how real.
+
+#### The decay curve
+`kitRemaining()` is a two-clock model per material (`KIT_STRINGS`: poly, multifilament, synthetic gut, natural gut, hybrid, kevlar):
+
+- **bed-in** — the ~10% a bed loses in its first day or two, before anybody hits a ball. **It is not charged against playability.** A stringer pre-stretches for it and "strung at 52" has always meant the tension it settles to. An earlier draft counted it and reported a brand-new racket as a third gone: technically true against the machine reading, and useless as a description.
+- **play** — exponential in hours hit, with a per-material constant.
+- **age** — exponential in days elapsed. Polyester goes off on the shelf; natural gut barely notices. This is why the countdown takes the player's actual weekly rate: a bed that comes out once a fortnight has **fewer** usable hours left than one played every day, which is exactly what the hours-only rules of thumb get wrong.
+
+**Playability** (0–100) is the smaller of two clocks — tension gone, or the string physically worn — and `kitBinding()` says which, because "the tension went" and "it wore through" call for different strings next time, not just a restring. The two clocks are deliberately set close to each other per material, and **which one binds first is the claim each row of `KIT_STRINGS` makes about its string**: poly and hybrid go dead while perfectly intact (the reason a pro restrings between matches); everything else notches or breaks while still holding a usable tension. `test/kit.test.js` asserts that ordering per material, so retuning a constant cannot quietly reverse it.
+
+**The score is monotone, on purpose, and it costs something.** A poly bed genuinely does not feel its best in its first hour. An earlier draft modelled that as a rising ramp and the score climbed for two hours before falling; it was defensible and it was a bad idea, because a headline number that can go *up* invites the reading that the strings tightened themselves. So break-in is **reported** (`brokenIn`, "still breaking in") rather than priced in.
+
+#### What it is honest about
+The constants are published rules of thumb, not measurements — nobody here owns a tension meter, and the panel says so in a footnote rather than printing a tension to one decimal place and hoping. What the model is good for is **the ordering and the shape**: which bed is further gone than which, and roughly when this one stops being worth playing with.
+
+#### The rest of the screen
+- **Live cards**, one per frame currently strung: band colour as a top rule, a playability meter, tension now vs strung, hours on it, days on the racket, why it is going, and "about 9 days at 3.2 h/week".
+- **The curve**, inline SVG in the app's own chart idiom, with the bed's position on it and the restring line marked.
+- **History** — retired beds, each **frozen at the moment it came off** rather than still accruing hours it never played. Without that, a season of history reads as a column of dead beds, which is true of the string and useless as a record. Cutting a bed out therefore writes a date (`removed_at`) instead of deleting the row, which is the only way "it lasted 31 days" is knowable later.
+- Requires two tables — see **`docs/kit.sql`**. Both optional; without them the screen explains what it would do and points at the file, because "we never created that table" and "you have not added a racket yet" look identical from the outside and want completely different actions from the reader.
+
+## The command palette (⌘K)
+The app grew to ten top-level views, nineteen sub-tabs and well over a hundred actions living behind a menu, a sheet, a sub-tab or a scroll. Reaching "the validation tab of Analytics" is four taps and knowing where it lives; reaching the FF Cup draw means knowing Events hides behind the More sheet on a phone. Fine for the handful of people whose habits grew alongside the app, hostile to everybody else.
+
+**⌘K / Ctrl-K from anywhere**, or `/` when not typing into something. It is a **superset of the old search box**, not a second one beside it: players, matches, posts and #tags are four of its providers now rather than the whole list, and the ⌕ button opens this. `openSearch()` / `closeSearch()` survive as aliases so nothing written against the old box needed to change.
+
+**The hard part is the ordering, not the list.** With ~200 candidates and a two-letter query a substring filter returns thirty rows in array order and the one you meant is nineteenth. So `cpFuzzy()` scores a subsequence alignment — the shape of thing an editor's file finder uses — as a dynamic program rather than a greedy left-to-right scan, because greedy gets "app" in `a-pretty-app` wrong (it takes the leading `a`, then the `p`s of "pretty", and never sees the whole word sitting there). Bonuses for prefixes, word starts, camelCase boundaries and consecutive runs; penalties for gaps and unmatched tail. Then `cpRank()` adds each item's standing weight and a recency boost, and caps how many rows any one group may contribute so forty players cannot bury five commands.
+
+- **`keys` is the highest-leverage field in the registry** — the words a label does not say out loud. It is why "restring" finds The Kit and "glicko" finds Rating models.
+- **Recency reorders equals, it never promotes a bad match.** Half-life decay (`cpRecencyBoost`), and the whole boost is deliberately worth less than a prefix match — so picking Backup once floats it for "do", and "doub" still means Doubles.
+- **Weight is added, never multiplied**, so a heavyweight cannot win on a bad match: "d" must not open Doubles just because Doubles is important.
+- Group headings appear **only when there is no query**. With a query the order is the ranking's, so the groups interleave and a heading at every run boundary read as a rendering fault rather than as information.
+- Proper combobox/listbox ARIA — focus stays in the input and `aria-activedescendant` moves — rather than a list of buttons Tab has to walk.
+- The core is pure and lives in the `CP-CORE` sentinel region; `test/palette.test.js` holds it to every promise above with no DOM at all.
+
 ## Mobile Navigation
-- **Desktop (>=860px)**: horizontal top tab bar with an animated underline indicator.
+- **Desktop (>=860px)**: horizontal top tab bar with an animated underline indicator. Ten tabs is the most it holds; **The Kit deliberately is not one of them** — it lives in the ☰ utility menu, the More sheet and ⌘K, because an eleventh tab pushes Messages off the end.
+- **The bar used to clip silently.** Between the 860px breakpoint and about 1400px the ten tabs overflowed, and because the scrollbar is hidden (right on a phone) there was no scrollbar, no fade and no indication at all — on a 1280px laptop, the commonest desktop width there is, Messages simply was not there. Fixed in two layers: the tabs tighten across 860–1440px so they fit, and `moveTabIndicator()` — the one function that already measures this bar, on every view switch, resize and webfont load — now also sets a `.tb-cut` class that fades the right edge when anything really is cut off. It is also called once on the way in, because every trigger it had was an *event*, and a first paint at an overflowing width fires none of them.
 - **Mobile (<860px)**: top tab bar hides; a fixed bottom nav bar (.botbar) shows the 5 most-used views (Ladder, Home, Matches, Predict, Stats) plus a "More" button.
-- **"More" sheet**: a bottom sheet (slide-up panel + backdrop) listing the remaining views as a 2-column icon grid: Doubles, Training, Court, Events, Messages, Search, Surface (cycles court-surface theme), Stadium (ambient stadium-mode toggle), Help. *(Doubles and Training were previously missing from this sheet — a mobile nav bug fixed in this design pass — make sure the target implementation includes every view here.)*
+- **"More" sheet**: a bottom sheet (slide-up panel + backdrop) listing the remaining views as a 2-column icon grid: Doubles, Training, The Kit, Court, Events, Messages, Search, Surface (cycles court-surface theme), Stadium (ambient stadium-mode toggle), Help. *(Doubles and Training were previously missing from this sheet — a mobile nav bug fixed in this design pass — make sure the target implementation includes every view here.)*
 - A secondary fixed bar sits above the bottom nav: a scrolling "live ticker" of recent results/comments (marquee-style horizontal scroll, pauses on hover/tap).
 
 ## Interactions & Behavior
@@ -222,7 +275,8 @@ Direct messages between players, two-pane layout (conversation list + thread) co
 
 ## State Management
 No framework — plain module-level JS arrays/objects re-rendered via innerHTML on data change:
-- matches, comments, tournaments, posts, scheduledMatches, practiceLog, availabilityData, playerRoster — all mirrors of Supabase tables, refetched on load and on postgres_changes realtime subscriptions.
+- matches, comments, tournaments, posts, scheduledMatches, practiceLog, availabilityData, playerRoster, rackets, stringJobs — all mirrors of Supabase tables, refetched on load and on postgres_changes realtime subscriptions.
+- `kitTables` — which of the Kit's two optional tables actually answered. `load()` already treats a failing table as "keep what is in memory", which is right for every other table and not enough for these two: an empty bag and a table that was never created look identical and want completely different sentences on screen.
 - presentUsers, ghostCursors, presenceChan — ephemeral realtime presence/broadcast state (Supabase Realtime channels), not persisted.
 - Point tracker keeps its own local PT state object (per-game point arrays, undo/redo stacks, timer) until Submit inserts a row into matches.
 - Calendar keeps calCursor (visible month) and selectedCalDay (highlighted day key) as local UI state.
@@ -402,9 +456,19 @@ No custom illustrations or photography — avatars are generated from initials (
 - docs/tournament-stats.sql — the optional `tournaments.counts_stats` column: how to keep one event out of the stats as well as out of the ladder, and why you almost never want to.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
 - docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.
+- docs/kit.sql — the Kit's two optional tables (`rackets`, `string_jobs`), why the hours are deliberately NOT stored in either of them, and why cutting a bed out writes a date rather than deleting the row.
 - docs/rally-reel.sql — the one column the rally reel needs (`matches.rallies`), the shape of what goes in it, and what happens if you skip it.
 - FGTA Ladder (standalone).html — an older snapshot of the app pre-bundled as a self-contained offline-loadable file; predates the move to YouTube streaming and is kept only for offline reference, not as a build artifact.
 - manifest.webmanifest, sw.js, icons/ — the installable-app layer, see below.
+
+## Tests
+No dependencies, no build, no runner: each file is `node test/<name>.test.js` and prints its own pass/fail. `test/extract.js` pulls **sentinel-delimited regions straight out of index.html** — `/* ==== NAME-START ==== */ … /* ==== NAME-END ==== */` — so the tests run the shipped code rather than a copy of it that can drift, and throw rather than silently testing nothing if a sentinel moves.
+
+- `elo.test.js` — **the rating engine**, which had no coverage at all until now, and is the one piece of this app whose output people argue about. A bug in the feed loses a post and somebody notices within the hour; a bug in here quietly rewrites who is winning and produces a table exactly as plausible as the right one. Covers the margin multiplier, the per-player K, the replay, and — most importantly — **the date gates**. Margin of victory and the dynamic K were both shipped with an explicit promise not to re-score anything already played, and that promise is enforced entirely by two string comparisons; the last section replays a pre-gate season and checks it against a flat-K replay written out by hand, to the point.
+- `kit.test.js` — the string model. The curve has no ground truth available, so what is asserted is its *shape*: monotone in both clocks, bounded at both ends, and each material's two clocks arranged so the one that is supposed to run out first does. The hour readers are a different matter and are tested against real rows, including every way they can be wrong — a ref who never pressed stop, a match tiebreak that reads as a fifteen-game set, a practice row from a deployment that skipped the `players` migration.
+- `palette.test.js` — the fuzzy matcher and ranker, held to the ordering promises in the section above.
+- `robin-plus.test.js`, `park-busy.test.js`, `score*.test.js`, `serve*.test.js`, `floor.test.js`, `studio*.test.js` — the draw solver, the busyness model, the score reconstruction, and the Admin Studio.
+- The video tests (`ball`, `bigfile`, `dynamics`, `onsets`, `preview`, `render`, `scoreboard`, `serve-vision`) need fixtures first — run the `test/make-*.js` scripts — and some need a Playwright chromium. They say so and exit 2 rather than failing.
 
 ## Installable app (PWA)
 The site is installable on Android and iPhone as-is — no native app store build. `manifest.webmanifest` (linked from index.html's `<head>`) gives it a name, icon set, and standalone display mode; `sw.js` is a minimal service worker that makes install prompts eligible and caches an offline shell. Android/Chrome shows an install prompt (wired to the "Install app" button via `beforeinstallprompt`); iOS/Safari has no such prompt, so `installApp()` shows the manual "Share → Add to Home Screen" steps instead — this is a Safari limitation, not something fixable from the app.
