@@ -39,7 +39,17 @@ function launchOpts(){
 function initScript(){
   const empty = () => Promise.resolve({data: [], error: null});
   const one   = () => Promise.resolve({data: null, error: null});
-  const q = () => {
+
+  /* Every call the app makes is RECORDED on window.__sb. A stub that only
+     answers is a stub that cannot tell "the code called us and got nothing"
+     apart from "the code never called us" — and that is exactly the shape of
+     the window.sb-vs-sb bug that shipped: the studio silently skipped every
+     server call and the tests, which only ever checked that drafts applied,
+     could not see the difference. Assertions can now name the call. */
+  const log = window.__sb = {tables: [], rpcs: [], channels: [], publishes: []};
+
+  const q = (table) => {
+    log.tables.push(table);
     const c = {
       select: () => c, eq: () => c, order: () => c, limit: () => c,
       insert: empty, update: empty, upsert: empty, delete: empty,
@@ -48,13 +58,25 @@ function initScript(){
     };
     return c;
   };
-  const chan = {on(){ return chan; }, subscribe(){ return chan; }, unsubscribe(){}};
+  const chan = (name) => {
+    log.channels.push(name);
+    const c = {on(){ return c; }, subscribe(){ return c; }, unsubscribe(){}};
+    return c;
+  };
   window.supabase = {
     createClient(){
       return {
         from: q,
-        rpc: name => Promise.resolve({data: name === 'is_admin' ? true : null, error: null}),
-        channel: () => chan,
+        rpc: (name, args) => {
+          log.rpcs.push(name);
+          if(name === 'is_admin') return Promise.resolve({data: true, error: null});
+          if(name === 'publish_site_config'){
+            log.publishes.push(args);
+            return Promise.resolve({data: (log.publishes.length + 1), error: null});
+          }
+          return Promise.resolve({data: null, error: null});
+        },
+        channel: chan,
         removeChannel(){},
         storage: {from: () => ({upload: one, remove: one,
           getPublicUrl: () => ({data:{publicUrl:''}})})},

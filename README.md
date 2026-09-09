@@ -418,6 +418,8 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 
 Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site**, then click something and change it. **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
 
+**Change one, change all like it.** Restyling a match card restyles every match card — the toolbar shows the count, the others are outlined on the page, and a dropdown offers *just this one* when you mean only the one you clicked. It works because a config key is already a CSS selector, so a key of `.pend` styles every pending row through the same generated rule a positional key uses.
+
 **How it feels to use.** Clicking selects the nearest thing a person would *name* — a button, a heading, a section — not the deepest node under the cursor, and a toolbar appears on it with the things you'll want most. Double-click text and type into the page. Grab ⠿ and drag a section elsewhere. ⌘Z undoes anything (a whole colour drag is one step, not forty). The panel names your selection in plain words and offers sliders and swatches; the CSS selector is demoted to an **Advanced** disclosure.
 
 What it reaches:
@@ -504,7 +506,8 @@ No custom illustrations or photography — avatars are generated from initials (
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
 - docs/admin-studio.md — the in-app site editor: what each tab reaches, how the config compiles to a stylesheet rather than into the DOM, and where the limits are.
-- docs/site-config.sql — the `site_config` + `site_config_history` tables the studio publishes to, their admin-only RLS, the realtime publication, and the one-transaction `publish_site_config()`.
+- docs/site-config.sql — the `site_config` + `site_config_history` tables the studio publishes to, their admin-only RLS, the realtime publication, and the one-transaction `publish_site_config()`. Read this one.
+- docs/site-config.min.sql — the same migration with the prose stripped out, for pasting into the Supabase SQL editor. Paste it in an empty tab on its own: Supabase runs a tab as one transaction, so an error from an unrelated script above it silently rolls back everything after it. `test/site-config-sql.test.js` fails if the two files drift apart.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
 - docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.

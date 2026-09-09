@@ -11,19 +11,51 @@ Open the ☰ menu and choose **✎ Edit site**. It only appears once
 
 ## Setup (once)
 
-Run [`site-config.sql`](site-config.sql) in the Supabase SQL editor. It
-creates two tables, their RLS policies, the realtime publication and the
-`publish_site_config()` function. It is idempotent, so re-running it is
-safe.
+Paste [`site-config.min.sql`](site-config.min.sql) into the Supabase SQL
+editor and Run. It creates two tables, their RLS policies, the realtime
+publication and the `publish_site_config()` function.
 
-Not running it is a supported way to run this site: the app asks once,
-notes the missing table in the console, and renders the built-in defaults —
-which is exactly what the site looked like before any of this existed. The
-studio still opens and still previews, and says plainly that it cannot
+[`site-config.sql`](site-config.sql) is the same migration with the
+reasoning written out; read that one to understand it, paste the other.
+They cannot drift — `test/site-config-sql.test.js` fails if they do.
+
+> **Paste it on its own, in an empty editor tab.** Supabase runs a tab as
+> one transaction. One error anywhere — including a harmless
+> `42710: policy "…" already exists` from an unrelated script pasted above
+> it — rolls back *everything after it*. You get no tables and no obvious
+> sign why, because the only message shown is the one about the unrelated
+> script.
+
+Every statement is guarded (`if not exists`, `drop policy if exists`,
+`create or replace`), so running it twice is safe.
+
+### Did it work?
+
+```sql
+select
+  to_regclass('public.site_config')          as site_config,
+  to_regclass('public.site_config_history')  as history,
+  to_regproc('public.is_admin')              as is_admin_fn,
+  to_regproc('public.publish_site_config')   as publish_fn;
+```
+
+Four values, and `null` means missing:
+
+| Column | `null` means |
+|---|---|
+| `is_admin_fn` | **Run `admin-security.sql` first.** This migration doesn't create it and six of its policies depend on it. |
+| `site_config` | The migration didn't run — see the transaction note above. |
+| `history` | Same; it is created after `site_config`. |
+| `publish_fn` | Same; it is the last statement in the file. |
+
+All four non-null and the studio can publish. If `is_admin_fn` is the only
+one filled in, the migration aborted before its first `create table`.
+
+Not running it at all is a supported way to run this site: the app asks
+once, notes the missing table in the console, and renders the built-in
+defaults — exactly what the site looked like before any of this existed.
+The studio still opens and still previews, and says plainly that it cannot
 publish.
-
-The migration depends on `is_admin()` and the `admins` table from
-`admin-security.sql`, which the rest of the app already uses.
 
 ---
 
@@ -69,6 +101,43 @@ behaves normally with the panel still open. That's for navigating to
 another tab to carry on editing there.
 
 `Esc` unwinds one layer at a time: typing, then picking, then the studio.
+
+---
+
+## Change one, change all like it
+
+Clicking a match card and restyling it changes **every match card**. That is
+the default, because doing the other thirty-nine by hand is data entry, not
+editing.
+
+The toolbar shows a pill with the count (`◆ 12`) and the panel says
+*"Changes apply to — all 12 like this"*, with every other member outlined on
+the page so you can see the blast radius before you touch anything. The
+dropdown offers each candidate group and **just this one**; the toolbar pill
+flips between group and single in one click.
+
+It works because a config key is already a CSS selector: a key of `.pend`
+styles every pending row through exactly the same generated rule a
+positional key uses. Nothing new runs — the studio just picks a broader
+selector.
+
+Groups are found most-specific-first: the compound class set (`.a.b.c`),
+then each class alone, then a container-scoped tag (`#topTabs>button`) for
+elements with no classes. **State classes are stripped** — `.on`, `.open`,
+`.g1` say what an element is *doing*, not what it *is*, and a rule keyed on
+one would come and go as the page updates.
+
+Two things stay per-element on purpose:
+
+- **Moving.** "Put all forty cards third" is not a thing anyone means.
+- **Undo my edits** clears exactly the scope shown, and the button says
+  which — *Undo edits on all 12* or *Undo edits on this one*. Clearing both
+  at once would mean narrowing to fix one card and silently resetting the
+  rest.
+
+Retyping at group scope gives every member the same words, which is what you
+want for a repeated label and not what you want for a match name — so the
+panel warns when you are about to do it.
 
 ---
 
@@ -245,7 +314,24 @@ node test/studio.test.js          # theme, type, nav, order, features, CSS, pres
 node test/studio-pick.test.js     # hover, click-to-select, inspect, restyle, hide, Esc
 node test/studio-blocks.test.js   # add, edit, sanitise, re-render, reload, delete
 node test/studio-direct.test.js   # toolbar, inline typing, undo/redo, drag-to-reorder
+node test/studio-publish.test.js  # the server half: load, realtime, publish, history
+node test/studio-scope.test.js    # change one, change all like it
+node test/site-config-sql.test.js # the two SQL files agree, and stay re-runnable
 ```
+
+`site-config-sql` needs neither a browser nor a network — it is a plain
+file comparison plus the guards that keep the migration safe to paste
+twice.
+
+`studio-publish` exists because of a bug that shipped and that the other four
+could not see. The studio guarded every Supabase call with `window.sb`, but
+`sb` is a top-level `let` — a *script-scope* binding that never becomes a
+window property — so every server call was skipped and Publish reported
+"Not connected to the database" against a healthy project. Everything else
+still worked, because drafts live in `localStorage`.
+
+The harness records each call on `window.__sb`, and the rule those tests
+encode is: **assert the call happened, not only that the page changed.**
 
 They drive the real file in a real browser against a stubbed Supabase — see
 `test/studio-harness.js`. They need Playwright and a Chromium build; the
