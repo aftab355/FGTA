@@ -91,9 +91,17 @@
        named below (--on-chrome, --wx-ink) and exist precisely because a
        handful of surfaces do NOT follow the page.
        ================================================================ */
+    /* --dim and --ball are TEXT colours and both were set from their ratio
+       against white alone: they cleared AA on --bg (4.82 and 4.61) and
+       quietly missed it on the two tinted grounds they are used on just as
+       often — --panel-2 (4.26 / 4.07) and --accent-dim (4.08 / 3.90). A
+       "dim" colour is by definition the one closest to failing, so it is
+       the one that has to be checked against the darkest ground it lands
+       on, not the lightest. Measured now: --dim 5.80 / 5.12 / 4.91 and
+       --ball 5.77 / 5.10 / 4.88. */
     --bg:#FFFFFF; --panel:#FFFFFF; --panel-2:#EDF2EE; --line:rgba(16,38,26,.18);
     --line-soft:rgba(16,38,26,.09);
-    --ink:#10261A; --muted:#41564A; --dim:#61776A;
+    --ink:#10261A; --muted:#41564A; --dim:#566A5E;
     /* interactive purple, and the near-black green that goes on top of it
        (--on-accent: the text colour for anything sitting ON a filled accent,
        gold or court surface — it used to be a hardcoded #04140e in a dozen
@@ -114,7 +122,7 @@
        form tags), so it is the olive a tennis ball reads as in print, not
        the fluorescent the ball itself is painted in — that gradient carries
        its own literals. */
-    --ball:#6E7C10; --ball-glow:rgba(110,124,16,.26);
+    --ball:#5F6C0E; --ball-glow:rgba(110,124,16,.26);
     --court:#1C6B45; --court-dim:#E3EFE7;
     /* Two sets, because a metal has two jobs and one value cannot do both.
        --gold/--silver/--bronze are TEXT: dark enough to read on white (7.0,
@@ -296,17 +304,76 @@
      logo and a tournament's name on a board. .18em is wide enough to read as
      engraved and tight enough that FGTA still fits beside the tabs on a
      narrow phone — the ellipsis below is the guard if it ever doesn't. */
+  /* This is an <h1> now — the wordmark was the page's title in every sense
+     except the markup, so heading navigation had nothing to start from. The
+     margin and font-size resets are what stop the browser's own h1 defaults
+     from rearranging the top bar around it. */
   .tb-title{font-family:var(--font-display);font-weight:600;font-size:19px;
+    margin:0;line-height:1.1;
     letter-spacing:.18em;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* The skip link. Off-screen until focused, then the first thing on the
+     page — because a keyboard user's first Tab used to land on the cup chip
+     and then walk all ten nav tabs before reaching a word of content. */
+  .skip-link{position:fixed;top:8px;left:8px;z-index:calc(var(--z-toast) + 1);
+    transform:translateY(-160%);
+    background:var(--on-chrome);color:var(--chrome);text-decoration:none;
+    padding:10px 16px;border-radius:var(--r-pill);font-size:14px;font-weight:600;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,.5);
+    transition:transform .18s cubic-bezier(.16,1,.3,1)}
+  .skip-link:focus{transform:translateY(0)}
+  /* the target takes focus programmatically, so it must not draw a ring
+     around the entire page when it does */
+  main.wrap:focus{outline:none}
   .tb-live{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--on-chrome-dim);letter-spacing:1px;margin-top:3px;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  /* The bar scrolls, and its scrollbar is hidden — which is right on a phone
+     and was quietly wrong on a laptop. Between the 860px breakpoint where the
+     bottom bar takes over and about 1400px, ten tabs do not fit, so the last
+     one (Messages) sat past the right edge with NO indication that anything
+     had been cut off: no scrollbar, no fade, and a bar that looks complete
+     because it is centred. On a 1280px laptop — the commonest desktop width
+     there is — a whole view was effectively invisible.
+
+     Two fixes, in order of preference. The tabs tighten first, because a bar
+     that fits needs no affordance at all; and if a re-skin's typography
+     pushes them over anyway, the fade below says so rather than lying. */
+  /* `safe center` rather than `center`, and it is not cosmetic. A centred
+     flex container that overflows pushes content past its START edge, and
+     that overflow is UNREACHABLE — you cannot scroll to negative. So at the
+     widths where the ten tabs do not fit, the first tab (Ladder) was
+     clipped on the left with no way to get to it, in a bar that also
+     scrolls. `safe` falls back to flex-start exactly when overflow happens,
+     which is the whole reason the keyword exists. */
+  .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;justify-content:safe center;
+    overflow-x:auto;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;position:relative;
+    /* the fade is painted by the wrapper below, so scrolled-out content is
+       visibly cut rather than silently absent */
+    -webkit-mask-image:var(--tb-mask,none);mask-image:var(--tb-mask,none)}
   .tb-tabs::-webkit-scrollbar{display:none}
+  /* set by moveTabIndicator(), which already runs on every view switch and
+     every resize — it is the one place that measures this bar */
+  .tb-tabs.tb-cut{--tb-mask:linear-gradient(to right,#000 calc(100% - 34px),transparent 100%)}
   .tb-tab{
     background:none;border:none;border-bottom:none;color:var(--on-chrome-dim);white-space:nowrap;cursor:pointer;
     font-family:var(--font-body);font-size:13.5px;font-weight:500;letter-spacing:0;text-transform:none;
     padding:9px 18px;border-radius:var(--r-pill);transition:.2s cubic-bezier(.16,1,.3,1);position:relative;
+  }
+  /* the band where the top bar is still in charge but the screen is a laptop
+     rather than a monitor: buy back the ~150px ten tabs are over by */
+  @media (min-width:860px) and (max-width:1439px){
+    .tb-tab{padding:9px 12px;font-size:13px}
+    .tb-tab.on::after{left:10px;right:10px}
+  }
+  /* Below about 1120px ten tabs, a wordmark, a cup chip and four action
+     buttons genuinely do not fit without shrinking the type past readable.
+     So this band goes as tight as it sensibly can and the fade does the rest
+     honestly, rather than the bar pretending to be complete. */
+  @media (min-width:860px) and (max-width:1119px){
+    .tb-tab{padding:8px 7px;font-size:12.5px;letter-spacing:-.1px}
+    .tb-tab.on::after{left:5px;right:5px}
   }
   .tb-tab:hover{color:var(--on-chrome);background:rgba(255,255,255,.09)}
   .tb-tab.on{color:var(--chrome);background:var(--on-chrome)}
@@ -1687,19 +1754,358 @@
   .div-b{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
   .div-cur{font-family:var(--font-mono);font-size:9px;color:var(--accent);margin-top:3px}
 
-  /* ===== SEARCH ===== */
-  .srch-card{max-width:560px;padding:0;overflow:hidden}
-  .srch-input{border:none;border-bottom:1px solid var(--line);border-radius:0;
-    font-size:17px;padding:20px}
-  .srch-input:focus{box-shadow:none;border-bottom-color:var(--accent)}
-  .srch-results{max-height:60vh;overflow-y:auto}
-  .srch-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
-    background:none;border:none;border-bottom:1px solid var(--line);padding:13px 20px;cursor:pointer;color:var(--ink)}
-  .srch-row:hover{background:var(--panel-2)}
-  .srch-ic{font-family:var(--font-mono);font-size:15px;width:26px;text-align:center;flex-shrink:0}
-  .srch-main{display:flex;flex-direction:column;min-width:0}
-  .srch-label{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .srch-sub{font-family:var(--font-mono);font-size:10px;color:var(--dim)}
+
+  /* ================================================================
+     PRINT — the championship on paper, actually on paper.
+
+     The whole visual system here is borrowed from a tournament's
+     printed programme: a white ground, near-black green type, gold
+     for what has been won. It has never been printable. Hitting
+     ⌘P produced the fixed top bar overlapping the first rows, the
+     bottom nav stamped across the footer, a ticker, a weather
+     canvas, and every hidden view's leftovers — on four pages.
+
+     There are real reasons to want it on paper. A draw pinned to
+     the clubhouse noticeboard. The standings for somebody who does
+     not use the site. A scorecard for a match with no phone in it.
+     So this is a proper print sheet rather than a display:none
+     sweep: it removes the app's chrome, unwinds the layouts that
+     only make sense on a screen, and prints the ONE view that is
+     open rather than all eleven.
+
+     `print-color-adjust` is deliberately NOT forced on. A reader
+     who has turned background graphics off has done so on purpose,
+     and everything below stays legible in plain black on white —
+     the rank medals, the band colours and the meters all keep a
+     border or a label so none of them is carrying meaning by
+     colour alone once the fill is gone.
+     ================================================================ */
+  @media print{
+    /* -- the page itself -- */
+    @page{ margin:14mm 12mm; }
+    :root{
+      /* the weather themes and the cup skin retint the whole palette at
+         runtime through inline custom properties; on paper none of that is
+         wanted, so the tokens are pinned back to the base scheme */
+      --bg:#fff; --panel:#fff; --panel-2:#fff;
+      --ink:#111; --muted:#333; --dim:#555;
+      --line:#bbb; --line-soft:#ddd;
+      --accent:#004d2f; --accent-dim:#eef4f0; --accent-glow:transparent;
+      --shadow:none;
+    }
+    html,body{background:#fff !important;color:#111 !important}
+    body{margin:0;font-size:10.5pt;line-height:1.45}
+
+    /* -- everything that is chrome, furniture or motion -- */
+    .topbar,.botbar,.subwrap,.live-ticker-bar,.more-sheet,.util-menu,.skip-link,
+    .toast,.oq-pill,.modal,.cp-card,#tabWipe,.loadscreen,.fxlayer,
+    #wxCanvas,.wx-canvas,.live-mount,.cup-mount,.qa-bar,.presence-bar,
+    .live-marquee,.lm-wrap,#setupNote,.notif-panel,.trophy-case,
+    .moments,.composer,.pt-stream,.galaxy-wrap,.ffcup-chip,
+    .tb-indicator,.physics-ball,.ghost-cursor{ display:none !important }
+    /* Anything whose only job is to be tapped or typed into.
+
+       Inputs go too, and that is a decision rather than an oversight: an
+       empty text field prints as a filled dark rectangle, and a printed form
+       is not a form — nobody is going to write a set score onto paper and
+       hand it back to the website. Printing here is for READING a record.
+       So the entry panels go with them, or their headings would be left
+       standing over nothing. */
+    button,.btn,.mini,.subtab,.tb-tab,.bb-tab,.modal-x,.oq-go,
+    input,select,textarea,
+    [data-print="hide"],
+    .match-filter,.composer,.dm-compose,.ct-report{ display:none !important }
+    /* …except a control that is showing a VALUE somebody is printing */
+    .set-score-built,.ss-built{ display:inline !important }
+    /* the opposite of the above: something inside a hidden section that IS
+       worth printing opts back in */
+    [data-print="keep"]{ display:revert !important }
+
+    /* -- the one view that is open, and only that one -- */
+    [id^="view-"]{ break-inside:auto }
+    /* the app hides views with an inline display:none, which print respects
+       already; this is the belt to that braces, for a view left visible by a
+       half-finished transition */
+    [id^="view-"][style*="display: none"],
+    [id^="view-"][style*="display:none"]{ display:none !important }
+
+    /* -- panels become printed blocks, not cards -- */
+    .panel,.tool-block,.kit-card,.pod,.riv-stat,.stat-card{
+      box-shadow:none !important;border:1px solid var(--line) !important;
+      background:#fff !important;break-inside:avoid;padding:8pt 10pt}
+    .sec-label{break-after:avoid;font-size:9pt;letter-spacing:.12em}
+    h1,h2,h3,.kit-frame,.riv-name{break-after:avoid}
+
+    /* -- the ladder, which is the thing most likely to be printed -- */
+    .row{break-inside:avoid;padding:5pt 0;border-bottom:1px solid var(--line-soft)}
+    /* the medals are a gradient fill on screen; on paper they are a rank in a
+       ring, so a 1st still reads as a 1st with background graphics off */
+    .rank-badge,.rk{background:none !important;color:#111 !important;
+      border:1.2pt solid #111;border-radius:50%;font-weight:700}
+    .row .rank-1 .rank-badge,.rk-1{border-width:2.2pt}
+    .row .rank-2 .rank-badge,.rk-2{border-width:1.6pt}
+
+    /* -- meters and bars: a fill nobody prints, so give them a number -- */
+    .kit-meter,.hype-fill,.odds-bar,.riv-split{border:1px solid var(--line)}
+    .kit-meter span,.odds-bar span{background:#555 !important}
+    /* the Kit's band is a colour AND a word on screen; the word is what
+       survives here, so make sure it is not the thing that got hidden */
+    .kit-verdict{color:#111 !important;font-weight:700}
+    .kit-card:before{display:none}
+
+    /* -- charts -- */
+    svg{max-width:100% !important;break-inside:avoid}
+    .kit-curve,.chart-line{stroke:#111 !important}
+    .kit-dot{fill:#111 !important;stroke:#fff !important}
+    canvas{display:none}          /* nothing here draws print-worthy canvas */
+
+    /* -- links: a URL nobody can click is worth printing once -- */
+    a[href^="http"]:after{content:" (" attr(href) ")";font-size:8pt;color:#555;
+      word-break:break-all}
+    a[href^="#"]:after,a[href^="javascript"]:after{content:""}
+
+    /* -- a footer that says what this is a print of --
+       Deliberately not a page number: counter(page) only resolves inside an
+       @page margin box, which no browser here implements, so an element's
+       ::after renders it as a flat 0. What is actually useful on a
+       noticeboard is where the live version is. -->  */
+    main.wrap:after{
+      content:"FGTA Ladder — the live standings are at fgta.ca";
+      display:block;margin-top:14pt;padding-top:6pt;
+      border-top:1px solid var(--line);
+      font-family:var(--font-mono);font-size:8pt;color:#555}
+
+    /* -- nothing animates on paper -- */
+    *,*:before,*:after{
+      animation:none !important;transition:none !important;
+      text-shadow:none !important;filter:none !important}
+  }
+
+  /* ===== THE OUTBOX PILL =====
+     A standing state, not an event: "there are things on this phone the
+     league does not have yet". It sits above the mobile bottom bar rather
+     than over it, and it survives a reload, because that is exactly the case
+     it exists for — a phone closed at the court and opened again at home. */
+  /* width:max-content, because a fixed element with no width shrink-to-fits
+     against the viewport and a flex child that is allowed to shrink will —
+     which ellipsised "2 things waiting to send" down to "2 things waiting …"
+     on a phone with 260px to spare. */
+  .oq-pill{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:var(--z-toast);
+    display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;width:max-content;
+    background:var(--chrome);color:var(--on-chrome);border-radius:var(--r-pill);
+    box-shadow:0 16px 40px -18px rgba(0,0,0,.55);font-size:13px;max-width:calc(100vw - 28px)}
+  .oq-dot{width:8px;height:8px;border-radius:50%;background:var(--pending);flex-shrink:0;
+    animation:oqBreathe 2.4s ease-in-out infinite}
+  @keyframes oqBreathe{0%,100%{opacity:.45}50%{opacity:1}}
+  .oq-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .oq-go{background:var(--on-chrome);color:var(--chrome);border:none;border-radius:var(--r-pill);
+    padding:5px 12px;font-family:var(--font-mono);font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
+  .oq-go:hover{opacity:.88}
+  /* clear of the bottom nav and the ticker on a phone */
+  @media (max-width:859px){ .oq-pill{bottom:118px} }
+  @media (prefers-reduced-motion:reduce){ .oq-dot{animation:none;opacity:.9} }
+
+  /* ===== THE KIT — rackets and string beds =====
+     The band colours are the app's existing semantic set rather than a new
+     ramp: a bed in its prime is a win, a dead one is a danger, and the two
+     in between are the pending amber. Nothing here invents a colour. */
+  .kit-who{display:flex;align-items:center;gap:10px;margin:18px 0 14px;flex-wrap:wrap}
+  .kit-who label{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.7px;
+    text-transform:uppercase;color:var(--dim);margin:0}
+  .kit-who select{width:auto;min-width:180px}
+  .kit-who-n{font-family:var(--font-mono);font-size:10px;color:var(--dim)}
+
+  .kit-setup,.kit-empty{margin-top:6px}
+  .kit-empty-h{font-family:var(--font-display);font-size:19px;margin-bottom:6px}
+
+  .kit-live{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:16px}
+  .kit-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:16px 16px 12px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  /* the band as a top rule — a 3px edge reads at a glance across a grid of
+     cards in a way a coloured word in the corner does not */
+  .kit-card:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--kit-c)}
+  .kit-card.kit-peak  {--kit-c:var(--win)}
+  .kit-card.kit-good  {--kit-c:var(--accent)}
+  .kit-card.kit-fading{--kit-c:var(--pending)}
+  .kit-card.kit-due   {--kit-c:var(--bronze)}
+  .kit-card.kit-dead  {--kit-c:var(--danger)}
+  /* min-height reserves the optional label line, so a card with a label
+     and one without still line their meters up across the grid */
+  .kit-card-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    margin-bottom:11px;min-height:42px}
+  .kit-frame{font-family:var(--font-display);font-size:18px;line-height:1.2;min-width:0}
+  .kit-frame i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim);
+    display:block;margin-top:3px}
+  .kit-verdict{font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--kit-c);font-weight:600;flex-shrink:0}
+
+  .kit-meter{height:7px;border-radius:var(--r-pill);background:var(--panel-2);
+    border:1px solid var(--line-soft);overflow:hidden}
+  .kit-meter span{display:block;height:100%;background:var(--kit-c);
+    transition:width .6s cubic-bezier(.16,1,.3,1)}
+
+  .kit-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0 11px}
+  .kit-stat{text-align:center}
+  .kit-stat b{display:block;font-family:var(--font-mono);font-size:16px;font-weight:700;line-height:1.1}
+  .kit-stat i{display:block;font-style:normal;font-family:var(--font-mono);font-size:8.5px;
+    letter-spacing:.3px;color:var(--dim);margin-top:4px;line-height:1.3}
+
+  .kit-line{font-size:13.5px;color:var(--muted);line-height:1.5}
+  .kit-line span{color:var(--dim);font-size:12px}
+  /* the countdown line. Named -when rather than -due because .kit-due is
+     already the BAND for a bed that is past its best, and a card in that band
+     would otherwise have its own countdown claiming to be a band. */
+  .kit-when{margin-top:9px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted)}
+  .kit-when b{color:var(--ink);font-weight:700}
+  .kit-when i{font-style:normal;color:var(--pending)}
+
+  /* what today's weather does to the bed */
+  .kit-feel{margin-top:8px;padding:7px 10px;border-radius:var(--r-sm);
+    background:var(--panel-2);border:1px solid var(--line-soft);
+    font-size:12.5px;line-height:1.45;color:var(--muted)}
+  .kit-feel b{font-family:var(--font-mono);font-weight:700;color:var(--ink)}
+  .kit-feel-strong{border-color:var(--pending)}
+
+  /* provenance — how much of the hours figure was actually measured */
+  .kit-prov{margin-top:12px}
+  .kit-prov-bar{display:flex;height:4px;border-radius:var(--r-pill);overflow:hidden;background:var(--panel-2)}
+  .kit-prov-bar span{display:block;height:100%}
+  .kp-tracked  {background:var(--accent)}
+  .kp-practice {background:var(--court)}
+  .kp-scoreline{background:var(--pending)}
+  .kp-assumed  {background:var(--line)}
+  .kit-prov-l{font-family:var(--font-mono);font-size:9.5px;color:var(--dim);margin-top:5px;line-height:1.5}
+
+  .kit-card-f{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft)}
+  .kit-card-f span{font-family:var(--font-mono);font-size:10px;color:var(--dim);min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .kit-chart-wrap{margin-bottom:16px}
+  .kit-chart{width:100%;height:auto;max-height:260px;display:block;margin:4px 0 8px;overflow:visible}
+  .kit-curve{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round}
+  .kit-gl{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+  .kit-now{stroke:var(--dim);stroke-width:1;stroke-dasharray:2 3}
+  .kit-dot{fill:var(--accent);stroke:var(--panel);stroke-width:2}
+  .kit-ax{font-family:var(--font-mono);font-size:9px;fill:var(--dim)}
+
+  .kit-hist{display:flex;flex-direction:column}
+  .kit-hrow{display:grid;grid-template-columns:10px 1fr auto auto auto;gap:11px;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+  .kit-hrow:last-child{border-bottom:none}
+  .kit-hdot{width:9px;height:9px;border-radius:50%;background:var(--kit-c, var(--dim))}
+  .kit-hmain{min-width:0}
+  .kit-hmain b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kit-hmain i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim)}
+  .kit-hnum{font-family:var(--font-mono);font-size:12px;color:var(--muted);
+    min-width:44px;text-align:right}
+  .kit-hnum.kit-peak{color:var(--win)} .kit-hnum.kit-good{color:var(--accent)}
+  .kit-hnum.kit-fading{color:var(--pending)} .kit-hnum.kit-due{color:var(--bronze)}
+  .kit-hnum.kit-dead{color:var(--danger)}
+  .kit-peak{--kit-c:var(--win)}     .kit-good{--kit-c:var(--accent)}
+  .kit-fading{--kit-c:var(--pending)} .kit-due{--kit-c:var(--bronze)}
+  .kit-dead{--kit-c:var(--danger)}
+
+  .kit-rlist{display:flex;flex-direction:column}
+  .kit-rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 0;border-bottom:1px solid var(--line-soft)}
+  .kit-rrow:last-child{border-bottom:none}
+  .kit-rrow b{font-weight:600;font-size:14px}
+  .kit-rrow i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim);
+    display:block;margin-top:2px}
+
+  .kit-bag{display:flex;flex-direction:column}
+  .kit-bagrow{display:grid;grid-template-columns:auto 1fr 90px auto;gap:12px;align-items:center;
+    width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line-soft);
+    padding:10px 0;cursor:pointer;color:var(--ink);font-size:14px}
+  .kit-bagrow:last-child{border-bottom:none}
+  .kit-bagrow:hover{background:var(--panel-2)}
+  .kit-bagrow.on{background:var(--accent-dim)}
+  .kit-bagav{display:flex;align-items:center}
+  .kit-bagmain{min-width:0}
+  .kit-bagmain b{display:block;font-weight:600}
+  .kit-bagmain i{font-style:normal;font-family:var(--font-mono);font-size:10px;color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  .kit-bagmeter{height:6px;border-radius:var(--r-pill);background:var(--panel-2);
+    border:1px solid var(--line-soft);overflow:hidden}
+  .kit-bagmeter span{display:block;height:100%;background:var(--kit-c, var(--dim))}
+  .kit-bagscore{font-family:var(--font-mono);font-size:14px;font-weight:700;min-width:26px;text-align:right;
+    color:var(--kit-c, var(--ink))}
+  @media (max-width:640px){ .kit-bagrow{grid-template-columns:auto 1fr 54px auto} }
+
+  .kit-note{margin:20px 0 6px;font-size:12.5px;line-height:1.65;color:var(--dim);
+    border-left:2px solid var(--line);padding-left:13px}
+  .kit-note b{color:var(--muted)}
+
+  @media (max-width:640px){
+    .kit-live{grid-template-columns:1fr}
+    .kit-nums{grid-template-columns:repeat(2,1fr);gap:12px}
+    .kit-hrow{grid-template-columns:10px 1fr auto;row-gap:2px}
+    .kit-hrow .kit-hnum:nth-of-type(2){display:none}
+  }
+  @media (prefers-reduced-motion:reduce){ .kit-meter span{transition:none} }
+
+  /* ===== COMMAND PALETTE =====
+     Sits high rather than centred: the list grows downward from a fixed
+     point, so a row does not move under the cursor as you type. */
+  .cp-card{max-width:620px;width:100%;padding:0;overflow:hidden;align-self:flex-start;
+    margin-top:min(11vh,90px);display:flex;flex-direction:column;max-height:74vh}
+  /* the dialog layer's own ✕ is absolutely positioned in this corner, so the
+     row reserves the space rather than running the input underneath it */
+  .cp-head{display:flex;align-items:center;gap:11px;padding:0 46px 0 16px;
+    border-bottom:1px solid var(--line);flex-shrink:0}
+  .cp-glyph{font-size:17px;color:var(--dim);flex-shrink:0}
+  .cp-input{border:none;border-radius:0;font-size:16.5px;padding:19px 0;background:none;
+    flex:1;min-width:0;color:var(--ink)}
+  .cp-input:focus{box-shadow:none;outline:none}
+  .cp-input::placeholder{color:var(--dim)}
+  .cp-list{overflow-y:auto;flex:1;padding:6px 0 4px;scroll-padding:34px 0}
+  .cp-group{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;
+    color:var(--dim);padding:11px 18px 5px;position:sticky;top:0;background:var(--panel);z-index:2}
+  .cp-group:first-child{padding-top:4px}
+  .cp-row{display:flex;align-items:center;gap:12px;padding:9px 18px;cursor:pointer;
+    color:var(--ink);border-left:2px solid transparent}
+  /* Selection is a background plus a left rule, never a colour change on the
+     label: at 40 rows a colour-only highlight is genuinely hard to find, and
+     the rule survives a high-contrast mode that flattens the fill. */
+  .cp-row.on{background:var(--accent-dim);border-left-color:var(--accent)}
+  .cp-ic{font-size:15px;width:24px;text-align:center;flex-shrink:0;line-height:1}
+  .cp-ic-av{display:flex;align-items:center;justify-content:center}
+  .cp-main{display:flex;flex-direction:column;min-width:0;flex:1;gap:1px}
+  .cp-label{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* the matched characters, and the only place in the app where a <b> inside
+     a label means "this is why you are seeing this row" */
+  .cp-label b{font-weight:700;color:var(--accent)}
+  .cp-row.on .cp-label b{color:var(--accent)}
+  .cp-sub{font-family:var(--font-mono);font-size:10px;color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cp-hint{font-family:var(--font-mono);font-size:12px;color:var(--accent);
+    width:14px;text-align:right;flex-shrink:0}
+  .cp-empty{padding:34px 22px;text-align:center;color:var(--muted);font-size:14px}
+  .cp-empty span{display:block;margin-top:8px;font-size:12px;color:var(--dim)}
+  .cp-foot{display:flex;align-items:center;gap:14px;padding:9px 16px;flex-shrink:0;
+    border-top:1px solid var(--line);background:var(--panel-2);
+    font-family:var(--font-mono);font-size:9.5px;color:var(--dim);letter-spacing:.3px}
+  .cp-foot b{font-weight:600;color:var(--muted)}
+  .cp-foot .cp-spacer{margin-left:auto}
+  .cp-kbd{font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:var(--r-sm);padding:3px 7px;background:var(--panel-2);
+    color:var(--muted);flex-shrink:0;min-width:74px;text-align:center}
+  /* the ring the palette leaves around whatever it just jumped you to */
+  @keyframes cpFlash{0%{box-shadow:0 0 0 0 var(--accent-glow)}
+    18%{box-shadow:0 0 0 5px var(--accent-glow)}
+    100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
+  .cp-flash{animation:cpFlash 1.3s cubic-bezier(.16,1,.3,1);border-radius:var(--r-md)}
+  @media (max-width:640px){
+    .cp-card{margin-top:0;max-height:100vh;height:100%;max-width:none;border-radius:0}
+    .cp-list{max-height:none}
+    /* the palette is the fastest way around the app on a phone, where every
+       other route is a sheet inside a bar — so it gets the whole screen */
+    .cp-foot{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cp-flash{animation:none;outline:2px solid var(--accent);outline-offset:2px}
+  }
 
   /* ===== HELP ===== */
   .help-card{max-width:520px}
@@ -2539,7 +2945,10 @@
     color:var(--dim);font-size:22px}
   .pt-join-row{margin-top:6px}
   .pt-watch-cta{background:var(--accent);color:var(--on-accent);font-weight:800}
-  .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#ff2d2d;color:#fff}
+  /* #ff2d2d carries white type at 3.71:1, under AA. Darkened to 5.2:1; the
+     live dot beside it keeps the bright red, because a dot is a signal and
+     not something anybody has to read. */
+  .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#D42121;color:#fff}
   .pt-golive-cta .pt-live-dot{background:#fff;animation:none}
 
   /* ---- fullscreen (any device) ----
@@ -8242,11 +8651,17 @@
 </div>
 
 <!-- ===== APP SHELL: TOP BAR (lives outside .wrap so transforms on .wrap never break its fixed positioning) ===== -->
+<!-- A keyboard user's first press of Tab landed on the FF Cup chip and then
+     walked every one of the ten nav tabs before reaching any content. This is
+     the standard escape hatch: invisible until it is focused, then the first
+     thing on the page. -->
+<a class="skip-link" href="#main">Skip to the ladder</a>
+
 <header class="topbar">
   <div class="tb-brand">
     <span class="tb-ball"></span>
     <div class="tb-word">
-      <span class="tb-title">FGTA</span>
+      <h1 class="tb-title">FGTA</h1>
       <span class="tb-live" id="tagline">loading…</span>
     </div>
     <span class="ffcup-chip" id="ffcupChip" title="Open the FF Cup" role="button" tabindex="0"
@@ -8271,7 +8686,7 @@
     <button class="tb-ico" id="searchBtn" onclick="openSearch()" title="Search">⌕</button>
     <button class="tb-ico" id="sfxToggleBtn" onclick="toggleSfx()" title="Toggle sound">🔊</button>
     <div style="position:relative">
-      <button class="tb-ico" id="newsBtn" style="display:none" onclick="toggleNotifCenter()"></button>
+      <button class="tb-ico" id="newsBtn" aria-label="Notifications" style="display:none" onclick="toggleNotifCenter()"></button>
       <div id="notifPanel" style="display:none;position:absolute;top:44px;right:0;width:280px;max-height:340px;overflow-y:auto;
         background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 20px 50px -20px rgba(0,0,0,.7);z-index:200;padding:8px"></div>
     </div>
@@ -8280,6 +8695,7 @@
 
   <!-- overflow utility menu -->
   <div class="util-menu" id="utilMenu">
+    <button onclick="showView('kit');toggleUtilMenu()">🎽 The Kit</button>
     <button onclick="spawnPhysicsBall();toggleUtilMenu()">🎾 Toss the ball</button>
     <button onclick="cycleSurface();toggleUtilMenu()" id="surfBtn">◉ Hard</button>
     <button onclick="toggleStadium();toggleUtilMenu()" id="stadiumBtn">◎ Stadium</button>
@@ -8394,6 +8810,7 @@
     <div class="ms-grid">
       <button onclick="showView('doubles');toggleMoreSheet()"><span>👥</span>Doubles</button>
       <button onclick="showView('training');toggleMoreSheet()"><span>🏋</span>Training</button>
+      <button onclick="showView('kit');toggleMoreSheet()"><span>🎽</span>The Kit</button>
       <button onclick="showView('court');toggleMoreSheet()"><span>📍</span>Court</button>
       <button onclick="showView('events');toggleMoreSheet()"><span>🏆</span>Events</button>
       <button onclick="showView('dms');toggleMoreSheet()"><span>✉</span>Messages</button>
@@ -8409,7 +8826,7 @@
   </div>
 </div>
 
-<div class="wrap">
+<main class="wrap" id="main" tabindex="-1">
   <!-- sub-navigation: segmented control, shown contextually -->
   <div class="subwrap">
     <nav class="subtabs" id="subMatches" style="display:none">
@@ -8507,7 +8924,7 @@
             <button class="see-all" onclick="toggleSavedView()" id="savedBtn">🔖 saved</button>
           </div>
           <div id="tagBanner" class="tag-banner" style="display:none"></div>
-          <button id="feedNew" class="feed-new" style="display:none" onclick="flushFeed()"></button>
+          <button id="feedNew" aria-label="Refresh the feed" class="feed-new" style="display:none" onclick="flushFeed()"></button>
           <div id="feedList"></div>
         </section>
       </div>
@@ -8564,7 +8981,7 @@
   <section id="pendingSec" style="display:none">
     <div class="sec-label">Pending queue <span class="count-pill" id="pendCount">0</span></div>
     <div class="pend-bulk-bar" style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-weight:400;text-transform:none;color:var(--ink);letter-spacing:normal"><input type="checkbox" id="pendSelectAll" onchange="togglePendSelectAll()"> select all</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-weight:400;text-transform:none;color:var(--ink);letter-spacing:normal"><input type="checkbox" id="pendSelectAll" aria-label="Select every pending result" onchange="togglePendSelectAll()"> select all</span>
       <button class="mini yes" onclick="bulkSetStatus('approved')">Approve selected</button>
       <button class="mini no" onclick="bulkSetStatus('rejected')">Reject selected</button>
     </div>
@@ -8611,7 +9028,7 @@
   <div class="col-side">
 
   <!-- REPORT GAME -->
-  <section>
+  <section data-print="hide">
     <div class="sec-label">Report a game</div>
     <div class="panel">
       <div class="grid2">
@@ -8670,8 +9087,7 @@
         <input id="notesInput" class="input-compact" placeholder="rain delay, lighting, injury…" autocomplete="off" maxlength="200">
       </div>
       <div style="margin-top:14px">
-        <label>Vibe <span style="color:var(--dim)">(optional)</span></label>
-        <select id="vibeInput">
+        <label for="vibeInput">Vibe <span style="color:var(--dim)">(optional)</span></label><select id="vibeInput">
           <option value="">—</option>
           <option value="friendly">Friendly</option>
           <option value="competitive">Competitive</option>
@@ -8685,7 +9101,7 @@
   </section>
 
   <!-- SCHEDULE A MATCH (admin only) -->
-  <section id="scheduleMatchSec" style="display:none">
+  <section id="scheduleMatchSec" style="display:none" data-print="hide">
     <div class="sec-label">Schedule a match</div>
     <div class="panel">
       <div class="grid2">
@@ -8699,8 +9115,7 @@
         </div>
       </div>
       <div style="margin-top:14px">
-        <label>Date &amp; time</label>
-        <input id="schedAt" type="datetime-local">
+        <label for="schedAt">Date &amp; time</label><input id="schedAt" type="datetime-local">
       </div>
       <div style="margin-top:14px">
         <label>Hype note <span style="color:var(--dim)">(optional)</span></label>
@@ -8718,7 +9133,7 @@
   </section>
 
   <!-- MATCHUP ODDS -->
-  <section>
+  <section data-print="hide">
     <div class="sec-label">Matchup odds</div>
     <div class="panel">
       <div class="odds-label">Pick two players to see win probability</div>
@@ -8809,13 +9224,12 @@
         <div><label>Player 2</label><input id="pgP2" data-ac="players" autocomplete="off" placeholder="name"></div>
       </div>
       <div class="grid2" style="margin-top:10px">
-        <div><label>Result</label>
-          <select id="pgOut">
+        <div><label for="pgOut">Result</label><select id="pgOut">
             <option value="1">Player 1 won</option>
             <option value="0">Player 2 won</option>
             <option value="0.5">Draw</option>
           </select></div>
-        <div><label>Date played</label><input id="pgDate" type="date"></div>
+        <div><label for="pgDate">Date played</label><input id="pgDate" type="date"></div>
       </div>
       <div style="margin-top:10px"><label>Set scores (optional, P1 first)</label><input id="pgSets" placeholder="6-4, 3-6, 7-5" autocomplete="off"></div>
       <button class="btn" onclick="addPastGame()">Add game</button>
@@ -8835,23 +9249,23 @@
       <div class="match-filter">
         <input id="matchSearch" placeholder="filter by player name…" autocomplete="off" oninput="renderAllMatchesD()">
         <div class="mf-controls">
-          <select id="mfResult" onchange="renderAllMatches()">
+          <select id="mfResult" aria-label="Filter the archive by result" onchange="renderAllMatches()">
             <option value="">All results</option>
             <option value="decisive">Wins only</option>
             <option value="draw">Draws only</option>
           </select>
-          <select id="mfSets" onchange="renderAllMatches()">
+          <select id="mfSets" aria-label="Filter the archive by set data" onchange="renderAllMatches()">
             <option value="">Any set data</option>
             <option value="has">Has set scores</option>
             <option value="missing">Missing set scores</option>
           </select>
-          <select id="mfVibe" onchange="renderAllMatches()">
+          <select id="mfVibe" aria-label="Filter the archive by vibe" onchange="renderAllMatches()">
             <option value="">Any vibe</option>
             <option value="friendly">Friendly</option>
             <option value="competitive">Competitive</option>
             <option value="grudge">Grudge match</option>
           </select>
-          <select id="mfSort" onchange="renderAllMatches()">
+          <select id="mfSort" aria-label="Sort the archive" onchange="renderAllMatches()">
             <option value="new">Newest first</option>
             <option value="old">Oldest first</option>
             <option value="talk">Most discussed</option>
@@ -8875,7 +9289,7 @@
             <input id="ptA" data-ac="players" placeholder="player 1" autocomplete="off">
             <input id="ptB" data-ac="players" placeholder="player 2" autocomplete="off">
           </div>
-          <select id="ptServe" style="margin-top:10px">
+          <select id="ptServe" aria-label="Who serves first" style="margin-top:10px">
             <option value="a">player 1 serves first</option>
             <option value="b">player 2 serves first</option>
           </select>
@@ -8902,7 +9316,7 @@
           <input id="wiP2" data-ac="players" placeholder="player 2" autocomplete="off">
         </div>
         <div class="grid2" style="margin-top:10px">
-          <select id="wiResult">
+          <select id="wiResult" aria-label="Result of the imagined game">
             <option value="1">Player 1 won</option>
             <option value="0">Player 2 won</option>
             <option value="0.5">Draw</option>
@@ -9280,7 +9694,7 @@
       <div class="sec-label">Butterfly effect <span class="pred-tag">Counterfactual</span></div>
       <div class="panel">
         <div class="pred-hint">Flip one past result and replay every game after it. Because ratings feed forward, one changed night can rewrite the whole season.</div>
-        <div style="margin-top:12px"><select id="dpMatch" onchange="runButterfly()"></select></div>
+        <div style="margin-top:12px"><select id="dpMatch" aria-label="The game to flip" onchange="runButterfly()"></select></div>
         <div id="deepButterfly" class="pred-out"></div>
       </div>
     </section>
@@ -9354,8 +9768,7 @@
       <div class="panel">
         <div class="grid2">
           <div><label>Name</label><input id="tnName" placeholder="FGTA Open" autocomplete="off"></div>
-          <div><label>Format</label>
-            <select id="tnFormat" onchange="tnFormatHint()">
+          <div><label for="tnFormat">Format</label><select id="tnFormat" onchange="tnFormatHint()">
               <option value="robin2">Robin+ — group stage into a 4-player bracket</option>
               <option value="knockout">Knockout</option>
               <option value="roundrobin">Round-robin</option>
@@ -9363,13 +9776,11 @@
             </select></div>
         </div>
         <div class="grid2" style="margin-top:10px">
-          <div><label>Elo</label>
-            <select id="tnElo">
+          <div><label for="tnElo">Elo</label><select id="tnElo">
               <option value="true">Games count toward the ladder</option>
               <option value="false">Exhibition — no Elo (still counts for stats)</option>
             </select></div>
-          <div><label>Start date <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional)</span></label>
-            <input id="tnStartDate" type="date"></div>
+          <div><label for="tnStartDate">Start date <span style="opacity:.6;text-transform:none;letter-spacing:0">(optional)</span></label><input id="tnStartDate" type="date"></div>
         </div>
         <div class="pred-hint" id="tnFormatHint" style="margin-top:8px">Robin+ runs a two-games-each group ring, cuts to the top 4, and settles a tied qualification line with a 1v1 rather than a tiebreak column. It's an exhibition by default — nothing in it moves the ladder, though the games still feed form, rivalries, records and the prediction models.</div>
         <div class="pred-hint" style="margin-top:8px">Leave the start date blank to open it right away. Set a future date and it shows as an upcoming promo card until then.</div>
@@ -9389,7 +9800,7 @@
   <div id="view-doubles" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
     <div class="live-mount"></div>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Report a doubles match</div>
       <div class="panel">
         <div class="pred-hint">Same ladder engine, scoped to the pairing — a team rating is its own thing, separate from either player's singles Elo.</div>
@@ -9398,7 +9809,7 @@
           <div><label>Team B</label><input id="dbB1" placeholder="player 1" autocomplete="off" style="margin-bottom:8px"><input id="dbB2" placeholder="player 2" autocomplete="off"></div>
         </div>
         <div class="grid2" style="margin-top:12px">
-          <div><label>Result</label><select id="dbOut"><option value="1">Team A won</option><option value="0">Team B won</option><option value="0.5">Draw</option></select></div>
+          <div><label for="dbOut">Result</label><select id="dbOut"><option value="1">Team A won</option><option value="0">Team B won</option><option value="0.5">Draw</option></select></div>
           <div><label>Set scores <span style="color:var(--dim)">(optional)</span></label><input id="dbSets" placeholder="6-4, 3-6, 10-7" autocomplete="off"></div>
         </div>
         <button class="btn" style="margin-top:14px" onclick="submitDoublesMatch()">Submit doubles match</button>
@@ -9408,11 +9819,11 @@
       <div class="sec-label">Doubles standings <span class="pred-tag">Team rating</span></div>
       <div class="panel" id="doublesStandings"></div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Best pairing suggester</div>
       <div class="panel">
         <div class="pred-hint">Blends each player's singles form into a rough chemistry score for a hypothetical pairing — a starting point, not a guarantee.</div>
-        <div class="grid2" style="margin-top:12px"><select id="synA" onchange="renderSynergy()"></select><select id="synB" onchange="renderSynergy()"></select></div>
+        <div class="grid2" style="margin-top:12px"><select id="synA" aria-label="First player of the pairing" onchange="renderSynergy()"></select><select id="synB" aria-label="Second player of the pairing" onchange="renderSynergy()"></select></div>
         <div id="synergyBox" style="margin-top:12px"></div>
       </div>
     </section>
@@ -9422,13 +9833,13 @@
   <div id="view-training" style="display:none">
     <div class="cup-mount" data-cup-mount="mini"></div>
     <div class="live-mount"></div>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Log a casual session</div>
       <div class="panel">
         <div class="pred-hint">1v1, Kings court, or casual doubles — track who showed up and how long each person actually played. Separate from the competitive ladder.</div>
         <div class="grid2" style="margin-top:12px">
-          <input id="csDate" type="date" autocomplete="off">
-          <select id="csType" onchange="onCasualTypeChange()">
+          <input id="csDate" aria-label="Date of the session" type="date" autocomplete="off">
+          <select id="csType" aria-label="Kind of session" onchange="onCasualTypeChange()">
             <option value="1v1">1v1</option>
             <option value="kings">Kings court</option>
             <option value="doubles">Casual doubles</option>
@@ -9454,7 +9865,7 @@
         <div id="calDayDetail" style="margin-top:12px"></div>
       </div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Weekly availability</div>
       <div class="panel">
         <div class="pred-hint">Set the windows you're usually free — lets the scheduler below find real overlap instead of a group chat back-and-forth.</div>
@@ -9463,15 +9874,31 @@
         <button class="btn ghost" style="margin-top:12px;width:auto" onclick="saveAvailability()">Save availability</button>
       </div>
     </section>
-    <section>
+    <section data-print="hide">
       <div class="sec-label">Smart scheduler</div>
       <div class="panel">
         <div class="pred-hint">Finds the windows where both players are actually free.</div>
-        <div class="grid2" style="margin-top:12px"><select id="schedA" onchange="renderScheduler()"></select><select id="schedB" onchange="renderScheduler()"></select></div>
+        <div class="grid2" style="margin-top:12px"><select id="schedA" aria-label="First player" onchange="renderScheduler()"></select><select id="schedB" aria-label="Second player" onchange="renderScheduler()"></select></div>
         <div id="schedulerBox" style="margin-top:12px"></div>
       </div>
     </section>
   </div><!-- /view-training -->
+
+  <!-- THE KIT — rackets, string beds, and how much tennis is on each one.
+       Everything inside is rendered by renderKit(); the shell is here so the
+       view-switcher has something to show and hide like every other view. -->
+  <div id="view-kit" style="display:none">
+    <div class="cup-mount" data-cup-mount="mini"></div>
+    <div class="live-mount"></div>
+    <section>
+      <div class="sec-label">The Kit</div>
+      <div class="pred-hint" style="margin-bottom:2px">Rackets and string beds, and the one question
+        about them worth asking: is this bed still any good? The hours on it are not typed in — they
+        are read back out of the matches and practice sessions already on record.</div>
+      <div id="kitBody"></div>
+    </section>
+  </div><!-- /view-kit -->
+
 
   <!-- ===== COURT VIEW ===== -->
   <div id="view-court" style="display:none">
@@ -9516,7 +9943,7 @@
         <div class="cn-origin" id="cnOrigin"></div>
       </div>
       <div class="cn-list" id="cnList"></div>
-      <button class="cn-more" id="cnMore" style="display:none" onclick="nearbyShowAll()"></button>
+      <button class="cn-more" id="cnMore" aria-label="More" style="display:none" onclick="nearbyShowAll()"></button>
       <div class="ct-note" id="cnNote"></div>
     </section>
   </div><!-- /view-court -->
@@ -9532,7 +9959,7 @@
     <b>⚙ One-time setup</b><br>
     This page isn't connected yet. Open the file and set your <code>SUPABASE_URL</code> and <code>SUPABASE_KEY</code> near the top of the script, run the <code>admin-security.sql</code> migration in your Supabase project, then create your admin login in Authentication → Users.
   </div>
-</div>
+</main><!-- /wrap -->
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- One polite live region for the whole app. Announcing a score by putting
@@ -9541,12 +9968,29 @@
      instead, and only when the thing it describes has actually changed. -->
 <div id="a11yLive" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<!-- SEARCH MODAL -->
-<div class="modal" id="searchModal" onclick="if(event.target===this)closeSearch()">
-  <div class="modal-card srch-card">
-    <input id="searchInput" class="srch-input" placeholder="Search players, matches, posts, #tags…" oninput="runSearchD()" autocomplete="off">
-    <div id="searchResults" class="srch-results"></div>
-    <button class="modal-x" onclick="closeSearch()">✕</button>
+<!-- COMMAND PALETTE — ⌘K. Replaces the old search modal, which it is a
+     superset of: players, matches, posts and #tags are four of its providers
+     now rather than the whole list. The combobox/listbox pair is the real
+     ARIA pattern rather than a list of buttons, so focus never leaves the
+     input and aria-activedescendant is what moves. -->
+<div class="modal" id="cmdkModal" onclick="if(event.target===this)cpClose()">
+  <div class="modal-card cp-card">
+    <div class="cp-head">
+      <span class="cp-glyph" aria-hidden="true">⌕</span>
+      <input id="cpInput" class="cp-input" type="text" role="combobox"
+        aria-expanded="true" aria-controls="cpList" aria-autocomplete="list"
+        aria-label="Search the app, or type what you want to do"
+        placeholder="Go anywhere, do anything…" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false"
+        oninput="cpRender()" onkeydown="cpKeys(event)">
+    </div>
+    <div id="cpList" class="cp-list" role="listbox"
+      aria-label="Results"></div>
+    <div class="cp-foot">
+      <span><b>↑↓</b> move</span><span><b>↵</b> open</span><span><b>esc</b> close</span>
+      <span class="cp-spacer" id="cpCount" role="status" aria-live="polite"></span>
+    </div>
+    <button class="modal-x" onclick="cpClose()" aria-label="Close">✕</button>
   </div>
 </div>
 
@@ -9562,6 +10006,8 @@
       <div class="help-row"><span class="help-ic">💬</span><div><b>The Feed is social.</b> Post, reply, react, run polls, throw callouts, and tag people with @name. Pick a display name once — no account needed — and it's remembered on this device.</div></div>
       <div class="help-row"><span class="help-ic">⚔️</span><div><b>Rivalry & Messages</b> let you dig into any head-to-head and trash-talk privately.</div></div>
       <div class="help-row"><span class="help-ic">🔮</span><div><b>Predict, Lab & Deep</b> are for the nerds — forecasts, simulations and model validation.</div></div>
+      <div class="help-row"><span class="help-ic">⌨️</span><div><b>Press ⌘K</b> (or Ctrl-K, or just <b>/</b>) to go anywhere. Type three letters of a view, a player, a match or a thing you want to do — "report", "csv", "restring" — and hit Enter. It is faster than every menu in here.</div></div>
+      <div class="help-row"><span class="help-ic">🎽</span><div><b>The Kit</b> tracks your rackets and strings, and works out how many hours are on each bed from the matches and sessions already recorded — so it can tell you when a restring is actually due instead of guessing from the calendar.</div></div>
     </div>
     <button class="btn" onclick="closeHelp()">Let's play</button>
   </div>
@@ -10095,7 +10541,6 @@ function debounce(fn, wait){
    the global object, not this script's top-level scope. The originals stay
    exported and undebounced for the places that call them directly and want
    the answer now (opening a panel, applying a filter from code). */
-window.runSearchD        = debounce((...a)=>runSearch(...a),        140);
 window.nearbySearchD     = debounce((...a)=>nearbySearch(...a),     160);
 window.renderAllMatchesD = debounce((...a)=>renderAllMatches(...a), 160);
 window.runBriefingD      = debounce((...a)=>runBriefing(...a),      200);
@@ -10174,7 +10619,70 @@ const toast = (msg, err=false) => {
 };
 
 /* ---------- Elo engine: recompute everything from approved history ---------- */
+/* ==== ELO-STANDINGS-START ====
+   The replay. Every rating in the app comes out of this loop and
+   nowhere else — there is no stored rating to drift away from it,
+   which is what makes "re-file a game and the ladder corrects
+   itself on the next paint" true rather than aspirational.
+
+   Paired with ELO-ENGINE below in test/elo.test.js, because the
+   property worth checking is one neither half has on its own:
+   replaying the same history twice has to produce the same table,
+   to the point. ==== */
+/* ---- the memo ----
+
+   computeStandings() replays every approved game in the league through the
+   Elo engine, and it is called SIXTY-FOUR times from this file. That was
+   fine when it was cheap. It is no longer cheap — a 420-game season costs
+   about 1.2 ms a replay on a desktop and several times that on a phone, and
+   a single paint of the Analytics view does that replay over and over for
+   answers it has already had.
+
+   Measured on a 420-game season, in a browser: 1.15 ms a call before, and a
+   pointer comparison after. The heaviest render in the app, renderPro(),
+   goes from a 59 ms median to 45 ms — a real win, and a smaller one than the
+   call count suggests, because most of what that render costs is not this.
+   The honest summary is that this removes a needless quadratic-ish habit
+   from sixty-four call sites; it does not by itself make Analytics fast.
+
+   Caching it is safe for one specific reason, and it is worth writing down
+   because it is what the cache rests on: `matches` is NEVER mutated in
+   place. Every path that changes it — load(), the optimistic layer's
+   optAdd/optDrop/optPatch, the offline-cache restore — builds a NEW array,
+   because those three helpers are pure by contract. So array identity is a
+   sound "has anything changed" test, and it costs a pointer comparison
+   rather than a hash of every row.
+
+   The other two inputs are keyed the same way: `tournaments`, because
+   countsForElo() reads a tournament's counts_elo flag, and DIVISOR, because
+   the admin can move it live from the divisor preview.
+
+   ELO_DRIFT is part of the answer, not a side effect of computing it, so a
+   cache hit restores it. Leaving it stale would make the Lab's data audit
+   report the drift of whichever replay happened to run last.
+
+   What the cache does NOT protect against is a caller mutating what it is
+   handed. Nothing does today — the test asserts it — and the array itself is
+   copied out so a stray .sort() cannot reorder everybody's cached table. The
+   row objects are shared: they carry a per-player rating history that is the
+   bulk of the memory here, and copying those on every one of sixty-four
+   calls would cost more than the replay this exists to avoid. */
+let _standCache = null;
+function invalidateStandings(){ _standCache = null; }
+
 function computeStandings(){
+  if(_standCache && _standCache.m === matches && _standCache.t === tournaments
+     && _standCache.divisor === DIVISOR){
+    ELO_DRIFT = _standCache.drift;
+    return _standCache.value.slice();
+  }
+  const out = _computeStandings();
+  _standCache = {m: matches, t: tournaments, divisor: DIVISOR,
+                 drift: ELO_DRIFT, value: out};
+  return out.slice();
+}
+
+function _computeStandings(){
   const P = {}; // name -> {rating, w, l, d, games}
   const ensure = n => P[n] || (P[n] = {name:n, rating:START, w:0, l:0, d:0, games:0, peak:START, history:[START]});
   const approved = matches
@@ -10207,6 +10715,13 @@ function computeStandings(){
   ELO_DRIFT = drift;
   return Object.values(P).sort((x,y) => y.rating - x.rating);
 }
+/* ==== ELO-STANDINGS-END ==== */
+/* Exported outside the region deliberately: everything inside it has to load
+   in plain node for test/elo.test.js, where there is no `window` to hang
+   anything off. Nothing in the app needs to call this — the identity check
+   catches every real change — but a console has it if a future write path
+   ever does start mutating rows in place. */
+window.invalidateStandings = invalidateStandings;
 
 /* ============================================================
    HYPOTHETICAL LADDER (Predict tab) — purely client-side "what if"
@@ -10428,6 +10943,21 @@ function ratingOf(name, standings){
   const p = standings.find(s => s.name.toLowerCase() === name.trim().toLowerCase());
   return p ? p.rating : START;
 }
+/* ==== ELO-ENGINE-START ====
+   The rating engine: margin of victory, the per-player K, and the
+   replay that turns a list of matches into a table.
+
+   Everything from here to ELO-ENGINE-END is pure arithmetic over
+   rows plus the `matches` array itself, which is why the whole
+   thing loads into test/elo.test.js with nothing stubbed but that
+   array and the two event filters. There is no DOM in it, no
+   Supabase in it, and no clock in it that the caller cannot set.
+
+   That matters more here than anywhere else in the file: this is
+   the one piece of code whose output people argue about. A bug in
+   the feed loses a post; a bug in here silently rewrites who is
+   winning, and does it consistently enough that nobody notices.
+   ============================================================ */
 /* ============================================================
    MARGIN OF VICTORY (from MOV_START onward only)
    A dominant win counts for more — but the bonus is suppressed
@@ -10732,6 +11262,7 @@ function matchKOf(matchId){
 function winProb(rA, rB){
   return 1 / (1 + Math.pow(10, (rB - rA) / DIVISOR));
 }
+/* ==== ELO-ENGINE-END ==== */
 
 /* ============================================================
    ATTRIBUTE-AWARE PREDICTION LAYER
@@ -11769,6 +12300,22 @@ async function ptSubmit(){
   }
   if(btn) btn.disabled=false;
   if(error){
+    /* A REFFED MATCH IS THE WORST THING IN THE APP TO LOSE — two hours of
+       somebody's afternoon, tapped in point by point, on a phone at a public
+       court. The tracker state was already deliberately left standing here so
+       a failure did not throw it away; the outbox goes further and takes the
+       row, so the person can put the phone in their pocket and walk home. */
+    if(oqClassify(error) === "network"
+       && oqEnqueue({table:"matches", op:"insert", row,
+                     optional:OPTIONAL.slice(), label:"match"}, error)){
+      toast("No signal — the match is saved on this phone and will send itself.");
+      broadcastTicker(`🎾 ${PT.a} vs ${PT.b} — ${PT.draw?'drawn':'tracked live'}`);
+      PT=null; ptHistory=[]; ptFuture=[];
+      ptPersist();
+      $("ptA").value=""; $("ptB").value="";
+      $("ptSetup").style.display=""; $("ptLive").style.display="none";
+      return;
+    }
     /* the tracker state is deliberately still standing here — a failed submit
        must not throw away a match somebody just umpired point by point */
     toast(optErrorText(error, "That match didn't send — the tracker is still here, try again."), true);
@@ -16737,7 +17284,7 @@ function renderTickerBar(){
         : `🏆 ${window.FFCUP.name} is live · ${window.FFCUP.range} — results scroll here`)
     : "🎾 FGTA live ticker — new results and comments scroll here";
   const text = tickerQueue.join("     •     ") || idle;
-  bar.innerHTML = `<div style="display:inline-block;white-space:nowrap;padding-left:100%;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);animation:tickerScroll 22s linear infinite">${esc(text)}</div>`;
+  bar.innerHTML = `<div style="display:inline-block;white-space:nowrap;padding-left:100%;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--on-chrome);animation:tickerScroll 22s linear infinite">${esc(text)}</div>`;
 }
 window.renderTickerBar=renderTickerBar;
 
@@ -19828,6 +20375,7 @@ const VIEW_GROUPS = {
   events:    { views:["events"] },
   doubles:   { views:["doubles"] },
   training:  { views:["training"] },
+  kit:       { views:["kit"] },
   dms:       { views:["dms"] }
 };
 let subState = { matches:"tracker", predict:"forecast", analytics:"overview" };
@@ -19853,6 +20401,7 @@ function renderForView(id){
   else if(id==="events") renderTournaments();
   else if(id==="doubles") renderDoubles();
   else if(id==="training") renderTraining();
+  else if(id==="kit") renderKit();
   else if(id==="stats") renderStats();
   else if(id==="fixtures") renderFixtures();
   else if(id==="lab") renderLab();
@@ -19877,6 +20426,13 @@ function replayEnter(el){
 function moveTabIndicator(){
   const bar = $("topTabs"); const ind = $("tbIndicator");
   if(!bar || !ind) return;
+  /* This is the one function that measures the tab bar, so it is also where
+     the bar finds out whether it is overflowing. The tightened padding above
+     makes ten tabs fit down to 860px today, but a re-skin that changes the
+     type is one Studio setting away from pushing them over again — and the
+     failure mode is silent, because the scrollbar is hidden. The fade is the
+     backstop: if anything is cut off, it looks cut off. */
+  bar.classList.toggle("tb-cut", bar.scrollWidth - bar.clientWidth > 2);
   const on = bar.querySelector(".tb-tab.on");
   if(!on){ ind.style.width="0"; return; }
   const barRect = bar.getBoundingClientRect(), onRect = on.getBoundingClientRect();
@@ -19918,7 +20474,7 @@ function _showViewCore(v){
   });
   // events/dms live in the "more" sheet — highlight the More button for them
   const more=document.querySelector(".bb-more");
-  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court");
+  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court"||v==="kit");
   /* the marquee mounts sit inside the views, so a view that has just been
      shown needs it filled in — this is what keeps the cup on every screen */
   renderCupMarquee();
@@ -21087,7 +21643,9 @@ const OPT_STORES = {
   doubles_matches:   {get:()=>doublesMatches,   set:v=>{doublesMatches=v;}},
   practice_log:      {get:()=>practiceLog,      set:v=>{practiceLog=v;}},
   availability:      {get:()=>availabilityData, set:v=>{availabilityData=v;}},
-  court_reports:     {get:()=>courtReports,     set:v=>{courtReports=v;}}
+  court_reports:     {get:()=>courtReports,     set:v=>{courtReports=v;}},
+  rackets:           {get:()=>rackets,          set:v=>{rackets=v;}},
+  string_jobs:       {get:()=>stringJobs,       set:v=>{stringJobs=v;}}
 };
 
 const OPT_BASE = Object.create(null);   // store name -> last server-confirmed value
@@ -21210,6 +21768,352 @@ function optErrorText(error, fallback){
   return fallback || raw || "That didn't save — try again.";
 }
 
+/* ============================================================
+   THE OUTBOX — writes that survive not having a signal.
+
+   This app is used courtside. Thorncliffe Park is a public court
+   under a hydro corridor and the signal there is whatever it is
+   that afternoon; the point tracker's whole job is to be held in
+   one hand for two hours while somebody refs a match. So "you're
+   offline, that didn't send" — which is what the optimistic layer
+   does today, honestly and immediately — is the right sentence
+   and the wrong outcome. The person is holding a phone with a
+   completed match on it and no way to keep it.
+
+   THE DISTINCTION THIS RESTS ON, and it is the whole design:
+
+     the server REFUSED the write   RLS said no, a unique key
+                                    clashed, a foreign key is
+                                    gone. Retrying is pointless
+                                    and, for a duplicate, actively
+                                    harmful. Roll it back and say
+                                    so — exactly as now.
+
+     the write never ARRIVED        no network, DNS, a dead
+                                    captive portal, a 5xx from a
+                                    proxy. Nothing happened at the
+                                    other end. This is the one
+                                    worth keeping.
+
+   Only the second kind is queued. oqClassify() is where that call
+   is made and it is deliberately conservative: anything it cannot
+   confidently place goes to "refused", because a wrongly-queued
+   write retries forever against a server that will never take it,
+   while a wrongly-dropped one loses a match that the caller has
+   already put the text back in the field for.
+
+   WHY A DESCRIPTOR AND NOT THE CLOSURE. optWrite takes a `write`
+   function, and a function cannot be written to localStorage. So
+   a queueable call passes a plain, serialisable {table, op, row}
+   alongside it, and oqPerform() rebuilds the Supabase call from
+   that on the way out. It is opt-in per call site rather than
+   automatic, which is the right default: a write nobody has
+   thought about being replayed twenty minutes later, out of
+   order, is a write that should fail honestly instead.
+   ============================================================ */
+
+/* ==== OQ-CORE-START ==== */
+
+const OQ_KEY = "fgta_outbox_v1";
+const OQ_MAX = 40;                    // most writes held at once
+const OQ_MAX_AGE_MS = 7 * 86400000;   // a week; older than that, ask again
+const OQ_MAX_ATTEMPTS = 12;
+
+/* Backoff between flush attempts. Starts fast, because the commonest case by
+   far is a signal that came back three seconds after it went; ends slow,
+   because past a couple of minutes the phone is in a pocket and a tight
+   retry loop is just battery. Jitter so a clubhouse full of phones coming
+   back on the same wifi do not all hit at once. */
+const OQ_BACKOFF = [1500, 4000, 10000, 30000, 60000, 120000, 300000];
+function oqBackoff(attempt, rnd){
+  const base = OQ_BACKOFF[Math.min(Math.max(0, attempt), OQ_BACKOFF.length - 1)];
+  const r = rnd == null ? Math.random() : rnd;
+  return Math.round(base * (0.75 + r * 0.5));
+}
+
+/* Which kind of failure is this?
+
+   "network"  nothing reached the server, so replaying it is safe and right
+   "refused"  the server answered, and its answer was no
+
+   Offline is checked first because a dead connection surfaces as a different
+   message in every browser. After that the ORDER MATTERS: a refusal is
+   looked for before a network pattern, so a 503 body that happens to contain
+   the word "network" is still read as the refusal it is. */
+function oqClassify(error, online){
+  if(online === false) return "network";
+  const raw = String((error && (error.message || error.error_description ||
+                                error.msg || error.details)) || error || "");
+  const code = String((error && (error.code || error.status)) || "");
+
+  /* an answer from the server, whatever it says */
+  if(/row-level security|permission denied|not authori[sz]ed|jwt|invalid api key/i.test(raw)) return "refused";
+  if(/duplicate key|unique constraint|already exists|conflict/i.test(raw)) return "refused";
+  if(/violates|foreign key|check constraint|invalid input|column .* does not exist|schema cache/i.test(raw)) return "refused";
+  if(/^(4\d\d)$/.test(code) && code !== "408" && code !== "429") return "refused";
+  if(/\b4\d\d\b/.test(raw) && !/\b(408|429)\b/.test(raw)) return "refused";
+
+  /* never got there */
+  if(/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(raw)) return "network";
+  if(/timeout|timed out|aborted|econnreset|enotfound|eai_again|dns/i.test(raw)) return "network";
+  if(/\b(408|429|50\d|52\d)\b/.test(raw) || /^(408|429|5\d\d)$/.test(code)) return "network";
+  if(/offline/i.test(raw)) return "network";
+
+  /* Anything else is treated as a refusal. Queueing something that will never
+     be accepted is the worse of the two mistakes: it retries forever, it sits
+     in the outbox looking like unsent work, and the person never finds out
+     the real reason. */
+  return "refused";
+}
+
+/* One queued write, as it is stored. Kept deliberately flat and JSON-only —
+   this has to survive a reload, a browser update and a year. */
+function oqItem(descriptor, meta){
+  return {
+    id: (meta && meta.id) || ("oq" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    at: (meta && meta.at) || Date.now(),
+    attempts: (meta && meta.attempts) || 0,
+    nextAt: (meta && meta.nextAt) || 0,
+    lastError: (meta && meta.lastError) || null,
+    label: (meta && meta.label) || descriptor.label || descriptor.table,
+    d: {
+      table: descriptor.table,
+      op: descriptor.op || "insert",
+      row: descriptor.row || null,
+      match: descriptor.match || null,
+      /* columns to drop and retry without, one at a time, when the server
+         says they do not exist — the same "only if the schema has it" story
+         the match and session forms already tell */
+      optional: descriptor.optional || null
+    }
+  };
+}
+
+/* A queued write is only worth keeping if it is still a description of
+   something true. Two things retire one: age, and having been tried so many
+   times that "network" was clearly the wrong reading. */
+function oqExpired(item, now){
+  const t = now == null ? Date.now() : now;
+  if(!item || !item.d || !item.d.table) return true;
+  if(item.attempts >= OQ_MAX_ATTEMPTS) return true;
+  /* A missing or unusable timestamp means "written by something that did not
+     record one", not "written in 1970" — and `item.at || 0` meant the latter,
+     which quietly expired every such item the instant it was read back. The
+     safe reading is that an item with no age is new: the attempt counter and
+     the classifier still retire it if it turns out to be junk, whereas
+     discarding it loses a write nobody ever gets told about. */
+  const at = Number(item.at);
+  if(!isFinite(at) || at <= 0) return false;
+  return (t - at) > OQ_MAX_AGE_MS;
+}
+
+/* Parse whatever is in storage into a list that is definitely safe to act on.
+   This is the boundary between "a string a browser handed us" and the rest of
+   the app, so it is the one place that has to assume the string is nonsense:
+   a half-written value from a tab that was killed mid-write, a v1 blob from a
+   much older build, or somebody's own experiment in devtools. */
+function oqParse(raw, now){
+  let data;
+  try{ data = JSON.parse(raw || "[]"); }catch(e){ return []; }
+  if(!Array.isArray(data)) return [];
+  const out = [];
+  for(const it of data){
+    if(!it || typeof it !== "object" || !it.d || typeof it.d !== "object") continue;
+    if(typeof it.d.table !== "string" || !it.d.table) continue;
+    if(["insert", "update", "delete"].indexOf(it.d.op) === -1) continue;
+    if(oqExpired(it, now)) continue;
+    out.push(it);
+    if(out.length >= OQ_MAX) break;
+  }
+  return out;
+}
+
+/* Which items are due, oldest first. Order is preserved on purpose: two
+   writes queued from the same screen are usually a post and its comment, or
+   a match and the note about it, and replaying them out of order is how the
+   second one arrives pointing at nothing. */
+function oqDue(items, now){
+  const t = now == null ? Date.now() : now;
+  return (items || []).filter(it => !oqExpired(it, t) && (it.nextAt || 0) <= t)
+                      .sort((a, b) => (a.at || 0) - (b.at || 0));
+}
+
+/* Fold the result of one attempt back into the item. Returns the item to
+   keep, or null to drop it — dropped meaning either "it went through" or
+   "it was refused and never will". */
+function oqAfterAttempt(item, outcome, now, rnd){
+  const t = now == null ? Date.now() : now;
+  if(outcome === "ok" || outcome === "refused") return null;
+  const attempts = (item.attempts || 0) + 1;
+  if(attempts >= OQ_MAX_ATTEMPTS) return null;
+  return Object.assign({}, item, {
+    attempts,
+    nextAt: t + oqBackoff(attempts - 1, rnd),
+    lastError: outcome === "network" ? "not sent yet" : String(outcome)
+  });
+}
+
+/* What the pill says. One sentence, no jargon, and it never says "error" —
+   nothing has gone wrong yet from the person's point of view, the phone
+   simply has not had a signal. */
+function oqSummary(items, now){
+  const live = (items || []).filter(it => !oqExpired(it, now));
+  if(!live.length) return null;
+  const n = live.length;
+  const kinds = {};
+  live.forEach(it => { const k = it.label || it.d.table; kinds[k] = (kinds[k] || 0) + 1; });
+  const names = Object.keys(kinds);
+  const what = names.length === 1
+    ? (kinds[names[0]] > 1 ? kinds[names[0]] + " " + names[0] + "s" : names[0])
+    : n + " things";
+  return {count: n, text: what + " waiting to send", detail: names.join(", ")};
+}
+/* ==== OQ-CORE-END ==== */
+
+/* ------------------------------------------------------------------
+   THE OUTBOX AT RUNTIME — storage, the flush loop, and the pill.
+   ------------------------------------------------------------------ */
+let OQ = [];                 // the live list, mirroring storage
+let _oqFlushing = false, _oqTimer = null;
+
+function oqRead(){
+  try{ return oqParse(localStorage.getItem(OQ_KEY)); }
+  catch(e){ return []; }     // private mode: the outbox degrades to "off"
+}
+function oqSave(){
+  try{ localStorage.setItem(OQ_KEY, JSON.stringify(OQ.slice(0, OQ_MAX))); }
+  catch(e){
+    /* quota, or private mode. Dropping the OLDEST is right: the newest write
+       is the one whose author is still standing there expecting it to send. */
+    OQ = OQ.slice(-10);
+    try{ localStorage.setItem(OQ_KEY, JSON.stringify(OQ)); }catch(_){}
+  }
+}
+
+/* Rebuild the Supabase call from the stored description. This is the only
+   place that knows a descriptor is not a closure. */
+async function oqPerform(d){
+  if(!sb || !d || !d.table) return {error: {message: "no client"}};
+  const t = () => sb.from(d.table);
+  const applyMatch = q => {
+    Object.keys(d.match || {}).forEach(k => { q = q.eq(k, d.match[k]); });
+    return q;
+  };
+  if(d.op === "delete") return applyMatch(t().delete());
+  if(d.op === "update") return applyMatch(t().update(d.row || {}));
+
+  /* insert, with the same drop-an-optional-column-and-retry dance the match
+     and session forms do inline — a deployment that skipped half a migration
+     must still be able to file the thing it is holding */
+  const row = Object.assign({}, d.row || {});
+  let res = await t().insert(row);
+  for(const col of (d.optional || [])){
+    if(!res.error) break;
+    if(row[col] === undefined) continue;
+    if(!new RegExp(col).test(res.error.message || "")) continue;
+    delete row[col];
+    res = await t().insert(row);
+  }
+  return res;
+}
+
+function oqEnqueue(descriptor, error){
+  if(!descriptor || !descriptor.table) return false;
+  OQ.push(oqItem(descriptor, {lastError: (error && error.message) || null,
+                              nextAt: Date.now() + oqBackoff(0)}));
+  if(OQ.length > OQ_MAX) OQ = OQ.slice(-OQ_MAX);
+  oqSave();
+  oqRenderPill();
+  oqSchedule();
+  return true;
+}
+
+/* Send whatever is due. Serial rather than parallel, and it stops at the
+   first thing that is still not sending: if the signal is gone it is gone
+   for all of them, and firing forty requests into the dark to watch them all
+   time out is how a flush drains a battery. */
+async function oqFlush(opts){
+  const force = !!(opts && opts.force);
+  if(_oqFlushing || !sb) return;
+  if(typeof navigator !== "undefined" && navigator.onLine === false && !force) return;
+  const due = force ? OQ.slice().sort((a, b) => (a.at || 0) - (b.at || 0)) : oqDue(OQ);
+  if(!due.length){ oqRenderPill(); return; }
+  _oqFlushing = true;
+  let sent = 0, refused = 0;
+  try{
+    for(const item of due){
+      let outcome;
+      try{
+        const res = await oqPerform(item.d);
+        outcome = (res && res.error) ? oqClassify(res.error) : "ok";
+      }catch(e){ outcome = oqClassify(e); }
+
+      const keep = oqAfterAttempt(item, outcome, Date.now());
+      const i = OQ.findIndex(x => x.id === item.id);
+      if(i >= 0){ if(keep) OQ[i] = keep; else OQ.splice(i, 1); }
+      if(outcome === "ok") sent++;
+      else if(outcome === "refused"){ refused++; console.warn("[outbox] refused", item.d.table, item.lastError); }
+      else break;                       // still no signal — leave the rest queued
+    }
+  } finally {
+    _oqFlushing = false;
+    oqSave();
+    oqRenderPill();
+  }
+  if(sent){
+    toast(sent === 1 ? "Sent the one that was waiting ✓"
+                     : "Sent " + sent + " that were waiting ✓");
+    optRefreshSoon(0);
+  }
+  if(refused && !sent) toast("Something waiting couldn't be sent — it's been dropped", true);
+  if(OQ.length) oqSchedule();
+}
+
+/* One timer, always aimed at the next thing due. */
+function oqSchedule(){
+  if(_oqTimer){ clearTimeout(_oqTimer); _oqTimer = null; }
+  if(!OQ.length) return;
+  const next = Math.min.apply(null, OQ.map(it => it.nextAt || 0));
+  const wait = Math.max(1000, next - Date.now());
+  _oqTimer = setTimeout(() => { _oqTimer = null; oqFlush(); }, Math.min(wait, 300000));
+}
+
+/* The pill. Deliberately not a toast and not a modal: it is a standing state
+   ("there are two things on this phone that the league does not have yet"),
+   not an event, and it has to still be there after a reload. */
+function oqRenderPill(){
+  let el = document.getElementById("oqPill");
+  const s = oqSummary(OQ);
+  if(!s){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement("div");
+    el.id = "oqPill";
+    el.className = "oq-pill";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<span class="oq-dot" aria-hidden="true"></span>'
+    + '<span class="oq-txt">' + esc(s.text) + '</span>'
+    + '<button class="oq-go" onclick="oqFlush({force:true})">Try now</button>';
+}
+
+/* Every moment a phone plausibly has a signal again. */
+function oqWire(){
+  OQ = oqRead();
+  oqRenderPill();
+  if(OQ.length) oqSchedule();
+  window.addEventListener("online", () => oqFlush({force:true}));
+  document.addEventListener("visibilitychange", () => {
+    if(!document.hidden && OQ.length) oqFlush();
+  });
+  /* and once on the way in, because the commonest case of all is a phone
+     that was closed on the court and opened again at home */
+  setTimeout(() => { if(OQ.length) oqFlush(); }, 2500);
+}
+window.oqFlush = oqFlush;
+window.oqCount = () => OQ.length;
+
 /* ---- the one entry point every write goes through ----
      store   key in OPT_STORES the change lands in (omit for writes with no
              local mirror — the audit log, say — to get error handling only)
@@ -21226,10 +22130,18 @@ function optErrorText(error, fallback){
      after   () => void, run once on success (clear a field, close a sheet)
      key     optional string: refuse to start if a write with the same key is
              already in flight, so a double-tap can't race itself
-   Resolves true on success and false on failure, so callers that need to
-   chain can await it. Never rejects. */
+     queue   optional {table, op, row, match, optional, label}: a plain,
+             serialisable description of the SAME write `write` performs. Give
+             it and a failure that never reached the server parks the write in
+             the outbox and keeps the change on screen, instead of rolling it
+             back. Leave it off and the write fails honestly, as before —
+             which is the right default for anything nobody has thought about
+             being replayed twenty minutes later and out of order.
+   Resolves true on failure-that-was-queued as well as on success, because
+   from the caller's point of view both mean "it is safe to clear the field".
+   Never rejects. */
 async function optWrite(spec){
-  const {store, mutate, write, paint, ok, fail, after, key} = spec;
+  const {store, mutate, write, paint, ok, fail, after, key, queue} = spec;
   const refresh = spec.refresh !== false;
   const id = ++_optSeq;
   const mirrored = !!(store && mutate && OPT_STORES[store]);
@@ -21252,6 +22164,23 @@ async function optWrite(spec){
   finally{ if(key) OPT_INFLIGHT.delete(key); }
 
   if(error){
+    /* THE ONE BRANCH THE OUTBOX ADDS. A write the server refused is rolled
+       back and reported, exactly as before — retrying a duplicate or an RLS
+       refusal is pointless at best. A write that never ARRIVED is a different
+       thing entirely: nothing happened at the other end, the person is
+       holding a phone with a completed match on it, and rolling it back
+       throws that away. So it stays on screen and goes in the outbox. */
+    if(queue && queue.table && oqClassify(error) === "network"){
+      if(mirrored){
+        const op = OPT_PENDING.get(id);
+        if(op) op.settled = true;    // keep it laid over the server rows
+      }
+      oqEnqueue(queue, error);
+      toast("No signal — it's saved on this phone and will send itself.");
+      console.warn("[outbox] queued", queue.table, error);
+      if(after) try{ after(); }catch(e){}
+      return true;
+    }
     if(mirrored){
       OPT_PENDING.delete(id);        // peel this one change back off…
       optRebuild(store);             // …leaving anything else in flight alone
@@ -21321,7 +22250,14 @@ const LOAD_TABLES = [
   ["muted_names",       d=>{ mutedNames = d; }],
   ["admin_actions",     d=>{ adminActions = d; }],
   ["player_roster",     d=>{ playerRoster = d; }],
-  ["scheduled_matches", d=>{ scheduledMatches = d; }]
+  ["scheduled_matches", d=>{ scheduledMatches = d; }],
+  /* The Kit's two tables. Both are optional — a deployment that never ran
+     docs/kit.sql gets an error here, which the loop below already treats as
+     "keep what is in memory", and the view says which table is missing
+     rather than showing an empty bag. kitTables is what tells those two
+     cases apart, so it is set from the same result. */
+  ["rackets",           d=>{ rackets = d; }],
+  ["string_jobs",       d=>{ stringJobs = d; }]
 ];
 
 let _loadInFlight = null;
@@ -21357,8 +22293,10 @@ async function load(opts){
         /* a table this project hasn't created yet, or one RLS hides from a
            signed-out visitor: keep whatever is already in memory */
         console.warn("[load] " + table + " unavailable", res.error.message || res.error);
+        if(table in kitTables) kitTables[table] = false;
         return;
       }
+      if(table in kitTables) kitTables[table] = true;
       assign(res.data || []);
       touched.push(table);
     });
@@ -21751,6 +22689,10 @@ async function submitGame(){
       }
       return res;
     },
+    /* the one write in the app most likely to be made with no signal:
+       somebody standing on a court that has just finished a match */
+    queue : {table:"matches", op:"insert", row,
+             optional:["vibe","notes","court"], label:"game"},
     paint : ()=>render(),
     ok    : "Submitted — waiting for approval ✓",
     fail  : "That game didn't send — your entries are back in the form.",
@@ -25964,6 +26906,8 @@ async function logCasualSession(){
       }
       return res;
     },
+    queue  : {table:"practice_log", op:"insert", row,
+              optional:["players","type"], label:"session"},
     paint  : ()=>renderTraining(),
     ok     : "Session logged ✓",
     fail   : "The training log needs a `practice_log` table — ask your admin to create it.",
@@ -26192,6 +27136,1049 @@ function renderStats(){
     </table>`;
 }
 window.renderStats = renderStats;
+
+/* ============================================================
+   THE KIT — rackets, string jobs, and the one question about
+   them anybody actually asks: is this bed still any good?
+
+   Every answer to that in circulation is a rule of thumb about a
+   number nobody has: "restring as many times a year as you play
+   per week". It is a proxy for playing HOURS, and it is a bad one
+   — it cannot tell a season of forty-minute hits from a season of
+   three-set finals, and it silently assumes the string was fresh
+   in January.
+
+   This app does not have to guess at the hours. It has been
+   recording them all along, for a different reason:
+
+     - a point-tracked match carries `rallies`, and inside it the
+       instant the ref started and the instant the match ended.
+       That is an exact duration, to the second, for every match
+       anybody reffed.
+     - every other approved match has a scoreline, and a scoreline
+       is a game count, which is a decent estimate.
+     - the practice log records minutes played PER PLAYER per
+       session, because the casual-session form asks for it.
+
+   So the hours are already on record and the model can be about
+   the string instead of about the guesswork. What follows is the
+   decay curve, and then kitHoursFor() reads those three sources
+   back out in that order of preference and says which one each
+   hour came from.
+
+   HOW MUCH OF THIS IS REAL. The shape is: strings relax fast for
+   the first day or two (stress relaxation, before anybody hits a
+   ball), then lose tension with impacts and, more slowly, with
+   time alone. That much is well established and is why a pro
+   restrings between matches. The CONSTANTS in KIT_STRINGS are
+   published rules of thumb, not measurements of anybody's racket,
+   and the panel says so rather than printing a tension to one
+   decimal place and hoping you assume it was weighed. What the
+   model is genuinely good for is the shape and the ordering —
+   this bed is further gone than that one, and here is roughly
+   when it stops being worth playing with.
+   ============================================================ */
+
+/* ==== KIT-CORE-START ==== */
+
+/* Per material: how it relaxes, how long it lasts, and how long it takes to
+   stop feeling like a board. Everything is a rule of thumb.
+
+     bedIn     fraction of reference tension lost in the first day or two,
+               before a ball is struck
+     hTau      play half-life-ish constant, in HOURS of hitting: how fast the
+               rest of the tension goes once it is being used
+     dTau      the same, in DAYS, for a bed sitting in a bag. Polyester goes
+               off on the shelf; natural gut barely notices
+     life      hours of hitting before the string is worn out regardless of
+               what the tension says — notched, and in poly's case with its
+               snapback gone long before it breaks
+     deadLoss  tension loss, as a fraction of reference, at which the bed is
+               finished. Poly's number is the lowest not because it relaxes
+               most but because it plays worst once it has
+     breakIn   hours of hitting before it stops feeling stiff. This is the
+               reason "fresh" is not the same as "best", and why the
+               playability curve below RISES before it falls */
+const KIT_STRINGS = {
+  poly:   {label:"Polyester / co-poly", short:"poly",   bedIn:0.10, hTau:26, dTau:150, life:22, deadLoss:0.28, breakIn:2.0,
+           note:"Goes dead long before it breaks — the snapback is gone while the string is intact."},
+  multi:  {label:"Multifilament",       short:"multi",  bedIn:0.09, hTau:42, dTau:320, life:34, deadLoss:0.30, breakIn:1.0,
+           note:"Holds tension well and stays comfortable; it usually breaks before it dies."},
+  syn:    {label:"Synthetic gut",       short:"syn gut",bedIn:0.09, hTau:34, dTau:280, life:28, deadLoss:0.30, breakIn:1.0,
+           note:"The default in a stock racket. Fine, cheap, and nothing it does is remarkable."},
+  gut:    {label:"Natural gut",         short:"gut",    bedIn:0.06, hTau:40, dTau:520, life:48, deadLoss:0.34, breakIn:0.3,
+           note:"Holds tension better than anything else and plays well from the first ball. Hates damp."},
+  hybrid: {label:"Hybrid (poly / soft)",short:"hybrid", bedIn:0.09, hTau:30, dTau:210, life:27, deadLoss:0.29, breakIn:1.5,
+           note:"Poly in one direction for control, something softer in the other for the arm."},
+  kevlar: {label:"Kevlar / aramid",     short:"kevlar", bedIn:0.11, hTau:62, dTau:260, life:55, deadLoss:0.32, breakIn:2.5,
+           note:"Nearly unbreakable and very stiff. For string-breakers, at the arm's expense."}
+};
+
+/* THE TWO CLOCKS HAVE TO AGREE, ROUGHLY.
+
+   hTau and life are not independent numbers to taste: hTau sets when the
+   tension term reaches deadLoss, and life sets when the wear term runs out,
+   and playability is the smaller of the two. Pick them carelessly and one
+   clock finishes at half the other's time, which makes the second one
+   decorative — the first draft of this table had poly's tension clock
+   expiring at 10 hours against a stated 22-hour life, so the life column was
+   a comment.
+
+   So each material's hTau is set relative to the hour at which its tension
+   term would hit deadLoss, and WHICH clock binds first is the claim being
+   made about that string:
+
+     poly, hybrid   tension binds — they go dead while perfectly intact,
+                    which is the entire reason a pro restrings between
+                    matches rather than when something snaps
+     multi, syn,
+     gut, kevlar    life binds — they wear out, notch or break while still
+                    holding a usable tension
+
+   test/kit.test.js asserts that ordering per material, so retuning a
+   constant cannot quietly reverse what a string is claimed to do. */
+function kitTensionClockHours(material){
+  const M = KIT_MAT(material);
+  const rest = 1 - M.bedIn - KIT_FLOOR;
+  const frac = (M.deadLoss - M.bedIn) / rest;
+  return frac >= 1 ? Infinity : -M.hTau * Math.log(1 - frac);
+}
+
+const KIT_DEFAULT_MATERIAL = "poly";
+const KIT_MAT = m => KIT_STRINGS[m] || KIT_STRINGS[KIT_DEFAULT_MATERIAL];
+
+/* how long the initial relaxation takes, in days */
+const KIT_BEDIN_DAYS = 1.5;
+/* tension never goes to nothing: this is the fraction of reference it
+   asymptotes to, which keeps the curve honest at the far end where nobody
+   has any data anyway */
+const KIT_FLOOR = 0.55;
+
+const kitClamp01 = v => v < 0 ? 0 : (v > 1 ? 1 : v);
+
+/* What fraction of reference tension is left, given hours hit and days
+   elapsed. Monotone decreasing in both, 1 at the origin, KIT_FLOOR at
+   infinity — properties the test pins, because a decay curve that is not
+   monotone will happily tell somebody their strings tightened up. */
+function kitRemaining(material, hours, days){
+  const M = KIT_MAT(material);
+  const h = Math.max(0, hours || 0), d = Math.max(0, days || 0);
+  const bedIn = M.bedIn * (1 - Math.exp(-d / KIT_BEDIN_DAYS));
+  const rest  = 1 - M.bedIn - KIT_FLOOR;              // what is left to lose after bed-in
+  const held  = Math.exp(-h / M.hTau) * Math.exp(-d / M.dTau);
+  return 1 - bedIn - rest * (1 - held);
+}
+
+/* Reference tension in, current tension out. Both in whatever unit the job
+   was strung at — the model is a ratio, so lbs and kg both work and the
+   caller keeps the label. */
+function kitTension(job, hours, days){
+  const ref = Number(job && job.tension) || 0;
+  return ref * kitRemaining(job && job.material, hours, days);
+}
+
+/* THE NUMBER THE PANEL ACTUALLY SHOWS.
+
+   Two independent clocks end a string job and the shorter one wins:
+
+     tension  the bed has relaxed past the point where it plays like the bed
+              you asked the stringer for
+     life     the string is physically worn — notched, and for poly, its
+              elasticity gone while the string itself is perfectly intact
+
+   100 when it comes off the machine, 0 when it is finished, and monotone
+   decreasing in between.
+
+   MONOTONE IS A DELIBERATE CHOICE, and it costs something real. A poly bed
+   genuinely does not feel its best in its first hour — it feels boardy, and
+   plenty of players will tell you it comes good after a couple of hits. An
+   earlier draft modelled that as a rising ramp, so the score climbed for two
+   hours before it fell. It was defensible and it was a bad idea: a headline
+   number that can go UP invites the reading that the strings tightened
+   themselves, and the effect it was representing is contested enough that it
+   has no business bending the one figure everything else is sorted on.
+
+   So the break-in is reported instead of priced in — kitAssess() carries a
+   `brokenIn` flag and the panel says "still breaking in" — and the score
+   only ever goes one way. */
+/* The two clocks, as fractions of themselves remaining. Both functions below
+   read this, so they can never disagree about which one is binding.
+
+   THE BED-IN IS NOT COUNTED AGAINST THE STRING. A bed loses about a tenth of
+   its reference tension in the first day or two whatever anybody does, which
+   is why a stringer pre-stretches and why "strung at 52" has always meant the
+   tension it settles to rather than the number on the machine. Charging that
+   loss to playability made the first draft report a bed as a third gone
+   before a ball had been hit — technically true against the machine reading,
+   and useless as a description of the racket. So the tension clock starts
+   where the bed settles: loss up to bedIn costs nothing, and everything after
+   it is measured against the range that is actually left. */
+function kitTerms(job, hours, days){
+  const M = KIT_MAT(job && job.material);
+  const h = Math.max(0, hours || 0);
+  const loss = 1 - kitRemaining(job && job.material, h, days);
+  const past = Math.max(0, loss - M.bedIn);
+  const span = Math.max(1e-9, M.deadLoss - M.bedIn);
+  return {loss, fTension: kitClamp01(1 - past / span), fLife: kitClamp01(1 - h / M.life)};
+}
+
+function kitPlayability(job, hours, days){
+  const t = kitTerms(job, hours, days);
+  return 100 * Math.min(t.fTension, t.fLife);
+}
+
+/* Which of the two clocks is the one actually running out, so the panel can
+   say WHY rather than only how much: "the tension has gone" and "it is worn
+   through" call for different strings next time, not just a restring. */
+function kitBinding(job, hours, days){
+  const t = kitTerms(job, hours, days);
+  return t.fTension <= t.fLife ? "tension" : "life";
+}
+
+/* The bands the verdict text is written from. Ordered high to low; the first
+   one whose floor the score clears is the answer. */
+const KIT_BANDS = [
+  {at:82, key:"peak",    label:"in its prime",   hint:"This is what you strung it for."},
+  {at:62, key:"good",    label:"good",           hint:"Nothing to think about yet."},
+  {at:40, key:"fading",  label:"fading",         hint:"Losing its bite. Worth booking the restring."},
+  {at:18, key:"due",     label:"due",            hint:"Past its best — you are playing a different racket."},
+  {at:-1, key:"dead",    label:"dead",           hint:"Restring it. This is costing you games."}
+];
+function kitBand(score){ return KIT_BANDS.find(b => score >= b.at) || KIT_BANDS[KIT_BANDS.length - 1]; }
+
+/* A bed strung today and never used is not "in its prime" yet, and saying so
+   is the whole point of the break-in ramp — so the band for a brand-new job
+   is called out separately rather than reading as a fault. */
+const KIT_RESTRING_AT = 40;      // the score the "due in" countdown aims at
+
+/* How many more HOURS of hitting until the score falls to `target`.
+
+   Solved by walking forward rather than inverted algebraically: the score is
+   the minimum of three terms and the binding one changes partway along the
+   curve, so there is no single closed form and pretending there is would put
+   a subtle wrong answer in front of somebody's stringer. The walk is coarse
+   then bisected, which is exact enough for a number rendered as "about nine
+   days" and costs a few dozen evaluations.
+
+   daysPerHour converts hitting hours into calendar days so the ageing term
+   advances too — a bed that only comes out once a fortnight is losing
+   tension on the shelf between outings, which is exactly the case the
+   hours-only rules of thumb get wrong.
+
+   Returns null when the score never reaches the target inside KIT_HORIZON,
+   which is the honest answer for natural gut in a bag. */
+const KIT_HORIZON = 400;         // hours of hitting to look ahead, at most
+function kitHoursUntil(job, hours0, days0, target, daysPerHour){
+  const tgt = target == null ? KIT_RESTRING_AT : target;
+  const dph = daysPerHour == null ? 0 : Math.max(0, daysPerHour);
+  const at = dh => kitPlayability(job, (hours0 || 0) + dh, (days0 || 0) + dh * dph);
+  if(at(0) <= tgt) return 0;
+  let lo = 0, hi = 1;
+  while(hi < KIT_HORIZON && at(hi) > tgt){ lo = hi; hi *= 2; }
+  if(at(hi) > tgt) return null;                    // still fine at the horizon
+  for(let i = 0; i < 40; i++){                     // bisect to well under an hour
+    const mid = (lo + hi) / 2;
+    if(at(mid) > tgt) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+
+/* ---------------------------------------------------------------
+   WHAT THE BED FEELS LIKE TODAY, WHICH IS NOT WHAT IT MEASURES.
+
+   A string bed is a polymer under load and polymers stiffen in the
+   cold. The same racket, unchanged since the morning, plays tighter
+   at 4 degrees than it did at 24 — noticeably so, in the direction
+   everybody blames on the balls. So a Kit screen that reports one
+   tension all year is telling the truth and still not answering the
+   question, which is "why is this thing playing like a board today".
+
+   The app already knows the temperature. The ambient background
+   fetches Toronto's weather for the particle layer and the court's
+   busyness model reads the same cached answer, so this costs no
+   request: it is the third reader of a number already on the page.
+
+   The shift is a rule of thumb, like everything else in KIT_STRINGS,
+   and it is expressed as EFFECTIVE POUNDS rather than as a percentage
+   because pounds are the unit anybody discussing this would use.
+   Roughly a pound for every eight or nine degrees away from a mild
+   afternoon, capped, because past the cap nobody is playing tennis
+   and the model has no business extrapolating into weather where the
+   ball does not bounce. Polyester is the stiffest and moves most;
+   natural gut barely notices, which is one of the reasons people
+   play it in the cold. --------------------------------------------- */
+const KIT_WX_REF_C     = 21;    // a mild afternoon: the tension you strung at IS the tension
+const KIT_WX_LB_PER_C  = 0.115; // effective pounds per degree away from it
+const KIT_WX_MAX_LB    = 4;     // and no further, in either direction
+/* how much each material cares, relative to poly */
+const KIT_WX_SENS = {poly:1, hybrid:0.85, kevlar:0.9, syn:0.7, multi:0.6, gut:0.35};
+
+/* Effective pounds ADDED by today's temperature: positive means the bed
+   plays tighter than it measures (cold), negative looser (heat). Zero when
+   there is no reading, because "no weather" must never read as "mild". */
+function kitFeelShift(material, tempC){
+  if(typeof tempC !== "number" || !isFinite(tempC)) return 0;
+  const sens = KIT_WX_SENS[material] == null ? 1 : KIT_WX_SENS[material];
+  const raw = (KIT_WX_REF_C - tempC) * KIT_WX_LB_PER_C * sens;
+  return Math.max(-KIT_WX_MAX_LB, Math.min(KIT_WX_MAX_LB, raw));
+}
+
+/* The sentence that goes under it. Deliberately about what the racket will
+   DO rather than about the number, because the number is the part somebody
+   already has. */
+function kitFeelNote(material, tempC, shift){
+  const d = shift == null ? kitFeelShift(material, tempC) : shift;
+  if(typeof tempC !== "number" || !isFinite(tempC)) return null;
+  const lb = Math.abs(d);
+  if(lb < 0.4) return "Playing about as strung.";
+  const tighter = d > 0;
+  const much = lb >= 2;
+  return Math.round(tempC) + "\u00B0 — playing "
+    + lb.toFixed(1) + " lb " + (tighter ? "tighter" : "looser")
+    + (tighter
+        ? (much ? ". Stiff and short on power; the ball will feel dead off the string."
+                : ". A little stiffer than it measures.")
+        : (much ? ". Livelier and longer; expect the ball to fly."
+                : ". A little softer than it measures."));
+}
+
+/* ---------------------------------------------------------------
+   HOURS ON THE STRING — read back out of what the app already has.
+
+   Three tiers, best first, and every returned figure says which
+   tier it came from so the panel can be straight about it rather
+   than presenting an estimate as a measurement.
+   --------------------------------------------------------------- */
+
+/* A tracked match knows exactly how long it took. The clamp is not
+   defensiveness for its own sake: a ref who forgets to submit leaves
+   startedAt set and endedAt hours later, and one such row would otherwise
+   put a whole afternoon on somebody's strings. */
+const KIT_MATCH_MAX_MIN = 240;
+const KIT_MATCH_MIN_MIN = 4;
+/* a game of singles, warm-up and changeovers included, near enough */
+const KIT_MIN_PER_GAME = 5.2;
+/* what an approved match with no scoreline at all is worth */
+const KIT_MATCH_FALLBACK_MIN = 62;
+
+function kitMatchMinutes(m){
+  /* tier 1 — the ref's own clock */
+  if(m && m.rallies){
+    try{
+      const r = typeof m.rallies === "string" ? JSON.parse(m.rallies) : m.rallies;
+      const a = r && r.startedAt ? new Date(r.startedAt).getTime() : NaN;
+      const b = r && r.endedAt   ? new Date(r.endedAt).getTime()   : NaN;
+      if(isFinite(a) && isFinite(b) && b > a){
+        const mins = (b - a) / 60000;
+        if(mins >= KIT_MATCH_MIN_MIN && mins <= KIT_MATCH_MAX_MIN)
+          return {minutes: mins, source: "tracked"};
+      }
+    }catch(e){ /* a rallies blob this build cannot read is simply not tier 1 */ }
+  }
+  /* tier 2 — the scoreline is a game count */
+  if(m && m.sets){
+    let games = 0;
+    String(m.sets).split(",").forEach(str => {
+      const [x, y] = str.trim().split("-").map(n => parseInt(n, 10));
+      if(isNaN(x) || isNaN(y)) return;
+      /* a match tiebreak written in the sets column reads as a very long set
+         and is the shortest thing anybody plays — the same correction the
+         dynamic K makes, for the same reason */
+      games += Math.max(x, y) > 7 ? 2 : x + y;
+    });
+    if(games > 0) return {minutes: games * KIT_MIN_PER_GAME, source: "scoreline"};
+  }
+  /* tier 3 — it happened, and that is all anybody wrote down */
+  return {minutes: KIT_MATCH_FALLBACK_MIN, source: "assumed"};
+}
+
+/* Minutes a named player spent in one practice session. The casual form asks
+   for minutes per player, but the `players` column is optional — a project
+   that skipped that migration has the session's first player in scalar
+   `name`/`minutes` columns instead, and that row still counts. */
+function kitPracticeMinutes(row, name){
+  if(!row || !name) return 0;
+  const want = String(name).toLowerCase();
+  if(Array.isArray(row.players)){
+    let sum = 0;
+    row.players.forEach(p => {
+      if(p && String(p.name || "").toLowerCase() === want) sum += Number(p.minutes) || 0;
+    });
+    return sum;
+  }
+  if(String(row.name || "").toLowerCase() === want) return Number(row.minutes) || 0;
+  return 0;
+}
+
+/* Everything a player hit between two instants, in hours, with the count of
+   how much of it came from each tier so the panel can say "12.4 h, 9 of them
+   off the ref's clock" instead of asking to be trusted.
+
+   `sources` are hours, not sessions: the interesting question is how much of
+   the TOTAL is measured, and one tracked five-setter is worth more of an
+   answer than six assumed hits. */
+function kitHoursFor(name, from, to, data){
+  const d = data || {};
+  const ms = t => (t == null ? null : new Date(t).getTime());
+  const a = ms(from), b = ms(to) == null ? Date.now() : ms(to);
+  const want = String(name || "").toLowerCase();
+  const out = {hours: 0, matches: 0, sessions: 0,
+               sources: {tracked: 0, scoreline: 0, assumed: 0, practice: 0}};
+  if(!want) return out;
+
+  (d.matches || []).forEach(m => {
+    if(!m || m.status !== "approved") return;
+    if(String(m.p1 || "").toLowerCase() !== want &&
+       String(m.p2 || "").toLowerCase() !== want) return;
+    const t = ms(m.created_at);
+    if(t == null || (a != null && t < a) || t > b) return;
+    const {minutes, source} = kitMatchMinutes(m);
+    out.hours += minutes / 60;
+    out.sources[source] += minutes / 60;
+    out.matches++;
+  });
+
+  (d.practice || []).forEach(p => {
+    const t = ms(p && p.created_at);
+    if(t == null || (a != null && t < a) || t > b) return;
+    const mins = kitPracticeMinutes(p, name);
+    if(mins <= 0) return;
+    out.hours += mins / 60;
+    out.sources.practice += mins / 60;
+    out.sessions++;
+  });
+
+  return out;
+}
+
+/* How much this player is hitting lately, in hours per week, which is what
+   turns "22 hours left in these strings" into a date somebody can act on.
+   Measured over a trailing window rather than over their whole history: a
+   player who has just come back from three months out should get a due date
+   for the tennis they are playing now.
+
+   Falls back to the league's own rate, and then to a plain default, so a
+   brand-new player still gets a countdown rather than a dash. */
+const KIT_RATE_WINDOW_DAYS = 56;
+const KIT_RATE_DEFAULT = 2.5;
+const KIT_RATE_MIN = 0.4;
+function kitWeeklyRate(name, data, now){
+  const t = now == null ? Date.now() : now;
+  const from = t - KIT_RATE_WINDOW_DAYS * 86400000;
+  const mine = kitHoursFor(name, from, t, data);
+  const weeks = KIT_RATE_WINDOW_DAYS / 7;
+  if(mine.hours > 0) return Math.max(KIT_RATE_MIN, mine.hours / weeks);
+  return KIT_RATE_DEFAULT;
+}
+
+/* Everything the panel needs about one string job, in one call. */
+function kitAssess(job, data, now, tempC){
+  const t = now == null ? Date.now() : now;
+  const strung = job && job.strung_at ? new Date(job.strung_at).getTime() : null;
+  const days = strung == null ? 0 : Math.max(0, (t - strung) / 86400000);
+  const used = kitHoursFor(job && job.owner, strung, t, data);
+  const hours = used.hours;
+  const rate = kitWeeklyRate(job && job.owner, data, t);
+  /* days elapsed per hour hit, which is how the ageing term keeps advancing
+     while somebody is not playing */
+  const daysPerHour = rate > 0 ? 7 / rate : 0;
+
+  const M = KIT_MAT(job && job.material);
+  const score = kitPlayability(job, hours, days);
+  const left  = kitHoursUntil(job, hours, days, KIT_RESTRING_AT, daysPerHour);
+  return {
+    job, days, hours, rate, used,
+    tension: kitTension(job, hours, days),
+    lossPct: (1 - kitRemaining(job && job.material, hours, days)) * 100,
+    score, band: kitBand(score),
+    binding: kitBinding(job, hours, days),
+    /* Today's temperature, if the page happens to have one. Optional in
+       every sense: no reading means no shift and no sentence, and nothing
+       else in the assessment changes. It is a PARAMETER rather than a global
+       read so this whole file stays a pure function of its arguments. */
+    feelShift: kitFeelShift(job && job.material, tempC),
+    feelNote: kitFeelNote(job && job.material, tempC),
+    /* reported, never priced into the score — see kitPlayability */
+    brokenIn: hours >= M.breakIn,
+    breakInLeft: Math.max(0, M.breakIn - hours),
+    hoursLeft: left,
+    daysLeft: left == null ? null : left * daysPerHour,
+    material: KIT_MAT(job && job.material)
+  };
+}
+/* ==== KIT-CORE-END ==== */
+
+/* ============================================================
+   THE KIT — UI
+
+   Two tables, both optional. `rackets` is the frames somebody
+   owns; `string_jobs` is every time one of them was strung. The
+   app works without either — see docs/kit.sql — and says so in a
+   sentence rather than showing an empty panel, because "we never
+   created that table" and "you have not added a racket yet" look
+   identical from the outside and want completely different
+   actions from the reader.
+
+   The whole point of the screen is that the second table is the
+   only thing anybody has to type. Everything else — the hours,
+   the rate, the date it comes due — is read back out of matches
+   and the practice log by kitHoursFor().
+   ============================================================ */
+let rackets = [], stringJobs = [];
+/* set the moment a select against either table comes back with an error, so
+   the panel can tell "no table" apart from "no rows" */
+let kitTables = {rackets: true, string_jobs: true};
+
+async function loadKitData(){
+  if(!configured) return;
+  const [r, j] = await Promise.all([
+    sb.from("rackets").select("*").then(x => x, e => ({error:e, data:null})),
+    sb.from("string_jobs").select("*").then(x => x, e => ({error:e, data:null}))
+  ]);
+  kitTables.rackets      = !r.error;
+  kitTables.string_jobs  = !j.error;
+  if(!r.error) rackets    = r.data || [];
+  if(!j.error) stringJobs = j.data || [];
+  optAdoptServerState(["rackets", "string_jobs"]);
+}
+
+/* Whose kit is on screen. Defaults to you, falls back to whoever has the most
+   string jobs so the screen is never empty for a visitor who has not signed
+   in — a stranger arriving on an empty page learns nothing about what the
+   screen is for. */
+let kitWho = null;
+function kitOwners(){
+  const seen = new Map();
+  const add = n => { if(n) seen.set(String(n).toLowerCase(), n); };
+  rackets.forEach(r => add(r.owner));
+  stringJobs.forEach(j => add(j.owner));
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+function kitCurrentOwner(){
+  const owners = kitOwners();
+  if(kitWho && owners.some(o => o.toLowerCase() === kitWho.toLowerCase())) return kitWho;
+  if(kitWho) return kitWho;                       // a name with nothing on it yet
+  const mine = myName();
+  if(mine && owners.some(o => o.toLowerCase() === mine.toLowerCase())) return mine;
+  if(mine) return mine;
+  return owners[0] || "";
+}
+/* the two collections the model reads its hours out of */
+function kitData(){ return {matches, practice: practiceLog}; }
+
+/* Today's temperature, if the page has one. The ambient background already
+   fetches Toronto's weather for its particle layer and caches it for twenty
+   minutes; the court's busyness model is the second reader of that same
+   answer and this is the third, so it costs no request. Null until it lands,
+   and null forever on a build with the weather layer switched off — which is
+   exactly what kitAssess() treats as "say nothing about the temperature". */
+let kitTempC = null;
+async function kitLoadWeather(){
+  if(typeof window.fgtaGetWeather !== "function") return;
+  try{
+    const wx = await window.fgtaGetWeather();
+    const t = wx && wx.temp;
+    if(typeof t === "number" && isFinite(t)){
+      kitTempC = t;
+      if(activeView === "kit") renderKit();
+    }
+  }catch(e){ /* the Kit works fine without it, which is the point */ }
+}
+
+/* Every job for one owner, newest first, each with its assessment attached
+   and each knowing which frame it went into. A job whose racket row has been
+   deleted still renders — the string job is the record, the frame is a label. */
+function kitJobsFor(owner){
+  const want = String(owner || "").toLowerCase();
+  const byId = {};
+  rackets.forEach(r => byId[r.id] = r);
+  const d = kitData();
+  return stringJobs
+    .filter(j => String(j.owner || "").toLowerCase() === want)
+    .sort((a, b) => new Date(b.strung_at || b.created_at) - new Date(a.strung_at || a.created_at))
+    /* the "is this the current bed" question is answered a layer up, in
+       kitWithHistory(), because it needs the whole list to decide */
+    .map(j => Object.assign({}, kitAssess(j, d, null, kitTempC), {racket: byId[j.racket_id] || null}));
+}
+
+/* Freeze a retired job's hours at the moment it was replaced or cut out.
+
+   Without this every old job keeps accruing the owner's hours forever, so a
+   season of history reads as a column of dead beds — which is true of the
+   string and useless as a record. What somebody wants from an old job is what
+   it did while it was ON: how long it lasted, and how it was doing when it
+   came off. */
+function kitWithHistory(owner){
+  const jobs = kitJobsFor(owner);
+  const d = kitData();
+  const latestFor = {};
+  jobs.forEach(a => {
+    const key = a.job.racket_id == null ? "_none" : a.job.racket_id;
+    if(latestFor[key] === undefined) latestFor[key] = a.job.id;   // jobs are newest-first
+  });
+  return jobs.map(a => {
+    const key = a.job.racket_id == null ? "_none" : a.job.racket_id;
+    const current = latestFor[key] === a.job.id && !a.job.removed_at;
+    if(current) return Object.assign({}, a, {current:true});
+    /* find when it came off: its own removed_at, else the next job in the
+       same frame going on */
+    let off = a.job.removed_at ? new Date(a.job.removed_at).getTime() : null;
+    if(off == null){
+      const next = jobs.filter(x => (x.job.racket_id == null ? "_none" : x.job.racket_id) === key
+                              && new Date(x.job.strung_at) > new Date(a.job.strung_at))
+                       .sort((x, y) => new Date(x.job.strung_at) - new Date(y.job.strung_at))[0];
+      off = next ? new Date(next.job.strung_at).getTime() : null;
+    }
+    if(off == null) return Object.assign({}, a, {current:false});
+    return Object.assign({}, kitAssess(a.job, d, off, kitTempC), {
+      racket: a.racket, current:false, retiredAt: off
+    });
+  });
+}
+
+/* ------------------------------------------------------------------
+   RENDER
+   ------------------------------------------------------------------ */
+function renderKit(){
+  const box = $("kitBody");
+  if(!box) return;
+  if(kitTempC == null) kitLoadWeather();      // fire and forget; it re-renders if it lands
+  const owner = kitCurrentOwner();
+  const owners = kitOwners();
+
+  if(!kitTables.string_jobs){
+    box.innerHTML = kitNoTableHTML();
+    return;
+  }
+
+  const jobs = kitWithHistory(owner);
+  const live = jobs.filter(a => a.current);
+  const past = jobs.filter(a => !a.current);
+  const mine = rackets.filter(r => String(r.owner || "").toLowerCase() === String(owner).toLowerCase());
+
+  box.innerHTML =
+      kitWhoHTML(owner, owners)
+    + (live.length ? kitLiveHTML(live) : kitEmptyHTML(owner, mine.length))
+    + (live.length ? kitCurveHTML(live[0]) : "")
+    + kitFormHTML(owner, mine)
+    + (past.length ? kitHistoryHTML(past) : "")
+    + kitRacketsHTML(owner, mine)
+    + kitBagCheckHTML(owner)
+    + kitFootnoteHTML();
+  try{ fxObserveAnimated(); }catch(e){}
+}
+
+function kitNoTableHTML(){
+  return '<div class="panel kit-setup">'
+    + '<div class="tool-h">🎽 The Kit needs two tables</div>'
+    + '<div class="pred-hint">This screen tracks rackets and string jobs, and works out how much '
+    + 'tennis has been played on each bed from the matches and practice sessions already on record — '
+    + 'so the only thing anybody types is the stringing itself.</div>'
+    + '<div class="pred-hint" style="margin-top:10px">Run <code>docs/kit.sql</code> in the Supabase SQL editor '
+    + 'to create <code>rackets</code> and <code>string_jobs</code>. Nothing else in the app depends on them, '
+    + 'and nothing else changes if you never do.</div>'
+    + '</div>';
+}
+
+function kitWhoHTML(owner, owners){
+  const opts = owners.map(o =>
+    '<option value="' + esc(o) + '"' + (o === owner ? " selected" : "") + '>' + esc(o) + '</option>').join("");
+  const others = owners.filter(o => o !== owner).length;
+  return '<div class="kit-who">'
+    + '<label for="kitWho">Whose bag</label>'
+    + '<select id="kitWho" onchange="kitSetWho(this.value)">'
+    + (owner && !owners.some(o => o === owner)
+        ? '<option value="' + esc(owner) + '" selected>' + esc(owner) + '</option>' : "")
+    + opts + '</select>'
+    + (others ? '<span class="kit-who-n">' + others + ' other' + (others === 1 ? "" : "s") + ' on record</span>' : "")
+    + '</div>';
+}
+
+function kitEmptyHTML(owner, frames){
+  return '<div class="panel kit-empty">'
+    + '<div class="kit-empty-h">Nothing strung yet' + (owner ? " for " + esc(owner) : "") + '</div>'
+    + '<div class="pred-hint">'
+    + (frames ? 'Log a stringing below and this fills in on its own — '
+              : 'Add a racket below, then log a stringing, and this fills in on its own — ')
+    + 'the hours come out of the matches and sessions already recorded, so there is no second thing to keep up to date.'
+    + '</div></div>';
+}
+
+/* The headline card: one per frame currently strung. */
+function kitLiveHTML(live){
+  return '<div class="kit-live">' + live.map(a => {
+    const M = a.material;
+    const pct = Math.max(0, Math.min(100, a.score));
+    const due = a.daysLeft == null ? "no end in sight"
+      : a.daysLeft < 1  ? "due now"
+      : a.daysLeft < 14 ? "about " + Math.round(a.daysLeft) + " day" + (Math.round(a.daysLeft) === 1 ? "" : "s")
+      : "about " + Math.round(a.daysLeft / 7) + " weeks";
+    const why = a.binding === "tension"
+      ? "the tension is what goes first on " + esc(M.short)
+      : "it wears out before it goes soft";
+    return '<div class="kit-card kit-' + a.band.key + '">'
+      + '<div class="kit-card-h">'
+      +   '<div class="kit-frame">' + esc(a.racket ? (a.racket.name || "Racket") : "Unassigned frame")
+      +     (a.racket && a.racket.label ? ' <i>' + esc(a.racket.label) + '</i>' : '') + '</div>'
+      +   '<div class="kit-verdict">' + esc(a.band.label) + '</div>'
+      + '</div>'
+      + '<div class="kit-meter" role="img" aria-label="Playability ' + Math.round(pct) + ' out of 100, '
+      +   esc(a.band.label) + '"><span style="width:' + pct.toFixed(1) + '%"></span></div>'
+      + '<div class="kit-nums">'
+      +   kitStat(Math.round(a.score), "playability")
+      +   kitStat(a.tension ? a.tension.toFixed(1) : "—", "lb now"
+                 + (a.job.tension ? " · strung " + a.job.tension : ""))
+      +   kitStat(a.hours.toFixed(1) + "h", "played on it")
+      +   kitStat(Math.round(a.days) + "d", "on the racket")
+      + '</div>'
+      + '<div class="kit-line">' + esc(a.band.hint) + ' <span>' + esc(why) + '</span></div>'
+      + '<div class="kit-when"><b>' + esc(due) + '</b> at ' + a.rate.toFixed(1) + ' h/week'
+      +   (a.brokenIn ? '' : ' · <i>still breaking in</i>') + '</div>'
+      /* what it will feel like TODAY, which is not what it measures — see
+         kitFeelShift. Absent entirely when the page has no temperature. */
+      + (a.feelNote
+          ? '<div class="kit-feel' + (Math.abs(a.feelShift) >= 2 ? ' kit-feel-strong' : '') + '">'
+            + '<b>' + (a.feelShift > 0 ? '+' : '') + a.feelShift.toFixed(1) + ' lb</b> '
+            + esc(a.feelNote) + '</div>'
+          : '')
+      + kitProvenanceHTML(a)
+      + '<div class="kit-card-f">'
+      +   '<span>' + esc(kitJobLabel(a.job)) + '</span>'
+      +   (optIsPendingRow(a.job) ? '' :
+          '<button class="mini" onclick="kitCutOut(' + a.job.id + ')">Cut it out</button>')
+      + '</div>'
+      + '</div>';
+  }).join("") + '</div>';
+}
+function kitStat(v, l){
+  return '<div class="kit-stat"><b>' + esc(String(v)) + '</b><i>' + esc(l) + '</i></div>';
+}
+function kitJobLabel(j){
+  const M = KIT_MAT(j.material);
+  const bits = [M.label];
+  if(j.gauge) bits.push(j.gauge);
+  if(j.tension) bits.push(j.tension + (j.tension_cross && j.tension_cross !== j.tension
+    ? "/" + j.tension_cross : "") + " lb");
+  if(j.main_string) bits.push(j.main_string);
+  return bits.join(" · ");
+}
+
+/* WHERE THE HOURS CAME FROM. The number above is only as good as this, so it
+   is on the card rather than in a tooltip: a bed whose hours are all "assumed"
+   is a guess wearing a decimal point, and the reader is entitled to know. */
+function kitProvenanceHTML(a){
+  const s = a.used.sources, total = a.hours;
+  if(total <= 0) return '<div class="kit-prov">No tennis on it yet.</div>';
+  const parts = [
+    ["tracked",   s.tracked,   "timed by a ref"],
+    ["practice",  s.practice,  "logged sessions"],
+    ["scoreline", s.scoreline, "from scorelines"],
+    ["assumed",   s.assumed,   "assumed"]
+  ].filter(([, v]) => v > 0.01);
+  const measured = (s.tracked + s.practice) / total;
+  return '<div class="kit-prov">'
+    + '<div class="kit-prov-bar">' + parts.map(([k, v]) =>
+        '<span class="kp-' + k + '" style="width:' + (v / total * 100).toFixed(1) + '%"></span>').join("")
+    + '</div><div class="kit-prov-l">'
+    + parts.map(([, v, l]) => v.toFixed(1) + 'h ' + l).join(' · ')
+    + (measured > 0.6 ? '' : ' — mostly estimated, so read the number as a shape not a measurement')
+    + '</div></div>';
+}
+
+/* The curve, drawn where the bed actually is on it. Inline SVG in the app's
+   own chart idiom: no library, a mono axis, and the one dot that matters. */
+const KIT_CHART = {w: 640, h: 168, pad: {t: 12, r: 12, b: 26, l: 34}};
+function kitCurveHTML(a){
+  const C = KIT_CHART, iw = C.w - C.pad.l - C.pad.r, ih = C.h - C.pad.t - C.pad.b;
+  const dph = a.rate > 0 ? 7 / a.rate : 0;
+  /* far enough right to show the end of the string's life, and never less
+     than where this bed already is */
+  const span = Math.max(a.hours * 1.4, (a.material.life || 24) * 1.15, 6);
+  const x = h => C.pad.l + (h / span) * iw;
+  const y = s => C.pad.t + (1 - s / 100) * ih;
+  let d = "";
+  for(let i = 0; i <= 90; i++){
+    const h = span * i / 90;
+    const s = kitPlayability(a.job, h, a.days + Math.max(0, h - a.hours) * dph);
+    d += (i ? "L" : "M") + x(h).toFixed(1) + " " + y(s).toFixed(1) + " ";
+  }
+  const gy = y(KIT_RESTRING_AT);
+  const px = x(a.hours), py = y(a.score);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const h = span * f;
+    return '<text x="' + x(h).toFixed(1) + '" y="' + (C.h - 8) + '" class="kit-ax" text-anchor="middle">'
+      + (h >= 10 ? Math.round(h) : h.toFixed(1)) + 'h</text>';
+  }).join("");
+  return '<div class="panel kit-chart-wrap">'
+    + '<div class="sec-label" style="margin:0 0 4px">How this bed goes</div>'
+    + '<svg class="kit-chart" viewBox="0 0 ' + C.w + ' ' + C.h + '" role="img"'
+    + ' aria-label="Playability against hours played. This bed is at '
+    + Math.round(a.score) + ' out of 100 after ' + a.hours.toFixed(1) + ' hours.">'
+    + '<line x1="' + C.pad.l + '" y1="' + gy.toFixed(1) + '" x2="' + (C.w - C.pad.r)
+    +   '" y2="' + gy.toFixed(1) + '" class="kit-gl"/>'
+    + '<text x="' + (C.w - C.pad.r) + '" y="' + (gy - 5).toFixed(1)
+    +   '" class="kit-ax" text-anchor="end">restring around here</text>'
+    + '<path d="' + d.trim() + '" class="kit-curve"/>'
+    + '<line x1="' + px.toFixed(1) + '" y1="' + C.pad.t + '" x2="' + px.toFixed(1)
+    +   '" y2="' + (C.h - C.pad.b) + '" class="kit-now"/>'
+    + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="4.5" class="kit-dot"/>'
+    + ticks
+    /* outside the plot, anchored right — inside it, the "100" sat exactly
+       where the curve starts and read as part of the line */
+    + '<text x="' + (C.pad.l - 6) + '" y="' + (C.pad.t + 4) + '" class="kit-ax" text-anchor="end">100</text>'
+    + '<text x="' + (C.pad.l - 6) + '" y="' + (C.h - C.pad.b) + '" class="kit-ax" text-anchor="end">0</text>'
+    + '</svg>'
+    + '<div class="pred-hint">' + esc(a.material.note) + '</div>'
+    + '</div>';
+}
+
+function kitFormHTML(owner, frames){
+  const mats = Object.keys(KIT_STRINGS).map(k =>
+    '<option value="' + k + '"' + (k === KIT_DEFAULT_MATERIAL ? " selected" : "") + '>'
+    + esc(KIT_STRINGS[k].label) + '</option>').join("");
+  const opts = frames.map(r =>
+    '<option value="' + r.id + '">' + esc(r.name || "Racket") + '</option>').join("");
+  return '<section data-print="hide"><div class="sec-label">Log a stringing</div><div class="panel">'
+    + '<div class="pred-hint">Everything else — the hours, how often you play, when it comes due — '
+    + 'is read off the matches and sessions already recorded. This is the only part nobody else knows.</div>'
+    + '<div class="grid2" style="margin-top:12px">'
+    +   '<div><label for="kjRacket">Racket</label><select id="kjRacket">'
+    +     (opts || '<option value="">— add one below —</option>') + '</select></div>'
+    +   '<div><label for="kjDate">Strung on</label><input id="kjDate" type="date" autocomplete="off"></div>'
+    + '</div>'
+    + '<div class="grid2" style="margin-top:10px">'
+    +   '<div><label for="kjMat">String</label><select id="kjMat">' + mats + '</select></div>'
+    +   '<div><label for="kjTension">Tension (lb)</label><input id="kjTension" type="number" min="20" max="80" step="0.5" placeholder="52" autocomplete="off"></div>'
+    + '</div>'
+    + '<div class="grid2" style="margin-top:10px">'
+    +   '<div><label for="kjName">Which string <span style="color:var(--dim)">(optional)</span></label>'
+    +     '<input id="kjName" placeholder="Luxilon ALU Power" autocomplete="off" maxlength="60"></div>'
+    +   '<div><label for="kjGauge">Gauge <span style="color:var(--dim)">(optional)</span></label>'
+    +     '<input id="kjGauge" placeholder="1.25 / 16L" autocomplete="off" maxlength="20"></div>'
+    + '</div>'
+    + '<button class="btn" style="margin-top:12px" onclick="kitAddJob()">Log it</button>'
+    + '</div></section>';
+}
+
+function kitHistoryHTML(past){
+  return '<section><div class="sec-label">Beds that have been and gone</div><div class="panel">'
+    + '<div class="pred-hint">Each one frozen at the moment it came off, rather than still counting '
+    + 'hours it never played — what a retired job is worth knowing is how long it lasted.</div>'
+    + '<div class="kit-hist">' + past.slice(0, 24).map(a => {
+      const lasted = a.retiredAt && a.job.strung_at
+        ? Math.round((a.retiredAt - new Date(a.job.strung_at).getTime()) / 86400000) : null;
+      return '<div class="kit-hrow">'
+        + '<span class="kit-hdot kit-' + a.band.key + '"></span>'
+        + '<span class="kit-hmain"><b>' + esc(kitJobLabel(a.job)) + '</b>'
+        +   '<i>' + esc(a.racket ? (a.racket.name || "Racket") : "unassigned")
+        +   (a.job.strung_at ? ' · strung ' + new Date(a.job.strung_at).toLocaleDateString() : '')
+        +   '</i></span>'
+        + '<span class="kit-hnum">' + a.hours.toFixed(1) + 'h</span>'
+        + '<span class="kit-hnum">' + (lasted == null ? '—' : lasted + 'd') + '</span>'
+        + '<span class="kit-hnum kit-' + a.band.key + '">' + Math.round(a.score) + '</span>'
+        + '</div>';
+    }).join("") + '</div></div></section>';
+}
+
+function kitRacketsHTML(owner, mine){
+  const rows = mine.map(r =>
+    '<div class="kit-rrow"' + optPendingAttrs(r) + '><span><b>' + esc(r.name || "Racket") + '</b>'
+    + (r.label ? '<i>' + esc(r.label) + '</i>' : '') + '</span>'
+    + (optIsPendingRow(r) ? '<span class="kit-hnum">saving…</span>'
+       : '<button class="mini danger" onclick="kitRetireRacket(' + r.id + ')">Remove</button>')
+    + '</div>').join("");
+  return '<section><div class="sec-label">Frames</div><div class="panel">'
+    + (kitTables.rackets ? '' :
+       '<div class="pred-hint">There is no <code>rackets</code> table on this deployment, so string jobs '
+       + 'are tracked without a frame attached. That still works — see <code>docs/kit.sql</code>.</div>')
+    + (rows ? '<div class="kit-rlist">' + rows + '</div>' : '<div class="pred-hint">No frames yet.</div>')
+    + (kitTables.rackets ? '<div class="grid2" style="margin-top:12px">'
+        + '<input id="krName" placeholder="Pure Aero 98" autocomplete="off" maxlength="60">'
+        + '<input id="krLabel" placeholder="the one with the blue grip" autocomplete="off" maxlength="60">'
+        + '</div><button class="btn ghost" style="margin-top:10px;width:auto" onclick="kitAddRacket()">Add a frame</button>' : '')
+    + '</div></section>';
+}
+
+/* THE BAG CHECK — everybody's current bed, worst first.
+
+   The per-player screen answers "should I restring". This answers the
+   question the group actually asks each other, which is "whose racket is a
+   disgrace" — and it is the reason the Kit is worth having as a shared page
+   rather than a note on somebody's phone. It also does something useful by
+   accident: a player who has never logged a stringing shows up as absent
+   from a list everybody else is on, which is a better prompt than any empty
+   state on their own screen would be. */
+function kitBagCheckHTML(currentOwner){
+  const owners = kitOwners();
+  if(owners.length < 2) return "";
+  const rows = [];
+  owners.forEach(o => {
+    kitWithHistory(o).filter(a => a.current).forEach(a => rows.push({o, a}));
+  });
+  if(rows.length < 2) return "";
+  rows.sort((x, y) => x.a.score - y.a.score);      // worst first
+  return '<section><div class="sec-label">The bag check</div><div class="panel">'
+    + '<div class="pred-hint">Everybody\'s current bed, worst first. Same model, same hours, '
+    + 'read off the same matches — so this is a comparison rather than an argument.</div>'
+    + '<div class="kit-bag">' + rows.map(({o, a}) => {
+        const mine = o.toLowerCase() === String(currentOwner || "").toLowerCase();
+        /* The owner goes in a data- attribute and is read back out on click,
+           rather than being spliced into a JS call inside an attribute.
+
+           The version this replaces did JSON.stringify(o).replace(/"/g,'&quot;')
+           and it was injectable: JSON.stringify leaves an ampersand alone, so
+           a name containing the literal text `&quot;` came through untouched,
+           the HTML parser decoded it back to a real quote, and the rest of
+           the name ran as script. Player names are typed by players.
+
+           esc() escapes & and " (though NOT ', which is why this attribute is
+           double-quoted), so an escaped value in a double-quoted attribute
+           cannot break out of it, and nothing here is ever parsed as JS. */
+        return '<button class="kit-bagrow' + (mine ? ' on' : '')
+          + '" data-owner="' + esc(o) + '" onclick="kitSetWho(this.dataset.owner)">'
+          + '<span class="kit-bagav">' + (function(){ try{ return avatar(o, 24); }catch(e){ return ""; } })() + '</span>'
+          + '<span class="kit-bagmain"><b>' + esc(o) + '</b>'
+          +   '<i>' + esc(a.material.short) + ' · ' + Math.round(a.days) + 'd · '
+          +   a.hours.toFixed(1) + 'h' + (a.racket ? ' · ' + esc(a.racket.name || "") : '') + '</i></span>'
+          + '<span class="kit-bagmeter"><span style="width:' + Math.max(0, Math.min(100, a.score)).toFixed(0)
+          +   '%" class="kit-' + a.band.key + '"></span></span>'
+          + '<span class="kit-bagscore kit-' + a.band.key + '">' + Math.round(a.score) + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div></div></section>';
+}
+
+function kitFootnoteHTML(){
+  return '<div class="kit-note">The decay curve is a published rule of thumb per material, not a '
+    + 'measurement of your racket — nobody here owns a tension meter. What it is good for is the '
+    + 'ordering and the shape: which bed is further gone, and roughly when this one stops being worth '
+    + 'playing with. The <b>hours</b> underneath it are real, and each card says how much of its own '
+    + 'total was timed rather than estimated.</div>';
+}
+
+/* ------------------------------------------------------------------
+   ACTIONS
+   ------------------------------------------------------------------ */
+function kitSetWho(name){ kitWho = name; renderKit(); }
+window.kitSetWho = kitSetWho;
+
+async function kitAddRacket(){
+  const owner = kitCurrentOwner();
+  if(!owner) return toast("Pick a display name first", true);
+  const name = ($("krName").value || "").trim();
+  if(!name) return toast("Give the frame a name", true);
+  const label = ($("krLabel").value || "").trim();
+  const row = {owner, name, label: label || null};
+  const draft = [name, label];
+  $("krName").value = ""; $("krLabel").value = "";
+  const done = await optWrite({
+    store  : "rackets",
+    mutate : optAdd(optRow(Object.assign({}, row))),
+    write  : () => sb.from("rackets").insert(row),
+    paint  : () => renderKit(),
+    ok     : "Frame added ✓",
+    fail   : "The Kit needs a `rackets` table — see docs/kit.sql.",
+    refresh: false
+  });
+  if(done){ await loadKitData(); renderKit(); }
+  else { $("krName").value = draft[0]; $("krLabel").value = draft[1]; renderKit(); }
+}
+window.kitAddRacket = kitAddRacket;
+
+async function kitAddJob(){
+  const owner = kitCurrentOwner();
+  if(!owner) return toast("Pick a display name first", true);
+  const tension = Number($("kjTension").value);
+  if(!tension || tension < 20 || tension > 80)
+    return toast("Tension should be somewhere between 20 and 80 lb", true);
+  const dateStr = $("kjDate").value;
+  const racketId = $("kjRacket").value;
+  const row = {
+    owner,
+    racket_id  : racketId ? Number(racketId) : null,
+    material   : $("kjMat").value || KIT_DEFAULT_MATERIAL,
+    tension,
+    main_string: ($("kjName").value || "").trim() || null,
+    gauge      : ($("kjGauge").value || "").trim() || null,
+    strung_at  : dateStr ? new Date(dateStr + "T12:00:00").toISOString() : new Date().toISOString()
+  };
+  const draft = {t: $("kjTension").value, n: $("kjName").value,
+                 g: $("kjGauge").value, d: $("kjDate").value};
+  $("kjTension").value = ""; $("kjName").value = ""; $("kjGauge").value = "";
+  const done = await optWrite({
+    store  : "string_jobs",
+    mutate : optAdd(optRow(Object.assign({}, row))),
+    /* racket_id, gauge and main_string are all "only if the schema has them"
+       extras — the same shape as the match forms, and for the same reason: a
+       project that ran half the migration must still be able to record that
+       it strung a racket. */
+    write  : async () => {
+      let res = await sb.from("string_jobs").insert(row);
+      for(const col of ["racket_id", "gauge", "main_string"]){
+        if(!res.error) break;
+        if(row[col] === undefined) continue;
+        if(!new RegExp(col).test(res.error.message || "")) continue;
+        delete row[col];
+        res = await sb.from("string_jobs").insert(row);
+      }
+      return res;
+    },
+    queue  : {table:"string_jobs", op:"insert", row,
+              optional:["racket_id", "gauge", "main_string"], label:"stringing"},
+    paint  : () => renderKit(),
+    ok     : "Strung ✓",
+    fail   : "The Kit needs a `string_jobs` table — see docs/kit.sql.",
+    refresh: false
+  });
+  if(done){ await loadKitData(); renderKit(); }
+  else {
+    $("kjTension").value = draft.t; $("kjName").value = draft.n;
+    $("kjGauge").value = draft.g; $("kjDate").value = draft.d;
+    renderKit();
+  }
+}
+window.kitAddJob = kitAddJob;
+
+/* Cutting a bed out is a real event — it stops the clock — so it is recorded
+   rather than deleted. The history panel is the reason: "it lasted 31 days"
+   is only knowable if the day it came off was written down. */
+async function kitCutOut(id){
+  if(isOptTempId(id)) return;
+  const when = new Date().toISOString();
+  const done = await optWrite({
+    store  : "string_jobs",
+    mutate : optPatch(j => j.id === id, {removed_at: when}),
+    write  : () => sb.from("string_jobs").update({removed_at: when}).eq("id", id),
+    paint  : () => renderKit(),
+    ok     : "Cut out — the clock stopped today ✓",
+    fail   : "Couldn't record that.",
+    refresh: false
+  });
+  if(done){ await loadKitData(); renderKit(); }
+}
+window.kitCutOut = kitCutOut;
+
+async function kitRetireRacket(id){
+  if(isOptTempId(id)) return;
+  const jobs = stringJobs.filter(j => j.racket_id === id).length;
+  if(jobs && !confirm("That frame has " + jobs + " string job" + (jobs === 1 ? "" : "s")
+      + " against it. They stay on record, but lose the frame's name. Remove it?")) return;
+  const done = await optWrite({
+    store  : "rackets",
+    mutate : optDrop(r => r.id === id),
+    write  : () => sb.from("rackets").delete().eq("id", id),
+    paint  : () => renderKit(),
+    ok     : "Frame removed",
+    fail   : "Couldn't remove that frame.",
+    refresh: false
+  });
+  if(done){ await loadKitData(); renderKit(); }
+}
+window.kitRetireRacket = kitRetireRacket;
+window.renderKit = renderKit;
+window.loadKitData = loadKitData;
+
 
 /* ============================================================
    MATCHMAKER — scores every possible pairing on what makes
@@ -27175,44 +29162,927 @@ async function postWeeklyRecap(){
 window.postWeeklyRecap=postWeeklyRecap;
 
 /* ============================================================
-   GLOBAL SEARCH
-   ============================================================ */
-/* computeStandings() replays every approved match in the league through the
-   Elo engine and sorts the result. This function used to call it once to
-   filter, and then AGAIN inside the loop for each matching player just to
-   read that player's rank — so a query matching ten people replayed the
-   whole league eleven times, on every keystroke. One call, and the rank
-   comes out of the array that call already produced. */
-function runSearch(){
-  const q=$("searchInput").value.trim().toLowerCase();
-  const out=$("searchResults");
-  if(!q){ out.innerHTML=''; return; }
-  const res=[];
-  // players
-  const standings=computeStandings();
-  standings.filter(p=>p.games>0&&p.name.toLowerCase().includes(q)).forEach(p=>
-    res.push({icon:avatar(p.name,26),label:p.name,sub:`#${standings.indexOf(p)+1} · ${Math.round(p.rating)}`,act:`openProfile('${p.name.replace(/'/g,"\\'")}')`}));
-  // matches
-  matches.filter(m=>m.status==="approved"&&(`${m.p1} ${m.p2}`.toLowerCase().includes(q))).slice(0,6).forEach(m=>
-    res.push({icon:'🎾',label:`${m.p1} vs ${m.p2}`,sub:new Date(m.created_at).toLocaleDateString(),act:`openMatch(${m.id})`}));
-  // posts
-  posts.filter(p=>(p.body||'').toLowerCase().includes(q)).slice(0,5).forEach(p=>
-    res.push({icon:'💬',label:`${p.author}: ${(p.body||'').slice(0,40)}`,sub:when(p.created_at),act:`showView('feed')`}));
-  // hashtags
-  trendingTags().filter(([t])=>t.includes(q.replace('#',''))).forEach(([t,n])=>
-    res.push({icon:'#',label:'#'+t,sub:`${n} post${n>1?'s':''}`,act:`showView('feed');setTagFilter('${t}')`}));
+   THE COMMAND PALETTE — one keystroke to anywhere in the app.
 
-  out.innerHTML = res.length?res.slice(0,14).map(r=>`
-    <button class="srch-row" onclick="closeSearch();${r.act}">
-      <span class="srch-ic">${r.icon}</span>
-      <span class="srch-main"><span class="srch-label">${esc(r.label)}</span><span class="srch-sub">${esc(r.sub)}</span></span>
-    </button>`).join(''):'<div class="c-empty">No matches for "'+esc(q)+'"</div>';
+   The app grew to ten top-level views, nineteen sub-tabs and
+   well over a hundred actions that live behind a menu, a sheet, a
+   sub-tab or a scroll. Reaching "the validation tab of Analytics"
+   is four taps and knowing where it lives; reaching the FF Cup
+   draw is knowing that Events hides behind the More sheet on a
+   phone. That is fine for the handful of people who grew their
+   habits alongside the app, and hostile to everybody else.
+
+   So: Cmd/Ctrl-K, type three letters, press Enter. The palette is
+   a superset of the old search box rather than a second one
+   beside it — players, matches, posts and hashtags are still in
+   there, they are four providers now rather than the whole list,
+   and the ⌕ button opens this.
+
+   WHAT IS ACTUALLY HARD is not the list, it is the ordering. With
+   a couple of hundred candidates and a two-letter query, a
+   substring filter returns thirty things in whatever order the
+   arrays happened to be in, and the one you meant is nineteenth.
+   So the matcher below scores a subsequence alignment — the shape
+   of thing an editor's file finder uses — and every way it feels
+   like it read your mind is one bonus term in cpFuzzy():
+
+     "lad" -> Ladder            ahead of "Reload"     (prefix > interior)
+     "rr"  -> Rating Ratios     ahead of "Rivalry"    (word initials)
+     "anv" -> Analytics · Validation                  (across a separator)
+     "app" -> the "app" in "a-pretty-app", not its scattered
+              a…p…p, which is what a greedy scan would have taken
+
+   The core is pure and lives in its own sentinel region, so
+   test/palette.test.js holds it to exactly those promises with no
+   DOM in sight: strings and plain item records in, scores and an
+   order out.
+   ============================================================ */
+
+/* ==== CP-CORE-START ==== */
+
+/* Query and haystack are both folded through this before matching, so "jose"
+   finds "José" and "FF-CUP" finds "FF Cup".
+
+   It must never change a string's LENGTH: the boundary table below is built
+   from the raw string (case is what carries a camelCase boundary) and then
+   indexed against the normalised one. NFD followed by a combining-mark strip
+   can only shorten a string where a character actually decomposes, and every
+   such character is replaced by its base — so the invariant holds for the
+   Latin script a tennis roster is written in, which is the whole domain
+   here. cpIndexable() below is the assertion of that, and the one caller
+   that can be handed arbitrary text (post bodies) checks it. */
+function cpNorm(s){
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
 }
-window.runSearch=runSearch;
-function openSearch(){ $("searchModal").classList.add("open"); setTimeout(()=>$("searchInput").focus(),50); }
-window.openSearch=openSearch;
-function closeSearch(){ $("searchModal").classList.remove("open"); $("searchInput").value=''; $("searchResults").innerHTML=''; }
-window.closeSearch=closeSearch;
+function cpIndexable(s){ return cpNorm(s).length === String(s == null ? "" : s).length; }
+
+/* Characters that begin a "word" for scoring: the first one, anything after
+   a separator, the capital in camelCase, and the first digit of a run. */
+const CP_SEP = /[\s\-_/.,:;·—–>|()[\]{}#@'"!?+*&]/;
+function cpBoundaries(raw){
+  const s = String(raw == null ? "" : raw);
+  const b = new Uint8Array(s.length);
+  for(let i = 0; i < s.length; i++){
+    const ch = s[i], prev = i ? s[i-1] : "";
+    /* a separator is the thing words start AFTER, never a word start itself:
+       "Analytics · Validation" has two words in it, not four */
+    if(CP_SEP.test(ch)) continue;
+    if(i === 0){ b[i] = 1; continue; }
+    if(CP_SEP.test(prev)){ b[i] = 1; continue; }
+    const isUp  = ch >= "A" && ch <= "Z";
+    const preUp = prev >= "A" && prev <= "Z";
+    const nextLo = s[i+1] >= "a" && s[i+1] <= "z";
+    /* aB -> B, and the last capital of a run before a lower-case letter
+       ("FFCup" -> C), which is how an acronym followed by a word splits */
+    if(isUp && (!preUp || nextLo)) b[i] = 1;
+    else if(ch >= "0" && ch <= "9" && !(prev >= "0" && prev <= "9")) b[i] = 1;
+  }
+  return b;
+}
+
+/* Scoring weights. Named rather than inlined because the entire feel of the
+   palette is the ratio between these, and tuning it means moving them. */
+const CP_W = {
+  base:        16,     // every matched character earns this
+  boundary:    26,     // …plus this if it starts a word
+  head:        38,     // …or this if it is the very first character
+  runBonus:    24,     // per character of a run after the first
+  runBoundaryDiscount: 0.5, // a boundary inside a run is already paid for
+  gap:         -3.2,   // per haystack character skipped between matches
+  tail:        -0.35,  // per haystack character left over after the last match
+  exact:       140,    // the haystack IS the query
+  prefix:      74,     // the haystack starts with the query
+  wordPrefix:  42      // some word in the haystack starts with the query
+};
+
+const CP_NO_MATCH = null;
+
+/* Best-scoring subsequence alignment of `q` inside `text`, or null when some
+   character of the query simply is not there.
+
+   Greedy left-to-right gets "app" in "a-pretty-app" wrong — it takes the
+   leading a, then the p's of "pretty", and never sees that "app" sits there
+   whole — so this is a proper dynamic program instead. dp[i][j] is the best
+   score for having matched q[0..i] with q[i] landing exactly on hay[j]; the
+   running maximum G carries "best predecessor, gap penalty already applied"
+   forward so the whole thing stays O(len(q) x len(text)) rather than cubic.
+   Haystacks here are labels and names, so that is microseconds. */
+function cpFuzzy(q, text, boundaries){
+  const hay = cpNorm(text);
+  const needle = cpNorm(q).replace(/\s+/g, "");
+  if(!needle) return {score: 0, hits: []};
+  if(!hay.length || needle.length > hay.length) return CP_NO_MATCH;
+
+  const B = boundaries || cpBoundaries(text);
+  const n = needle.length, h = hay.length;
+
+  const charScore = (j, inRun) => {
+    let s = CP_W.base;
+    if(B[j]) s += (j === 0 ? CP_W.head : CP_W.boundary) *
+                  (inRun ? CP_W.runBoundaryDiscount : 1);
+    return s;
+  };
+
+  /* row i of the dp, and the haystack index q[i-1] matched at */
+  let prevRow = new Float64Array(h), prevFrom = new Int32Array(h);
+  let row     = new Float64Array(h), from     = new Int32Array(h);
+  const trace = [];
+
+  for(let i = 0; i < n; i++){
+    row.fill(-Infinity); from.fill(-1);
+    /* G[j] = max over k <= j of (prevRow[k] + gap * (j - k)) — the best
+       predecessor for a match at j+1, with its gap already charged. gBest is
+       G[j-1] as the loop reaches j; gAt is where that maximum came from. */
+    let gBest = -Infinity, gAt = -1;
+    for(let j = 0; j < h; j++){
+      if(i > 0 && j > 0){
+        /* fold hay[j-1] in as a possible predecessor, then age the running
+           best by one character of gap */
+        const cand = prevRow[j-1];
+        if(cand > gBest){ gBest = cand; gAt = j-1; }
+      }
+      if(hay[j] === needle[i]){
+        if(i === 0){
+          row[j] = charScore(j, false); from[j] = -1;
+        } else if(gBest > -Infinity){
+          /* two ways in: straight off the adjacent character (a run), or
+             from the best earlier match with the gap paid for */
+          const adj    = (j > 0 && prevRow[j-1] > -Infinity)
+                       ? prevRow[j-1] + CP_W.runBonus + charScore(j, true)
+                       : -Infinity;
+          const jumped = gBest + charScore(j, false);
+          if(adj >= jumped){ row[j] = adj; from[j] = j-1; }
+          else             { row[j] = jumped; from[j] = gAt; }
+        }
+      }
+      if(gBest > -Infinity) gBest += CP_W.gap;   // one more character skipped
+    }
+    trace.push({row: Float64Array.from(row), from: Int32Array.from(from)});
+    const tr = prevRow; prevRow = row; row = tr;
+    const tf = prevFrom; prevFrom = from; from = tf;
+  }
+
+  const last = trace[n-1];
+  let end = -1, best = -Infinity;
+  for(let j = 0; j < h; j++) if(last.row[j] > best){ best = last.row[j]; end = j; }
+  if(end < 0) return CP_NO_MATCH;
+
+  const hits = [];
+  for(let i = n - 1, j = end; i >= 0 && j >= 0; i--){
+    hits.push(j);
+    j = trace[i].from[j];
+  }
+  hits.reverse();
+
+  let score = best + CP_W.tail * (h - 1 - end);
+  /* whole-string shortcuts ride on top of the alignment rather than
+     replacing it, so two prefix matches are still ordered by how well the
+     rest of them lined up */
+  if(hay === needle) score += CP_W.exact;
+  else if(hay.startsWith(needle)) score += CP_W.prefix;
+  else {
+    for(let k = 1; k < h; k++){
+      if(B[k] && hay.startsWith(needle, k)){ score += CP_W.wordPrefix; break; }
+    }
+  }
+  return {score, hits};
+}
+
+/* One candidate's total. The three haystacks are weighted by how much a hit
+   in each of them actually tells you what the person meant:
+
+     title     what is written on the row — full weight
+     keys      synonyms and words the label does not say out loud
+               ("restring" finding The Kit, "elo" finding Ratings) — nearly
+               full weight, because a keyword hit IS a title hit as far as
+               intent goes; it just has nothing to underline
+     sub       the greyed-out second line — half, since matching a date or a
+               rating there is usually a coincidence
+
+   `weight` is the item's standing importance (a top-level view outranks a
+   three-week-old post), and `boost` is what recency and pinning add. Both
+   are plain additions rather than multipliers: multiplying lets a heavy item
+   win on a bad match, which is exactly the failure mode — "d" must not open
+   the Doubles tab just because Doubles is important. */
+const CP_FIELD = {title: 1, keys: 0.9, sub: 0.5};
+const CP_MIN_SCORE = 1;      // below this a match is a coincidence, not a hit
+
+function cpScore(q, item, boost){
+  const query = String(q == null ? "" : q).trim();
+  const bonus = (item.weight || 0) + (boost || 0);
+  if(!query) return item.hidden ? null : {score: bonus, hits: []};
+
+  const t = cpFuzzy(query, item.title || "", item._tb);
+  let best = t ? t.score * CP_FIELD.title : -Infinity;
+  /* Highlight indices are positions in the NORMALISED title, so they only
+     land correctly while normalising preserves length — true for the Latin
+     script every label and name in here is written in, and not true in
+     general, because a post or a pasted name can contain a bare combining
+     mark. Such a title still MATCHES; it just renders without underlining,
+     which is a missing nicety rather than characters bolded in the wrong
+     places. The check is here rather than in the four providers so no future
+     provider has to remember it. */
+  let hits = (t && item._safe) ? t.hits : [];
+
+  const keys = item.keys;
+  if(keys){
+    const k = cpFuzzy(query, keys, item._kb);
+    if(k && k.score * CP_FIELD.keys > best){ best = k.score * CP_FIELD.keys; hits = []; }
+  }
+  if(item.sub){
+    const s = cpFuzzy(query, item.sub, item._sb);
+    if(s && s.score * CP_FIELD.sub > best){ best = s.score * CP_FIELD.sub; hits = []; }
+  }
+  if(best === -Infinity) return null;
+  const total = best + bonus;
+  return total < CP_MIN_SCORE ? null : {score: total, hits};
+}
+
+/* Cache the boundary tables on the item the first time it is scored. They
+   depend only on the strings, and rebuilding three of them per candidate per
+   keystroke is the one genuinely wasteful thing this loop could do. */
+function cpPrepare(item){
+  if(item._tb === undefined){
+    item._tb = cpBoundaries(item.title || "");
+    item._safe = cpIndexable(item.title || "");
+    item._kb = item.keys ? cpBoundaries(item.keys) : null;
+    item._sb = item.sub  ? cpBoundaries(item.sub)  : null;
+  }
+  return item;
+}
+
+/* Rank a candidate list.
+
+   opts.limit   how many rows come back at all (default 40)
+   opts.cap     most rows any one group may contribute (default 6). Without
+                it a roster of forty players buries the five commands under
+                a wall of names on any query that happens to be a common
+                letter run — and the cap is per group rather than global so
+                the LAST group in the list still gets its share.
+   opts.boost   (item) => number, added to the score. This is where recency
+                lives: the palette hands back what you picked last time.
+   opts.now     injected clock, so the test does not have to wait a day
+
+   Ties break on group order, then on the item's own order, so a list with
+   no query at all comes back in the order it was declared rather than in
+   whatever order the sort happened to leave it. */
+function cpRank(q, items, opts){
+  const o = opts || {};
+  const limit = o.limit == null ? 40 : o.limit;
+  const cap   = o.cap   == null ? 6  : o.cap;
+  const boost = o.boost || (() => 0);
+  const query = String(q == null ? "" : q).trim();
+
+  const scored = [];
+  for(let i = 0; i < items.length; i++){
+    const it = cpPrepare(items[i]);
+    const r = cpScore(query, it, boost(it));
+    if(r) scored.push({item: it, score: r.score, hits: r.hits, order: i});
+  }
+  scored.sort((a, b) => (b.score - a.score) || (a.order - b.order));
+
+  if(cap > 0 && cap < scored.length){
+    const seen = {}, kept = [], overflow = [];
+    for(const s of scored){
+      const g = s.item.group || "";
+      seen[g] = (seen[g] || 0) + 1;
+      (seen[g] <= cap ? kept : overflow).push(s);
+    }
+    /* the cap trims a group, it does not throw the rows away: if the whole
+       list is short the overflow comes back on the end rather than leaving
+       an empty palette below six players */
+    return kept.concat(overflow).slice(0, limit);
+  }
+  return scored.slice(0, limit);
+}
+
+/* Split a label into matched / unmatched runs for rendering. Pure: it
+   returns segments, never markup, so the caller escapes once and the test
+   can assert on the split without parsing HTML. */
+function cpSegments(text, hits){
+  const s = String(text == null ? "" : text);
+  if(!hits || !hits.length) return [{text: s, hit: false}];
+  const on = new Set(hits);
+  const out = [];
+  let cur = "", curHit = on.has(0);
+  for(let i = 0; i < s.length; i++){
+    const h = on.has(i);
+    if(h !== curHit){ if(cur) out.push({text: cur, hit: curHit}); cur = ""; curHit = h; }
+    cur += s[i];
+  }
+  if(cur) out.push({text: cur, hit: curHit});
+  return out;
+}
+
+/* Recency as a score, not as a separate "recent" section that competes with
+   the results. A command picked in the last minute is worth a lot; one
+   picked last week is worth a nudge. Half-life rather than a cliff, so
+   there is no moment where a row visibly falls down the list.
+
+   CP_RECENT_MAX is deliberately smaller than a good title match: recency
+   reorders equals, it never promotes something you did not ask for. */
+const CP_RECENT_MAX = 55;
+const CP_RECENT_HALFLIFE_MS = 36 * 3600 * 1000;   // a day and a half
+function cpRecencyBoost(lastUsed, now){
+  /* == null, not falsy: 0 is a real instant (and the one every fake clock in
+     a test starts at), so `!lastUsed` would quietly report "never used" for
+     the epoch and make the decay untestable at its own origin. */
+  if(lastUsed == null) return 0;
+  const age = Math.max(0, (now == null ? Date.now() : now) - lastUsed);
+  return CP_RECENT_MAX * Math.pow(0.5, age / CP_RECENT_HALFLIFE_MS);
+}
+/* ==== CP-CORE-END ==== */
+
+/* ------------------------------------------------------------------
+   THE REGISTRY
+
+   A command is a plain record. Nothing in here reaches into the DOM
+   at declaration time, because the palette is built while the app is
+   still booting and half these views have never been rendered:
+
+     id      stable, and the key recency is remembered against, so
+             renaming a label does not lose where somebody's hands go
+     title   what is written on the row
+     sub     the grey second line — where it lives, or what it does
+     group   which section it files under, and what the per-group cap
+             counts (see cpRank)
+     icon    one glyph. Decorative; the row's accessible name is the
+             title, so this is aria-hidden
+     keys    words the title does not say out loud. This is where
+             "restring" finds The Kit and "elo" finds Ratings, and it
+             is the single highest-leverage field in the file
+     weight  standing importance, added to the match score
+     admin   only offered once is_admin() has actually confirmed
+     run     what happens on Enter
+   ------------------------------------------------------------------ */
+
+/* Where a view lives, said the way somebody would say it out loud.
+
+   The last column is the weight, and it is the idle list: with no query
+   typed, the palette is ordered by it, so this column is a claim about how
+   often somebody opens each screen rather than a tidy hierarchy. That is
+   why the Point Tracker — a sub-tab — outranks four whole views. Sorting
+   top-level views above sub-tabs instead produced an opening screen with
+   Court and Events on it and no way to score a game, which is backwards
+   for an app whose main verb is "ref a match". */
+const CP_NAV = [
+  //view       sub          title           subtitle                     icon  weight
+  ["ladder",    null,        "Ladder",       "The standings",             "🏆", 34,
+   "standings table rankings rating elo peak record who is first top"],
+  ["feed",      null,        "Home",         "The feed",                  "💬", 32,
+   "social posts feed timeline moments comments what is happening news"],
+  ["matches",   "tracker",   "Point Tracker","Matches · ref mode",        "🎾", 31,
+   "ref score a game live scoring point by point umpire tracker"],
+  ["matches",   "archive",   "Match Archive","Matches · every result",    "📜", 30,
+   "history past games results archive csv export fix a game log"],
+  ["events",    null,        "Events",       "Tournaments and the cup",   "🏅", 29,
+   "tournament event cup bracket draw robin knockout final group"],
+  ["predict",   "forecast",  "Forecast",     "Predict · win probability", "🔮", 28,
+   "odds win probability chance predict who wins matchup briefing"],
+  ["analytics", "overview",  "Pro",          "Analytics · the overview",  "📊", 27,
+   "pro overview dashboard advanced stats analytics numbers"],
+  ["court",     null,        "Court",        "Weather, busyness, courts nearby", "🌤️", 26.5,
+   "weather rain court busy nearby parks toronto transit drive lights"],
+  ["matches",   "rivalry",   "Rivalries",    "Matches · head to head",    "⚔️", 26,
+   "head to head h2h versus rivalry nemesis records against"],
+  ["training",  null,        "Training",     "Casual play and the calendar", "🗓️", 25,
+   "practice casual calendar availability schedule sessions kings court hitting"],
+  ["doubles",   null,        "Doubles",      "The pairs ladder",          "👥", 24,
+   "doubles pairs team partner two on two synergy"],
+  ["kit",       null,        "The Kit",      "Rackets, strings and hours on them", "🎽", 23,
+   "racket rackets string strings restring tension gauge gear equipment kit bag stringing"],
+  ["dms",       null,        "Messages",     "Direct messages",           "✉️", 22,
+   "dm dms message chat private inbox talk"],
+  ["predict",   "fixtures",  "Fixtures",     "Predict · what is on",      "📋", 21,
+   "fixtures schedule upcoming matchmaker who should play next"],
+  ["analytics", "ratings",   "Rating models","Analytics · Glicko, BT, PageRank", "📈", 20,
+   "glicko bradley terry pagerank kalman bootstrap models elo alternatives"],
+  ["analytics", "story",     "Story & records","Analytics · the record book", "📖", 20,
+   "records record book story recap history milestones streaks rookie"],
+  ["predict",   "live",      "Live & sims",  "Predict · Monte Carlo",     "🎲", 19,
+   "simulation monte carlo season sim galaxy rating map projection"],
+  ["analytics", "validation","Validation",   "Analytics · is the model right?", "🔬", 19,
+   "validation brier calibration accuracy backtest model check log loss"],
+  ["matches",   "autocut",   "Auto-cut",     "Matches · footage nobody reffed", "✂️", 18,
+   "video edit cut rally reel footage clip highlights ffmpeg"]
+];
+
+/* Actions. Kept as [id, title, sub, icon, keys, weight, adminOnly, fn]
+   tuples rather than object literals because there are forty of them and the
+   shape is worth seeing down a column. */
+const CP_ACTIONS = [
+  ["report",     "Report a game",        "Ladder · submit a result",     "📣", "submit report enter add result score game played won lost", 26, false,
+                 () => { showView("ladder"); cpAfterView(() => cpFocus("p1")); }],
+  ["track",      "Start tracking a game","Matches · ref a live game",    "⏱️", "start ref umpire live point tracker score keeping begin", 24, false,
+                 () => showSub("matches", "tracker")],
+  ["golive",     "Set up a broadcast",   "Matches · stream to YouTube",  "🔴", "stream live youtube broadcast obs camera go live", 14, false,
+                 () => { showSub("matches", "tracker"); cpAfterView(() => cpJump("ptStreamBox")); }],
+  ["doubles-report","Report a doubles game","Doubles · submit a result", "👥", "doubles pairs submit report team result", 12, false,
+                 () => { showView("doubles"); cpAfterView(() => cpFocus("dbA1")); }],
+  ["casual",     "Log a casual session", "Training · hitting, no ladder","🧺", "casual practice session hit log kings court minutes", 14, false,
+                 () => { showView("training"); cpAfterView(() => cpFocus("csDate")); }],
+  ["availability","Set my availability", "Training · when I can play",   "📅", "availability free when can play weekly slots morning evening", 10, false,
+                 () => { showView("training"); cpAfterView(() => cpFocus("availName")); }],
+  ["scheduler",  "Find a time to play",  "Training · overlapping windows","🤝", "scheduler when free overlap find time both available meet", 10, false,
+                 () => { showView("training"); cpAfterView(() => cpFocus("schedA")); }],
+  ["matchmaker", "Who should I play?",   "Predict · the matchmaker",     "🎯", "matchmaker who should i play best matchup suggest opponent fair game", 14, false,
+                 () => showSub("predict", "fixtures")],
+  ["cup",        "Open the FF Cup",      "The event on right now",       "🏆", "ff cup event tournament draw bracket final", 16, false,
+                 () => cpCall("openCupEvent")],
+  ["profile",    "My profile",           "My rating, form and history",  "🙋", "me my profile my stats my rating my record myself", 18, false,
+                 () => { const n = cpMyName(); n ? cpCall("openProfile", n) : cpCall("openNameModal"); }],
+  ["help",       "How it works",         "The explainer",                "❓", "help how it works explain guide onboarding what is k elo tutorial", 12, false,
+                 () => cpCall("openHelp")],
+  ["shortcuts",  "Keyboard shortcuts",   "Everything you can do without a mouse", "⌨️", "keyboard shortcuts keys hotkeys bindings cheat sheet", 10, false,
+                 () => cpShortcuts()],
+
+  /* toggles — the sub line reads the live state, so the row says what the
+     tap will do rather than what the setting is called */
+  ["sound",      "Sound",                () => cpOnOff(cpSfxOn(), "on", "off"), "🔊", "sound audio mute unmute sfx noise beep silence", 8, false,
+                 () => cpCall("toggleSfx")],
+  ["surface",    "Change court surface", () => cpSurfaceName(),          "◉", "surface court hard clay grass theme look colour skin", 8, false,
+                 () => cpCall("cycleSurface")],
+  ["stadium",    "Stadium mode",         () => cpOnOff(document.body.classList.contains("stadium"), "on", "off"), "◎", "stadium mode ambient crowd atmosphere lights", 6, false,
+                 () => cpCall("toggleStadium")],
+  ["attrs",      "Attribute model",      () => cpOnOff(cpAttrOn(), "on", "off"), "◈", "attributes scouting model prior serve movement toggle", 6, false,
+                 () => cpCall("toggleAttrModel")],
+  ["ball",       "Toss a ball",          "…into the page",               "🎾", "ball toy toss throw physics bounce fun", 2, false,
+                 () => cpCall("spawnPhysicsBall")],
+
+  /* data out */
+  ["csv",        "Export matches as CSV","Every result, spreadsheet-ready","⬇️", "csv export download spreadsheet excel matches data", 10, false,
+                 () => cpCall("exportMatchesCSV")],
+  ["backup",     "Download a full backup","Everything, as JSON",         "💾", "backup export json download everything data dump archive", 8, false,
+                 () => cpCall("exportData")],
+  ["share",      "Copy the standings",   "The table, as text",           "📋", "share copy clipboard standings table paste post", 8, false,
+                 () => cpCall("shareStandings")],
+  ["recap",      "Post the weekly recap","Feed · the week in review",    "📰", "recap weekly week review summary post digest", 6, false,
+                 () => cpCall("postWeeklyRecap")],
+  ["install",    "Install the app",      "Add it to the home screen",    "⤓", "install pwa home screen app add shortcut", 6, false,
+                 () => cpCall("installApp")],
+  ["reload",     "Reload the league",    "Pull fresh data",              "↻", "reload refresh reset fetch update sync pull", 6, false,
+                 () => cpReload()],
+
+  /* admin */
+  ["admin",      "Admin sign in",        "Approve, edit, run events",    "◆", "admin sign in login approve moderator", 10, true,
+                 () => cpCall("openAdminLogin")],
+  ["queue",      "The approval queue",   "Ladder · pending results",     "✅", "approve pending queue reject results waiting admin", 20, true,
+                 () => { showView("ladder"); cpAfterView(() => cpJump("pendingSec")); }],
+  ["newevent",   "Create a tournament",  "Events · a new draw",          "➕", "create tournament event new draw bracket start cup", 12, true,
+                 () => { showView("events"); cpAfterView(() => cpJump("newTournSec")); }],
+  ["studio",     "Edit the site",        "The Admin Studio",             "✎", "studio edit site design theme colours fonts configure customise", 12, true,
+                 () => cpCall("SITE.openStudio")],
+  ["roster",     "Manage the roster",    "Locked names and emails",      "👤", "roster players names emails manage lock identity admin", 8, true,
+                 () => { showView("ladder"); cpAfterView(() => cpFocus("rosterEmailInput")); }],
+  ["rename",     "Rename or merge a player","Two spellings, one person", "✏️", "rename merge duplicate player name fix spelling combine", 8, true,
+                 () => { showView("ladder"); cpAfterView(() => cpFocus("rnFrom")); }]
+];
+
+/* ------------------------------------------------------------------
+   PROVIDERS — the rows that are not commands but content.
+
+   Each one is a function returning items, called once per open (not
+   per keystroke), because computeStandings() replays the entire
+   league and the old search box called it on every letter typed.
+   ------------------------------------------------------------------ */
+function cpProviders(){
+  const out = [];
+  let standings = [];
+  try{ standings = computeStandings(); }catch(e){ standings = []; }
+
+  standings.forEach((p, i) => {
+    if(!p.games) return;
+    out.push({
+      id: "player:" + p.name, group: "player", title: p.name,
+      sub: "#" + (i+1) + " · " + Math.round(p.rating) + " · " + p.wins + "-" + p.losses,
+      icon: "person", avatarFor: p.name,
+      keys: "player profile rating record " + (i === 0 ? "top number one first leader" : ""),
+      weight: Math.max(0, 14 - i * 0.6),
+      run: () => cpCall("openProfile", p.name)
+    });
+  });
+
+  const recent = (typeof matches !== "undefined" ? matches : [])
+    .filter(m => m.status === "approved")
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 60);
+  recent.forEach((m, i) => out.push({
+    id: "match:" + m.id, group: "match", title: m.p1 + " vs " + m.p2,
+    sub: cpDate(m.created_at) + (m.sets ? " · " + m.sets : ""),
+    icon: "🎾", keys: "match game result score played beat",
+    weight: Math.max(0, 6 - i * 0.15),
+    run: () => cpCall("openMatch", m.id)
+  }));
+
+  (typeof tournaments !== "undefined" ? tournaments : []).forEach(t => out.push({
+    id: "event:" + t.id, group: "event", title: t.name || "Untitled event",
+    sub: "Event · " + (t.format || "tournament"),
+    icon: "🏅", keys: "tournament event draw bracket cup " + (t.format || ""),
+    weight: 8,
+    run: () => cpCall("openTournament", t.id)
+  }));
+
+  (typeof posts !== "undefined" ? posts : []).slice(-40).reverse().forEach(p => {
+    const body = String(p.body || "").replace(/\s+/g, " ").trim();
+    if(!body) return;
+    out.push({
+      id: "post:" + p.id, group: "post",
+      title: (p.author || "Someone") + ": " + (body.length > 52 ? body.slice(0, 52) + "…" : body),
+      sub: cpDate(p.created_at), icon: "💬",
+      /* the WHOLE body, not the truncated title — searching a post for a word
+         that fell past the 52nd character and getting nothing is the one way
+         a feed search is obviously broken. It goes in `keys` rather than the
+         title because keys are matched but never highlighted, and highlight
+         indices are the only thing cpNorm's length invariant protects. */
+      keys: body,
+      weight: 1,
+      run: () => { showView("feed"); }
+    });
+  });
+
+  try{
+    (trendingTags() || []).forEach(([tag, n]) => out.push({
+      id: "tag:" + tag, group: "tag", title: "#" + tag,
+      sub: n + " post" + (n === 1 ? "" : "s"), icon: "#",
+      keys: "hashtag tag topic trending", weight: 4,
+      run: () => { showView("feed"); cpCall("setTagFilter", tag); }
+    }));
+  }catch(e){}
+
+  return out;
+}
+
+/* ------------------------------------------------------------------
+   BUILDING THE LIST
+   ------------------------------------------------------------------ */
+const CP_GROUP_LABEL = {
+  go: "Go to", do: "Do", admin: "Admin",
+  player: "Players", match: "Matches", event: "Events", post: "Feed", tag: "Tags"
+};
+const CP_GROUP_ORDER = ["go", "do", "admin", "player", "match", "event", "tag", "post"];
+
+let CP_ITEMS = null;          // built on open, dropped on close
+let CP_STATE = {q: "", rows: [], sel: 0, open: false};
+
+function cpBuild(){
+  const items = [];
+
+  CP_NAV.forEach(([view, sub, title, subtitle, icon, weight, keys]) => {
+    items.push({
+      id: "nav:" + view + (sub ? ":" + sub : ""), group: "go",
+      title, sub: subtitle, icon, keys, weight,
+      run: () => sub ? showSub(view, sub) : showView(view)
+    });
+  });
+
+  CP_ACTIONS.forEach(([id, title, sub, icon, keys, weight, adminOnly, run]) => {
+    if(adminOnly && !cpIsAdmin()) return;
+    items.push({
+      id: "act:" + id, group: adminOnly ? "admin" : "do",
+      title, sub: typeof sub === "function" ? sub : sub,
+      icon, keys, weight, run
+    });
+  });
+
+  return items.concat(cpProviders());
+}
+
+/* Recency, persisted. Keyed on the command id rather than its label, and
+   capped so a year of use does not grow an unbounded blob in localStorage. */
+const CP_RECENT_KEY = "fgta_palette_recent";
+const CP_RECENT_KEEP = 40;
+function cpRecents(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(CP_RECENT_KEY) || "{}");
+    return (raw && typeof raw === "object") ? raw : {};
+  }catch(e){ return {}; }
+}
+function cpRemember(id){
+  if(!id) return;
+  try{
+    const r = cpRecents();
+    r[id] = Date.now();
+    const keys = Object.keys(r).sort((a, b) => r[b] - r[a]).slice(0, CP_RECENT_KEEP);
+    const out = {};
+    keys.forEach(k => out[k] = r[k]);
+    localStorage.setItem(CP_RECENT_KEY, JSON.stringify(out));
+  }catch(e){ /* private mode — the palette just forgets, which is survivable */ }
+}
+
+/* ------------------------------------------------------------------
+   SMALL HELPERS the registry above leans on. Every one of them is
+   defensive about the thing it touches not existing: the palette is
+   the one surface that lists everything, so it is the one surface
+   guaranteed to name something that is switched off, still loading,
+   or gated behind a table this deployment never created.
+   ------------------------------------------------------------------ */
+function cpIsAdmin(){ try{ return !!isAdmin; }catch(e){ return false; } }
+function cpMyName(){ try{ return myName(); }catch(e){ return ""; } }
+function cpOnOff(v, a, b){ return v ? a : b; }
+function cpSfxOn(){ try{ return !!sfxOn(); }catch(e){ return false; } }
+function cpAttrOn(){ try{ return !!useAttrs; }catch(e){ return false; } }
+function cpSurfaceName(){
+  try{ return (SURFACES[currentSurface()] || {}).name || "Hard"; }
+  catch(e){ return "Hard"; }
+}
+function cpDate(ts){
+  try{ return new Date(ts).toLocaleDateString(undefined, {month:"short", day:"numeric"}); }
+  catch(e){ return ""; }
+}
+/* Call a global by name, including a dotted one (SITE.openStudio), and say so
+   plainly rather than throwing if this build does not have it. */
+function cpCall(path, ...args){
+  const parts = String(path).split(".");
+  let ctx = window, fn = window;
+  for(const p of parts){ ctx = fn; fn = fn && fn[p]; }
+  if(typeof fn !== "function"){
+    try{ toast("That isn't available on this build", true); }catch(e){}
+    return;
+  }
+  try{ return fn.apply(ctx, args); }
+  catch(e){
+    console.warn("[palette] " + path + " threw", e);
+    try{ toast("That didn't open — check the console", true); }catch(_){}
+  }
+}
+/* showView() runs a 300ms wipe before it swaps anything in, so anything that
+   wants to touch the view it just opened has to wait for it. */
+function cpAfterView(fn){ setTimeout(fn, 420); }
+function cpFocus(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  try{ el.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){}
+  try{ el.focus({preventScroll:true}); }catch(e){ try{ el.focus(); }catch(_){} }
+  cpFlash(el.closest(".panel, .tool-block, section") || el);
+}
+function cpJump(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  try{ el.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
+  cpFlash(el);
+}
+/* A one-second ring around whatever the palette just jumped to. Landing
+   halfway down a long view with no idea which panel you were sent to is the
+   failure mode every "jump to" command has, and this is the fix for it. */
+function cpFlash(el){
+  if(!el || !el.classList) return;
+  el.classList.remove("cp-flash");
+  void el.offsetWidth;
+  el.classList.add("cp-flash");
+  setTimeout(() => el.classList.remove("cp-flash"), 1400);
+}
+async function cpReload(){
+  try{ await load(); toast("Reloaded"); }
+  catch(e){ try{ toast("Couldn't reload", true); }catch(_){} }
+}
+
+/* ------------------------------------------------------------------
+   OPEN / CLOSE / RENDER
+   ------------------------------------------------------------------ */
+function cpOpen(prefill){
+  const modal = document.getElementById("cmdkModal");
+  if(!modal) return;
+  CP_ITEMS = cpBuild();
+  CP_STATE.open = true;
+  CP_STATE.sel = 0;
+  modal.classList.add("open");
+  const inp = document.getElementById("cpInput");
+  if(inp){
+    inp.value = prefill == null ? "" : String(prefill);
+    setTimeout(() => { try{ inp.focus(); inp.select(); }catch(e){} }, 40);
+  }
+  cpRender();
+}
+function cpClose(){
+  const modal = document.getElementById("cmdkModal");
+  if(modal) modal.classList.remove("open");
+  const inp = document.getElementById("cpInput");
+  if(inp) inp.value = "";
+  CP_STATE.open = false;
+  CP_STATE.rows = [];
+  CP_ITEMS = null;                       // let the standings replay be collected
+}
+function cpToggle(){ CP_STATE.open ? cpClose() : cpOpen(); }
+
+function cpRender(){
+  const list = document.getElementById("cpList");
+  const inp  = document.getElementById("cpInput");
+  if(!list) return;
+  const q = inp ? inp.value : "";
+  CP_STATE.q = q;
+
+  const recents = cpRecents();
+  const now = Date.now();
+  const rows = cpRank(q, CP_ITEMS || [], {
+    limit: 40,
+    cap: q.trim() ? 6 : 7,
+    boost: it => cpRecencyBoost(recents[it.id], now)
+  });
+  CP_STATE.rows = rows;
+  if(CP_STATE.sel >= rows.length) CP_STATE.sel = Math.max(0, rows.length - 1);
+
+  if(!rows.length){
+    list.innerHTML = '<div class="cp-empty">Nothing matches “' + esc(q) + '”.'
+      + '<span>Try a player, a view, or what you want to do — “report”, “csv”, “restring”.</span></div>';
+    if(inp) inp.removeAttribute("aria-activedescendant");
+    cpCount(0);
+    return;
+  }
+
+  /* Group headings only when there is no query.
+
+     With a query the order is the RANKING's — a player you named should
+     outrank a view, and does — so the groups interleave, and emitting a
+     heading at every run boundary put "Go to" on screen three times and read
+     as a rendering fault rather than as information. It was information
+     nobody needed either way: with a query, the sub-line under each row
+     already says what the row is ("Analytics · …", "#3 · 812", "Aug 12").
+
+     With no query the ranking IS the grouping, because the only thing
+     separating items is their weight, so the headings label real sections. */
+  const grouped = !q.trim();
+  let last = null, html = "";
+  rows.forEach((r, i) => {
+    const g = r.item.group || "";
+    if(grouped && g !== last){
+      html += '<div class="cp-group" role="presentation">'
+           + esc(CP_GROUP_LABEL[g] || g) + '</div>';
+      last = g;
+    }
+    html += cpRowHTML(r, i);
+  });
+  list.innerHTML = html;
+  cpSelect(CP_STATE.sel, false);
+  cpCount(rows.length);
+}
+
+function cpCount(n){
+  /* the input owns the live count so a screen reader hears "12 results"
+     once per keystroke instead of the whole list being re-read */
+  try{
+    const c = document.getElementById("cpCount");
+    if(c) c.textContent = n ? (n + " result" + (n === 1 ? "" : "s")) : "no results";
+  }catch(e){}
+}
+
+function cpRowHTML(r, i){
+  const it = r.item;
+  const sub = typeof it.sub === "function" ? cpSafeSub(it) : (it.sub || "");
+  const icon = it.avatarFor
+    ? cpAvatar(it.avatarFor)
+    : '<span class="cp-ic" aria-hidden="true">' + esc(it.icon || "›") + '</span>';
+  const title = cpSegments(it.title, r.hits)
+    .map(seg => seg.hit ? '<b>' + esc(seg.text) + '</b>' : esc(seg.text))
+    .join("");
+  return '<div class="cp-row" role="option" id="cp-row-' + i + '" data-i="' + i + '"'
+    + ' aria-selected="false" onmousemove="cpSelect(' + i + ',false)"'
+    + ' onclick="cpRun(' + i + ')">'
+    + icon
+    + '<span class="cp-main"><span class="cp-label">' + title + '</span>'
+    + (sub ? '<span class="cp-sub">' + esc(sub) + '</span>' : '')
+    + '</span>'
+    + '<span class="cp-hint" aria-hidden="true">' + (CP_STATE.sel === i ? "↵" : "") + '</span>'
+    + '</div>';
+}
+/* A live sub-line is a closure reading app state, and app state during boot
+   can be anything. One bad toggle must not blank the whole palette. */
+function cpSafeSub(it){
+  try{ return it.sub() || ""; }catch(e){ return ""; }
+}
+function cpAvatar(name){
+  try{ return '<span class="cp-ic cp-ic-av" aria-hidden="true">' + avatar(name, 22) + '</span>'; }
+  catch(e){ return '<span class="cp-ic" aria-hidden="true">·</span>'; }
+}
+
+function cpSelect(i, scroll){
+  const rows = document.querySelectorAll("#cpList .cp-row");
+  if(!rows.length) return;
+  const n = Math.max(0, Math.min(rows.length - 1, i));
+  CP_STATE.sel = n;
+  rows.forEach((el, k) => {
+    const on = k === n;
+    el.classList.toggle("on", on);
+    el.setAttribute("aria-selected", on ? "true" : "false");
+    const hint = el.querySelector(".cp-hint");
+    if(hint) hint.textContent = on ? "↵" : "";
+  });
+  const inp = document.getElementById("cpInput");
+  if(inp) inp.setAttribute("aria-activedescendant", "cp-row-" + n);
+  if(scroll !== false){
+    try{ rows[n].scrollIntoView({block:"nearest"}); }catch(e){}
+  }
+}
+
+function cpRun(i){
+  const r = CP_STATE.rows[i == null ? CP_STATE.sel : i];
+  if(!r) return;
+  cpRemember(r.item.id);
+  cpClose();
+  /* after the close, so a command that opens another dialog is not fighting
+     this one's focus restore */
+  setTimeout(() => { try{ r.item.run(); }catch(e){ console.warn("[palette] run failed", e); } }, 0);
+}
+
+/* ------------------------------------------------------------------
+   KEYS
+
+   Arrow keys and Enter are handled on the input rather than on the
+   document, so the palette cannot swallow a key press meant for
+   anything else. Escape is deliberately NOT handled here: the app's
+   dialog layer already clicks the open modal's ✕ on Escape, which
+   runs cpClose()'s real teardown.
+   ------------------------------------------------------------------ */
+function cpKeys(e){
+  const n = CP_STATE.rows.length;
+  if(e.key === "ArrowDown" || (e.key === "n" && e.ctrlKey)){
+    e.preventDefault(); cpSelect((CP_STATE.sel + 1) % Math.max(1, n));
+  } else if(e.key === "ArrowUp" || (e.key === "p" && e.ctrlKey)){
+    e.preventDefault(); cpSelect((CP_STATE.sel - 1 + Math.max(1, n)) % Math.max(1, n));
+  } else if(e.key === "Home"){ e.preventDefault(); cpSelect(0); }
+  else if(e.key === "End"){ e.preventDefault(); cpSelect(n - 1); }
+  else if(e.key === "PageDown"){ e.preventDefault(); cpSelect(CP_STATE.sel + 5); }
+  else if(e.key === "PageUp"){ e.preventDefault(); cpSelect(CP_STATE.sel - 5); }
+  else if(e.key === "Enter"){ e.preventDefault(); cpRun(); }
+}
+
+/* The one global binding. Cmd-K on a Mac, Ctrl-K everywhere else, and "/"
+   as the second one because that is muscle memory from every site with a
+   search box — but only when nothing is being typed into, or "/" would be
+   impossible to type in a post. */
+document.addEventListener("keydown", e => {
+  const key = (e.key || "").toLowerCase();
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || "")
+              || (e.target && e.target.isContentEditable);
+  if((e.metaKey || e.ctrlKey) && key === "k"){
+    e.preventDefault(); cpToggle(); return;
+  }
+  if(key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey
+     && !document.querySelector(".modal.open")){
+    e.preventDefault(); cpOpen();
+  }
+});
+
+/* The ⌕ button and the More sheet both call these, and so does anything
+   else written against the old search box — the palette is a superset of it,
+   so nothing that used to open a search needs to know it changed. */
+function openSearch(prefill){ cpOpen(typeof prefill === "string" ? prefill : ""); }
+function closeSearch(){ cpClose(); }
+window.openSearch = openSearch;
+window.closeSearch = closeSearch;
+window.cpOpen = cpOpen; window.cpClose = cpClose; window.cpToggle = cpToggle;
+window.cpRender = cpRender; window.cpSelect = cpSelect; window.cpRun = cpRun;
+window.cpKeys = cpKeys;
+
+/* ------------------------------------------------------------------
+   THE SHORTCUT SHEET — the palette's own entry for "what else can I
+   press?", rendered into the help modal rather than as a seventh
+   dialog nobody would find twice.
+   ------------------------------------------------------------------ */
+const CP_SHORTCUTS = [
+  ["⌘K / Ctrl K", "Open this palette from anywhere"],
+  ["/",           "Same, when you are not typing into something"],
+  ["↑ ↓",         "Move through the results"],
+  ["⌃N / ⌃P",     "Same, without leaving the home row"],
+  ["Enter",       "Run the highlighted row"],
+  ["Esc",         "Close the palette, or any dialog"],
+  ["Tab",         "Cycle focus inside an open dialog"],
+  ["⌘Z / Ctrl Z", "Undo, in the Admin Studio"]
+];
+/* The help dialog's own markup, stashed while the shortcut sheet borrows its
+   body. Module-level variables rather than data- attributes on the element:
+   parking HTML in the DOM and reading it back out is a real taint path
+   (dataset -> innerHTML), and it is a needless one — nothing outside this
+   file needs to see it, and a variable cannot be edited by anything that can
+   reach the element. */
+let _cpHelpBody = null, _cpHelpHead = null;
+function cpShortcuts(){
+  const body = CP_SHORTCUTS.map(([k, what]) =>
+    '<div class="help-row"><kbd class="cp-kbd">' + esc(k) + '</kbd><div>' + esc(what) + '</div></div>'
+  ).join("");
+  const m = document.getElementById("helpModal");
+  const target = m && m.querySelector(".help-body");
+  if(!m || !target){ try{ toast("⌘K opens the palette; ↑↓ and Enter drive it"); }catch(e){} return; }
+  if(_cpHelpBody === null) _cpHelpBody = target.innerHTML;
+  target.innerHTML = body;
+  const h = m.querySelector(".help-h");
+  if(h){ if(_cpHelpHead === null) _cpHelpHead = h.textContent; h.textContent = "Keyboard shortcuts ⌨️"; }
+  m.classList.add("open");
+}
+/* openHelp() puts the real help back — otherwise the shortcut sheet would be
+   the help screen forever after somebody looked at it once. */
+function cpRestoreHelp(){
+  if(_cpHelpBody === null) return;
+  const m = document.getElementById("helpModal");
+  if(!m) return;
+  const target = m.querySelector(".help-body");
+  if(target) target.innerHTML = _cpHelpBody;
+  const h = m.querySelector(".help-h");
+  if(h && _cpHelpHead !== null) h.textContent = _cpHelpHead;
+}
+window.cpShortcuts = cpShortcuts;
+window.cpRestoreHelp = cpRestoreHelp;
 
 /* ============================================================
    ONBOARDING / HELP
@@ -27222,7 +30092,10 @@ function maybeOnboard(){
   try{ seen=localStorage.getItem("fgta_onboarded")==="1"; }catch(e){}
   if(!seen) openHelp();
 }
-function openHelp(){ $("helpModal").classList.add("open"); }
+/* cpShortcuts() borrows this dialog's body to render the keyboard sheet,
+   so every other way in has to put the real help back first — otherwise
+   looking at the shortcuts once makes them the help screen forever. */
+function openHelp(){ try{ cpRestoreHelp(); }catch(e){} $("helpModal").classList.add("open"); }
 window.openHelp=openHelp;
 function closeHelp(){ $("helpModal").classList.remove("open"); try{localStorage.setItem("fgta_onboarded","1");}catch(e){} }
 window.closeHelp=closeHelp;
@@ -28412,6 +31285,39 @@ function renderNews(){
    except the inputs. Any value added here has to be readable *as a form
    field*, not just as a backdrop.
    ------------------------------------ */
+/* THESE WERE LEFT BEHIND BY THE RE-SKIN, and the consequence was much
+   larger than a wrong accent colour.
+
+   applySurface() writes accent / dim / tint as INLINE custom properties on
+   <body>, and an inline custom property beats every rule in the stylesheet.
+   The values here were a dark theme's — a near-black purple for --accent-dim
+   and a near-black green for --bg — and they survived the move to the white
+   Championships palette, which landed six commits ago and never came back
+   here. So on every load, with no cup skin running, the app immediately
+   overwrote three of its own design tokens with the previous era's.
+
+   FIFTY-TWO rules paint a background from --bg or --accent-dim. Among them:
+   `input, select`, `.composer textarea` and `.match-filter input`, which is
+   why every text field on a white site rendered as a near-black box; and
+   .pred-tag, .cs-btn.on, .ch-pill.ch-yes, .rx-mine and the rest, which
+   expected a pale tint and got near-black. The accent itself was a light
+   lilac on a page whose entire system is championship green.
+
+   So the three surfaces are re-expressed inside the current palette: a court
+   colour each, all three dark enough to carry white type on a filled accent
+   and to clear WCAG AA as text on the page (7.5:1, 5.5:1, 6.4:1), and a
+   ground that is white or a hair off it rather than a different theme.
+
+   Both this branch and main arrived at this fix independently and agreed to
+   the character on grass, which is just the base palette. Clay and hard came
+   out slightly different and both clear AA comfortably, so main's are the
+   ones kept: between two valid court colours the choice is aesthetic, and it
+   had already landed on the shared branch. What is worth keeping from this
+   side is the paragraph above, which is the reason the table was wrong.
+
+   The comment inside applySurface() already knew this shape of bug — it is
+   the reason the ffcup skin deletes these three properties rather than
+   trusting them. This is the same failure without a skin to catch it. */
 const SURFACES = {
   grass: {name:"Grass", accent:"#00623C", dim:"#E3EFE7", tint:"#FFFFFF"},
   clay:  {name:"Clay",  accent:"#A8501E", dim:"#F6EAE1", tint:"#FEFCFA"},
@@ -29433,6 +32339,22 @@ function renderProExtra(){
 /* ============================================================
    BRADLEY–TERRY — maximum-likelihood strength (MM algorithm)
    ============================================================ */
+/* ==== MODELS-START ====
+   The three rating models that are not Elo.
+
+   Elo is the ladder, so a bug in it is argued about within a
+   week. These are the ones on the Analytics tab that nobody
+   checks against anything: Bradley–Terry, the bootstrap, and
+   PageRank. All three produce a plausible-looking table from any
+   input whatsoever, which is exactly what makes them worth
+   pinning — an iteration that silently stops converging, a
+   normalisation that drifts, or a win graph wired the wrong way
+   round all still render a tidy ranked list.
+
+   test/models.test.js loads this region with `matches` and the
+   two event filters injected, and checks the properties each
+   method actually guarantees rather than the numbers it happens
+   to produce today. ==== */
 function bradleyTerry(){
   const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const names=[...new Set(games.flatMap(m=>[m.p1,m.p2]))];
@@ -29498,6 +32420,24 @@ function renderBradleyTerry(){
 
 /* ============================================================
    BOOTSTRAP — resample the season, recompute, get 90% bands
+
+   READ THESE BANDS AS A SPREAD, NOT AS AN ORDINARY CONFIDENCE
+   INTERVAL. The instinct with any interval is that it tightens
+   as evidence accumulates, and that instinct is wrong here, for
+   a reason worth knowing: bootstrapping a MEAN narrows because a
+   mean has a fixed point to converge on, and Elo has none. It is
+   a sequential random walk, so a longer season pushes the
+   ratings APART at least as fast as it pins each one down.
+
+   Measured, on a clean four-player pecking order from 6 games to
+   60: the mean band width goes 66 → 83 → 87 → 90 → 77 points —
+   flat, near enough. What improves monotonically is the width
+   against the spread it is describing: 0.73 → 0.49 → 0.38 → 0.24
+   → 0.15. So the band is not getting narrower; the table is
+   getting wider around it, and that is what makes the order
+   trustworthy. test/models.test.js asserts exactly that, in both
+   directions, so nobody later "fixes" the resampler to chase a
+   narrowing that was never going to come.
    ============================================================ */
 function bootstrapRatings(B){
   B=B||800;
@@ -29550,7 +32490,7 @@ function renderBootstrap(){
       </span>
       <span class="boot-nums">${r.lo}–${r.hi}<span class="boot-conf boot-${conf}">${conf}</span></span>
     </div>`;
-  }).join('')+`<div class="pw-legend">The bar is each player's likely rating range if the season were replayed; the notch is the median. Tight bands are trustworthy; wide bands mean the ranking there is basically a guess — play more games to shrink them.</div>`;
+  }).join('')+`<div class="pw-legend">The bar is each player's likely rating range if the season were replayed; the notch is the median. What matters is <b>overlap</b>: two bars that overlap heavily are a ranking the season has not actually settled, whatever order they happen to be printed in. Playing more games does <i>not</i> make a bar narrower — Elo is a random walk with no fixed point to converge on, so a longer season spreads the whole table out at least as fast as it pins any one player down. What it does is separate the bars, which is the thing that makes the order mean something.</div>`;
 }
 
 /* ============================================================
@@ -29588,6 +32528,7 @@ function pageRankDominance(){
   }
   return {names,idx,M,pr,outSum};
 }
+/* ==== MODELS-END ==== */
 
 function renderPageRank(){
   const el=$("deepPageRank"); if(!el) return;
@@ -32122,8 +35063,42 @@ document.addEventListener("keydown", e=>{
 
 /* ---------- boot ---------- */
 $("submitBtn").onclick=submitGame;
+/* THE CLIENT LIBRARY IS A NETWORK RESOURCE, AND SO IS THE NETWORK.
+
+   `supabase` comes from a <script src="…jsdelivr…"> above. When that request
+   fails — a phone with no signal, a captive portal, a blocked CDN, jsdelivr
+   having a bad afternoon — the identifier is simply not defined, and this
+   line threw an uncaught ReferenceError that stopped the script dead.
+
+   Measured, on an offline load: everything defined ABOVE this point survives
+   — the views, the models, the dialog layer, the tab bar — and everything
+   below it never runs. That is the whole Admin Studio (`SITE` was left in
+   the temporal dead zone, so even `typeof SITE` threw), the tail wiring, and
+   most pointedly the outbox that exists precisely for the case of having no
+   network.
+
+   So the client is built inside a try, and a failure leaves `sb` null and
+   says so once. Every path that talks to the server already has to cope with
+   `sb` being null (it is null before this line on a project that was never
+   configured), so the app degrades to the offline shell it was already
+   designed to be, instead of half-executing. */
+/* The outbox comes up FIRST, before the client, before the load, before
+   anything that touches the network at all. It has to: the state it restores
+   is "there are writes on this phone that the league does not have", and the
+   run in which that matters most is the one where everything else fails. It
+   needs no client to read storage or paint its pill — only to flush, and it
+   checks for one when it tries. */
+try{ oqWire(); }catch(e){ console.warn("[outbox] not wired", e); }
+
 if(configured){
-  sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  try{
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }catch(e){
+    console.warn("[boot] the Supabase client library did not load", e);
+    sb = null;
+  }
+}
+if(configured && sb){
   $("setupNote").style.display="none";
   $("tagline").textContent=taglineText();
   /* wrapped rather than passed bare: load() reads an options argument now,
@@ -32169,6 +35144,14 @@ try{ fxObserveAnimated(); }catch(e){}
 everyVisible(updateCountdowns, 1000); // started once here; walks the DOM each tick, not re-created on render
 window.addEventListener("resize", onFrame(moveTabIndicator), {passive:true});
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndicator).catch(()=>{});
+/* …and once on the way in. Everything above waits for an EVENT — a view
+   switch, a resize, a webfont landing — and on a first paint at a width where
+   the bar overflows, none of them happen: the page just sits there with a tab
+   past the right edge and no fade over it, because the one function that
+   measures the bar had not run yet. */
+window.addEventListener("load", moveTabIndicator, {once:true});
+
+try{ requestAnimationFrame(moveTabIndicator); }catch(e){ moveTabIndicator(); }
 
 /* cinematic load screen — once per session.
 
