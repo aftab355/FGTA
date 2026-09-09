@@ -28023,7 +28023,20 @@ function kitBagCheckHTML(currentOwner){
     + 'read off the same matches — so this is a comparison rather than an argument.</div>'
     + '<div class="kit-bag">' + rows.map(({o, a}) => {
         const mine = o.toLowerCase() === String(currentOwner || "").toLowerCase();
-        return '<button class="kit-bagrow' + (mine ? ' on' : '') + '" onclick="kitSetWho(' + JSON.stringify(o).replace(/"/g, '&quot;') + ')">'
+        /* The owner goes in a data- attribute and is read back out on click,
+           rather than being spliced into a JS call inside an attribute.
+
+           The version this replaces did JSON.stringify(o).replace(/"/g,'&quot;')
+           and it was injectable: JSON.stringify leaves an ampersand alone, so
+           a name containing the literal text `&quot;` came through untouched,
+           the HTML parser decoded it back to a real quote, and the rest of
+           the name ran as script. Player names are typed by players.
+
+           esc() escapes & and " (though NOT ', which is why this attribute is
+           double-quoted), so an escaped value in a double-quoted attribute
+           cannot break out of it, and nothing here is ever parsed as JS. */
+        return '<button class="kit-bagrow' + (mine ? ' on' : '')
+          + '" data-owner="' + esc(o) + '" onclick="kitSetWho(this.dataset.owner)">'
           + '<span class="kit-bagav">' + (function(){ try{ return avatar(o, 24); }catch(e){ return ""; } })() + '</span>'
           + '<span class="kit-bagmain"><b>' + esc(o) + '</b>'
           +   '<i>' + esc(a.material.short) + ' · ' + Math.round(a.days) + 'd · '
@@ -30037,6 +30050,13 @@ const CP_SHORTCUTS = [
   ["Tab",         "Cycle focus inside an open dialog"],
   ["⌘Z / Ctrl Z", "Undo, in the Admin Studio"]
 ];
+/* The help dialog's own markup, stashed while the shortcut sheet borrows its
+   body. Module-level variables rather than data- attributes on the element:
+   parking HTML in the DOM and reading it back out is a real taint path
+   (dataset -> innerHTML), and it is a needless one — nothing outside this
+   file needs to see it, and a variable cannot be edited by anything that can
+   reach the element. */
+let _cpHelpBody = null, _cpHelpHead = null;
 function cpShortcuts(){
   const body = CP_SHORTCUTS.map(([k, what]) =>
     '<div class="help-row"><kbd class="cp-kbd">' + esc(k) + '</kbd><div>' + esc(what) + '</div></div>'
@@ -30044,21 +30064,22 @@ function cpShortcuts(){
   const m = document.getElementById("helpModal");
   const target = m && m.querySelector(".help-body");
   if(!m || !target){ try{ toast("⌘K opens the palette; ↑↓ and Enter drive it"); }catch(e){} return; }
-  if(!m.dataset.cpOriginal) m.dataset.cpOriginal = target.innerHTML;
+  if(_cpHelpBody === null) _cpHelpBody = target.innerHTML;
   target.innerHTML = body;
   const h = m.querySelector(".help-h");
-  if(h){ if(!m.dataset.cpOriginalH) m.dataset.cpOriginalH = h.textContent; h.textContent = "Keyboard shortcuts ⌨️"; }
+  if(h){ if(_cpHelpHead === null) _cpHelpHead = h.textContent; h.textContent = "Keyboard shortcuts ⌨️"; }
   m.classList.add("open");
 }
 /* openHelp() puts the real help back — otherwise the shortcut sheet would be
    the help screen forever after somebody looked at it once. */
 function cpRestoreHelp(){
+  if(_cpHelpBody === null) return;
   const m = document.getElementById("helpModal");
-  if(!m || !m.dataset.cpOriginal) return;
+  if(!m) return;
   const target = m.querySelector(".help-body");
-  if(target) target.innerHTML = m.dataset.cpOriginal;
+  if(target) target.innerHTML = _cpHelpBody;
   const h = m.querySelector(".help-h");
-  if(h && m.dataset.cpOriginalH) h.textContent = m.dataset.cpOriginalH;
+  if(h && _cpHelpHead !== null) h.textContent = _cpHelpHead;
 }
 window.cpShortcuts = cpShortcuts;
 window.cpRestoreHelp = cpRestoreHelp;
