@@ -11,25 +11,50 @@ Open the ☰ menu and choose **✎ Edit site**. It only appears once
 
 ## Setup (once)
 
-Run [`site-config.sql`](site-config.sql) in the Supabase SQL editor —
-paste the whole file and hit Run. It creates two tables, their RLS
-policies, the realtime publication and the `publish_site_config()`
-function. It is idempotent, so re-running it is safe.
+Paste [`site-config.min.sql`](site-config.min.sql) into the Supabase SQL
+editor and Run. It creates two tables, their RLS policies, the realtime
+publication and the `publish_site_config()` function.
 
-To check it took, in the SQL editor:
+[`site-config.sql`](site-config.sql) is the same migration with the
+reasoning written out; read that one to understand it, paste the other.
+They cannot drift — `test/site-config-sql.test.js` fails if they do.
+
+> **Paste it on its own, in an empty editor tab.** Supabase runs a tab as
+> one transaction. One error anywhere — including a harmless
+> `42710: policy "…" already exists` from an unrelated script pasted above
+> it — rolls back *everything after it*. You get no tables and no obvious
+> sign why, because the only message shown is the one about the unrelated
+> script.
+
+Every statement is guarded (`if not exists`, `drop policy if exists`,
+`create or replace`), so running it twice is safe.
+
+### Did it work?
 
 ```sql
-select id, version, updated_at from public.site_config;   -- one row, id 1
+select
+  to_regclass('public.site_config')          as site_config,
+  to_regclass('public.site_config_history')  as history,
+  to_regproc('public.is_admin')              as is_admin_fn,
+  to_regproc('public.publish_site_config')   as publish_fn;
 ```
 
-The studio depends on `is_admin()` and the `admins` table from
-`admin-security.sql`, which the rest of the app already uses — if the ◆
-Admin button already turns on for you, that part is done.
+Four values, and `null` means missing:
 
-Not running it is a supported way to run this site: the app asks once,
-notes the missing table in the console, and renders the built-in defaults —
-which is exactly what the site looked like before any of this existed. The
-studio still opens and still previews, and says plainly that it cannot
+| Column | `null` means |
+|---|---|
+| `is_admin_fn` | **Run `admin-security.sql` first.** This migration doesn't create it and six of its policies depend on it. |
+| `site_config` | The migration didn't run — see the transaction note above. |
+| `history` | Same; it is created after `site_config`. |
+| `publish_fn` | Same; it is the last statement in the file. |
+
+All four non-null and the studio can publish. If `is_admin_fn` is the only
+one filled in, the migration aborted before its first `create table`.
+
+Not running it at all is a supported way to run this site: the app asks
+once, notes the missing table in the console, and renders the built-in
+defaults — exactly what the site looked like before any of this existed.
+The studio still opens and still previews, and says plainly that it cannot
 publish.
 
 ---
@@ -291,7 +316,12 @@ node test/studio-blocks.test.js   # add, edit, sanitise, re-render, reload, dele
 node test/studio-direct.test.js   # toolbar, inline typing, undo/redo, drag-to-reorder
 node test/studio-publish.test.js  # the server half: load, realtime, publish, history
 node test/studio-scope.test.js    # change one, change all like it
+node test/site-config-sql.test.js # the two SQL files agree, and stay re-runnable
 ```
+
+`site-config-sql` needs neither a browser nor a network — it is a plain
+file comparison plus the guards that keep the migration safe to paste
+twice.
 
 `studio-publish` exists because of a bug that shipped and that the other four
 could not see. The studio guarded every Supabase call with `window.sb`, but

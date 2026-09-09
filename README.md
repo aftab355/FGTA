@@ -397,7 +397,8 @@ No custom illustrations or photography — avatars are generated from initials (
 - netlify/functions/youtube.mts — the YouTube Data API proxy behind `/api/youtube`.
 - netlify/functions/ai.mts — the Anthropic API proxy behind `/api/ai`, used by the match-card AI commentary/roast buttons.
 - docs/admin-studio.md — the in-app site editor: what each tab reaches, how the config compiles to a stylesheet rather than into the DOM, and where the limits are.
-- docs/site-config.sql — the `site_config` + `site_config_history` tables the studio publishes to, their admin-only RLS, the realtime publication, and the one-transaction `publish_site_config()`.
+- docs/site-config.sql — the `site_config` + `site_config_history` tables the studio publishes to, their admin-only RLS, the realtime publication, and the one-transaction `publish_site_config()`. Read this one.
+- docs/site-config.min.sql — the same migration with the prose stripped out, for pasting into the Supabase SQL editor. Paste it in an empty tab on its own: Supabase runs a tab as one transaction, so an error from an unrelated script above it silently rolls back everything after it. `test/site-config-sql.test.js` fails if the two files drift apart.
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
 - docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
