@@ -243,34 +243,67 @@ If the target stack has React Query / SWR / RTK Query, this maps directly onto t
 ## Design Tokens
 
 ### Colors (CSS custom properties in the source)
-- Background: --bg #151125 (near-black grape)
-- Panel surfaces: --panel #211c38, --panel-2 #2c2650
-- Hairlines: --line rgba(255,255,255,.16), --line-soft rgba(255,255,255,.08)
-- Text: --ink #f2eefc (primary), --muted #a29cc4 (secondary), --dim #6e6795 (tertiary/labels)
-- Primary accent (hot pink, 90s neon): --accent #ff2d78, --accent-dim #3a1230, --accent-glow rgba(255,45,120,.4)
-- Secondary accent (cyan/court): --court #1ec9dd, --court-dim #0d2f36
-- Tertiary accent (chartreuse/ball): --ball #d4ff2b, --ball-glow rgba(212,255,43,.4)
-- Medal colors: --gold #ffcc00, --silver #c7c7d9, --bronze #e0793a
-- Semantic: --danger #ff3b3b, --pending #ffb100, --win #34c759
+
+The palette is **a championship on paper**: a white page, near-black green
+type, championship green for anything interactive, purple as the secondary and
+gold for anything earned. It replaced a near-black "neon grape" base with a
+hot-pink accent; that old palette is still available as the **Neon grape**
+preset in the Admin Studio, so nothing was lost, it was demoted.
+
+The only dark surface is the **chrome** — the fixed top bar, bottom bar and
+ticker are championship green with ivory type on them, the way a scoreboard
+frames a white court. Everything inside them is black-on-white.
+
+- Background: --bg #FFFFFF
+- Panel surfaces: --panel #FFFFFF, --panel-2 #EDF2EE (hover/raised)
+- Hairlines: --line rgba(16,38,26,.18), --line-soft rgba(16,38,26,.09)
+- Text: --ink #10261A (primary), --muted #41564A (secondary), --dim #61776A (tertiary/labels) — 15.9:1, 8.5:1 and 6.1:1 on white
+- Primary accent (championship green): --accent #00623C, --accent-dim #E3EFE7, --accent-glow rgba(0,98,60,.22)
+- --on-accent #FFFFFF — type sitting **on** a filled accent, gold or court surface. Move it with the accent or a button goes unreadable.
+- Chrome: --chrome #0B3B26, --on-chrome #F5F2E9, --on-chrome-dim rgba(245,242,233,.68), --chrome-line rgba(245,242,233,.20)
+- Secondary accent (purple, the "loudest thing allowed"): --accent-pop #52247F
+- Supports: --accent-split-a #7A5FA6, --accent-split-b #1F6E8C
+- Court/grass: --court #1C6B45, --court-dim #E3EFE7
+- Ball: --ball #6E7C10 — the olive a tennis ball reads as **in print**, because this token is a text colour in ~18 places. The ball graphic itself carries its own fluorescent literals.
+- Medals, two sets, because a metal has two jobs:
+  - as **text**: --gold #8A6A1E, --silver #63685F, --bronze #8A5524 (7.0:1, 6.6:1, 5.5:1 on white)
+  - as **fill** on a badge or plinth: --medal-gold #D4AF37, --medal-silver #C2C6C4, --medal-bronze #C08A4E, with --on-medal #2A2008 on top
+- Semantic: --danger #B23A2E, --pending #8A6A1E, --win #166B41
+- Weather particles: --wx-ink "90,114,104" — an `r,g,b` triple the weather canvas composes its own alphas onto, so rain and snow are the paper's shadow rather than a fixed near-white
+
+Every colour ever used as text clears 4.5:1 against --bg, --panel *and*
+--panel-2, in the default palette and in all three weather themes. The only
+type below that bar is on surfaces that carry their own dark ground — the
+video overlays, the celebration screens, the cinematic intro and the FF Cup
+skin.
 
 ### Radius
---r-sm 12px, --r-md 18px, --r-lg 26px, --r-pill 999px (fully-rounded pills for buttons/tabs/tags)
+--r-sm 4px, --r-md 7px, --r-lg 10px, --r-pill 999px (pills stay fully round for buttons/tabs/tags). Close to square: a 26px corner reads as consumer app, a 10px corner reads as printed programme.
 
 ### Shadow
---shadow: 0 24px 60px -28px rgba(0,0,0,.6) — soft, diffuse, no hard offset
+--shadow: 0 14px 34px -26px rgba(16,38,26,.42) — elevation you notice only when it is gone. Panels are **paper, not plastic**: one flat fill, one hairline, one soft cast. The bevelled-slab modelling (surface ramp, lit bevel, ambient occlusion, contact edge) that the dark palette needed is gone — on white those five layers only made a white card grey.
 
 ### Typography
 Three tokens, and **every `font-family` in the stylesheet reads one of them** — `--font-body`, `--font-mono`, `--font-display`. Nothing names a typeface directly any more, which is what lets the Admin Studio retype the whole site without a rule being rewritten. `--font-display` is unclaimed by default and resolves to the body face until something points at it.
 
-- UI/body font (`--font-body`): system font stack with **Outfit** as the fallback custom font — -apple-system, BlinkMacSystemFont, "Segoe UI", 'Outfit', sans-serif
-- Monospace/label font (`--font-mono`): **JetBrains Mono** — used for all uppercase labels, stats, scores, timestamps, badges, and anything data-like (contrast against the humanist body font)
+- UI/body font (`--font-body`): **Inter**, then the system stack — 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+- Display font (`--font-display`): **Playfair Display**, the editorial serif. No longer inert — the wordmark, every section label and the profile headline read it, and it is the single biggest reason the page reads as a championship rather than an app.
+- Monospace/label font (`--font-mono`): **JetBrains Mono** — scores, ratings, timestamps and anything that has to line up in a column. Numbers carry `font-variant-numeric: tabular-nums`.
 - Base body size 16px, line-height 1.6
-- Section labels: 11px, JetBrains Mono, 600 weight, 1.5px letter-spacing, uppercase, --muted
+- Section labels: 14px, Playfair Display, 600 weight, .16em letter-spacing, uppercase, --ink, over a hairline rule, with a 2px gold tick at the left. This is the most repeated piece of type on the site and sets its voice; it was 11px mono in grey, which read as a code comment.
 - Row/player names: 15–16px, 600–700 weight, body font
 - Never smaller than ~11px in this design; keep mobile tap targets ≥44px per the source's button/row padding
 
+### Standings and results
+
+Two components carry most of the site's identity and both are drawn as **one
+sheet, not a stack of cards**:
+
+- **The ladder** (`.board-broadcast` / `.brow`) is a single white sheet with one outline and hairline rules between rows. The podium three each carry their metal three times over — a 4px spine down the left edge, a filled medal disc in place of the plain numeral, and a wash of that metal across the row, deepest at first and lightest at third — so the break between "on the podium" and "not" is the loudest edge in the table. Hover is a wash and a 3px accent margin; nothing moves.
+- **The archive** (`.msc`) is a scorecard, not a log line: the event and the stage across the head, then one row per player with their set scores in columns and the winner's row picked out in the accent behind a tick, then a footer carrying the comment count, the admin's re-file control and "View match →". `m.sets` is stored p1-first as `"6-4, 3-6, 7-5"`; splitting it into two columns is the whole trick. Games with no recorded set scores fall back to an em dash per side rather than collapsing the row.
+
 ### Spacing
-No formal scale — panels use 14–20px internal padding, sections stack with margin-top: 34px (26px on mobile), grids use 8–14px gaps. Recreate with whatever spacing scale the target design system already has, snapping to the nearest step.
+No formal scale — panels use 14–20px internal padding, sections stack with margin-top: 40px (26px on mobile), grids use 8–14px gaps. Recreate with whatever spacing scale the target design system already has, snapping to the nearest step.
 
 ## Admin Studio — changing the site without changing the code
 
@@ -280,7 +313,7 @@ Everything above describes what the site is *coded* to look like. An admin can c
 
 What it reaches:
 
-- **Colours and shape** — every design token listed above, grouped and explained, with six complete palettes as starting points. Studio colours outrank the FF Cup skin and the live weather themes, both of which redeclare the palette on `<body>`.
+- **Colours and shape** — every design token listed above, grouped and explained, with eight complete palettes as starting points (including **Neon grape**, the palette this site wore before the championship one, and **Championship whites**). Studio colours outrank the FF Cup skin and the live weather themes, both of which redeclare the palette on `<body>`.
 - **Typography** — the three font tokens, plus scale, line height, tracking and weight. Google families are fetched only once one is chosen.
 - **Copy** — click any element and retype it. Icons, counters and badges beside the words stay where they are.
 - **Layout** — rename, reorder and hide nav tabs; reorder and hide the sections of any view. The section list is discovered live, so a panel added to a view later shows up with no work.

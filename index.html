@@ -12,9 +12,10 @@
      decode them. -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<!-- matches the cup skin's --bg, so the phone's own chrome joins the grade
-     instead of framing it in black. Goes back to #000000 with the skin. -->
-<meta name="theme-color" content="#16000e">
+<!-- matches --chrome, the colour of the fixed top/bottom bars, so the phone's
+     own status bar reads as the top of the same dark-green frame rather than a
+     black band above it. Follows the palette: change --chrome, change this. -->
+<meta name="theme-color" content="#04231A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -26,7 +27,14 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Three faces, one job each. Inter is the body grotesque (neutral, wide
+     language coverage, metrics close enough to the system UI fonts it
+     replaces that nothing reflows). Playfair Display is --font-display: the
+     high-contrast editorial serif that carries the wordmark and every section
+     label, and the single biggest reason the page reads as a championship
+     rather than an app. JetBrains Mono stays on the numbers, where tabular
+     figures matter more than the voice of the typeface. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- The supabase-js loader moved down to just above the app's boot code
      near the end of the body — it used to sit here in the head, unused
      until then, and being a synchronous external script it blocked the
@@ -46,13 +54,13 @@
      fetched twice. (Deliberately not spelling that tag out: a bare "<scr"+
      "ipt" inside a comment trips naive tag-regex tooling.) -->
 <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-<template id="__bundler_thumbnail" data-bg-color="#0a0814">
+<template id="__bundler_thumbnail" data-bg-color="#07281B">
   <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
-    <rect width="1200" height="800" fill="#0a0814"/>
-    <circle cx="600" cy="400" r="180" fill="#d4ff2b"/>
-    <path d="M420 400a180 180 0 0 1 360 0" fill="none" stroke="#0a0814" stroke-width="10"/>
-    <path d="M420 400a180 180 0 0 0 360 0" fill="none" stroke="#0a0814" stroke-width="10"/>
-    <text x="600" y="620" text-anchor="middle" font-family="monospace" font-weight="700" font-size="64" fill="#ff2d78">FGTA</text>
+    <rect width="1200" height="800" fill="#07281B"/>
+    <circle cx="600" cy="400" r="180" fill="#DCE651"/>
+    <path d="M420 400a180 180 0 0 1 360 0" fill="none" stroke="#07281B" stroke-width="10"/>
+    <path d="M420 400a180 180 0 0 0 360 0" fill="none" stroke="#07281B" stroke-width="10"/>
+    <text x="600" y="620" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="64" letter-spacing="10" fill="#C8A951">FGTA</text>
   </svg>
 </template>
 
@@ -62,21 +70,71 @@
   .tick-up{color:var(--win)}
   .tick-down{color:var(--danger)}
   :root{
-    /* ===== CALM PREMIUM PRODUCT-PAGE SYSTEM (Apple-style) ===== */
-    /* true near-black base — panels separated by soft elevation and quiet hairlines, not hard bright borders */
-    --bg:#151125; --panel:#211c38; --panel-2:#2c2650; --line:rgba(255,255,255,.16);
-    --line-soft:rgba(255,255,255,.08);
-    --ink:#f2eefc; --muted:#a29cc4; --dim:#6e6795;
-    /* 90s neon: hot-pink primary accent + cyan secondary against near-black grape */
-    --accent:#ff2d78; --accent-dim:#3a1230; --accent-glow:rgba(255,45,120,.4);
-    --ball:#d4ff2b; --ball-glow:rgba(212,255,43,.4);
-    --court:#1ec9dd; --court-dim:#0d2f36;
-    --gold:#ffcc00; --silver:#c7c7d9; --bronze:#e0793a;
-    --danger:#ff3b3b; --pending:#ffb100; --win:#34c759;
-    /* generous, consistent rounding — Apple-style cards, panels and pill controls */
-    --r-sm:12px; --r-md:18px; --r-lg:26px; --r-pill:999px;
-    /* warm, soft, diffuse elevation instead of a hard offset block shadow */
-    --shadow:0 24px 60px -28px rgba(0,0,0,.6);
+    /* ===== THE CHAMPIONSHIPS SYSTEM =================================
+       A championship palette on paper: a white page, near-black green
+       type, championship green for everything interactive, purple as
+       the secondary and gold for everything earned. The colours do the
+       same jobs they do on a tournament's printed programme — white is
+       the ground, green is the voice and the mark of anything you can
+       act on, gold marks what a player has won — so a page reads as a
+       competition record rather than as a dashboard.
+
+       The only dark surface left is the chrome: the fixed top and
+       bottom bars are championship green with ivory type on them, the
+       way a scoreboard frames a white court. Everything inside them is
+       black-on-white and meant to be read for a long time.
+
+       It replaces a near-black grape base with a hot-pink neon accent.
+       Nothing structural changed with it: every rule in this sheet was
+       already painting from these tokens, which is why one block of
+       colour re-dresses thirty-six thousand lines. The exceptions are
+       named below (--on-chrome, --wx-ink) and exist precisely because a
+       handful of surfaces do NOT follow the page.
+       ================================================================ */
+    --bg:#FFFFFF; --panel:#FFFFFF; --panel-2:#EDF2EE; --line:rgba(16,38,26,.18);
+    --line-soft:rgba(16,38,26,.09);
+    --ink:#10261A; --muted:#41564A; --dim:#61776A;
+    /* interactive purple, and the near-black green that goes on top of it
+       (--on-accent: the text colour for anything sitting ON a filled accent,
+       gold or court surface — it used to be a hardcoded #04140e in a dozen
+       places, so a re-skin left dark type stranded on a dark fill) */
+    --accent:#00623C; --accent-dim:#E3EFE7; --accent-glow:rgba(0,98,60,.22);
+    --on-accent:#FFFFFF;
+    /* the chrome: the fixed top bar, bottom bar and ticker. One step darker
+       than --bg so the frame reads as behind the page, and matched by the
+       theme-color meta so the phone's status bar joins it. */
+    --chrome:#0B3B26;
+    /* type and hairlines that sit ON the chrome. The bars are the one dark
+       surface left on a white site, so --ink/--muted/--dim (now near-black)
+       would be invisible there — every rule inside a bar reads these three
+       instead. */
+    --on-chrome:#F5F2E9; --on-chrome-dim:rgba(245,242,233,.68);
+    --chrome-line:rgba(245,242,233,.20);
+    /* --ball is a text colour in ~18 places (clocks, qualification cuts,
+       form tags), so it is the olive a tennis ball reads as in print, not
+       the fluorescent the ball itself is painted in — that gradient carries
+       its own literals. */
+    --ball:#6E7C10; --ball-glow:rgba(110,124,16,.26);
+    --court:#1C6B45; --court-dim:#E3EFE7;
+    /* Two sets, because a metal has two jobs and one value cannot do both.
+       --gold/--silver/--bronze are TEXT: dark enough to read on white (7.0,
+       6.6 and 5.5:1). --medal-* are the FILLS on a badge or a plinth, where
+       the metal has to actually look like metal and the type on top goes
+       dark. Using the text golds as fills is what made the podium muddy;
+       using the fills as text is what made it illegible. */
+    --gold:#8A6A1E; --silver:#63685F; --bronze:#8A5524;
+    --medal-gold:#D4AF37; --medal-silver:#C2C6C4; --medal-bronze:#C08A4E;
+    --on-medal:#2A2008;
+    --danger:#B23A2E; --pending:#8A6A1E; --win:#166B41;
+    /* the weather canvas draws its rain, snow and cloud in this — it used to
+       be hardcoded near-white, which is nothing at all on a white page */
+    --wx-ink:90,114,104;
+    /* editorial rounding — cards and tables are close to square, only the
+       pill controls stay fully round. Soft 26px corners read as consumer
+       app; a 10px corner reads as printed programme. */
+    --r-sm:4px; --r-md:7px; --r-lg:10px; --r-pill:999px;
+    /* elevation you notice only when it is gone */
+    --shadow:0 14px 34px -26px rgba(16,38,26,.42);
 
     /* ===== TYPOGRAPHY TOKENS ========================================
        Every font-family in this stylesheet reads one of these three,
@@ -89,9 +147,12 @@
        --type-scale and --type-tracking are multipliers the Studio
        drives through the generated stylesheet, not values read here.
        ================================================================ */
-    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif;
+    --font-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-    --font-display:var(--font-body);
+    /* --font-display is no longer inert: the wordmark, every section label
+       and the profile headline read it, so the editorial serif is one token
+       away from being any other face the Studio points it at. */
+    --font-display:'Playfair Display',Georgia,'Times New Roman',serif;
 
     /* ===== STACKING SCALE ===========================================
        The app had grown ~20 unrelated z-index values with no stated
@@ -117,11 +178,11 @@
 
     /* ===== DEPTH & CONTRAST PALETTE =================================
        Ten tokens layered on top of the base system above. Nothing here
-       replaces a brand colour: --accent stays the hot pink, --bg stays
-       the near-black grape. These are the *lighting* — where the light
-       lands, where it doesn't, and the cool counterweights that let the
-       pink read as the loudest thing on the page rather than the only
-       saturated one.
+       replaces a brand colour: --accent stays the championship green,
+       --bg stays white. These are the *lighting* — where the light
+       lands, where it doesn't, and the counterweights that let gold
+       read as the most valuable thing on the page rather than just
+       another brown.
 
        Every value that is ever set as a text colour clears WCAG AA
        (4.5:1) against --bg, --panel AND --panel-2, and against the
@@ -134,47 +195,49 @@
        skin, so the depth follows the palette instead of fighting it. */
 
     /* -- highlights & specular accents -- */
-    /* rim light: the near-white a hot-pink surface throws back off a top
-       edge. Top hairlines, 1px rims, glowing micro-accents. 12.7:1 on
-       --panel. */
-    --highlight-rim:#ffd9ec;
-    /* the same light gone diffuse — soft luminous tint for gradient
+    /* rim light: warm ivory, the colour a lit top edge throws back off a
+       cream-on-green surface. Top hairlines, 1px rims, micro-accents.
+       11.0:1 on --panel. */
+    --highlight-rim:#FFFFFF;
+    /* the same light gone diffuse — a soft lilac tint for gradient
        overlays and hovered states, used mostly at 8-20% via color-mix.
-       9.1:1 on --panel when it does carry type. */
-    --highlight-ambient:#ffa8d2;
+       7.7:1 on --panel when it does carry type. */
+    --highlight-ambient:#D9C9EC;
 
     /* -- deep shadows & ambient occlusion -- */
-    /* cast shadow with a plum undertone. Flat black punches a hole in a
-       violet page; this sinks into it. */
-    --shadow-tinted:#0a0414;
+    /* cast shadow with a green undertone. Flat black punches a hole in a
+       green page; this sinks into it. */
+    --shadow-tinted:#9FB0A6;
     /* grounding tone — one step below --bg. Sunken wells, progress
        tracks, footer/sidebar depth, anything that should read as cut
        into the page rather than sitting on it. */
-    --surface-sunken:#0f0a1e;
+    --surface-sunken:#E5EBE6;
 
     /* -- high-contrast secondary accents -- */
-    /* the true complement of --accent (338° → 158°). Reserved for the
-       loudest things on the page: primary CTAs, live badges, pings.
-       11.2:1 on --panel; near-black type on it reads at 13.9:1. */
-    --accent-pop:#2ff2b3;
-    /* split-complementary supports: an electric indigo that sits
-       between the grape base and the pink accent, and a signal azure
-       that reads instantly as "interactive, not brand". Tags, chart
-       series, hover states. 5.5:1 and 6.9:1 on --panel. */
-    --accent-split-a:#9b82ff;
-    --accent-split-b:#3fb0ff;
+    /* trophy gold — the loudest thing allowed on the page: primary CTAs,
+       live badges, pings. It is the one colour that beats both the green
+       ground and the purple accent for attention, which is why nothing
+       decorative is permitted to use it. 7.3:1 on --panel; --on-accent
+       type on it reads at 8.8:1. */
+    --accent-pop:#52247F;
+    /* supports that are neither brand green nor brand purple: a champagne
+       for warm series and a signal azure that reads instantly as
+       "interactive, not brand". Tags, chart series, hover states.
+       7.5:1 and 6.1:1 on --panel. */
+    --accent-split-a:#7A5FA6;
+    --accent-split-b:#1F6E8C;
 
     /* -- 3D / skeuomorphic layering -- */
     /* bevel pair: a lit top/left edge and a shadowed bottom/right one.
        Tinted rather than white/black so a bevelled card still looks cut
        from the same material as the page. Edges only, never type —
        --surface-bevel-light clears the 3:1 non-text bar at 3.1:1. */
-    --surface-bevel-light:#6d64a8;
-    --surface-bevel-shadow:#160f2c;
+    --surface-bevel-light:#FFFFFF;
+    --surface-bevel-shadow:#C2CEC6;
     /* diffuse mesh glow — radial backdrops behind focal points, the
        bloom under floating/blurred surfaces. Always well under 20%
        alpha, so it is a wash and never a foreground. */
-    --glow-mesh:#a259ff;
+    --glow-mesh:#8E6FC4;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;background:var(--bg);overflow-x:hidden}
@@ -193,14 +256,16 @@
     padding-top:calc(60px + env(safe-area-inset-top));
   }
   .wrap{max-width:860px;margin:0 auto}
-  ::selection{background:var(--accent);color:#04140e}
+  ::selection{background:var(--accent);color:var(--on-accent)}
   :focus-visible{outline:1.5px solid var(--accent);outline-offset:3px}
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
     /* the accent ring keeps doing the work; the rim light is added as a
        thin outer bloom so the marker still reads on the surfaces that
        are themselves close to the accent hue (cup skin, hot weather) */
-    outline:1.5px solid var(--highlight-rim);outline-offset:3px;
-    box-shadow:0 0 0 5px var(--accent-glow), 0 0 18px -4px color-mix(in srgb, var(--highlight-rim) 55%, transparent);
+    /* the marker has to be the accent, not the rim light: --highlight-rim is
+       white on a white page, which is no focus ring at all */
+    outline:2px solid var(--accent);outline-offset:3px;
+    box-shadow:0 0 0 5px var(--accent-glow);
   }
 
   /* ===== APP SHELL — TOP BAR ===== */
@@ -209,45 +274,52 @@
     height:calc(60px + env(safe-area-inset-top));
     padding:env(safe-area-inset-top) calc(20px + env(safe-area-inset-right)) 0 calc(20px + env(safe-area-inset-left));
     display:flex;align-items:center;gap:18px;
-    background:color-mix(in srgb, #0a0814 92%, transparent);
+    background:color-mix(in srgb, var(--chrome) 96%, transparent);
     backdrop-filter:blur(18px) saturate(1.4);
     -webkit-backdrop-filter:blur(18px) saturate(1.4);
-    border-bottom:1px solid var(--line);
+    border-bottom:1px solid var(--chrome-line);
+    color:var(--on-chrome);
     transition:transform .25s cubic-bezier(.4,0,.2,1);
   }
   .tb-brand{display:flex;align-items:center;gap:11px;flex:0 1 auto;min-width:0}
   .tb-ball{
     width:26px;height:26px;border-radius:50%;flex-shrink:0;
-    background:radial-gradient(circle at 34% 30%, #f5ff8f 0%, var(--ball) 45%, #9db81a 100%);
-    box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 2px 2px 3px rgba(255,255,255,.5),0 0 20px -1px var(--ball-glow);
+    background:radial-gradient(circle at 34% 30%, #EDF4A6 0%, #D2E23F 45%, #94A82C 100%);
+    box-shadow:inset -2px -2px 4px rgba(0,0,0,.28),inset 2px 2px 3px rgba(255,255,255,.5),0 1px 3px rgba(16,38,26,.3);
     position:relative;
   }
   .tb-ball::after{content:'';position:absolute;inset:0;border-radius:50%;
     border-top:1.5px solid rgba(255,255,255,.55);transform:rotate(34deg);}
   .tb-word{display:flex;flex-direction:column;line-height:1;min-width:0;overflow:hidden}
-  .tb-title{font-weight:600;font-size:19px;letter-spacing:.5px;text-transform:uppercase;
+  /* The wordmark is the one place the display serif is not optional: four
+     letters in letterspaced caps is the whole difference between a product
+     logo and a tournament's name on a board. .18em is wide enough to read as
+     engraved and tight enough that FGTA still fits beside the tabs on a
+     narrow phone — the ellipsis below is the guard if it ever doesn't. */
+  .tb-title{font-family:var(--font-display);font-weight:600;font-size:19px;
+    letter-spacing:.18em;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tb-live{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-top:3px;text-transform:uppercase;
+  .tb-live{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--on-chrome-dim);letter-spacing:1px;margin-top:3px;text-transform:uppercase;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tb-tabs{display:flex;gap:2px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .tb-tabs::-webkit-scrollbar{display:none}
   .tb-tab{
-    background:none;border:none;border-bottom:none;color:var(--dim);white-space:nowrap;cursor:pointer;
+    background:none;border:none;border-bottom:none;color:var(--on-chrome-dim);white-space:nowrap;cursor:pointer;
     font-family:var(--font-body);font-size:13.5px;font-weight:500;letter-spacing:0;text-transform:none;
     padding:9px 18px;border-radius:var(--r-pill);transition:.2s cubic-bezier(.16,1,.3,1);position:relative;
   }
-  .tb-tab:hover{color:var(--ink);background:var(--panel-2)}
-  .tb-tab.on{color:var(--bg);background:var(--ink)}
+  .tb-tab:hover{color:var(--on-chrome);background:rgba(255,255,255,.09)}
+  .tb-tab.on{color:var(--chrome);background:var(--on-chrome)}
   .tb-tab.on::after{
     content:'';position:absolute;left:16px;right:16px;bottom:-7px;height:2px;border-radius:var(--r-pill);
-    background:var(--accent);opacity:.7;
+    background:var(--gold);opacity:.9;
   }
   .tb-actions{display:flex;gap:6px;flex:0 0 auto;align-items:center;margin-left:auto}
   .tb-ico{
-    width:38px;height:38px;border-radius:6px;border:1px solid var(--line);background:transparent;
-    color:var(--muted);cursor:pointer;font-size:16px;transition:.15s;display:grid;place-items:center;
+    width:38px;height:38px;border-radius:6px;border:1px solid var(--chrome-line);background:transparent;
+    color:var(--on-chrome-dim);cursor:pointer;font-size:16px;transition:.15s;display:grid;place-items:center;
   }
-  .tb-ico:hover{color:var(--ink);border-color:var(--line);background:var(--panel-2)}
+  .tb-ico:hover{color:var(--on-chrome);border-color:var(--on-chrome-dim);background:rgba(255,255,255,.09)}
 
   /* overflow utility menu */
   .util-menu{
@@ -326,9 +398,9 @@
     color:var(--ink);font-weight:600;font-size:14px;cursor:pointer;transition:.15s;text-align:center;
   }
   .res-btn:hover{border-color:var(--accent-dim)}
-  .res-btn.on{background:var(--accent);color:#04140e;border-color:var(--accent);box-shadow:0 8px 20px -8px var(--accent-glow)}
+  .res-btn.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);box-shadow:0 8px 20px -8px var(--accent-glow)}
   .res-draw{flex:0 0 76px;font-size:12.5px}
-  .res-draw.on{background:var(--court);color:#04140e;border-color:var(--court);box-shadow:0 8px 20px -8px rgba(31,122,114,.5)}
+  .res-draw.on{background:var(--court);color:var(--on-accent);border-color:var(--court);box-shadow:0 8px 20px -8px rgba(31,122,114,.5)}
   @media(max-width:480px){ .res-btn{font-size:12.5px;padding:12px 6px} .res-draw{flex:0 0 60px} }
   @media(max-width:640px){
     .ss-row{grid-template-columns:38px 46px auto 46px 1fr 1fr;gap:6px 8px}
@@ -348,20 +420,20 @@
   .botbar{
     position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
     padding-bottom:env(safe-area-inset-bottom);
-    background:color-mix(in srgb, #0a0814 95%, transparent);
+    background:color-mix(in srgb, var(--chrome) 97%, transparent);
     backdrop-filter:blur(18px) saturate(1.4);
     -webkit-backdrop-filter:blur(18px) saturate(1.4);
-    border-top:1px solid var(--line);
+    border-top:1px solid var(--chrome-line);
     grid-template-columns:repeat(6,1fr);
     transition:transform .25s cubic-bezier(.4,0,.2,1);
   }
   .bb-tab{
-    background:none;border:none;border-top:3px solid transparent;color:var(--dim);cursor:pointer;
+    background:none;border:none;border-top:3px solid transparent;color:var(--on-chrome-dim);cursor:pointer;
     display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;margin-top:-2.5px;transition:.15s;
   }
   .bb-ico{font-size:19px;line-height:1;transition:transform .15s}
   .bb-lbl{font-size:9px;font-weight:600;letter-spacing:.4px;text-transform:uppercase}
-  .bb-tab.on{color:var(--accent);border-top-color:var(--ball);background:var(--accent-dim)}
+  .bb-tab.on{color:var(--on-chrome);border-top-color:var(--gold);background:rgba(255,255,255,.08)}
   .bb-tab.on .bb-ico{transform:translateY(-2px) scale(1.1)}
   .bb-tab:active .bb-ico{transform:scale(.9)}
 
@@ -454,10 +526,16 @@
   .admin-btn.on{color:var(--bg);border-color:var(--accent);background:var(--accent)}
 
 
-  section{margin-top:34px}
+  section{margin-top:40px}
+  /* Every section on every view is announced by one of these, so it sets the
+     voice of the whole site more than any other rule here. It was 11px mono
+     in muted grey — a code comment. It is now the display serif in ivory,
+     letterspaced caps over a hairline rule: the eyebrow above a printed
+     order of play. Same box, same flex, same trailing rule; the change is
+     entirely typeface, size and colour. */
   .sec-label{
-    font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:1.5px;
-    text-transform:uppercase; color:var(--muted); margin-bottom:20px;
+    font-family:var(--font-display); font-size:14px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink); margin-bottom:20px;
     display:flex; align-items:center; gap:10px;
   }
   .sec-label::after{content:'';height:1px;flex:1;background:var(--line-soft)}
@@ -470,25 +548,41 @@
   .board{border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:var(--panel); box-shadow:var(--shadow)}
   .row{
     display:grid; grid-template-columns:52px 1fr 70px 96px 74px; align-items:center;
-    padding:18px 22px; border-bottom:1px solid var(--line-soft); transition:background .2s cubic-bezier(.16,1,.3,1);
+    padding:16px 22px; border-bottom:1px solid var(--line-soft); transition:background .18s ease;
   }
   .row:last-child{border-bottom:none}
   .row:hover{background:var(--panel-2)}
   .row.head{
-    background:var(--ink); padding:11px 18px; border-bottom:1px solid var(--line);
+    background:var(--chrome); padding:11px 18px; border-bottom:1px solid var(--line);
     font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:1.5px;
-    text-transform:uppercase; color:var(--bg);
+    text-transform:uppercase; color:var(--on-chrome);
   }
-  .row.head:hover{background:var(--ink)}
+  .row.head:hover{background:var(--chrome)}
   .row.head .r-rating,.row.head .r-record,.row.head .r-peak{text-align:right}
   .r-peak{text-align:right;font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--gold)}
-  .rank{font-family:var(--font-mono); font-weight:600; font-size:19px; color:var(--dim)}
-  .rank.g1{color:#3a2c00;background:linear-gradient(135deg,#fff3b0,#ffcc00 40%,#8a6400 70%,#ffe36b);display:inline-block;min-width:1.6em;text-align:center;padding:2px 4px;box-shadow:0 0 14px -3px var(--gold)}
-  .rank.g2{color:#2b2b33;background:linear-gradient(135deg,#ffffff,#c7c7d9 40%,#6a6a76 70%,#e3e3ec);display:inline-block;min-width:1.6em;text-align:center;padding:2px 4px}
-  .rank.g3{color:#2e1a08;background:linear-gradient(135deg,#f2b483,#e0793a 40%,#7a3d14 70%,#eb9a5e);display:inline-block;min-width:1.6em;text-align:center;padding:2px 4px}
-  .r-name{font-weight:700; font-size:16px}
-  .r-sub{font-size:12px;color:var(--dim);font-family:var(--font-mono);margin-top:1px}
-  .r-rating{text-align:right;font-family:var(--font-mono);font-weight:600;font-size:21px;border-bottom:1.5px solid var(--accent)}
+  /* The top three used to wear brushed-metal tiles: four-stop 135deg
+     gradients with hard mid-stops, a glow on the gold one, and inline-block
+     padding that shunted the badge into the player's name with no gap. Three
+     small screenshots of a trophy, in a column that is already ordered.
+     They are numerals now, in their own metal's colour, with a hairline disc
+     behind them to hold the column — same information, no ornament, and the
+     name gets its margin back. */
+  .rank{font-family:var(--font-mono); font-weight:500; font-size:18px; color:var(--dim);
+    font-variant-numeric:tabular-nums}
+  .rank.g1,.rank.g2,.rank.g3{
+    display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;
+    font-weight:700;font-size:15px;color:var(--on-medal);
+    box-shadow:0 1px 3px color-mix(in srgb, var(--shadow-tinted) 70%, transparent);
+  }
+  .rank.g1{background:var(--medal-gold)}
+  .rank.g2{background:var(--medal-silver)}
+  .rank.g3{background:var(--medal-bronze)}
+  .r-name{font-weight:600; font-size:16px; letter-spacing:-.01em}
+  .r-sub{font-size:11.5px;color:var(--dim);font-family:var(--font-body);margin-top:2px}
+  /* every rating carried a 1.5px accent underline — fifteen green rules down
+     the right-hand column, which is a lot of ink to say "this is a number" */
+  .r-rating{text-align:right;font-family:var(--font-mono);font-weight:600;font-size:20px;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .r-record{text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--muted)}
   .r-record .w{color:var(--win)} .r-record .l{color:var(--danger)}
   .empty{padding:36px 18px;text-align:center;color:var(--dim);font-size:14px}
@@ -508,7 +602,7 @@
   input::placeholder{color:var(--dim)}
   .btn{
     width:100%; margin-top:18px; padding:15px; border:1px solid transparent; border-radius:var(--r-pill);
-    background:var(--accent); color:#04140e; font-family:var(--font-body);
+    background:var(--accent); color:var(--on-accent); font-family:var(--font-body);
     font-weight:600; font-size:15.5px; letter-spacing:0; text-transform:none; cursor:pointer; transition:.2s cubic-bezier(.16,1,.3,1);
   }
   .btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
@@ -531,7 +625,7 @@
   .pend-meta{font-size:11px;color:var(--dim);font-family:var(--font-mono);margin-top:3px;letter-spacing:.3px}
   .pend-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .mini{padding:9px 16px;border-radius:var(--r-pill);border:1px solid transparent;cursor:pointer;font-weight:600;font-size:12.5px;letter-spacing:.3px;text-transform:none;font-family:var(--font-mono);transition:.2s cubic-bezier(.16,1,.3,1)}
-  .mini.yes{background:var(--accent);color:#04140e;border-color:var(--accent)}
+  .mini.yes{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
   .mini.no{background:transparent;color:var(--danger);border-color:var(--line)}
   .mini:hover{filter:brightness(1.08);transform:translateY(-1px)}
   a.mini{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
@@ -709,14 +803,77 @@
     font-family:var(--font-mono);font-size:10px;color:var(--muted);
     background:var(--panel-2);padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle;
   }
-  .match-wrap{margin-bottom:10px}
+  .match-wrap{margin-bottom:12px}
   .match-wrap .pend{margin-bottom:0}
+
+  /* ===== MATCH SCORECARD (the archive) =====
+     The archive used to be one line per game — "<b>Aftab</b> beat Sam" with
+     the scoreline crushed into a grey meta line beside a timestamp. It read
+     as a log, so the two things anyone actually opens the archive for (who
+     won, and by what) were the two things hardest to see.
+
+     A scorecard says it the way a scoreboard does: the event and the stage
+     across the top, then one row per player with their set scores in
+     columns and the winner's row picked out in the accent behind a tick.
+     Everything below the fold of that — the pinned comment, the admin's
+     re-file control — hangs off the same card rather than beside it. */
+  .msc{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+    overflow:hidden;cursor:pointer;transition:border-color .18s ease, box-shadow .18s ease;
+  }
+  .msc:hover{border-color:color-mix(in srgb,var(--line) 55%, var(--accent) 45%);
+    box-shadow:0 10px 26px -22px color-mix(in srgb,var(--shadow-tinted) 90%, transparent)}
+  .msc-head{
+    display:grid;grid-template-columns:1fr auto;gap:2px 12px;
+    padding:14px 18px 12px;align-items:baseline;
+  }
+  .msc-event{font-size:14px;color:var(--muted);min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .msc-event b{color:var(--ink);font-weight:600}
+  .msc-stage{font-size:14px;font-weight:700;color:var(--ink);text-align:right;white-space:nowrap}
+  .msc-where{font-size:12px;color:var(--dim);grid-column:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .msc-when{font-size:12px;color:var(--dim);text-align:right;white-space:nowrap}
+  .msc-side{
+    display:grid;grid-template-columns:1fr auto 22px;gap:14px;align-items:center;
+    padding:13px 18px;border-top:1px solid var(--line-soft);
+  }
+  .msc-side.win{background:color-mix(in srgb, var(--accent) 9%, transparent)}
+  .msc-name{font-size:15.5px;font-weight:500;min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .msc-side.win .msc-name{font-weight:700}
+  .msc-scores{display:flex;gap:16px;font-family:var(--font-mono);font-size:17px;
+    font-variant-numeric:tabular-nums;color:var(--muted)}
+  .msc-side.win .msc-scores{color:var(--ink);font-weight:600}
+  .msc-scores i{font-style:normal;min-width:11px;text-align:center}
+  .msc-tick{
+    width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+    background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:700;
+  }
+  .msc-foot{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:11px 18px;border-top:1px solid var(--line-soft);
+  }
+  .msc-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+  .msc-link{
+    margin-left:auto;display:inline-flex;align-items:center;gap:7px;
+    color:var(--accent);font-size:13.5px;font-weight:600;white-space:nowrap;
+  }
+  .msc:hover .msc-link{text-decoration:underline}
+  @media(max-width:560px){
+    .msc-head{padding:12px 14px 10px}
+    .msc-side{padding:11px 14px;gap:10px}
+    .msc-scores{gap:12px;font-size:16px}
+    .msc-foot{padding:10px 14px}
+  }
+
+  /* the pinned comment is the card's last row now, not a tab stuck under it */
   .match-preview{
     display:flex;align-items:center;gap:8px;cursor:pointer;
-    background:var(--panel-2);border:1px solid var(--line);border-top:none;
-    border-radius:0 0 12px 12px;padding:9px 16px;margin-top:-1px;font-size:13px;
+    background:var(--panel-2);border-top:1px solid var(--line-soft);
+    padding:9px 18px;font-size:13px;
   }
-  .match-preview:hover{background:var(--panel)}
+  .match-preview:hover{background:color-mix(in srgb,var(--panel-2) 70%, var(--accent) 8%)}
   .match-preview .mp-pin{font-size:11px;flex-shrink:0}
   .match-preview .mp-author{color:var(--accent);font-weight:700;font-size:12px;flex-shrink:0}
   .match-preview .mp-body{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -769,9 +926,12 @@
     88%{transform:translateY(-24px)}
     100%{transform:translateY(0)}
   }
+  /* the load screen's wordmark reads the same face as the top bar's, so the
+     first frame of the session and every frame after it agree */
   .ls-word{
     position:absolute;bottom:24%;left:0;right:0;text-align:center;
-    font-weight:500;font-size:clamp(26px,7vw,44px);letter-spacing:-.5px;color:var(--ink);
+    font-family:var(--font-display);
+    font-weight:600;font-size:clamp(24px,6.4vw,40px);letter-spacing:.1em;color:var(--ink);
     opacity:0;animation:ls-word-in .6s ease 1.3s forwards;
   }
   .ls-word span{color:var(--accent);margin-left:10px;text-shadow:none}
@@ -855,7 +1015,7 @@
   .r-link:hover,.mp-link:hover,.h2h-name:hover{color:var(--accent);text-decoration:underline}
   .prof-header{display:flex;align-items:center;gap:18px;margin-top:24px}
   .prof-rank{font-size:48px;font-family:var(--font-mono);font-weight:600;color:var(--gold);text-shadow:none}
-  .prof-id h1{font-size:34px;font-weight:500;letter-spacing:-.5px;line-height:1.15;text-transform:none}
+  .prof-id h1{font-family:var(--font-display);font-size:36px;font-weight:600;letter-spacing:0;line-height:1.12;text-transform:none}
   .prof-sub{color:var(--muted);font-family:var(--font-mono);font-size:13px;margin-top:6px;letter-spacing:.3px}
   .prof-stats{
     display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:22px;
@@ -1044,7 +1204,7 @@
   .ao-num{font-family:var(--font-mono);font-size:38px;font-weight:700;line-height:1}
   .ao-lab{font-family:var(--font-mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-top:5px}
   .attr-overall.a-elite .ao-num{color:var(--accent)}
-  .attr-overall.a-good .ao-num{color:#8fd98f}
+  .attr-overall.a-good .ao-num{color:var(--win)}
   .attr-overall.a-mid .ao-num{color:var(--gold)}
   .attr-overall.a-low .ao-num{color:var(--danger)}
   .attr-bars{display:flex;flex-direction:column;gap:9px}
@@ -1053,11 +1213,11 @@
   .attr-track{height:7px;background:var(--surface-sunken);border-radius:6px;overflow:hidden}
   .attr-fill{height:100%;border-radius:6px;transition:width .4s ease}
   .attr-fill.a-elite{background:var(--accent)}
-  .attr-fill.a-good{background:#8fd98f}
+  .attr-fill.a-good{background:var(--win)}
   .attr-fill.a-mid{background:var(--gold)}
   .attr-fill.a-low{background:var(--danger)}
   .attr-val{font-family:var(--font-mono);font-size:14px;font-weight:700;text-align:right}
-  .attr-val.a-elite{color:var(--accent)} .attr-val.a-good{color:#8fd98f}
+  .attr-val.a-elite{color:var(--accent)} .attr-val.a-good{color:var(--win)}
   .attr-val.a-mid{color:var(--gold)} .attr-val.a-low{color:var(--danger)}
   .attr-edit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
   @media(max-width:560px){
@@ -1746,8 +1906,13 @@
 
   /* ===== LIVE TICKER ===== */
   .live-ticker-bar{position:fixed;left:0;right:0;bottom:0;z-index:55;height:34px;overflow:hidden;
-    background:linear-gradient(90deg,#0a0814,#1a1030);border-top:1px solid var(--line);display:flex;align-items:center;pointer-events:none;
-    transition:transform .25s cubic-bezier(.4,0,.2,1)}
+    background:var(--chrome);border-top:1px solid var(--chrome-line);display:flex;align-items:center;pointer-events:none;
+    transition:transform .25s cubic-bezier(.4,0,.2,1);color:var(--on-chrome)}
+  /* .tick-item and .tick-sep are shared with .ticker-wrap, which is an
+     ordinary white panel — inside the fixed bar they have to read off the
+     chrome instead */
+  .live-ticker-bar .tick-item{color:var(--on-chrome-dim)}
+  .live-ticker-bar .tick-sep{color:var(--gold);opacity:.75}
   .ticker-wrap{display:flex;align-items:center;gap:12px;margin:6px 0 14px;
     background:var(--panel);border:1px solid var(--line);
     border-radius:var(--r-md);padding:9px 14px;overflow:hidden}
@@ -1834,116 +1999,109 @@
   #wxfx{position:fixed;inset:0;z-index:-1;pointer-events:none}
   /* faint mood tint per condition, sits behind everything, layers under the particle canvas */
   body[data-wx="clear-day"]{background:
-    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(255,205,110,.05), transparent 55%),
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(190,160,60,.07), transparent 55%),
     var(--bg)}
   body[data-wx="clear-night"]{background:
-    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(120,150,255,.05), transparent 55%),
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(82,36,127,.06), transparent 55%),
     var(--bg)}
   body[data-wx="storm"]{background:
-    radial-gradient(ellipse 100% 60% at 50% -10%, rgba(80,100,140,.07), transparent 55%),
+    radial-gradient(ellipse 100% 60% at 50% -10%, rgba(60,90,86,.08), transparent 55%),
     var(--bg)}
 
-  /* ===== WEATHER-DRIVEN THEMES — override the palette to match live conditions ===== */
+  /* ===== WEATHER-DRIVEN THEMES — the same tournament, at a different hour
+     =================================================================
+     These used to swap the brand outright: cold turned the site ice
+     blue, hot turned it orange, rain turned it slate. Live weather was
+     deciding what the site's colours were, which is the one thing a
+     championship's colours are not allowed to depend on.
+
+     They are tonal shifts within the championship palette now. The page
+     stays white and green stays the voice in every condition; what moves
+     is the temperature of the paper, how deep the hairlines cut, and
+     which support colour leads. Cold is a morning session, hot is late
+     afternoon on a dry court, rain is the covers going on. Somebody who
+     opens the site on a cold day and a hot one should feel the hour
+     change, not the brand — and should be able to read a table in all
+     three, which is why every ink here is measured against its own
+     paper rather than inherited from the default.
+     ================================================================= */
   body[data-heat="cold"]{
-    --bg:#141a22; --panel:#1e2731; --panel-2:#28333e; --line:rgba(190,230,255,.14);
-    --line-soft:rgba(190,230,255,.06); --ink:#eef4f8; --muted:#9fb0bc; --dim:#66788a;
-    --accent:#5fd8ff; --accent-dim:#12333f; --accent-glow:rgba(95,216,255,.35);
-    --ball:#d8f6ff; --ball-glow:rgba(216,246,255,.3); --court:#8fe0ff;
-    /* depth layer, re-tinted to the cold palette: the light going over
-       this surface is the same ice blue the accent is */
-    --highlight-rim:#e2f6ff; --highlight-ambient:#a8dcff;
-    --shadow-tinted:#040c14; --surface-sunken:#0d141b;
-    --accent-pop:#5affc8; --accent-split-a:#8fb0ff; --accent-split-b:#4fc6ff;
-    --surface-bevel-light:#5d7a90; --surface-bevel-shadow:#111a23;
-    --glow-mesh:#59a8ff;
+    --bg:#F7FAFA; --panel:#FFFFFF; --panel-2:#E7EFEF; --line:rgba(14,42,38,.18);
+    --line-soft:rgba(14,42,38,.09); --ink:#0E2A26; --muted:#3E5854; --dim:#5E7672;
+    --accent:#065C4E; --accent-dim:#DFEDEA; --accent-glow:rgba(6,92,78,.22);
+    --chrome:#0A3730;
+    --ball:#5F7318; --ball-glow:rgba(95,115,24,.24); --court:#186356;
+    /* depth layer, cooled: the paper has the blue of a morning session in
+       it and the shadows go slate, but gold stays gold */
+    --highlight-rim:#FFFFFF; --highlight-ambient:#C6D6EC;
+    --shadow-tinted:#95AAA8; --surface-sunken:#E0E9E8;
+    --accent-pop:#46246E; --accent-split-a:#5B5F9C; --accent-split-b:#1B6479;
+    --surface-bevel-light:#FFFFFF; --surface-bevel-shadow:#BECBC9;
+    --glow-mesh:#6F84B8; --wx-ink:78,104,110;
   }
   /* one copy. This rule was pasted twice with two different inset values
      (0 0 0 1px and 0 0 1px 1px); the second was the one actually winning the
      cascade, so it is the one kept — deduplicating here changes nothing on
      screen, which is the point. */
-  body[data-heat="cold"] .panel{box-shadow:0 0 1px 1px rgba(190,230,255,.16) inset, 0 24px 60px -28px rgba(0,10,20,.6)}
-  body[data-heat="cold"] .panel::before{background:linear-gradient(90deg,#bff0ff,var(--accent))}
+  body[data-heat="cold"] .panel{box-shadow:0 0 0 1px rgba(14,42,38,.05) inset, 0 14px 34px -26px rgba(14,42,38,.4)}
+  body[data-heat="cold"] .panel::before{background:linear-gradient(90deg,var(--accent),var(--gold))}
 
   body[data-heat="hot"]{
-    --bg:#181119; --panel:#241a26; --panel-2:#2f2230; --line:rgba(255,150,80,.14);
-    --line-soft:rgba(255,150,80,.06); --ink:#f6eef0; --muted:#b39ba0; --dim:#7c6a6e;
-    --accent:#ff7a1f; --accent-dim:#3d1c0a; --accent-glow:rgba(255,122,31,.3);
-    --ball:#ffdd55; --ball-glow:rgba(255,221,85,.28); --court:#ff4d2e;
-    /* depth layer, re-tinted hot: ember highlights, a cool teal pop to
-       stop the whole frame going one temperature */
-    --highlight-rim:#ffe2c8; --highlight-ambient:#ffb98a;
-    --shadow-tinted:#12040a; --surface-sunken:#170f14;
-    --accent-pop:#2fe6c4; --accent-split-a:#ff9ec4; --accent-split-b:#ffc93d;
-    --surface-bevel-light:#8a6558; --surface-bevel-shadow:#1e1219;
-    --glow-mesh:#ff6a3d;
+    --bg:#FCFBF4; --panel:#FFFFFF; --panel-2:#F0F0E2; --line:rgba(32,38,20,.18);
+    --line-soft:rgba(32,38,20,.09); --ink:#1A2612; --muted:#4A543A; --dim:#6A7458;
+    --accent:#2F6420; --accent-dim:#E9F0E0; --accent-glow:rgba(47,100,32,.22);
+    --chrome:#1E4A18;
+    --ball:#767F0C; --ball-glow:rgba(118,127,12,.26); --court:#2F6B2A;
+    /* depth layer, warmed: the paper has the afternoon in it and the court
+       has dried out a shade, but the gold is still the prize */
+    --highlight-rim:#FFFFFF; --highlight-ambient:#E4D3C0;
+    --shadow-tinted:#ADAF97; --surface-sunken:#EBEBDB;
+    --accent-pop:#5A2A78; --accent-split-a:#7C5A2A; --accent-split-b:#2A6B6B;
+    --surface-bevel-light:#FFFFFF; --surface-bevel-shadow:#CBCBB6;
+    --glow-mesh:#B08FD0; --wx-ink:120,116,88;
   }
+  /* The hot theme used to set every panel on fire: a pulsing ember glow, a
+     flickering flame along the top edge and six sparks rising off it, all on
+     infinite loops. Three simultaneous animations per panel, on every panel,
+     for as long as it was warm in Toronto. It has been replaced by what heat
+     actually looks like on a still afternoon — a warm rim and a rule that
+     runs from gold into the accent. Nothing moves. The `sparkrise`,
+     `flameflicker` and `ignitepulse` keyframes went with it; the
+     reduced-motion rule that used to switch the flame off is now moot and
+     has been trimmed to the rain rule it shares. */
   body[data-heat="hot"] .panel{
-    box-shadow:0 0 26px -4px rgba(255,77,46,.5), 0 24px 60px -28px rgba(0,0,0,.6);
-    animation:ignitepulse 2.4s ease-in-out infinite;
-  }
-  @keyframes ignitepulse{
-    0%,100%{box-shadow:0 0 22px -6px rgba(255,77,46,.4), 0 24px 60px -28px rgba(0,0,0,.6)}
-    50%{box-shadow:0 0 34px 0px rgba(255,140,31,.65), 0 24px 60px -28px rgba(0,0,0,.6)}
+    box-shadow:0 0 0 1px rgba(32,38,20,.05) inset, 0 14px 34px -26px rgba(32,38,20,.4);
   }
   body[data-heat="hot"] .panel::before{
-    top:-3px;height:8px;
-    background:linear-gradient(180deg,#ffe08a,#ff7a1f 55%,#ff4d2e);
-    background-size:100% 100%;animation:flameflicker 1s ease-in-out infinite;
-    box-shadow:0 0 16px 2px rgba(255,122,31,.8);
-    filter:blur(.3px);
-  }
-  @keyframes flameflicker{
-    0%{transform:scaleY(1) translateY(0);opacity:.85;filter:brightness(1)}
-    25%{transform:scaleY(1.35) translateY(-1px);opacity:1;filter:brightness(1.3)}
-    50%{transform:scaleY(.9);opacity:.9;filter:brightness(1.05)}
-    75%{transform:scaleY(1.2) translateY(-1px);opacity:1;filter:brightness(1.2)}
-    100%{transform:scaleY(1) translateY(0);opacity:.85;filter:brightness(1)}
-  }
-  body[data-heat="hot"] .panel::after{
-    content:'';position:absolute;left:0;right:0;top:-2px;height:50px;pointer-events:none;z-index:2;
-    background-image:
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff8a3d 100%, transparent 100%),
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff5a2e 100%, transparent 100%),
-      radial-gradient(circle 2px, #ffd76a 100%, transparent 100%),
-      radial-gradient(circle 1.5px, #ff8a3d 100%, transparent 100%);
-    background-repeat:no-repeat;
-    background-position:10% 100%, 27% 100%, 45% 100%, 62% 100%, 80% 100%, 94% 100%;
-    animation:sparkrise 1.6s linear infinite;
-    opacity:0;
-  }
-  @keyframes sparkrise{
-    0%{background-position:10% 100%, 27% 100%, 45% 100%, 62% 100%, 80% 100%, 94% 100%;opacity:0}
-    8%{opacity:1}
-    55%{opacity:.7}
-    100%{background-position:6% -46px, 31% -52px, 41% -40px, 66% -55px, 76% -44px, 98% -50px;opacity:0}
+    background:linear-gradient(90deg,var(--gold),var(--accent));
   }
 
   body[data-heat="mild"]{background:
-    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(140,220,150,.06), transparent 55%),
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(0,98,60,.05), transparent 55%),
     var(--bg)}
 
   body[data-wx="rain"],body[data-wx="storm"]{
-    --bg:#1b2027; --panel:#252b34; --panel-2:#2e343f; --line:rgba(200,212,226,.16);
-    --line-soft:rgba(200,212,226,.08); --ink:#eceff3; --muted:#a1abb8; --dim:#6d7684;
-    --accent:#8fb4d9; --accent-dim:#26333f; --ball:#c9d6e3; --court:#5f7d99;
-    /* depth layer, re-tinted overcast: flatter highlights, deeper slate
-       occlusion, and the pop accent left saturated so CTAs still cut
-       through the grey */
-    --highlight-rim:#e8f0f8; --highlight-ambient:#b8ccdf;
-    --shadow-tinted:#070a0e; --surface-sunken:#12161c;
-    --accent-pop:#4fe0b8; --accent-split-a:#a0a8ff; --accent-split-b:#5fb8f0;
-    --surface-bevel-light:#78838f; --surface-bevel-shadow:#161b22;
-    --glow-mesh:#7d93b8;
+    --bg:#F4F7F6; --panel:#FFFFFF; --panel-2:#E6ECEB; --line:rgba(18,38,36,.19);
+    --line-soft:rgba(18,38,36,.10); --ink:#122624; --muted:#3F5451; --dim:#5F7370;
+    --accent:#0A5A4C; --accent-dim:#DEEBE8; --accent-glow:rgba(10,90,76,.22);
+    --chrome:#123832;
+    --ball:#65731A; --ball-glow:rgba(101,115,26,.22); --court:#1B6153;
+    /* depth layer, overcast: the paper has gone grey and the highlights are
+       flat, but gold still cuts through — the covers are on, the tournament
+       has not stopped */
+    --highlight-rim:#FFFFFF; --highlight-ambient:#C8C2DE;
+    --shadow-tinted:#94A5A3; --surface-sunken:#DFE6E5;
+    --accent-pop:#4A2570; --accent-split-a:#5D6470; --accent-split-b:#1F6478;
+    --surface-bevel-light:#FFFFFF; --surface-bevel-shadow:#BDC8C6;
+    --glow-mesh:#7A8AAE; --wx-ink:74,96,98;
   }
   body[data-wx="rain"] .panel::after,body[data-wx="storm"] .panel::after{
-    content:'';position:absolute;inset:0;pointer-events:none;opacity:.1;z-index:0;
-    background-image:repeating-linear-gradient(102deg, transparent 0 6px, rgba(220,235,255,.6) 6px 7px, transparent 7px 42px);
-    animation:raindrip .9s linear infinite;
+    content:'';position:absolute;inset:0;pointer-events:none;opacity:.06;z-index:0;
+    background-image:repeating-linear-gradient(102deg, transparent 0 6px, rgba(18,38,36,.5) 6px 7px, transparent 7px 42px);
+    animation:raindrip 1.4s linear infinite;
   }
   @keyframes raindrip{to{background-position:0 60px}}
-  @media(prefers-reduced-motion:reduce){ body[data-heat="hot"] .panel::before{animation:none} body[data-wx="rain"] .panel::after,body[data-wx="storm"] .panel::after{animation:none} }
+  @media(prefers-reduced-motion:reduce){ body[data-wx="rain"] .panel::after,body[data-wx="storm"] .panel::after{animation:none} }
 
   @media(prefers-reduced-motion:reduce){
     .ticker-track,.hype-fill,.pres-dot,.ticker-live,.pt-ref-tension{animation:none!important}
@@ -2271,10 +2429,10 @@
   .pt-bug-set.cur{color:#fff}
   .pt-bug-set.won{color:var(--gold)}
   .pt-bug-pt{display:flex;align-items:center;justify-content:center;min-width:34px;
-    font-size:13px;font-weight:800;color:#04140e;background:var(--ac);
+    font-size:13px;font-weight:800;color:var(--on-accent);background:var(--ac);
     border-left:1px solid rgba(255,255,255,.16)}
   .pt-bug-tag{align-self:flex-start;padding:3px 9px;border-radius:var(--r-pill);
-    background:var(--tc,var(--panel-2));color:#0b0710;font-size:9.5px;font-weight:800;letter-spacing:1px}
+    background:var(--tc,var(--panel-2));color:var(--on-accent);font-size:9.5px;font-weight:800;letter-spacing:1px}
   .pt-bug-final{background:rgba(8,6,18,.88);border:1px solid rgba(255,204,0,.5);color:var(--gold)}
   @media (max-width:560px){
     .pt-bug{left:6px;bottom:44px}
@@ -2372,7 +2530,7 @@
   .pt-live-thumb-none{display:flex;align-items:center;justify-content:center;
     color:var(--dim);font-size:22px}
   .pt-join-row{margin-top:6px}
-  .pt-watch-cta{background:var(--accent);color:#04140e;font-weight:800}
+  .pt-watch-cta{background:var(--accent);color:var(--on-accent);font-weight:800}
   .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#ff2d2d;color:#fff}
   .pt-golive-cta .pt-live-dot{background:#fff;animation:none}
 
@@ -2716,39 +2874,49 @@
   .fgta-p{position:absolute;line-height:1;animation-fill-mode:both;animation-timing-function:linear;will-change:transform,opacity}
   .fgta-cel>.fgta-card{position:relative;z-index:2;max-width:100%}
 
-  /* ---- set won: flame ---- */
+  /* ---- set won: the presentation light ----
+     This was a fire: an orange-red radial pulsing under a name flickering
+     between two shades of flame. It is now the light that comes up on a
+     trophy presentation — a deep green ground with gold rising out of the
+     bottom of the frame, the winner's name set in the display serif, and a
+     glow that breathes once a second instead of guttering four times. The
+     motion is identical (same keyframe names, same particle rise); only the
+     colour and the typeface changed, so nothing that triggers it had to. */
   @keyframes ptsetIn{0%{transform:scale(.3) translateY(40px);opacity:0}60%{transform:scale(1.12) translateY(-6px);opacity:1}100%{transform:scale(1) translateY(0)}}
-  @keyframes ptsetFlicker{0%,100%{text-shadow:0 0 24px #ff6a00,0 0 52px #ff2d2d}50%{text-shadow:0 0 40px #ffcc00,0 0 80px #ff6a00}}
+  @keyframes ptsetFlicker{0%,100%{text-shadow:0 0 26px rgba(200,169,81,.75),0 0 64px rgba(200,169,81,.35)}50%{text-shadow:0 0 40px rgba(227,185,75,.9),0 0 96px rgba(227,185,75,.45)}}
   @keyframes ptsetRise{0%{transform:translate3d(0,0,0) scale(.7);opacity:0}12%{opacity:1}100%{transform:translate3d(0,-118vh,0) scale(1.15);opacity:0}}
-  @keyframes ptsetGlow{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.08);opacity:1}}
-  .ptset-overlay{background:#170703}
+  @keyframes ptsetGlow{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.06);opacity:1}}
+  .ptset-overlay{background:#04180F}
   .ptset-overlay .fgta-bg{position:absolute;inset:-6%;z-index:0;
-    background:radial-gradient(ellipse 95% 72% at 50% 115%, #ffcc00 0%, #ff2d2d 26%, #ff6a00 46%, #6d1a02 68%, #150703 100%);
-    animation:ptsetGlow 1.15s ease-in-out infinite}
-  .ptset-label{font-family:var(--font-mono);font-size:clamp(13px,4vw,24px);font-weight:800;
-    letter-spacing:clamp(3px,1.4vw,6px);color:#ffe9b0;text-transform:uppercase;margin-bottom:6px}
-  .ptset-name{font-family:var(--font-body);font-size:clamp(34px,13vw,96px);font-weight:900;color:#fff;
-    animation:ptsetFlicker .45s ease-in-out infinite;line-height:1.02;overflow-wrap:anywhere}
-  .ptset-score{font-family:var(--font-mono);font-size:clamp(12px,3.6vw,20px);color:#ffe9b0;margin-top:14px;letter-spacing:1.5px}
+    background:radial-gradient(ellipse 95% 72% at 50% 115%, #E3B94B 0%, #C8A951 20%, #4E6B33 42%, #0E3A24 66%, #04180F 100%);
+    animation:ptsetGlow 1.9s ease-in-out infinite}
+  .ptset-label{font-family:var(--font-mono);font-size:clamp(13px,4vw,24px);font-weight:700;
+    letter-spacing:clamp(3px,1.4vw,6px);color:#F0E4C2;text-transform:uppercase;margin-bottom:6px}
+  .ptset-name{font-family:var(--font-display);font-size:clamp(34px,13vw,96px);font-weight:700;color:#FFFBF0;
+    animation:ptsetFlicker 1.9s ease-in-out infinite;line-height:1.02;overflow-wrap:anywhere}
+  .ptset-score{font-family:var(--font-mono);font-size:clamp(12px,3.6vw,20px);color:#F0E4C2;margin-top:14px;letter-spacing:1.5px}
   .ptset-card{animation:ptsetIn .6s cubic-bezier(.2,1.5,.4,1) both}
   .ptset-overlay .fgta-p{bottom:-8%;animation-name:ptsetRise;animation-timing-function:ease-in}
 
   /* ---- 8-8: THE MAGIC NUMBER ---- */
   @keyframes pt88spin{to{transform:rotate(360deg)}}
   @keyframes pt88in{0%{transform:scale(0) rotate(-30deg);opacity:0}55%{transform:scale(1.25) rotate(8deg);opacity:1}75%{transform:scale(.92) rotate(-4deg)}100%{transform:scale(1) rotate(0)}}
-  @keyframes pt88pulse{0%,100%{text-shadow:0 0 24px #ff2d78,0 0 52px #1ec9dd;transform:scale(1)}50%{text-shadow:0 0 46px #d4ff2b,0 0 90px #ff2d78;transform:scale(1.04)}}
+  @keyframes pt88pulse{0%,100%{text-shadow:0 0 26px rgba(200,169,81,.7),0 0 62px rgba(183,155,224,.4);transform:scale(1)}50%{text-shadow:0 0 44px rgba(227,185,75,.9),0 0 100px rgba(183,155,224,.5);transform:scale(1.03)}}
   @keyframes pt88fall{0%{transform:translate3d(0,0,0) rotate(0);opacity:1}100%{transform:translate3d(0,118vh,0) rotate(720deg);opacity:.15}}
-  .pt88-overlay{background:#0b0716}
+  .pt88-overlay{background:#04180F}
   /* a rotating conic layer instead of an infinite hue-rotate filter on the
-     whole overlay: transform-only, so it stays on the compositor */
+     whole overlay: transform-only, so it stays on the compositor. The five
+     stops used to be a neon rainbow, which is a fairground; they are the
+     four championship colours now, so the easter egg still spins but it
+     spins in the site's own livery. */
   .pt88-overlay .fgta-bg{position:absolute;top:50%;left:50%;width:180vmax;height:180vmax;margin:-90vmax 0 0 -90vmax;z-index:0;
-    background:conic-gradient(from 0deg,#ff2d78,#1ec9dd,#d4ff2b,#ffcc00,#ff2d78);
-    animation:pt88spin 2.6s linear infinite}
+    background:conic-gradient(from 0deg,#0E4A2E,#C8A951,#F4F0E4,#B79BE0,#0E4A2E);
+    animation:pt88spin 4.2s linear infinite}
   .pt88-card{animation:pt88in .55s cubic-bezier(.2,1.5,.4,1) both}
-  .pt88-num{font-family:var(--font-mono);font-size:clamp(76px,27vw,240px);font-weight:900;color:#fff;
-    animation:pt88pulse .5s ease-in-out infinite;line-height:1}
-  .pt88-tag{font-family:var(--font-mono);font-size:clamp(11px,3.4vw,22px);font-weight:800;
-    letter-spacing:clamp(2px,1vw,4px);color:#0d0a16;background:#fff;padding:9px clamp(14px,4vw,26px);
+  .pt88-num{font-family:var(--font-display);font-size:clamp(76px,27vw,240px);font-weight:700;color:#FFFBF0;
+    animation:pt88pulse 1.6s ease-in-out infinite;line-height:1}
+  .pt88-tag{font-family:var(--font-mono);font-size:clamp(11px,3.4vw,22px);font-weight:700;
+    letter-spacing:clamp(2px,1vw,4px);color:#0A2418;background:#C8A951;padding:9px clamp(14px,4vw,26px);
     border-radius:999px;margin-top:16px;display:inline-block;text-transform:uppercase}
   .pt88-overlay .fgta-p{top:-10%;animation-name:pt88fall}
 
@@ -2790,11 +2958,13 @@
     transition:transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s cubic-bezier(.16,1,.3,1);
   }
   .panel:hover{ transform:translateY(-3px); box-shadow:0 30px 70px -24px rgba(60,40,10,.32); }
-  /* every panel wears a bright accent baseline across its top — broadcast strip */
+  /* Every panel wears a rule across its top. It was 4px of flat accent, then
+     briefly a gold-into-green gradient — which put a second colour and a
+     ramp on a piece of trim 3px tall, on every card on every view. One flat
+     green line. */
   .panel::before{
-    content:'';position:absolute;top:0;left:0;right:0;height:4px;
+    content:'';position:absolute;top:0;left:0;right:0;height:3px;
     background:var(--accent);
-    opacity:.9;
   }
   .pend{ background:var(--panel)!important; }
 
@@ -2803,7 +2973,7 @@
      the bottom are what make the pill read as a physical key — and
      because they swap on :active, the press is a change in lighting
      rather than a 1px nudge. The glow colours were hardcoded to the
-     default pink; they run through --accent now so the weather themes
+     default accent; they run through --accent now so the weather themes
      and the cup skin light their own buttons. */
   .btn{
     box-shadow:
@@ -2846,12 +3016,14 @@
       0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 35%, transparent) inset;
   }
 
-  /* section labels: a quiet accent dot + hairline rule */
-  .sec-label{ color:var(--muted); }
+  /* section labels: a gold tick + hairline rule. The dot used to be a 6px
+     accent circle and the label was re-muted back to grey here, which undid
+     the eyebrow set above; the colour override is gone and the marker is a
+     2px gold bar — a rule-cap, not a bullet. */
   .sec-label::before{
-    content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
-    background:var(--accent);
-    margin-right:9px;vertical-align:middle;position:relative;top:-1px;flex-shrink:0;
+    content:'';display:inline-block;width:2px;height:13px;border-radius:1px;
+    background:var(--gold);
+    margin-right:11px;vertical-align:middle;position:relative;top:-1px;flex-shrink:0;
   }
   .sec-label::after{
     background:var(--line-soft)!important;
@@ -2867,7 +3039,7 @@
      painted as a box, but the moment html carries one, an opaque body draws over
      anything sitting behind it. */
   /* Four washes, not two. The accent pair stays exactly as it was — that
-     ambient pink is the brand and it still reads first. Underneath it a
+     ambient purple is the brand and it still reads first. Underneath it a
      --glow-mesh bloom drifts off-centre at the top and a --accent-pop
      one answers it from the far side low down, so the page has a light
      source with a direction instead of a symmetrical vignette. Both new
@@ -2909,8 +3081,21 @@
   /* avatars get a quiet hairline ring */
   .avi{ box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 25%, transparent); }
 
-  /* leaderboard #1 gets a quiet gold accent, no glow */
-  .row:first-child{ position:relative;background:linear-gradient(90deg,var(--accent-dim),transparent 60%);border-left:3px solid var(--gold) }
+  /* Leaderboard #1 gets a quiet gold accent, no glow.
+     This was `.row:first-child`, and the first child of a .board is the
+     HEADER row — so the gold border and the accent-dim wash were landing on
+     "# PLAYER W-L RATING PEAK" while the actual leader got nothing. Worse,
+     the wash is a background-IMAGE and the header's own `background:var(--ink)`
+     is a background-COLOR, so the image painted straight over the cream bar
+     and left the header's dark type sitting on a dark fill: the column
+     headings were close to unreadable at the left edge. Both halves of that
+     are fixed by naming the row that was actually meant — the one after the
+     header, or the first row outright in a board that has no header. */
+  .board > .row.head + .row,
+  .board > .row:first-child:not(.head){
+    position:relative;background:color-mix(in srgb, var(--medal-gold) 16%, transparent);
+    box-shadow:inset 4px 0 0 var(--medal-gold);
+  }
 
   /* ============================================================
      CHROME 3D DEPTH PASS — nav bar, podium, main cards.
@@ -2918,14 +3103,15 @@
      cursor-tracked tilt (see the tilt-3d script near the bottom
      of the file) on panels and podium cards for interactive feel.
      ============================================================ */
+  /* The bar was a 180deg ramp from --panel to --chrome with a lit lip inset
+     along its top edge — white fading into green now that --panel is white,
+     which is why the header looked washed out at the top and solid at the
+     bottom. A championship header is one flat green band with a hairline
+     under it. */
   .topbar{
-    background:linear-gradient(180deg, color-mix(in srgb,#171225 92%, transparent), color-mix(in srgb,#0a0814 94%, transparent))!important;
-    /* bevel-light along the top edge, tinted occlusion falling off the
-       bottom — the bar reads as a lit lip over the page, not a flat band */
-    box-shadow:
-      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 55%, transparent) inset,
-      0 14px 34px -20px color-mix(in srgb, var(--shadow-tinted) 88%, transparent)!important;
-    border-bottom:1px solid color-mix(in srgb, var(--line) 60%, var(--highlight-rim) 8%)!important;
+    background:var(--chrome)!important;
+    box-shadow:0 1px 0 color-mix(in srgb, var(--shadow-tinted) 25%, transparent)!important;
+    border-bottom:1px solid var(--chrome-line)!important;
   }
   .tb-tab.on{
     box-shadow:
@@ -2934,23 +3120,25 @@
       0 4px 12px -4px color-mix(in srgb, var(--shadow-tinted) 60%, transparent)!important;
   }
 
+  /* PAPER, NOT PLASTIC.
+     This block used to model a bevelled slab: a 160deg surface ramp from a
+     lit top-left to a shadowed bottom-right, a 1px lit bevel inset, ambient
+     occlusion pooling in the lower half, a deep cast shadow and a contact
+     edge. All of it was tuned against a near-black page, where a card has to
+     manufacture its own light to separate from the ground.
+
+     On white the same five layers only make a white card grey — the ramp
+     bottoms out at 18% of the bevel shadow, so every panel ended muddier
+     than the page it sits on, and the occlusion inset greyed the bottom of
+     every form. A championship programme separates its blocks with a
+     hairline and a whisper of shadow, so that is what a panel is now: flat
+     stock, one rule, one soft cast. The tokens are unchanged; the modelling
+     is gone. */
   .panel{
-    /* the surface ramp: bevel-light catching the top-left, the panel's
-       own tone through the middle, bevel-shadow sinking the bottom-right */
-    background:linear-gradient(160deg,
-      color-mix(in srgb, var(--panel) 92%, var(--surface-bevel-light) 8%) 0%,
-      var(--panel) 45%,
-      color-mix(in srgb, var(--panel) 82%, var(--surface-bevel-shadow) 18%) 100%)!important;
-    border:1px solid color-mix(in srgb, var(--line) 65%, var(--surface-bevel-light) 14%)!important;
-    box-shadow:
-      /* 1px lit bevel across the top */
-      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 60%, transparent) inset,
-      /* ambient occlusion pooling in the lower half */
-      0 -22px 44px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
-      /* the cast shadow, plum rather than black */
-      0 26px 54px -22px color-mix(in srgb, var(--shadow-tinted) 70%, transparent),
-      /* contact edge */
-      0 2px 0 color-mix(in srgb, var(--shadow-tinted) 45%, transparent)!important;
+    background:var(--panel)!important;
+    border:1px solid var(--line)!important;
+    box-shadow:0 1px 2px color-mix(in srgb, var(--shadow-tinted) 30%, transparent),
+               0 14px 34px -28px color-mix(in srgb, var(--shadow-tinted) 80%, transparent)!important;
     /* NO permanent will-change here. A ladder page carries 8-14 panels; a
        standing `will-change:transform` promoted every one of them to its own
        compositor layer for the whole session — tens of MB of GPU texture that
@@ -2959,22 +3147,19 @@
        :hover instead, which is the only moment the transform actually runs. */
   }
   .panel:hover{will-change:transform}
-  .panel::after{
-    content:'';position:absolute;top:0;left:0;right:0;height:46%;
-    /* specular fall across the top of the card */
-    background:linear-gradient(180deg, color-mix(in srgb, var(--highlight-ambient) 7%, transparent), transparent);
-    pointer-events:none;
-  }
+  /* the specular fall across the top of the card went with the bevel: on
+     white it is a grey band and nothing else */
+  .panel::after{content:none}
   /* on hover the card lifts, so the rim light sharpens and the cast
      shadow both deepens and spreads — the two have to move together or
      the lift reads as a colour change instead of a change in height */
+  /* the lift is a deeper shadow and a firmer rule. It used to also mix the
+     border toward --surface-bevel-light, which is white on this palette —
+     the card's edge disappeared at exactly the moment you pointed at it. */
   .panel:hover{
-    border-color:color-mix(in srgb, var(--line) 55%, var(--surface-bevel-light) 26%)!important;
-    box-shadow:
-      0 1px 0 color-mix(in srgb, var(--highlight-rim) 22%, transparent) inset,
-      0 -22px 44px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
-      0 38px 76px -24px color-mix(in srgb, var(--shadow-tinted) 80%, transparent),
-      0 2px 0 color-mix(in srgb, var(--shadow-tinted) 45%, transparent)!important;
+    border-color:color-mix(in srgb, var(--line) 65%, var(--accent) 35%)!important;
+    box-shadow:0 1px 2px color-mix(in srgb, var(--shadow-tinted) 35%, transparent),
+               0 22px 48px -26px color-mix(in srgb, var(--shadow-tinted) 90%, transparent)!important;
   }
   .panel:hover::after{
     background:linear-gradient(180deg, color-mix(in srgb, var(--highlight-ambient) 12%, transparent), transparent);
@@ -3104,12 +3289,12 @@
   /* text inputs are wells too — same logic, plus the focus ring now
      lights with the rim highlight over the accent glow it already had */
   input:not([type="checkbox"]):not([type="radio"]),select,textarea{
-    box-shadow:
-      0 1px 2px color-mix(in srgb, var(--surface-bevel-shadow) 70%, transparent) inset,
-      0 -1px 0 color-mix(in srgb, var(--surface-bevel-light) 18%, transparent) inset;
+    box-shadow:0 1px 1px color-mix(in srgb, var(--surface-bevel-shadow) 40%, transparent) inset;
   }
+  /* hover used to mix the border toward --surface-bevel-light — white on
+     this palette, so pointing at a field erased its outline */
   input:hover,select:hover,textarea:hover{
-    border-color:color-mix(in srgb, var(--line) 40%, var(--surface-bevel-light) 45%);
+    border-color:color-mix(in srgb, var(--line) 50%, var(--accent) 50%);
   }
   input:focus,select:focus,textarea:focus{
     border-color:var(--accent);
@@ -3213,7 +3398,7 @@
       0 4px 12px -8px color-mix(in srgb, var(--accent-split-a) 45%, transparent);
   }
   /* secondary/utility affordances pick up the azure — distinct from the
-     pink brand states, so "interactive" and "on brand" stop competing */
+     purple brand states, so "interactive" and "on brand" stop competing */
   .tb-ico:hover,.back-btn:hover{
     border-color:color-mix(in srgb, var(--accent-split-b) 45%, transparent)!important;
     box-shadow:0 0 0 1px color-mix(in srgb, var(--accent-split-b) 18%, transparent),
@@ -3243,18 +3428,16 @@
   }
 
   /* -- the board and its header -------------------------------------- */
+  /* the standings table is the front page of the site; it gets the same
+     paper treatment as a panel and nothing more */
   .board{
-    box-shadow:
-      0 1px 0 color-mix(in srgb, var(--surface-bevel-light) 50%, transparent) inset,
-      0 -20px 40px -34px color-mix(in srgb, var(--surface-bevel-shadow) 85%, transparent) inset,
-      0 26px 54px -24px color-mix(in srgb, var(--shadow-tinted) 65%, transparent);
-    border-color:color-mix(in srgb, var(--line) 65%, var(--surface-bevel-light) 12%);
+    box-shadow:0 1px 2px color-mix(in srgb, var(--shadow-tinted) 30%, transparent),
+               0 14px 34px -28px color-mix(in srgb, var(--shadow-tinted) 80%, transparent);
+    border-color:var(--line);
   }
   .row:hover{
-    background:linear-gradient(90deg,
-      color-mix(in srgb, var(--highlight-ambient) 7%, var(--panel-2)),
-      var(--panel-2) 55%);
-    box-shadow:inset 3px 0 0 color-mix(in srgb, var(--accent-split-b) 70%, transparent);
+    background:var(--panel-2);
+    box-shadow:inset 3px 0 0 var(--accent);
   }
 
   /* -- app chrome sits on the sunken tone ---------------------------- */
@@ -3267,8 +3450,8 @@
   /* keyboard focus: the rim light is the clearest "you are here" marker
      available on a page this dark, and it is legible on every skin */
   :focus-visible{
-    outline-color:var(--highlight-rim);
-    box-shadow:0 0 0 5px var(--accent-glow), 0 0 18px -4px color-mix(in srgb, var(--highlight-rim) 55%, transparent);
+    outline-color:var(--accent);
+    box-shadow:0 0 0 5px var(--accent-glow);
   }
 
   @media(prefers-reduced-motion:reduce){
@@ -3300,16 +3483,15 @@
   .bcast-title{font-size:12px;font-weight:600;letter-spacing:2px;color:var(--muted)}
   .bcast-meta{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+  /* the live pill used to be a two-colour neon sign: a red-to-black gradient
+     under a white text-glow, ringed in danger-mixed-with-court, breathing on
+     an 18-frame loop. It is a red badge. The dot beside it is already
+     pulsing, which is the whole job. */
   .bcast-mini .bcast-meta{
-    font-size:13px;color:#fff;background:linear-gradient(180deg, var(--danger), color-mix(in srgb, var(--danger) 55%, black));
+    font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--on-accent);background:var(--danger);
     padding:6px 16px;border-radius:var(--r-pill);max-width:none;
-    border:1px solid color-mix(in srgb, var(--danger) 70%, var(--court));
-    text-shadow:0 0 8px rgba(255,255,255,.6);
-    animation:cyberglow 1.8s ease-in-out infinite;
-  }
-  @keyframes cyberglow{
-    0%,100%{box-shadow:0 0 10px -1px var(--danger), 0 0 22px -6px var(--court), 0 4px 12px -3px rgba(0,0,0,.5)}
-    50%{box-shadow:0 0 18px 2px var(--danger), 0 0 34px -4px var(--court), 0 4px 12px -3px rgba(0,0,0,.5)}
+    border:1px solid var(--danger);
   }
 
   /* champion podium */
@@ -3328,81 +3510,133 @@
   .pod{cursor:pointer;text-align:center;position:relative;transition:transform .3s cubic-bezier(.16,1,.3,1);
     display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;max-width:100%}
   .pod:hover{transform:translateY(-3px)}
-  .pod-medal{font-size:20px;line-height:1;filter:none;opacity:.85}
-  .pod-1 .pod-medal{font-size:28px;display:inline-block;animation:trophySpin 4.5s linear infinite;filter:drop-shadow(0 4px 10px rgba(255,204,0,.55))}
-  @keyframes trophySpin{0%{transform:perspective(320px) rotateY(0deg)}100%{transform:perspective(320px) rotateY(360deg)}}
+  .pod-medal{font-size:20px;line-height:1;filter:none;opacity:.9}
+  /* the trophy used to rotate on a 4.5s loop, permanently, with a gold drop
+     shadow under it. A trophy on a presentation table does not spin. */
+  .pod-1 .pod-medal{font-size:28px;display:inline-block}
   @keyframes tickerScroll{from{transform:translateX(0)}to{transform:translateX(-100%)}}
-  .galaxy-wrap{position:relative;height:380px;border-radius:var(--r-md);overflow:hidden;background:radial-gradient(ellipse at 50% 50%, rgba(255,45,120,.06), transparent 70%)}
+  .galaxy-wrap{position:relative;height:380px;border-radius:var(--r-md);overflow:hidden;
+    background:radial-gradient(ellipse at 50% 50%, color-mix(in srgb,var(--accent) 6%, transparent), transparent 70%)}
   #galaxyCanvas{width:100%;height:380px;display:block}
   .pod-av{position:relative}
-  .pod-1 .pod-av .avi{box-shadow:0 0 0 2px var(--gold)}
+  .pod-1 .pod-av .avi{box-shadow:0 0 0 2px var(--medal-gold)}
+  .pod-2 .pod-av .avi{box-shadow:0 0 0 2px var(--medal-silver)}
+  .pod-3 .pod-av .avi{box-shadow:0 0 0 2px var(--medal-bronze)}
   .pod-spot{position:absolute;inset:-14px;border-radius:50%;pointer-events:none;
-    background:radial-gradient(circle, var(--accent-glow), transparent 70%);
-    opacity:.5;
+    background:radial-gradient(circle, color-mix(in srgb,var(--gold) 26%, transparent), transparent 70%);
+    opacity:.55;
   }
   .pod-name{font-weight:500;font-size:15px;margin-top:2px;max-width:100%;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .pod-1 .pod-name{font-size:19px;text-transform:none;font-weight:600}
-  .pod-num{font-family:var(--font-mono);font-weight:600;font-size:23px;color:var(--ink)}
-  .pod-1 .pod-num{font-size:32px;color:var(--gold)}
-  .pod-sub{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--dim)}
+  .pod-num{font-family:var(--font-mono);font-weight:600;font-size:23px;color:var(--ink);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .pod-1 .pod-num{font-size:32px;color:var(--ink)}
+  .pod-sub{font-family:var(--font-body);font-size:11px;font-weight:500;color:var(--dim);
+    font-variant-numeric:tabular-nums}
   .pod-base{margin-top:10px;width:100%;border-radius:var(--r-sm) var(--r-sm) 0 0;display:flex;align-items:flex-start;justify-content:center;
-    font-family:var(--font-mono);font-weight:600;color:#04140e;padding-top:8px;position:relative;overflow:hidden}
-  .pod-1 .pod-base{height:60px;background:linear-gradient(135deg,#fff3b0 0%,#ffcc00 28%,#8a6400 55%,#ffe36b 78%,#fff3b0 100%);box-shadow:0 0 22px -4px rgba(255,204,0,.65),inset 0 1px 0 rgba(255,255,255,.6)}
-  .pod-2 .pod-base{height:44px;background:linear-gradient(135deg,#ffffff 0%,#c7c7d9 28%,#6a6a76 55%,#e3e3ec 78%,#ffffff 100%);box-shadow:0 0 16px -4px rgba(220,220,235,.55),inset 0 1px 0 rgba(255,255,255,.7)}
-  .pod-3 .pod-base{height:32px;background:linear-gradient(135deg,#f2b483 0%,#e0793a 28%,#7a3d14 55%,#eb9a5e 78%,#f2b483 100%);box-shadow:0 0 16px -4px rgba(224,121,58,.55),inset 0 1px 0 rgba(255,255,255,.5)}
+    font-family:var(--font-mono);font-weight:600;color:var(--on-accent);padding-top:8px;position:relative;overflow:hidden}
+  /* The three plinths were five-stop brushed-metal gradients, each with an
+     outer glow and a white inset lip, and each with a sheen that swept
+     across it forever on a 3.2s loop with staggered delays. Three animations
+     that never stop, to say "these three are first, second and third" —
+     which the heights already say. They are solid blocks of their own metal
+     now, with one lit top edge, and they hold still. */
+  .pod-1 .pod-base{height:60px;background:var(--medal-gold);color:var(--on-medal)}
+  .pod-2 .pod-base{height:44px;background:var(--medal-silver);color:var(--on-medal)}
+  .pod-3 .pod-base{height:32px;background:var(--medal-bronze);color:var(--on-medal)}
   .pod-base::after{
-    content:'';position:absolute;top:0;bottom:0;left:-60%;width:45%;
-    background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.75) 50%,transparent 100%);
-    transform:skewX(-20deg);animation:pod-sheen 3.2s ease-in-out infinite;
-  }
-  .pod-2 .pod-base::after,.pod-3 .pod-base::after{animation-delay:.5s}
-  .pod-3 .pod-base::after{animation-delay:1s}
-  /* PERF — this animated `left`, which is a LAYOUT property: every frame the
-     browser had to re-lay-out and repaint the plinth, three plinths at once,
-     on a 3.2s loop that never ended. The sheen now travels on a transform,
-     which the compositor owns. 422% is the same journey measured in the
-     sheen's own width (45% of the plinth) rather than the plinth's: -60% to
-     130% is 190 points of plinth, and 190/45 ≈ 4.22. The skew is carried
-     through both keyframes so the streak keeps its rake — and because skewX
-     displaces x by y alone, composing a horizontal translate after it lands
-     exactly where the old `left` did. */
-  @keyframes pod-sheen{
-    0%{transform:skewX(-20deg) translate3d(0,0,0)}
-    35%,100%{transform:skewX(-20deg) translate3d(422%,0,0)}
+    content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:rgba(255,255,255,.5);
   }
   .pod-place{font-size:15px;font-weight:600}
 
-  /* ===== LEADERBOARD ROWS (broadcast variant) ===== */
-  .board-broadcast{display:flex;flex-direction:column;gap:10px;background:none;border:none;padding:0}
-  .brow{
-    display:grid;grid-template-columns:34px 42px 1fr 120px auto;gap:12px;align-items:center;
-    padding:16px 18px;border-radius:var(--r-md);cursor:pointer;position:relative;
-    background:var(--panel);
-    border:1px solid var(--line);border-left:1px solid var(--line);
-    transition:.2s cubic-bezier(.16,1,.3,1);overflow:hidden;
+  /* ===== LEADERBOARD ROWS =====
+     THE STANDINGS ARE ONE SHEET, NOT A STACK OF CARDS.
+
+     This was fifteen separate bordered cards with a 10px gap, each with its
+     own radius, its own outline and — for the top three — a coloured 3px
+     spine down the left edge. Six competing borders before you reach a name,
+     and the eye has to re-find the left margin on every row. Hovering also
+     slid the whole card 2px sideways, so running a finger down the table set
+     the entire list twitching.
+
+     A ranking is a single continuous object and it is read top to bottom, so
+     it is drawn as one: one white sheet, one outline, hairline rules between
+     rows and nothing else. Rank is carried by the numeral's colour alone —
+     gold, silver, bronze — because a number that is already in a column
+     headed by its own position does not need a second badge repeating it.
+     Hover is a wash and a 3px accent margin; nothing moves. */
+  .board-broadcast{
+    display:flex;flex-direction:column;gap:0;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+    overflow:hidden;padding:0;
   }
-  .brow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent}
-  .brow:hover{transform:translateX(2px);border-color:var(--muted);background:var(--panel-2)}
-  .brow.g1{border-left-color:var(--gold);border-color:var(--line);background:var(--panel)}
-  .brow.g1::before{background:var(--gold)}
-  .brow.g2{border-left-color:var(--silver)}
-  .brow.g2::before{background:var(--silver)}
-  .brow.g3{border-left-color:var(--bronze)}
-  .brow.g3::before{background:var(--bronze)}
-  .brow-rank{font-family:var(--font-mono);font-weight:600;font-size:20px;text-align:center;color:var(--dim)}
-  .brow.g1 .brow-rank{color:var(--gold)} .brow.g2 .brow-rank{color:var(--silver)} .brow.g3 .brow-rank{color:var(--bronze)}
+  .brow{
+    display:grid;grid-template-columns:34px 42px 1fr 120px auto;gap:14px;align-items:center;
+    padding:15px 20px;cursor:pointer;position:relative;
+    background:transparent;border:none;border-bottom:1px solid var(--line-soft);
+    transition:background .18s ease, box-shadow .18s ease;
+  }
+  .brow:last-child{border-bottom:none}
+  .brow:hover{background:var(--panel-2);box-shadow:inset 3px 0 0 var(--accent)}
+
+  /* THE PODIUM THREE.
+     Colouring the numeral alone was too quiet — a gold "1" and a grey "2"
+     against a white row is a distinction you have to go looking for, and the
+     top of a ladder is the thing people open the page to see. Each of the
+     three now carries its metal three times over: a 4px spine down the left
+     edge, a filled medal disc in place of the plain numeral, and a wash of
+     the same metal across the row, deepest at first and lightest at third.
+     Fourth place onward is bare white, so the break between "on the podium"
+     and "not" is the loudest edge in the table. */
+  .brow.g1,.brow.g2,.brow.g3{padding-left:24px}
+  .brow.g1::before,.brow.g2::before,.brow.g3::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+  }
+  .brow.g1{background:color-mix(in srgb, var(--medal-gold) 16%, transparent)}
+  .brow.g2{background:color-mix(in srgb, var(--medal-silver) 26%, transparent)}
+  .brow.g3{background:color-mix(in srgb, var(--medal-bronze) 13%, transparent)}
+  .brow.g1::before{background:var(--medal-gold)}
+  .brow.g2::before{background:var(--medal-silver)}
+  .brow.g3::before{background:var(--medal-bronze)}
+  .brow.g1:hover{background:color-mix(in srgb, var(--medal-gold) 26%, transparent)}
+  .brow.g2:hover{background:color-mix(in srgb, var(--medal-silver) 38%, transparent)}
+  .brow.g3:hover{background:color-mix(in srgb, var(--medal-bronze) 22%, transparent)}
+  /* the spine is the podium marker and must survive the hover bar */
+  .brow.g1:hover,.brow.g2:hover,.brow.g3:hover{box-shadow:none}
+
+  .brow-rank{
+    font-family:var(--font-mono);font-weight:500;font-size:17px;text-align:center;
+    color:var(--dim);font-variant-numeric:tabular-nums;
+  }
+  .brow.g1 .brow-rank,.brow.g2 .brow-rank,.brow.g3 .brow-rank{
+    display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;
+    justify-self:center;font-weight:700;font-size:15px;color:var(--on-medal);
+    box-shadow:0 1px 3px color-mix(in srgb, var(--shadow-tinted) 70%, transparent);
+  }
+  .brow.g1 .brow-rank{background:var(--medal-gold)}
+  .brow.g2 .brow-rank{background:var(--medal-silver)}
+  .brow.g3 .brow-rank{background:var(--medal-bronze)}
+  .brow.g1 .brow-av .avi{box-shadow:0 0 0 2px var(--medal-gold)}
+  .brow.g2 .brow-av .avi{box-shadow:0 0 0 2px var(--medal-silver)}
+  .brow.g3 .brow-av .avi{box-shadow:0 0 0 2px var(--medal-bronze)}
+  .brow.g1 .brow-name{font-weight:700}
   .brow-id{min-width:0}
-  .brow-name{font-weight:500;font-size:15.5px;display:flex;align-items:center;gap:6px;
-    min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-  .brow-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .brow-bar{height:6px;background:var(--panel-2);border-radius:var(--r-pill);overflow:hidden;border:none}
+  .brow-name{font-weight:600;font-size:15.5px;display:flex;align-items:center;gap:6px;
+    min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;letter-spacing:-.01em}
+  /* the sub-line was 10.5px mono, which turns "12G · 7-4-1" into a log entry.
+     Body face, one step up, tabular figures so the columns still line up. */
+  .brow-sub{font-family:var(--font-body);font-size:11.5px;color:var(--muted);margin-top:3px;
+    display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+  .brow-bar{height:4px;background:var(--surface-sunken);border-radius:var(--r-pill);overflow:hidden;border:none}
   .brow-fill{display:block;height:100%;border-radius:var(--r-pill);animation:barwipe .8s cubic-bezier(.16,1,.3,1) both}
   @keyframes barwipe{from{width:0!important}}
-  .brow-rating{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
-  .brow-num{font-family:var(--font-mono);font-weight:600;font-size:22px;color:var(--ink);border-bottom:none}
-  .brow.g1 .brow-num{color:var(--gold)}
-  .brow-peak{font-family:var(--font-mono);font-size:9px;color:var(--dim)}
+  .brow-rating{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+  .brow-num{font-family:var(--font-mono);font-weight:600;font-size:21px;color:var(--ink);
+    border-bottom:none;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .brow.g1 .brow-num{color:var(--ink)}
+  .brow-peak{font-family:var(--font-body);font-size:10px;color:var(--dim);letter-spacing:.02em}
 
   @media(max-width:560px){
     .podium{gap:8px;padding:20px 12px 18px}
@@ -3410,7 +3644,7 @@
     .pod-name{font-size:13px} .pod-1 .pod-name{font-size:15px}
     .bcast-title{font-size:10px;letter-spacing:1.5px}
     .bcast-meta{display:none}
-    .brow{grid-template-columns:26px 34px 1fr auto;gap:9px;padding:11px 12px}
+    .brow{grid-template-columns:26px 34px 1fr auto;gap:11px;padding:12px 14px}
     .brow-bar{display:none}
     .brow-num{font-size:19px}
   }
@@ -3541,7 +3775,8 @@
   }
 
   .setup{
-    background:var(--accent-dim);border:1.5px solid var(--accent);border-radius:var(--r-sm);
+    background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:var(--r-sm);
     padding:20px;margin-top:30px;font-size:14px;line-height:1.7;
   }
   .setup code{background:var(--bg);color:var(--accent);padding:2px 6px;border-radius:6px;font-family:var(--font-mono);font-size:12px}
@@ -4601,14 +4836,17 @@
      columns always mean the same weekday.
 
      Two lights carry the whole read of the board:
-       blue   a day with a 1v1 — the group games and any decider
-       white  a day with a bracket game — semis, third place, the final
+       blue    a day with a 1v1 — the group games and any decider
+       purple  a day with a bracket game — semis, third place, the final
      A day with both gets both, stacked. The colours are fixed here
      rather than taken from the palette: they are a legend, and they have
-     to mean the same thing under every skin and weather theme. */
+     to mean the same thing under every skin and weather theme. The bracket
+     light was white, which was a legend entry that disappeared the moment
+     the page became one — purple is the site's own second colour and reads
+     on paper and on a dark skin alike. */
   .rp-cal{
-    --rp-1v1:#3fb0ff;  --rp-1v1-glow:rgba(63,176,255,.55);
-    --rp-brk:#ffffff;  --rp-brk-glow:rgba(255,255,255,.42);
+    --rp-1v1:#1F6E8C;  --rp-1v1-glow:rgba(31,110,140,.5);
+    --rp-brk:#52247F;  --rp-brk-glow:rgba(82,36,127,.42);
     margin-top:12px;
   }
   .rp-cal-mhead{font-family:var(--font-mono);font-size:10px;letter-spacing:1.6px;
@@ -4713,8 +4951,12 @@
   .rp-kind-tag{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1px;
     text-transform:uppercase;padding:3px 7px;border-radius:6px;white-space:nowrap;
     border:1px solid transparent}
-  .rp-kind-tag.g{color:#3fb0ff;background:rgba(63,176,255,.12);border-color:rgba(63,176,255,.35)}
-  .rp-kind-tag.b{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
+  /* fallbacks: the two --rp-* tokens live on .rp-cal, and this badge is also
+     rendered outside the calendar, where they would not resolve */
+  .rp-kind-tag.g{color:var(--rp-1v1,#1F6E8C);background:color-mix(in srgb,var(--rp-1v1,#1F6E8C) 12%, transparent);
+    border-color:color-mix(in srgb,var(--rp-1v1,#1F6E8C) 38%, transparent)}
+  .rp-kind-tag.b{color:var(--rp-brk,#52247F);background:color-mix(in srgb,var(--rp-brk,#52247F) 12%, transparent);
+    border-color:color-mix(in srgb,var(--rp-brk,#52247F) 38%, transparent)}
 
   .rp-cal-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-sm);
     border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:8px}
@@ -4982,7 +5224,7 @@
   .cupmark-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .cup-final{
     font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:1px;
-    text-transform:uppercase;color:#04140e;background:var(--accent);
+    text-transform:uppercase;color:var(--on-accent);background:var(--accent);
     border-radius:var(--r-pill);padding:3px 11px;
   }
   .cupmark-status{
@@ -5082,7 +5324,7 @@
     margin-left:auto;flex:0 0 auto;
     display:inline-flex;align-items:center;gap:7px;
     padding:11px 20px;border:1px solid transparent;border-radius:var(--r-pill);
-    background:var(--accent);color:#04140e;
+    background:var(--accent);color:var(--on-accent);
     font-family:var(--font-body);font-size:14.5px;font-weight:600;
     cursor:pointer;transition:.2s cubic-bezier(.16,1,.3,1);
   }
@@ -6886,13 +7128,34 @@
      The champion's medal used to turn on a 4.5s loop, forever, on every
      view that draws a podium: a permanently promoted layer spinning in 3D
      for a 28px emoji nobody was looking at. It now turns when you look at
-     it, which is both cheaper and more like a trophy. */
+     it, which is both cheaper and more like a trophy.
+
+     The base stylesheet has since dropped the spin and the plinth sheen
+     outright — off-skin a trophy holds still and a plinth is a solid block
+     — so the two keyframes those rules used moved down here, next to the
+     only rules left that play them. They are the skin's own dressing now,
+     and the skin still works exactly as it did when it is switched back on. */
+  @keyframes trophySpin{0%{transform:perspective(320px) rotateY(0deg)}100%{transform:perspective(320px) rotateY(360deg)}}
+  /* the sheen travels on a transform, which the compositor owns: 422% is the
+     journey measured in the sheen's own width (45% of the plinth) rather than
+     the plinth's — -60% to 130% is 190 points of plinth, and 190/45 ≈ 4.22.
+     The skew is carried through both keyframes so the streak keeps its rake. */
+  @keyframes pod-sheen{
+    0%{transform:skewX(-20deg) translate3d(0,0,0)}
+    35%,100%{transform:skewX(-20deg) translate3d(422%,0,0)}
+  }
   :root[data-skin="ffcup"] .pod-1 .pod-medal{animation:none}
   :root[data-skin="ffcup"] .pod-1:hover .pod-medal{
     animation:trophySpin 2.2s cubic-bezier(.3,0,.3,1) 1;
   }
-  /* the plinth's sheen swept on a 3.2s loop for the same reason — same fix */
-  :root[data-skin="ffcup"] .pod-base::after{animation:none}
+  /* the plinth's sheen swept on a 3.2s loop for the same reason — same fix.
+     Off-skin ::after is now a 1px lit lip along the top, so the skin restores
+     the raking streak geometry here before asking it to sweep. */
+  :root[data-skin="ffcup"] .pod-base::after{
+    top:0;bottom:0;left:-60%;right:auto;width:45%;height:auto;
+    background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.75) 50%,transparent 100%);
+    transform:skewX(-20deg);animation:none;
+  }
   :root[data-skin="ffcup"] .pod:hover .pod-base::after{animation:pod-sheen 1.6s ease-out 1}
   /* and the avatar picks up a ball's rim light as you come to it */
   :root[data-skin="ffcup"] .pod-av .avi{transition:box-shadow .3s ease}
@@ -14399,24 +14662,24 @@ async function acRenderCut(){
       const nw=Math.max(g.measureText(nameA).width, g.measureText(nameB).width);
       const boxW=nw+padX*3+86*s, boxH=lh*2+padY*2;
       const x0=18*s, y0=H-boxH-18*s;
-      g.globalAlpha=0.82; g.fillStyle='#0a0814';
+      g.globalAlpha=0.86; g.fillStyle='#04231A';
       g.fillRect(x0,y0,boxW,boxH);
       g.globalAlpha=1;
-      g.strokeStyle='rgba(255,45,120,.85)'; g.lineWidth=Math.max(2,2.5*s);
+      g.strokeStyle='rgba(200,169,81,.85)'; g.lineWidth=Math.max(2,2.5*s);
       g.strokeRect(x0,y0,boxW,boxH);
       const line=(i,name,sets,games,pt,serving)=>{
         const y=y0+padY+lh*i+lh*0.72;
         if(serving){
-          g.fillStyle='#ffe600';
+          g.fillStyle='#DCE651';
           g.beginPath(); g.arc(x0+padX*0.55, y-5*s, 3.4*s, 0, 7); g.fill();
         }
-        g.fillStyle='#e8e6f0'; g.font=bugFont(700,17);
+        g.fillStyle='#F4F0E4'; g.font=bugFont(700,17);
         g.fillText(name, x0+padX, y);
-        g.fillStyle='#8a8296'; g.font=bugFont(500,16);
+        g.fillStyle='#B7C9B9'; g.font=bugFont(500,16);
         g.fillText(String(sets), x0+boxW-70*s, y);
-        g.fillStyle='#4be3ff';
+        g.fillStyle='#C8A951';
         g.fillText(String(games), x0+boxW-46*s, y);
-        g.fillStyle='#ff2d78'; g.font=bugFont(700,16);
+        g.fillStyle='#B79BE0'; g.font=bugFont(700,16);
         g.fillText(String(pt), x0+boxW-24*s, y);
       };
       const ptA = row.pts ? row.pts[0] : (row.tiebreak?'TB':String(row.point));
@@ -14424,7 +14687,7 @@ async function acRenderCut(){
       line(0,nameA,row.setsA,row.gamesA,ptA,row.server==='a');
       line(1,nameB,row.setsB,row.gamesB,row.pts?ptB:'',row.server==='b');
       if(!row.pts && !row.tiebreak){
-        g.fillStyle='#5a5468'; g.font=bugFont(400,11);
+        g.fillStyle='#8CA795'; g.font=bugFont(400,11);
         g.fillText('point '+row.point+' of '+row.points, x0+padX, y0+boxH-4*s);
       }
     };
@@ -16172,34 +16435,39 @@ function downloadMatchCard(matchId){
   const W=1000,H=560;
   const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
-  const bg=ctx.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,'#1a1030'); bg.addColorStop(1,'#0a0814');
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='#ff2d78'; ctx.lineWidth=3; ctx.strokeRect(12,12,W-24,H-24);
-  ctx.strokeStyle='rgba(78,227,255,.5)'; ctx.lineWidth=1; ctx.strokeRect(20,20,W-40,H-40);
+  /* The card is the only thing here that leaves the site — it gets saved and
+     posted somewhere the rest of the design never reaches — so it is dressed
+     as the printed result slip the site now is: white stock, a green band
+     across the head carrying the wordmark in letterspaced serif caps, a thin
+     gold rule under it, and gold reserved for the player who actually won. */
+  ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#0B3B26'; ctx.lineWidth=2; ctx.strokeRect(14,14,W-28,H-28);
+  ctx.fillStyle='#0B3B26'; ctx.fillRect(15,15,W-30,96);
+  ctx.fillStyle='#D4AF37'; ctx.fillRect(15,111,W-30,3);
   ctx.textAlign='center';
-  ctx.fillStyle='#8a8296'; ctx.font='600 20px monospace';
-  ctx.fillText('FGTA CHAMPIONSHIP LADDER', W/2, 74);
-  ctx.fillStyle='#4be3ff'; ctx.font='300 15px monospace';
-  ctx.fillText(new Date(m.created_at).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}), W/2, 100);
+  const serif="'Playfair Display',Georgia,'Times New Roman',serif";
+  ctx.fillStyle='#F5F2E9'; ctx.font='600 26px '+serif;
+  ctx.fillText('T H E   F G T A   C H A M P I O N S H I P S', W/2, 72);
+  ctx.fillStyle='rgba(245,242,233,.7)'; ctx.font='400 13px monospace';
+  ctx.fillText(new Date(m.created_at).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}).toUpperCase(), W/2, 96);
   const o=Number(m.outcome);
   const winner = o===0.5?null:(o===1?m.p1:m.p2);
-  ctx.font='800 52px -apple-system,sans-serif';
-  ctx.fillStyle = winner===m.p1 ? '#ffcc00' : '#e8e6f0';
-  ctx.fillText(m.p1, W/2-190, 240);
-  ctx.fillStyle='#5a5468'; ctx.font='300 26px sans-serif'; ctx.fillText('vs', W/2, 232);
-  ctx.font='800 52px -apple-system,sans-serif';
-  ctx.fillStyle = winner===m.p2 ? '#ffcc00' : '#e8e6f0';
-  ctx.fillText(m.p2, W/2+190, 240);
+  ctx.font='600 50px '+serif;
+  ctx.fillStyle = winner===m.p1 ? '#8A6A1E' : '#10261A';
+  ctx.fillText(m.p1, W/2-190, 250);
+  ctx.fillStyle='#61776A'; ctx.font='400 24px '+serif; ctx.fillText('v', W/2, 242);
+  ctx.font='600 50px '+serif;
+  ctx.fillStyle = winner===m.p2 ? '#8A6A1E' : '#10261A';
+  ctx.fillText(m.p2, W/2+190, 250);
   if(m.sets){
-    ctx.fillStyle='#ff2d78'; ctx.font='700 38px monospace';
-    ctx.fillText(m.sets, W/2, 330);
+    ctx.fillStyle='#10261A'; ctx.font='500 38px monospace';
+    ctx.fillText(m.sets, W/2, 340);
   }
-  ctx.font='700 24px monospace';
-  if(winner){ ctx.fillStyle='#ffcc00'; ctx.fillText('🏆  '+winner.toUpperCase()+' WINS', W/2, 400); }
-  else { ctx.fillStyle='#8a8296'; ctx.fillText('DRAW', W/2, 400); }
-  ctx.fillStyle='#4a4458'; ctx.font='400 13px monospace';
-  ctx.fillText('generated from the FGTA ladder', W/2, H-32);
+  ctx.font='600 20px monospace';
+  if(winner){ ctx.fillStyle='#00623C'; ctx.fillText(winner.toUpperCase()+'  \u2014  CHAMPION OF THE MATCH', W/2, 408); }
+  else { ctx.fillStyle='#41564A'; ctx.fillText('MATCH DRAWN', W/2, 408); }
+  ctx.fillStyle='#61776A'; ctx.font='400 12px monospace';
+  ctx.fillText('THE FGTA LADDER', W/2, H-34);
   canvas.toBlob(blob=>{
     if(!blob) return toast("Couldn't generate the image",true);
     const url=URL.createObjectURL(blob);
@@ -20115,24 +20383,79 @@ function renderAllMatches(){
     if(month!==lastMonth){ html += `<div class="month-sep">${month}</div>`; lastMonth = month; }
     const cCount = comments.filter(c=>c.match_id===m.id).length;
     const tourn = m.tournament_id ? tournaments.find(t=>t.id===m.tournament_id) : null;
-    const tournBadge = tourn ? ` <span class="sets-tag" style="color:var(--gold)">🏆 ${esc(tourn.name)}</span>` : '';
     const pin = pinnedComment(m.id);
     const preview = pin ? `<div class="match-preview" onclick="openMatch(${m.id})">
         <span class="mp-pin">📌</span>
         <span class="mp-author">${esc(pin.author)}</span>
         <span class="mp-body">${esc(pin.body)}</span>
       </div>` : '';
-    html += `<div class="match-wrap">
-      <div class="pend clickable" onclick="openMatch(${m.id})"><div>
-        <div class="pend-info">${result(m)}${tournBadge}${m.sets?' <span class="sets-tag">sets</span>':''}${cCount?` <span class="c-badge">💬 ${cCount}</span>`:''}</div>
-        <div class="pend-meta">${when(m.created_at)}${m.sets?' · '+esc(m.sets):''}</div></div>
-        ${isAdmin?`<div class="pend-actions"><button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button></div>${refileSelectHTML(m)}`:''}
-      </div>${preview}
-    </div>`;
+    html += `<div class="match-wrap">${scorecard(m, {tourn, cCount, preview})}</div>`;
   }
   listEl.innerHTML = html;
 }
 window.renderAllMatches = renderAllMatches;
+
+/* ---------- the scorecard ----------
+   `m.sets` is stored p1-first as "6-4, 3-6, 7-5". Splitting it into two
+   arrays is the whole trick: the archive used to print that string verbatim
+   in a meta line, which is readable only if you already know which name goes
+   with which number. In columns, the winner's row reads across.
+
+   Every branch has to survive a game with no set scores recorded (a good
+   third of the ladder's history), so scores fall back to an em dash per
+   side rather than collapsing the row. A draw picks out neither side. */
+function matchSetColumns(m){
+  if(!m.sets) return {a:["—"], b:["—"], n:1};
+  const pairs = String(m.sets).split(",").map(x=>x.trim()).filter(Boolean)
+    .map(x=>x.split("-").map(v=>v.trim()));
+  if(!pairs.length) return {a:["—"], b:["—"], n:1};
+  return {
+    a: pairs.map(pr => pr[0] || "—"),
+    b: pairs.map(pr => pr[1] || "—"),
+    n: pairs.length
+  };
+}
+
+function scorecard(m, opts){
+  opts = opts || {};
+  const tourn   = opts.tourn || null;
+  const cCount  = opts.cCount || 0;
+  const preview = opts.preview || "";
+  const o = Number(m.outcome);
+  const drawn = o === 0.5;
+  const cols = matchSetColumns(m);
+  const stage = drawn ? "Drawn"
+    : (m.round ? roundLabel(m.round).replace(/^(the|a) /, "") : "Result");
+  const event = tourn ? `<b>${esc(tourn.name)}</b>` : "The Ladder";
+  const where = m.vibe ? esc(m.vibe) : "Singles";
+  const meta  = when(m.created_at) + (cols.n > 1 ? ` · ${cols.n} sets` : "");
+  const side = (name, scores, won) => `
+      <div class="msc-side${won ? " win" : ""}">
+        <span class="msc-name">${esc(name)}</span>
+        <span class="msc-scores">${scores.map(v=>`<i>${esc(String(v))}</i>`).join("")}</span>
+        ${won ? '<span class="msc-tick" aria-label="winner">&#10003;</span>' : '<span></span>'}
+      </div>`;
+  return `<div class="msc" onclick="openMatch(${m.id})">
+      <div class="msc-head">
+        <div class="msc-event">${event}</div>
+        <div class="msc-stage">${esc(stage).replace(/^./, c=>c.toUpperCase())}</div>
+        <div class="msc-where">${where}</div>
+        <div class="msc-when">${meta}</div>
+      </div>
+      ${side(m.p1, cols.a, o === 1)}
+      ${side(m.p2, cols.b, o === 0)}
+      ${preview}
+      <div class="msc-foot">
+        <span class="msc-tags">
+          ${m.sets ? '' : '<span class="sets-tag">no set scores</span>'}
+          ${cCount ? `<span class="c-badge">&#128172; ${cCount}</span>` : ''}
+          ${isAdmin ? `<button class="mini no" onclick="event.stopPropagation();setStatus(${m.id},'rejected')">Undo</button>${refileSelectHTML(m)}` : ''}
+        </span>
+        <span class="msc-link">View match &#8594;</span>
+      </div>
+    </div>`;
+}
+window.scorecard = scorecard;
 
 function jumpMissingSets(){
   const s=$("mfSets"); if(!s) return;
@@ -20537,9 +20860,21 @@ function pinnedComment(matchId){
    The cup ramp walks the skin's own magenta→amber collision in eight steps,
    ordered bright/dark/bright so neighbouring chart series stay tellable apart
    without any of them landing on the cool side of the wheel. */
+/* The categorical series. These are not decoration: the same eight colours
+   identify a player in the rating chart, in their avatar's initials, in the
+   bar behind their name on the ladder and in an @mention, so one of them
+   being weak is one player being hard to find everywhere at once.
+
+   The off-skin set used to be pastels — #4ade80, #f5c451, #5ce0c0 — pitched
+   at a near-black page, where a light tint is the only thing that reads. On
+   white they run 1.8-2.6:1 and an avatar's initials disappear inside their
+   own disc. This set is the same eight hues taken down to printing weight:
+   every one clears 5:1 on white and 4.4:1 on a hovered row, and they stay
+   apart from each other in hue rather than in lightness, so a colour-blind
+   reader loses no more of them than before. The cup skin keeps its own. */
 const CHART_COLORS = document.documentElement.dataset.skin === "ffcup"
   ? ["#ff2d8f","#ff8a2b","#ffc247","#e0166f","#ff9ec9","#ff5a1f","#ffe6a8","#b30e62"]
-  : ["#4ade80","#f5c451","#6ab7ff","#f0665a","#c58bf5","#5ce0c0","#ff9d5c","#e86ab0"];
+  : ["#2A6E4F","#B3541E","#1F5FA8","#A32A5A","#6B4FA8","#0E7070","#8A6A1E","#A03A2F"];
 let isolated = null; // name of isolated player, or null for all
 
 function drawChart(standings){
@@ -25644,7 +25979,7 @@ function renderCalendar(){
   const firstDow=(new Date(y,m,1).getDay()+6)%7; // Mon=0
   const daysInMonth=new Date(y,m+1,0).getDate();
   const today=dayKey(new Date());
-  const dotColor={casual:"var(--court, #1ec9dd)",match:"var(--accent)",event:"var(--gold)",scheduled:"#fff"};
+  const dotColor={casual:"var(--court, #7FC49B)",match:"var(--accent)",event:"var(--gold)",scheduled:"var(--ink, #F4F0E4)"};
   let cells=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:10px;color:var(--dim);text-align:center;margin-bottom:4px">${["M","T","W","T","F","S","S"].map(d=>`<div>${d}</div>`).join('')}</div>`;
   cells+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
   for(let i=0;i<firstDow;i++) cells+=`<div></div>`;
@@ -28035,20 +28370,32 @@ function renderNews(){
   };
 }
 
-/* ---------- surface theme ---------- */
+/* ---------- surface theme ----------
+   These write --accent/--accent-dim/--bg as inline styles on <body>, which
+   outranks every rule in the stylesheet — so whatever sits here IS the site's
+   accent colour for anyone who has ever touched the button, and the :root
+   tokens are only the first-visit default. That is why the pink survived
+   three re-skins: it was hiding in this object.
+
+   All three are the championship palette at three court temperatures now,
+   not three different brands. Grass is the default and matches :root exactly,
+   so the toggle starts where the design starts; clay warms the ground and
+   pulls the accent toward terracotta; hard cools both toward the night
+   sessions. Nothing here escapes the green.
+   ------------------------------------ */
 const SURFACES = {
-  hard:  {name:"Hard",  accent:"#ff2d78", dim:"#3a1230", tint:"#151125"},
-  clay:  {name:"Clay",  accent:"#ff7a1f", dim:"#3a2110", tint:"#1e1420"},
-  grass: {name:"Grass", accent:"#3fe066", dim:"#0f3a20", tint:"#0f1b22"}
+  grass: {name:"Grass", accent:"#B79BE0", dim:"#231E36", tint:"#07281B"},
+  clay:  {name:"Clay",  accent:"#D9A277", dim:"#3A2317", tint:"#1E2417"},
+  hard:  {name:"Hard",  accent:"#8FB6DE", dim:"#1B2C3D", tint:"#08242A"}
 };
-function currentSurface(){ try{ return localStorage.getItem("fgta_surface")||"hard"; }catch(e){ return "hard"; } }
+function currentSurface(){ try{ return localStorage.getItem("fgta_surface")||"grass"; }catch(e){ return "grass"; } }
 function applySurface(key){
-  const s=SURFACES[key]||SURFACES.hard;
+  const s=SURFACES[key]||SURFACES.grass;
   const r=document.body;
   /* During the FF Cup the skin owns the palette. This function writes
      --accent/--accent-dim/--bg as INLINE styles on <body>, and an inline
      custom property outranks every stylesheet rule — which is exactly how
-     the default "hard court" pink got back into the LIVE badge, the
+     the old default "hard court" pink got back into the LIVE badge, the
      "copy for chat" link and the Elo pool line while everything painted
      from the skin's own literals stayed green. The preference is still
      stored and the button still reads correctly; it just doesn't paint. */
@@ -31926,11 +32273,27 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
     }
   }
 
+  /* Rain, snow and cloud used to be drawn in hardcoded near-whites, which
+     was correct while the page was near-black and is nothing at all now
+     that it is white. The canvas reads --wx-ink instead — an "r,g,b" triple
+     so the alphas below still compose — and every weather theme sets its
+     own, so the particles are always the paper's own shadow rather than a
+     fixed colour that happens to work on one background. */
+  let WX_INK = "90,114,104";
+  function readWxInk(){
+    /* read off <body>, not <html>: the weather themes are body[data-heat]
+       / body[data-wx] rules, so the value only exists once the attribute is
+       on. Called from the same place that sets the attribute, so it is one
+       getComputedStyle per weather change rather than one per frame. */
+    const v = getComputedStyle(document.body).getPropertyValue("--wx-ink").trim();
+    if(v) WX_INK = v;
+  }
+
   let t=0, lastFlash=-999;
   function draw(){
     ctx.clearRect(0,0,W,H);
     if(mode==="rain" || mode==="storm"){
-      ctx.strokeStyle="rgba(180,220,255,1)"; ctx.lineCap="round";
+      ctx.strokeStyle=`rgba(${WX_INK},1)`; ctx.lineCap="round";
       particles.forEach(p=>{
         ctx.globalAlpha=p.o; ctx.lineWidth=1*DPR;
         ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x-p.drift,p.y+p.len); ctx.stroke();
@@ -31942,11 +32305,11 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
         t++;
         if(t-lastFlash>90 && Math.random()<0.006){
           lastFlash=t;
-          ctx.fillStyle="rgba(255,255,255,.045)"; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle=`rgba(${WX_INK},.05)`; ctx.fillRect(0,0,W,H);
         }
       }
     } else if(mode==="snow"){
-      ctx.fillStyle="rgba(255,255,255,1)";
+      ctx.fillStyle=`rgba(${WX_INK},1)`;
       particles.forEach(p=>{
         ctx.globalAlpha=p.o;
         ctx.beginPath(); ctx.arc(p.x+Math.sin(p.phase)*8*DPR, p.y, p.r, 0, Math.PI*2); ctx.fill();
@@ -31957,8 +32320,8 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
     } else if(mode==="cloudy" || mode==="fog"){
       particles.forEach(p=>{
         const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.rx);
-        g.addColorStop(0,`rgba(200,220,235,${p.o})`);
-        g.addColorStop(1,"rgba(200,220,235,0)");
+        g.addColorStop(0,`rgba(${WX_INK},${p.o})`);
+        g.addColorStop(1,`rgba(${WX_INK},0)`);
         ctx.fillStyle=g;
         ctx.beginPath(); ctx.ellipse(p.x,p.y,p.rx,p.ry,0,0,Math.PI*2); ctx.fill();
         p.x+=p.speed;
@@ -31988,6 +32351,7 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabIndi
     document.body.setAttribute("data-wx", mode);
     const heat = wx.temp>=25 ? "hot" : wx.temp<18 ? "cold" : "mild";
     document.body.setAttribute("data-heat", heat);
+    readWxInk();
     // decorative canvas skipped on mobile (battery/GPU) and whenever the
     // active skin has hidden it — the attributes above are the part that matters
     if(!WXFX_IS_MOBILE && !WXFX_HIDDEN){ makeParticles(mode); requestAnimationFrame(draw); }
@@ -34244,7 +34608,7 @@ const SITE = (function(){
   function blank(){
     return {
       v: 1,
-      theme:    {},   // "--accent" -> "#ff2d78"
+      theme:    {},   // "--accent" -> "#B79BE0"
       type:     {},   // bodyFont / monoFont / displayFont / scale / tracking / lineHeight / weight
       text:     {},   // selector -> replacement copy
       hidden:   {},   // selector -> true
@@ -34266,11 +34630,12 @@ const SITE = (function(){
      a bare list of 30 custom properties is not an editor, it is a hazard. */
   const TOKENS = [
     ["Brand", [
-      ["--accent",        "Accent",            "color", "The hot pink. Buttons, links, the underline on a rating, focus rings."],
+      ["--accent",        "Accent",            "color", "The championship purple. Buttons, links, the underline on a rating, focus rings."],
       ["--accent-dim",    "Accent, dimmed",    "color", "Backing for accent-coloured chips and quiet fills."],
-      ["--accent-glow",   "Accent glow",       "text",  "The halo around focused and live elements. Takes alpha, e.g. rgba(255,45,120,.4)."],
-      ["--accent-pop",    "Pop accent",        "color", "The loudest colour available — primary CTAs, LIVE badges, pings."],
-      ["--accent-split-a","Support: indigo",   "color", "Tags, chart series, hover states."],
+      ["--accent-glow",   "Accent glow",       "text",  "The halo around focused and live elements. Takes alpha, e.g. rgba(183,155,224,.34)."],
+      ["--on-accent",     "On accent",         "color", "Type and icons sitting ON a filled accent, gold or court surface. Move it with the accent or a button goes unreadable."],
+      ["--accent-pop",    "Pop accent",        "color", "The loudest colour available — primary CTAs, LIVE badges, pings. Trophy gold."],
+      ["--accent-split-a","Support: champagne","color", "Tags, chart series, hover states."],
       ["--accent-split-b","Support: azure",    "color", "Reads as 'interactive, not brand'. Secondary chart series."]
     ]],
     ["Surfaces", [
@@ -34278,7 +34643,8 @@ const SITE = (function(){
       ["--panel",         "Panel",             "color", "Cards, modals, the menu. One step up from the page."],
       ["--panel-2",       "Panel, raised",     "color", "Insets and hovered rows — one step up again."],
       ["--surface-sunken","Sunken",            "color", "Progress tracks and wells: things cut INTO the page."],
-      ["--line",          "Hairline",          "text",  "Borders. Usually a white at low alpha."],
+      ["--chrome",        "Chrome",            "color", "The fixed top bar, bottom bar and ticker. Set the theme-color meta to match."],
+      ["--line",          "Hairline",          "text",  "Borders. Usually an ivory at low alpha."],
       ["--line-soft",     "Hairline, soft",    "text",  "The quieter divider."]
     ]],
     ["Text", [
@@ -34289,7 +34655,7 @@ const SITE = (function(){
     ["Sport & status", [
       ["--ball",          "Ball",              "color", "Tennis-ball yellow-green. Court lines, ball particles."],
       ["--ball-glow",     "Ball glow",         "text",  "Halo behind ball accents. Takes alpha."],
-      ["--court",         "Court",             "color", "Court cyan."],
+      ["--court",         "Court",             "color", "Grass green. Casual sessions and court markers."],
       ["--court-dim",     "Court, dimmed",     "color", "Court fills behind type."],
       ["--gold",          "Gold",              "color", "1st place, peak ratings, trophies."],
       ["--silver",        "Silver",            "color", "2nd place."],
@@ -34301,7 +34667,7 @@ const SITE = (function(){
     ["Depth & light", [
       ["--highlight-rim",     "Rim light",      "color", "The near-white on a lit top edge."],
       ["--highlight-ambient", "Ambient light",  "color", "The same light gone soft, for gradient washes."],
-      ["--shadow-tinted",     "Shadow tint",    "color", "Cast shadows. Plum-tinted so they sink into the page."],
+      ["--shadow-tinted",     "Shadow tint",    "color", "Cast shadows. Green-tinted so they sink into the page."],
       ["--surface-bevel-light","Bevel, lit",    "color", "Top/left edge of a bevelled card."],
       ["--surface-bevel-shadow","Bevel, shaded","color", "Bottom/right edge."],
       ["--glow-mesh",         "Backdrop glow",  "color", "The diffuse bloom behind focal points."],
@@ -34318,7 +34684,7 @@ const SITE = (function(){
   /* fonts offered without a network fetch, plus the Google families the
      studio will load a stylesheet for on demand */
   const SYSTEM_STACKS = {
-    "System (default)": "-apple-system,BlinkMacSystemFont,'Segoe UI','Outfit',sans-serif",
+    "System (default)": "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",
     "System serif":     "ui-serif,Georgia,Cambria,'Times New Roman',serif",
     "System mono":      "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
     "Rounded":          "ui-rounded,'SF Pro Rounded','Segoe UI',system-ui,sans-serif"
@@ -34390,12 +34756,45 @@ const SITE = (function(){
      accent without moving the surfaces under it is how a site ends up with
      an unreadable button. Each one is a starting point the admin then edits. */
   const PRESETS = {
-    "Neon grape (default)": {},
+    "The Championships (default)": {},
+    /* The palette this site wore before the championship one: near-black
+       grape with a hot-pink accent. It is not deleted, it is demoted — the
+       old look is one click away in the same list as the others, which is
+       what a preset list is for. */
+    "Neon grape": {
+      "--bg":"#151125","--panel":"#211c38","--panel-2":"#2c2650",
+      "--line":"rgba(255,255,255,.16)","--line-soft":"rgba(255,255,255,.08)",
+      "--ink":"#f2eefc","--muted":"#a29cc4","--dim":"#6e6795",
+      "--accent":"#ff2d78","--accent-dim":"#3a1230","--accent-glow":"rgba(255,45,120,.4)",
+      "--accent-pop":"#2ff2b3","--accent-split-a":"#9b82ff","--accent-split-b":"#3fb0ff",
+      "--ball":"#d4ff2b","--court":"#1ec9dd","--gold":"#ffcc00",
+      "--surface-sunken":"#0f0a1e","--highlight-rim":"#ffd9ec","--highlight-ambient":"#ffa8d2",
+      "--surface-bevel-light":"#6d64a8","--surface-bevel-shadow":"#160f2c",
+      "--glow-mesh":"#a259ff","--shadow-tinted":"#0a0414"
+    },
+    /* The championship palette with the ground taken out from under it: the
+       same green, purple and gold on cream, for anyone reading a long table
+       in daylight. */
+    "Championship whites": {
+      "--bg":"#F3F1E9","--panel":"#FFFFFF","--panel-2":"#E9E7DC",
+      "--line":"rgba(10,36,24,.16)","--line-soft":"rgba(10,36,24,.08)",
+      "--ink":"#0A2418","--muted":"#4A5F53","--dim":"#77877D",
+      "--accent":"#5A2D82","--accent-dim":"#EDE4F5","--accent-glow":"rgba(90,45,130,.24)",
+      "--on-accent":"#FFFFFF","--chrome":"#0A2418",
+      "--accent-pop":"#8A6A1E","--accent-split-a":"#7A6320","--accent-split-b":"#1F6E8C",
+      "--ball":"#6E7A12","--court":"#1C6B45","--gold":"#8A6A1E","--silver":"#6B6F68","--bronze":"#8A5524",
+      "--win":"#186B41","--danger":"#B23A2E","--pending":"#8A6A1E",
+      "--surface-sunken":"#E2E0D6","--highlight-rim":"#FFFFFF","--highlight-ambient":"#D8C9EC",
+      "--surface-bevel-light":"#FFFFFF","--surface-bevel-shadow":"#C9C6BB",
+      "--glow-mesh":"#9B7FC7","--shadow-tinted":"#B4B1A7",
+      "--shadow":"0 16px 38px -28px rgba(10,36,24,.4)"
+    },
     "Court clay": {
       "--bg":"#1a1210","--panel":"#251a17","--panel-2":"#33241f",
       "--ink":"#f6efe9","--muted":"#c0a99c","--dim":"#8a7568",
       "--accent":"#ff7a3d","--accent-dim":"#3d1f0f","--accent-glow":"rgba(255,122,61,.4)",
       "--accent-pop":"#ffd166","--accent-split-a":"#e0a05a","--accent-split-b":"#5fb0a0",
+      "--on-accent":"#1A0E06",
       "--ball":"#e8ff4a","--court":"#c96a3f","--surface-sunken":"#120c0a",
       "--glow-mesh":"#ff9d5c","--shadow-tinted":"#0d0705"
     },
@@ -34403,6 +34802,7 @@ const SITE = (function(){
       "--bg":"#0d160f","--panel":"#15231a","--panel-2":"#1e3325",
       "--ink":"#eef7f0","--muted":"#9dbba7","--dim":"#688073",
       "--accent":"#4ade80","--accent-dim":"#0f2e1c","--accent-glow":"rgba(74,222,128,.4)",
+      "--on-accent":"#06170D",
       "--accent-pop":"#f0ff7a","--accent-split-a":"#7dd3fc","--accent-split-b":"#a3e635",
       "--ball":"#d9ff3d","--court":"#2f8f5b","--surface-sunken":"#080f0a",
       "--glow-mesh":"#5ce68a","--shadow-tinted":"#040a06"
@@ -34412,6 +34812,7 @@ const SITE = (function(){
       "--ink":"#eaf1ff","--muted":"#95a8c8","--dim":"#5f7091",
       "--accent":"#3fb0ff","--accent-dim":"#0d2438","--accent-glow":"rgba(63,176,255,.4)",
       "--accent-pop":"#2ff2b3","--accent-split-a":"#9b82ff","--accent-split-b":"#5eead4",
+      "--on-accent":"#04101F",
       "--ball":"#d4ff2b","--court":"#1e6fdd","--surface-sunken":"#060a12",
       "--glow-mesh":"#5aa9ff","--shadow-tinted":"#03060c"
     },
@@ -34420,6 +34821,7 @@ const SITE = (function(){
       "--line":"rgba(0,0,0,.14)","--line-soft":"rgba(0,0,0,.07)",
       "--ink":"#171520","--muted":"#585366","--dim":"#8b8698",
       "--accent":"#c81e5b","--accent-dim":"#fbe3ec","--accent-glow":"rgba(200,30,91,.28)",
+      "--on-accent":"#ffffff",
       "--accent-pop":"#0f7a5a","--accent-split-a":"#5b45c9","--accent-split-b":"#0b6ec4",
       "--ball":"#7a8c00","--court":"#0d7d8c","--gold":"#a87b00","--silver":"#6b6b7d","--bronze":"#9c5121",
       "--win":"#12794a","--danger":"#c0271f","--pending":"#9a6800",
@@ -34431,6 +34833,7 @@ const SITE = (function(){
       "--bg":"#101012","--panel":"#191919","--panel-2":"#232325",
       "--ink":"#f2f2f2","--muted":"#a0a0a4","--dim":"#6c6c72",
       "--accent":"#ffffff","--accent-dim":"#2a2a2c","--accent-glow":"rgba(255,255,255,.28)",
+      "--on-accent":"#101012",
       "--accent-pop":"#ffe600","--accent-split-a":"#b8b8bd","--accent-split-b":"#8e8e95",
       "--ball":"#ffe600","--court":"#4a4a50","--surface-sunken":"#0a0a0b",
       "--glow-mesh":"#7a7a82","--shadow-tinted":"#000000",
@@ -35254,7 +35657,7 @@ const SITE = (function(){
   .sp-head{ display:flex; align-items:center; gap:8px; padding:12px 14px;
     border-bottom:1px solid var(--line-soft,rgba(255,255,255,.08)) }
   .sp-title{ font-family:var(--font-mono); font-size:11px; font-weight:700;
-    text-transform:uppercase; letter-spacing:.08em; color:var(--accent,#ff2d78) }
+    text-transform:uppercase; letter-spacing:.08em; color:var(--accent,#B79BE0) }
   .sp-ver{ font-family:var(--font-mono); font-size:10px; color:var(--dim,#6e6795) }
   .sp-x{ margin-left:auto; background:none; border:0; color:var(--muted,#a29cc4);
     font-size:18px; cursor:pointer; line-height:1; padding:2px 6px }
@@ -35266,10 +35669,10 @@ const SITE = (function(){
     padding:7px 11px; border-radius:var(--r-pill,999px); border:1px solid var(--line,rgba(255,255,255,.16));
     background:transparent; color:var(--muted,#a29cc4) }
   .sp-b:hover{ color:var(--ink,#fff); border-color:var(--muted,#a29cc4) }
-  .sp-b.pri{ background:var(--accent,#ff2d78); border-color:var(--accent,#ff2d78); color:#fff }
+  .sp-b.pri{ background:var(--accent,#B79BE0); border-color:var(--accent,#B79BE0); color:#fff }
   .sp-b[disabled]{ opacity:.4; cursor:default }
   .sp-b[disabled]:hover{ color:var(--muted,#a29cc4); border-color:var(--line,rgba(255,255,255,.16)) }
-  .sp-b.on{ background:var(--accent-pop,#2ff2b3); border-color:var(--accent-pop,#2ff2b3); color:#04140e }
+  .sp-b.on{ background:var(--accent-pop,#E3B94B); border-color:var(--accent-pop,#E3B94B); color:var(--on-accent) }
   .sp-dirty{ font-family:var(--font-mono); font-size:10.5px; color:var(--pending,#ffb100); margin-left:auto }
 
   /* wraps rather than scrolls: a hidden scrollbar on a strip of nine tabs is
@@ -35279,7 +35682,7 @@ const SITE = (function(){
   .sp-tab{ background:none; border:0; border-bottom:2px solid transparent; cursor:pointer;
     padding:9px 7px; font-size:11px; font-weight:600; color:var(--dim,#6e6795); white-space:nowrap;
     flex:0 0 auto }
-  .sp-tab.on{ color:var(--ink,#fff); border-bottom-color:var(--accent,#ff2d78) }
+  .sp-tab.on{ color:var(--ink,#fff); border-bottom-color:var(--accent,#B79BE0) }
 
   .sp-body{ flex:1; overflow-y:auto; padding:14px; -webkit-overflow-scrolling:touch }
   .sp-group{ margin-bottom:18px }
@@ -35305,7 +35708,7 @@ const SITE = (function(){
     background:var(--surface-sunken,#0f0a1e); position:relative; cursor:pointer; transition:.15s }
   .sp-sw::after{ content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
     background:var(--muted,#a29cc4); transition:.15s }
-  .sp-sw.on{ background:var(--accent,#ff2d78); border-color:var(--accent,#ff2d78) }
+  .sp-sw.on{ background:var(--accent,#B79BE0); border-color:var(--accent,#B79BE0) }
   .sp-sw.on::after{ left:18px; background:#fff }
   .sp-item{ display:flex; align-items:center; gap:7px; padding:7px 9px; margin-bottom:5px;
     border:1px solid var(--line-soft,rgba(255,255,255,.08)); border-radius:8px;
@@ -35328,7 +35731,7 @@ const SITE = (function(){
   .sp-selname{ font-size:13.5px; font-weight:700; color:var(--ink,#fff); margin-bottom:7px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .sp-selacts{ display:flex; gap:6px; flex-wrap:wrap }
-  .sp-dot{ color:var(--accent,#ff2d78); font-size:15px; line-height:0 }
+  .sp-dot{ color:var(--accent,#B79BE0); font-size:15px; line-height:0 }
   .sp-b.sq{ min-width:32px; padding:7px 8px; font-size:14px }
 
   .sp-row.wrap{ flex-wrap:wrap }
@@ -35337,9 +35740,9 @@ const SITE = (function(){
     font-weight:600; background:transparent; color:var(--muted,#a29cc4);
     border:1px solid var(--line,rgba(255,255,255,.16)) }
   .sp-chip:hover{ color:var(--ink,#fff) }
-  .sp-chip.on{ background:var(--accent,#ff2d78); border-color:var(--accent,#ff2d78); color:#fff }
+  .sp-chip.on{ background:var(--accent,#B79BE0); border-color:var(--accent,#B79BE0); color:#fff }
 
-  .sp-range{ flex:1; min-width:80px; accent-color:var(--accent,#ff2d78); cursor:pointer }
+  .sp-range{ flex:1; min-width:80px; accent-color:var(--accent,#B79BE0); cursor:pointer }
   .sp-val{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important; font-size:10.5px;
     color:var(--muted,#a29cc4); min-width:44px; text-align:right; flex:0 0 auto }
 
@@ -35370,9 +35773,9 @@ const SITE = (function(){
     font-size:13px; font-weight:700; line-height:1;
     display:flex; align-items:center; justify-content:center;
   }
-  #studioBar .sb-b:hover{ background:var(--accent,#ff2d78); color:#fff }
+  #studioBar .sb-b:hover{ background:var(--accent,#B79BE0); color:#fff }
   #studioBar .sb-drag{ cursor:grab }
-  #studioBar.on-hide .sb-hide{ background:var(--accent,#ff2d78); color:#fff }
+  #studioBar.on-hide .sb-hide{ background:var(--accent,#B79BE0); color:#fff }
   #studioBar .sb-color{
     width:0; height:0; padding:0; border:0; opacity:0; position:absolute; pointer-events:none;
   }
@@ -35381,28 +35784,28 @@ const SITE = (function(){
   /* the line that says where a dragged section will land */
   #studioDrop{
     position:fixed; z-index:9460; height:3px; display:none; pointer-events:none;
-    background:var(--accent-pop,#2ff2b3); border-radius:2px;
-    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 0 14px var(--accent-pop,#2ff2b3)!important;
+    background:var(--accent-pop,#E3B94B); border-radius:2px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 0 14px var(--accent-pop,#E3B94B)!important;
   }
   html[data-fgta-drag], html[data-fgta-drag] *{ cursor:grabbing!important; user-select:none!important }
 
   /* typing straight into the page */
   .fgta-inline{
-    outline:2px solid var(--accent-pop,#2ff2b3)!important; outline-offset:2px;
-    border-radius:3px; cursor:text!important; caret-color:var(--accent-pop,#2ff2b3);
+    outline:2px solid var(--accent-pop,#E3B94B)!important; outline-offset:2px;
+    border-radius:3px; cursor:text!important; caret-color:var(--accent-pop,#E3B94B);
   }
 
   /* what edit mode looks like from the page's side */
   html[data-fgta-pick] *{ cursor:crosshair!important }
   html[data-fgta-pick] .fgta-inline, html[data-fgta-pick] .fgta-inline *{ cursor:text!important }
-  #studioHi{ position:fixed; pointer-events:none; z-index:9400; border:2px solid var(--accent-pop,#2ff2b3);
-    border-radius:4px; background:color-mix(in srgb, var(--accent-pop,#2ff2b3) 10%, transparent);
+  #studioHi{ position:fixed; pointer-events:none; z-index:9400; border:2px solid var(--accent-pop,#E3B94B);
+    border-radius:4px; background:color-mix(in srgb, var(--accent-pop,#E3B94B) 10%, transparent);
     display:none; transition:.06s }
-  #studioSel{ position:fixed; pointer-events:none; z-index:9401; border:2px dashed var(--accent,#ff2d78);
+  #studioSel{ position:fixed; pointer-events:none; z-index:9401; border:2px dashed var(--accent,#B79BE0);
     border-radius:4px; display:none }
   #studioTag{ position:fixed; z-index:9402; pointer-events:none; display:none;
     font-family:var(--font-mono); font-size:10px; padding:2px 6px; border-radius:4px;
-    background:var(--accent-pop,#2ff2b3); color:#04140e; font-weight:700; white-space:nowrap }
+    background:var(--accent-pop,#E3B94B); color:var(--on-accent); font-weight:700; white-space:nowrap }
   `;
 
   let panel = null, hi = null, selBox = null, tagEl = null;
