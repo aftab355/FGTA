@@ -113,6 +113,31 @@ function loadOutbox(){
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
 }
 
+/* The three rating models that are not Elo — Bradley–Terry, the bootstrap
+   and PageRank. The bootstrap replays seasons through the real Elo engine,
+   so the ELO-ENGINE region comes in with them rather than being stubbed:
+   a bootstrap tested against a fake Elo would be testing nothing.
+
+   The render functions in the region are declarations only, so they load
+   fine here without a DOM; the test never calls them. */
+function loadModels(opts){
+  const o = opts || {};
+  const code = region('ELO-ENGINE') + '\n' + region('MODELS');
+  const names = ['bradleyTerry','bootstrapRatings','pageRankDominance'];
+  const pre = [
+    'const K = 32;',
+    'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
+    'const START = ' + (o.start == null ? 500 : o.start) + ';',
+    'let matches = arguments[0].matches;',
+    'const countsForElo = arguments[0].countsForElo || (() => true);',
+    'const countsForAnalysis = arguments[0].countsForAnalysis || (() => true);'
+  ].join('\n');
+  return new Function(pre + '\n' + code + '\nreturn {' + names.join(',') +
+    ', setMatches:(m)=>{matches=m;}, START, get DIVISOR(){return DIVISOR;}};')(
+      {matches: o.matches || [], countsForElo: o.countsForElo,
+       countsForAnalysis: o.countsForAnalysis});
+}
+
 /* The park-busyness model. It leans on a handful of things that live outside
    its region — the competition map built from the court table, the shared
    weather read, the home court's own feed — so they come in as stubs the test
@@ -206,4 +231,4 @@ function loadEloScope(tournaments){
                       '\nreturn {' + names.join(',') + '};')(tournaments || []);
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadOutbox,APP};
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadOutbox,loadModels,APP};

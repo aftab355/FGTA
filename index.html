@@ -32081,6 +32081,22 @@ function renderProExtra(){
 /* ============================================================
    BRADLEY–TERRY — maximum-likelihood strength (MM algorithm)
    ============================================================ */
+/* ==== MODELS-START ====
+   The three rating models that are not Elo.
+
+   Elo is the ladder, so a bug in it is argued about within a
+   week. These are the ones on the Analytics tab that nobody
+   checks against anything: Bradley–Terry, the bootstrap, and
+   PageRank. All three produce a plausible-looking table from any
+   input whatsoever, which is exactly what makes them worth
+   pinning — an iteration that silently stops converging, a
+   normalisation that drifts, or a win graph wired the wrong way
+   round all still render a tidy ranked list.
+
+   test/models.test.js loads this region with `matches` and the
+   two event filters injected, and checks the properties each
+   method actually guarantees rather than the numbers it happens
+   to produce today. ==== */
 function bradleyTerry(){
   const games=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m));
   const names=[...new Set(games.flatMap(m=>[m.p1,m.p2]))];
@@ -32146,6 +32162,24 @@ function renderBradleyTerry(){
 
 /* ============================================================
    BOOTSTRAP — resample the season, recompute, get 90% bands
+
+   READ THESE BANDS AS A SPREAD, NOT AS AN ORDINARY CONFIDENCE
+   INTERVAL. The instinct with any interval is that it tightens
+   as evidence accumulates, and that instinct is wrong here, for
+   a reason worth knowing: bootstrapping a MEAN narrows because a
+   mean has a fixed point to converge on, and Elo has none. It is
+   a sequential random walk, so a longer season pushes the
+   ratings APART at least as fast as it pins each one down.
+
+   Measured, on a clean four-player pecking order from 6 games to
+   60: the mean band width goes 66 → 83 → 87 → 90 → 77 points —
+   flat, near enough. What improves monotonically is the width
+   against the spread it is describing: 0.73 → 0.49 → 0.38 → 0.24
+   → 0.15. So the band is not getting narrower; the table is
+   getting wider around it, and that is what makes the order
+   trustworthy. test/models.test.js asserts exactly that, in both
+   directions, so nobody later "fixes" the resampler to chase a
+   narrowing that was never going to come.
    ============================================================ */
 function bootstrapRatings(B){
   B=B||800;
@@ -32198,7 +32232,7 @@ function renderBootstrap(){
       </span>
       <span class="boot-nums">${r.lo}–${r.hi}<span class="boot-conf boot-${conf}">${conf}</span></span>
     </div>`;
-  }).join('')+`<div class="pw-legend">The bar is each player's likely rating range if the season were replayed; the notch is the median. Tight bands are trustworthy; wide bands mean the ranking there is basically a guess — play more games to shrink them.</div>`;
+  }).join('')+`<div class="pw-legend">The bar is each player's likely rating range if the season were replayed; the notch is the median. What matters is <b>overlap</b>: two bars that overlap heavily are a ranking the season has not actually settled, whatever order they happen to be printed in. Playing more games does <i>not</i> make a bar narrower — Elo is a random walk with no fixed point to converge on, so a longer season spreads the whole table out at least as fast as it pins any one player down. What it does is separate the bars, which is the thing that makes the order mean something.</div>`;
 }
 
 /* ============================================================
@@ -32236,6 +32270,7 @@ function pageRankDominance(){
   }
   return {names,idx,M,pr,outSum};
 }
+/* ==== MODELS-END ==== */
 
 function renderPageRank(){
   const el=$("deepPageRank"); if(!el) return;
