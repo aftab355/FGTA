@@ -79,6 +79,43 @@ another tab to carry on editing there.
 
 ---
 
+## Change one, change all like it
+
+Clicking a match card and restyling it changes **every match card**. That is
+the default, because doing the other thirty-nine by hand is data entry, not
+editing.
+
+The toolbar shows a pill with the count (`◆ 12`) and the panel says
+*"Changes apply to — all 12 like this"*, with every other member outlined on
+the page so you can see the blast radius before you touch anything. The
+dropdown offers each candidate group and **just this one**; the toolbar pill
+flips between group and single in one click.
+
+It works because a config key is already a CSS selector: a key of `.pend`
+styles every pending row through exactly the same generated rule a
+positional key uses. Nothing new runs — the studio just picks a broader
+selector.
+
+Groups are found most-specific-first: the compound class set (`.a.b.c`),
+then each class alone, then a container-scoped tag (`#topTabs>button`) for
+elements with no classes. **State classes are stripped** — `.on`, `.open`,
+`.g1` say what an element is *doing*, not what it *is*, and a rule keyed on
+one would come and go as the page updates.
+
+Two things stay per-element on purpose:
+
+- **Moving.** "Put all forty cards third" is not a thing anyone means.
+- **Undo my edits** clears exactly the scope shown, and the button says
+  which — *Undo edits on all 12* or *Undo edits on this one*. Clearing both
+  at once would mean narrowing to fix one card and silently resetting the
+  rest.
+
+Retyping at group scope gives every member the same words, which is what you
+want for a repeated label and not what you want for a match name — so the
+panel warns when you are about to do it.
+
+---
+
 ## What each tab does
 
 ### Element
@@ -253,6 +290,7 @@ node test/studio-pick.test.js     # hover, click-to-select, inspect, restyle, hi
 node test/studio-blocks.test.js   # add, edit, sanitise, re-render, reload, delete
 node test/studio-direct.test.js   # toolbar, inline typing, undo/redo, drag-to-reorder
 node test/studio-publish.test.js  # the server half: load, realtime, publish, history
+node test/studio-scope.test.js    # change one, change all like it
 ```
 
 `studio-publish` exists because of a bug that shipped and that the other four

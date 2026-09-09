@@ -34874,7 +34874,9 @@ const SITE = (function(){
     try{ localStorage.setItem(LS_DRAFT, JSON.stringify(draft)); }catch(e){}
     applyAll();
     if(!quiet) paintPanel();
-    if(bar) placeBar();
+    /* the outlines move when a hide or a size change reflows the page, so the
+       blast radius stays accurate between edits, not just at selection time */
+    if(bar) refreshSelectionUI();
   }
 
   /* ---------- undo ------------------------------------------------------
@@ -35638,6 +35640,25 @@ const SITE = (function(){
   }
   #studioPanel .sp-in{ display:block!important; width:100%!important }
   #studioPanel .sp-in.w{ width:112px!important }
+
+  /* Form controls get LITERAL colours, not site tokens.
+     The earlier reset pinned structure and left colour to the theme, which
+     looked tidy until the app's own "select" rules — written for a dark
+     violet page — bled into the panel and rendered the scope picker as
+     dark-green-on-dark-green. The panel is an admin tool, not part of the
+     site's design: it has to stay readable whatever the admin does to the
+     palette, including publishing a theme that would swallow it. */
+  #studioPanel input.sp-in,
+  #studioPanel select.sp-in,
+  #studioPanel textarea.sp-in{
+    background:#191536!important; color:#f2eefc!important;
+    border:1px solid rgba(255,255,255,.2)!important;
+    -webkit-text-fill-color:#f2eefc!important;   /* Safari ignores color on select */
+  }
+  #studioPanel .sp-in::placeholder{ color:#8f88b8!important; opacity:1 }
+  #studioPanel option{ background:#191536; color:#f2eefc }
+  #studioPanel input[type=color]{ background:transparent!important; border:1px solid rgba(255,255,255,.25)!important }
+  #studioPanel input[type=range]{ background:transparent!important; border:0!important }
   #studioPanel input[type=range]{ width:auto!important; flex:1!important; height:18px!important;
     padding:0!important; background:transparent!important }
   #studioPanel details, #studioPanel summary{ display:block!important }
@@ -35739,6 +35760,9 @@ const SITE = (function(){
   .sp-selname{ font-size:13.5px; font-weight:700; color:var(--ink,#fff); margin-bottom:7px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .sp-selacts{ display:flex; gap:6px; flex-wrap:wrap }
+  .sp-scope{ display:flex; align-items:center; gap:8px; margin-top:2px }
+  .sp-scope-l{ font-size:11.5px; color:var(--muted,#a29cc4); flex:0 0 auto }
+  .sp-scope select{ flex:1; min-width:0 }
   .sp-dot{ color:var(--accent,#B79BE0); font-size:15px; line-height:0 }
   .sp-b.sq{ min-width:32px; padding:7px 8px; font-size:14px }
 
@@ -35788,6 +35812,21 @@ const SITE = (function(){
     width:0; height:0; padding:0; border:0; opacity:0; position:absolute; pointer-events:none;
   }
   @media(max-width:700px){ #studioBar .sb-name{ display:none } }
+
+  /* everything else the current scope will change — quieter than the
+     selection outline, because it is context and not the thing you clicked */
+  .fgta-peer{
+    position:fixed; z-index:9399; pointer-events:none; border-radius:3px;
+    border:1.5px dashed color-mix(in srgb, var(--accent-pop,#2ff2b3) 60%, transparent);
+    background:color-mix(in srgb, var(--accent-pop,#2ff2b3) 7%, transparent);
+  }
+  #studioBar .sb-scope{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important;
+    font-size:11px; padding:0 8px; border:1px solid var(--line,rgba(255,255,255,.2));
+  }
+  #studioBar .sb-scope.on{
+    background:var(--accent-pop,#2ff2b3); color:#04140e; border-color:var(--accent-pop,#2ff2b3);
+  }
 
   /* the line that says where a dragged section will land */
   #studioDrop{
@@ -35860,6 +35899,8 @@ const SITE = (function(){
     editing = false; setPick(false);
     if(bar){ bar.remove(); bar = null; }
     if(dropLine){ dropLine.remove(); dropLine = null; }
+    clearPeers();
+    scopes = []; scopeSel = null;
     document.documentElement.removeAttribute("data-fgta-edit");
     if(panel) panel.remove();
     [hi, selBox, tagEl].forEach(n => n && n.remove());
@@ -36004,18 +36045,141 @@ const SITE = (function(){
     node.style.width = r.width + "px"; node.style.height = r.height + "px";
   }
 
+  /* ======================================================================
+     SCOPE — "this one" or "everything like it"
+     ======================================================================
+     Restyling one match card and then having to do the other thirty-nine is
+     not editing a site, it is data entry. But the fix is not a bulk-apply
+     feature: a config key is already a CSS selector, so a key of `.pend`
+     styles every pending row for free through the same generated rule a
+     positional key uses. The whole job is choosing WHICH selector, and
+     showing what that choice is about to touch.
+
+     Candidates, most specific first, and the first one that matches more
+     than one element wins:
+
+       .a.b.c        every element built from exactly this set of classes —
+                     the tightest honest definition of "the same kind"
+       .a            each class on its own, for when the compound set is
+                     unique to this element but the family is not
+       #parent>tag   every button in this toolbar, every row in this list,
+                     for elements that carry no classes at all
+
+     State classes are stripped first. `.on`, `.open`, `.g1` describe what
+     an element is doing right now, not what it is, and keying on them
+     would mean a rule that comes and goes as the page updates. */
+  const STATE_CLASS = /^(on|off|open|closed|active|inactive|show|shown|hide|hidden|sel|selected|current|disabled|busy|loading|live|err|error|ok|win|loss|draw|pend|pending|dim|muted|sm|md|lg|xl|g[123]|is-|has-|js-)/i;
+
+  function kindCandidates(el){
+    if(!el || el.nodeType !== 1 || el === document.body) return [];
+    const tag = el.tagName.toLowerCase();
+    const classes = Array.prototype.filter.call(el.classList,
+      c => !STATE_CLASS.test(c) && !/^fgta-/.test(c) && c.length > 1);
+
+    const tries = [];
+    if(classes.length > 1) tries.push("." + classes.map(cssEscape).join("."));
+    classes.forEach(c => tries.push("." + cssEscape(c)));
+
+    /* a container-scoped tag catches the classless cases that matter most
+       here — the nav tabs, a row of toolbar buttons, a list of cards */
+    const p = el.parentElement;
+    if(p && p !== document.body){
+      const pk = p.id ? "#" + cssEscape(p.id)
+               : (p.classList.length ? "." + cssEscape(p.classList[0]) : null);
+      if(pk) tries.push(pk + ">" + tag);
+    }
+
+    const out = [], seen = {};
+    tries.forEach(sel => {
+      if(seen[sel]) return; seen[sel] = 1;
+      let nodes;
+      try{ nodes = document.querySelectorAll(sel); }catch(e){ return; }
+      /* it has to be a group, and it has to include the thing you clicked —
+         a selector that styles everything except your selection is a trap */
+      if(nodes.length > 1 && Array.prototype.indexOf.call(nodes, el) >= 0){
+        out.push({sel, count: nodes.length});
+      }
+    });
+    return out;
+  }
+
+  /* how many of a thing, in words: "all 12 like this" */
+  function scopeLabel(entry){
+    if(!entry) return "just this one";
+    return "all " + entry.count + " like this";
+  }
+
+  let scopes = [];      // kind candidates for the current selection
+  let scopeSel = null;  // the selector edits are currently written under
+
+  /* The key every style, hide and copy edit is written under. Moving is the
+     exception and stays positional — "put all forty cards third" is not a
+     thing anybody means. */
+  function activeKey(){
+    if(scopeSel) return scopeSel;
+    return keyFor(selected);
+  }
+
+  function setScope(sel){
+    scopeSel = sel || null;
+    refreshSelectionUI();
+    paintPanel();
+  }
+
   function select(el){
     if(inlineEditing) commitInline();
     selected = el;
     tab = "select";
+
+    /* Default to the group when there is an obvious one. That is the whole
+       point of the feature: clicking a match card and changing its colour
+       should change the match cards, not one of them. The scope is named on
+       the toolbar and in the panel with its count, and switching to "just
+       this one" is a click — so the broad default is visible rather than
+       something that happens behind your back. */
+    scopes = kindCandidates(el);
+    scopeSel = scopes.length ? scopes[0].sel : null;
+
     refreshSelectionUI();
     paintPanel();
   }
 
   function refreshSelectionUI(){
     if(!selBox) return;
-    if(selected && selected.isConnected){ box(selBox, selected); placeBar(); }
-    else { selBox.style.display = "none"; if(bar) bar.style.display = "none"; }
+    if(selected && selected.isConnected){ box(selBox, selected); placeBar(); paintPeers(); }
+    else {
+      selBox.style.display = "none";
+      if(bar) bar.style.display = "none";
+      clearPeers();
+    }
+  }
+
+  /* ---------- showing the blast radius --------------------------------
+     A scope you cannot see is a scope you will get wrong. Every OTHER
+     element the current key matches gets a quiet outline, so "all 12 like
+     this" is a claim you can check before you change anything. Capped,
+     because outlining four hundred table rows costs more than it explains. */
+  let peerBoxes = [];
+  const PEER_CAP = 60;
+
+  function clearPeers(){ peerBoxes.forEach(n => n.remove()); peerBoxes = []; }
+
+  function paintPeers(){
+    clearPeers();
+    if(!scopeSel || !editing) return;
+    let nodes;
+    try{ nodes = document.querySelectorAll(scopeSel); }catch(e){ return; }
+    Array.prototype.slice.call(nodes, 0, PEER_CAP).forEach(n => {
+      if(n === selected || inStudio(n)) return;
+      const r = n.getBoundingClientRect();
+      if(!r.width && !r.height) return;
+      const d = document.createElement("div");
+      d.className = "fgta-peer";
+      d.style.cssText = "left:" + r.left + "px;top:" + r.top + "px;" +
+                        "width:" + r.width + "px;height:" + r.height + "px";
+      document.body.appendChild(d);
+      peerBoxes.push(d);
+    });
   }
 
   /* ======================================================================
@@ -36048,6 +36212,9 @@ const SITE = (function(){
     bar.id = "studioBar";
     bar.innerHTML =
       `<span class="sb-name"></span>` +
+      /* the scope pill sits FIRST among the controls, because it changes what
+         every one of them does — you should read it before you press them */
+      `<button class="sb-b sb-scope" data-bar="scope" title="What this affects"></button>` +
       BAR_BUTTONS.map(([id, glyph, title]) =>
         `<button class="sb-b sb-${id}" data-bar="${id}" title="${title}">${glyph}</button>`).join("") +
       `<input type="color" class="sb-color" tabindex="-1" aria-label="Colour">`;
@@ -36080,7 +36247,18 @@ const SITE = (function(){
     const parent = selected.parentElement;
     b.querySelector(".sb-drag").style.display =
       (parent && parent.children.length > 1 && keyFor(parent)) ? "" : "none";
-    b.classList.toggle("on-hide", !!(cfg().hidden || {})[keyFor(selected) || ""]);
+    b.classList.toggle("on-hide", !!(cfg().hidden || {})[activeKey() || ""]);
+
+    /* the scope pill only appears when there IS a group to choose between —
+       on a one-off element it would be a control with one setting */
+    const sc = b.querySelector(".sb-scope");
+    const cur = scopes.find(x => x.sel === scopeSel);
+    sc.style.display = scopes.length ? "" : "none";
+    sc.textContent = cur ? "◆ " + cur.count : "◇ 1";
+    sc.title = cur ? "Changing " + scopeLabel(cur) + " — click for just this one"
+                   : "Changing just this one — click to change all like it";
+    sc.classList.toggle("on", !!cur);
+
     b.style.display = "flex";
 
     const r = selected.getBoundingClientRect();
@@ -36099,11 +36277,15 @@ const SITE = (function(){
   function barAction(name){
     const el = selected; if(!el) return;
     switch(name){
+      /* cycles group → just this one → group, so the common flip is one
+         click; the panel's dropdown is where you pick between several
+         candidate groups */
+      case "scope": return setScope(scopeSel ? null : (scopes[0] || {}).sel);
       case "text":  return startInline();
       case "minus": return nudgeSize(-1);
       case "plus":  return nudgeSize(1);
       case "bold": {
-        const d = parseDecl((cfg().elcss || {})[keyFor(el)]);
+        const d = parseDecl((cfg().elcss || {})[activeKey()]);
         return setDecl("font-weight", String(Number(d["font-weight"]) >= 700 ? "" : 700));
       }
       case "color": {
@@ -36113,7 +36295,7 @@ const SITE = (function(){
         return sw.click();
       }
       case "hide": {
-        const k = keyFor(el); if(!k) return;
+        const k = activeKey(); if(!k) return;
         return edit(c => { c.hidden = c.hidden || {}; if(c.hidden[k]) delete c.hidden[k]; else c.hidden[k] = true; });
       }
       case "up":
@@ -36135,7 +36317,7 @@ const SITE = (function(){
      first press starts from what is actually on screen. */
   function nudgeSize(dir){
     const el = selected; if(!el) return;
-    const d = parseDecl((cfg().elcss || {})[keyFor(el)]);
+    const d = parseDecl((cfg().elcss || {})[activeKey()]);
     const now = parseFloat(d["font-size"]) || parseFloat(getComputedStyle(el).fontSize) || 16;
     const next = Math.max(8, Math.min(96, Math.round((now + dir * (now < 20 ? 1 : 2)) * 10) / 10));
     setDecl("font-size", next + "px");
@@ -36184,7 +36366,7 @@ const SITE = (function(){
     const el = inlineEditing; if(!el) return;
     const val = (el.textContent || "").trim();
     endInline();
-    const k = keyFor(selected); if(!k) return;
+    const k = activeKey(); if(!k) return;
     if(val === inlineOriginal) return;
     edit(c => { c.text = c.text || {}; if(val) c.text[k] = val; else delete c.text[k]; });
   }
@@ -36378,23 +36560,41 @@ const SITE = (function(){
     const c = cfg();
     const warn = volatility(selected);
     const cur = readText(selected);
-    const override = (c.text || {})[key];
-    const decl = parseDecl((c.elcss || {})[key]);
-    const isHidden = !!(c.hidden || {})[key];
+    /* everything below reads the ACTIVE key, so the panel shows the values
+       that are actually in force for the scope you are editing at */
+    const akey = activeKey();
+    const override = (c.text || {})[akey];
+    const decl = parseDecl((c.elcss || {})[akey]);
+    const isHidden = !!(c.hidden || {})[akey];
     const parent = selected.parentElement;
     const canMove = parent && parent.children.length > 1 && keyFor(parent);
     const canText = !!textHost(selected);
+    const curScope = scopes.find(x => x.sel === scopeSel);
 
     return `
       <div class="sp-sel">
         <div class="sp-selname">${esc2(niceName(selected))}</div>
-        <div class="sp-selacts">
+        ${scopes.length ? `
+        <div class="sp-scope">
+          <span class="sp-scope-l">Changes apply to</span>
+          <select class="sp-in" data-act="scope">
+            ${scopes.map(x => `<option value="${esc2(x.sel)}" ${x.sel === scopeSel ? "selected" : ""}>${
+                esc2(scopeLabel(x))}</option>`).join("")}
+            <option value="" ${scopeSel ? "" : "selected"}>just this one</option>
+          </select>
+        </div>
+        <div class="sp-note" style="margin:6px 0 0">${curScope
+          ? `The other ${curScope.count - 1} are outlined on the page. Style it once and they all follow.`
+          : `Only the element you clicked changes.`}</div>` : ""}
+        <div class="sp-selacts" style="margin-top:8px">
           <button class="sp-mini" data-act="sel-parent">↑ Around it</button>
           <button class="sp-mini" data-act="sel-scroll">Show me</button>
-          <button class="sp-mini" data-act="sel-clear">Undo my edits</button>
+          <button class="sp-mini" data-act="sel-clear">${curScope
+            ? "Undo edits on all " + curScope.count : "Undo edits on this one"}</button>
         </div>
       </div>
       ${warn ? `<div class="sp-warn">${esc2(warn)}</div>` : ""}
+      ${curScope && canText ? `<div class="sp-warn">Retyping at this scope gives all ${curScope.count} the same words. Switch to “just this one” to change only this.</div>` : ""}
 
       ${canText ? `
       <div class="sp-group">
@@ -36429,8 +36629,10 @@ const SITE = (function(){
         <div class="sp-gh" style="margin-top:10px">Any other CSS for this one element</div>
         <input class="sp-in mono" data-act="elcss-raw" placeholder="letter-spacing:.05em;box-shadow:none"
                value="${esc2(joinDecl(omit(decl, QUICK.map(q => q[0]))))}">
-        <div class="sp-gh" style="margin-top:12px">Its address in the page</div>
-        <div class="sp-key">${esc2(key)}</div>
+        <div class="sp-gh" style="margin-top:12px">What these edits are saved under</div>
+        <div class="sp-key sp-key-active">${esc2(akey)}</div>
+        ${scopeSel ? `<div class="sp-gh" style="margin-top:10px">This element on its own</div>
+        <div class="sp-key sp-key-el">${esc2(key)}</div>` : ""}
       </details>`;
   }
 
@@ -36828,7 +37030,7 @@ const SITE = (function(){
     const txt = panel.querySelector('[data-act="text"]');
     if(txt){
       const write = quiet => {
-        const k = keyFor(selected); if(!k) return;
+        const k = activeKey(); if(!k) return;
         edit(c => { c.text = c.text || {}; if(txt.value) c.text[k] = txt.value; else delete c.text[k]; }, quiet);
       };
       txt.oninput = () => write(true);
@@ -36836,7 +37038,7 @@ const SITE = (function(){
     }
     const raw = panel.querySelector('[data-act="elcss-raw"]');
     if(raw) raw.onchange = () => {
-      const k = keyFor(selected); if(!k) return;
+      const k = activeKey(); if(!k) return;
       const kept = {}; const known = QUICK.map(q => q[0]);
       const d = parseDecl((cfg().elcss || {})[k]);
       known.forEach(p => { if(d[p]) kept[p] = d[p]; });
@@ -36862,6 +37064,9 @@ const SITE = (function(){
       css.oninput  = () => edit(c => { c.css = css.value; }, true);
       css.onchange = () => edit(c => { c.css = css.value; });
     }
+    const scopePick = panel.querySelector('select[data-act="scope"]');
+    if(scopePick) scopePick.onchange = () => setScope(scopePick.value);
+
     const skin = panel.querySelector('[data-act="skin"]');
     if(skin) skin.onchange = () => edit(c => { c.skin = skin.value === "null" ? null : skin.value; });
   }
@@ -36879,7 +37084,7 @@ const SITE = (function(){
     });
     const act0 = sw.getAttribute("data-act");
     if(act0 === "hide"){
-      const k = keyFor(selected); if(!k) return;
+      const k = activeKey(); if(!k) return;
       return edit(c => { c.hidden = c.hidden || {}; if(c.hidden[k]) delete c.hidden[k]; else c.hidden[k] = true; });
     }
   }
@@ -36898,7 +37103,7 @@ const SITE = (function(){
     edit(c => { c.type = c.type || {}; if(val) c.type[k] = val; else delete c.type[k]; });
   }
   function setDecl(prop, val, quiet){
-    const k = keyFor(selected); if(!k) return;
+    const k = activeKey(); if(!k) return;
     edit(c => {
       c.elcss = c.elcss || {};
       const d = parseDecl(c.elcss[k]);
@@ -36961,7 +37166,13 @@ const SITE = (function(){
         if(selected) selected.scrollIntoView({behavior:"smooth", block:"center"});
         return;
       case "sel-clear": {
-        const k = keyFor(selected); if(!k) return;
+        /* Clears exactly the scope you are editing at, and the button says
+           which — "Undo edits on all 10" versus "Undo edits on this one".
+           Clearing both scopes at once was the other option and it is worse:
+           narrowing to one card to fix it, then pressing undo, would silently
+           reset the other thirty-nine. Blast radius follows the scope
+           control, always, so there is one thing to look at. */
+        const k = activeKey(); if(!k) return;
         return edit(c => {
           delete (c.text || {})[k]; delete (c.elcss || {})[k]; delete (c.hidden || {})[k];
         });
