@@ -148,8 +148,14 @@ const ok = reporter();
   }, firstIdx);
   await page.mouse.click(first.x, first.y);
   await page.waitForTimeout(250);
-  const selParent = await page.evaluate(()=>
-    ((document.querySelector('.sp-adv .sp-key')||{}).textContent||''));
+  /* Read the ELEMENT key, not the active one: edits default to the group
+     scope now, so `.sp-key-active` may be a class selector. What this
+     assertion is about is which ELEMENT got selected. */
+  const selParent = await page.evaluate(()=>{
+    const el = document.querySelector('.sp-adv .sp-key-el') ||
+               document.querySelector('.sp-adv .sp-key-active');
+    return (el||{}).textContent || '';
+  });
   ok('clicking a section selects the section, not a wrapper deep inside it',
      selParent.startsWith('#view-ladder>') && selParent.split('>').length === 2, selParent);
 

@@ -309,6 +309,8 @@ No formal scale — panels use 14–20px internal padding, sections stack with m
 
 Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site**, then click something and change it. **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
 
+**Change one, change all like it.** Restyling a match card restyles every match card — the toolbar shows the count, the others are outlined on the page, and a dropdown offers *just this one* when you mean only the one you clicked. It works because a config key is already a CSS selector, so a key of `.pend` styles every pending row through the same generated rule a positional key uses.
+
 **How it feels to use.** Clicking selects the nearest thing a person would *name* — a button, a heading, a section — not the deepest node under the cursor, and a toolbar appears on it with the things you'll want most. Double-click text and type into the page. Grab ⠿ and drag a section elsewhere. ⌘Z undoes anything (a whole colour drag is one step, not forty). The panel names your selection in plain words and offers sliders and swatches; the CSS selector is demoted to an **Advanced** disclosure.
 
 What it reaches:

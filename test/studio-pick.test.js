@@ -35,9 +35,16 @@ const ok = reporter();
   ok('click did not navigate', await page.evaluate(()=>typeof activeView!=='undefined'?activeView:null)===viewBefore);
   const selName = await page.evaluate(()=>((document.querySelector('.sp-selname')||{}).textContent||''));
   ok('inspector names the selection in plain words', selName.includes('Court'), selName);
-  ok('the selector is still there, demoted to Advanced', await page.evaluate(()=>
-      !!document.querySelector('.sp-adv .sp-key') &&
-      document.querySelector('.sp-adv .sp-key').textContent.includes('topTabs')));
+  /* Advanced now lists two: the key edits are SAVED under (the group, by
+     default) and this element's own address. Both are exact selectors. */
+  ok('the element\'s own selector is still there, demoted to Advanced', await page.evaluate(()=>{
+      const el = document.querySelector('.sp-adv .sp-key-el');
+      return !!el && el.textContent.includes('topTabs');
+  }));
+  ok('Advanced also names the key the edits actually go to', await page.evaluate(()=>{
+      const a = document.querySelector('.sp-adv .sp-key-active');
+      return !!a && a.textContent.trim().length > 0;
+  }));
 
   // retype it through the inspector
   await page.evaluate(()=>{
