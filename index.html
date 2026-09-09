@@ -91,9 +91,17 @@
        named below (--on-chrome, --wx-ink) and exist precisely because a
        handful of surfaces do NOT follow the page.
        ================================================================ */
+    /* --dim and --ball are TEXT colours and both were set from their ratio
+       against white alone: they cleared AA on --bg (4.82 and 4.61) and
+       quietly missed it on the two tinted grounds they are used on just as
+       often — --panel-2 (4.26 / 4.07) and --accent-dim (4.08 / 3.90). A
+       "dim" colour is by definition the one closest to failing, so it is
+       the one that has to be checked against the darkest ground it lands
+       on, not the lightest. Measured now: --dim 5.80 / 5.12 / 4.91 and
+       --ball 5.77 / 5.10 / 4.88. */
     --bg:#FFFFFF; --panel:#FFFFFF; --panel-2:#EDF2EE; --line:rgba(16,38,26,.18);
     --line-soft:rgba(16,38,26,.09);
-    --ink:#10261A; --muted:#41564A; --dim:#61776A;
+    --ink:#10261A; --muted:#41564A; --dim:#566A5E;
     /* interactive purple, and the near-black green that goes on top of it
        (--on-accent: the text colour for anything sitting ON a filled accent,
        gold or court surface — it used to be a hardcoded #04140e in a dozen
@@ -114,7 +122,7 @@
        form tags), so it is the olive a tennis ball reads as in print, not
        the fluorescent the ball itself is painted in — that gradient carries
        its own literals. */
-    --ball:#6E7C10; --ball-glow:rgba(110,124,16,.26);
+    --ball:#5F6C0E; --ball-glow:rgba(110,124,16,.26);
     --court:#1C6B45; --court-dim:#E3EFE7;
     /* Two sets, because a metal has two jobs and one value cannot do both.
        --gold/--silver/--bronze are TEXT: dark enough to read on white (7.0,
@@ -2929,7 +2937,10 @@
     color:var(--dim);font-size:22px}
   .pt-join-row{margin-top:6px}
   .pt-watch-cta{background:var(--accent);color:var(--on-accent);font-weight:800}
-  .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#ff2d2d;color:#fff}
+  /* #ff2d2d carries white type at 3.71:1, under AA. Darkened to 5.2:1; the
+     live dot beside it keeps the bright red, because a dot is a signal and
+     not something anybody has to read. */
+  .pt-golive-cta{display:inline-flex;align-items:center;gap:7px;background:#D42121;color:#fff}
   .pt-golive-cta .pt-live-dot{background:#fff;animation:none}
 
   /* ---- fullscreen (any device) ----
@@ -17265,7 +17276,7 @@ function renderTickerBar(){
         : `🏆 ${window.FFCUP.name} is live · ${window.FFCUP.range} — results scroll here`)
     : "🎾 FGTA live ticker — new results and comments scroll here";
   const text = tickerQueue.join("     •     ") || idle;
-  bar.innerHTML = `<div style="display:inline-block;white-space:nowrap;padding-left:100%;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);animation:tickerScroll 22s linear infinite">${esc(text)}</div>`;
+  bar.innerHTML = `<div style="display:inline-block;white-space:nowrap;padding-left:100%;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--on-chrome);animation:tickerScroll 22s linear infinite">${esc(text)}</div>`;
 }
 window.renderTickerBar=renderTickerBar;
 
