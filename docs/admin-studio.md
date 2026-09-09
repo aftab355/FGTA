@@ -11,19 +11,26 @@ Open the ☰ menu and choose **✎ Edit site**. It only appears once
 
 ## Setup (once)
 
-Run [`site-config.sql`](site-config.sql) in the Supabase SQL editor. It
-creates two tables, their RLS policies, the realtime publication and the
-`publish_site_config()` function. It is idempotent, so re-running it is
-safe.
+Run [`site-config.sql`](site-config.sql) in the Supabase SQL editor —
+paste the whole file and hit Run. It creates two tables, their RLS
+policies, the realtime publication and the `publish_site_config()`
+function. It is idempotent, so re-running it is safe.
+
+To check it took, in the SQL editor:
+
+```sql
+select id, version, updated_at from public.site_config;   -- one row, id 1
+```
+
+The studio depends on `is_admin()` and the `admins` table from
+`admin-security.sql`, which the rest of the app already uses — if the ◆
+Admin button already turns on for you, that part is done.
 
 Not running it is a supported way to run this site: the app asks once,
 notes the missing table in the console, and renders the built-in defaults —
 which is exactly what the site looked like before any of this existed. The
 studio still opens and still previews, and says plainly that it cannot
 publish.
-
-The migration depends on `is_admin()` and the `admins` table from
-`admin-security.sql`, which the rest of the app already uses.
 
 ---
 
@@ -245,7 +252,18 @@ node test/studio.test.js          # theme, type, nav, order, features, CSS, pres
 node test/studio-pick.test.js     # hover, click-to-select, inspect, restyle, hide, Esc
 node test/studio-blocks.test.js   # add, edit, sanitise, re-render, reload, delete
 node test/studio-direct.test.js   # toolbar, inline typing, undo/redo, drag-to-reorder
+node test/studio-publish.test.js  # the server half: load, realtime, publish, history
 ```
+
+`studio-publish` exists because of a bug that shipped and that the other four
+could not see. The studio guarded every Supabase call with `window.sb`, but
+`sb` is a top-level `let` — a *script-scope* binding that never becomes a
+window property — so every server call was skipped and Publish reported
+"Not connected to the database" against a healthy project. Everything else
+still worked, because drafts live in `localStorage`.
+
+The harness records each call on `window.__sb`, and the rule those tests
+encode is: **assert the call happened, not only that the page changed.**
 
 They drive the real file in a real browser against a stubbed Supabase — see
 `test/studio-harness.js`. They need Playwright and a Chromium build; the

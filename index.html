@@ -35498,7 +35498,15 @@ const SITE = (function(){
       if(d) draft = JSON.parse(d);
     }catch(e){ draft = null; }
 
-    if(!window.sb){ applyAll(); watchDOM(); return; }
+    /* `sb` and not `window.sb`. It is declared as a top-level `let` in this
+       script, and a top-level `let` creates a SCRIPT-SCOPE binding — it never
+       becomes a property of window. `window.sb` is therefore permanently
+       undefined, and reading it here silently skipped every server call the
+       studio makes: the published config was never fetched, realtime never
+       subscribed, history never loaded, and Publish reported "not connected"
+       on a perfectly healthy database. The studio ran entirely on the local
+       draft and looked like it worked. */
+    if(!sb){ applyAll(); watchDOM(); return; }
     try{
       const {data, error} = await sb.from(TABLE).select("config,version").eq("id", 1).maybeSingle();
       if(error){
@@ -35524,7 +35532,7 @@ const SITE = (function(){
      because somebody else changed a colour would be unforgivable — the new
      published config is taken quietly and the studio says so. */
   function subscribe(){
-    if(!window.sb) return;
+    if(!sb) return;
     try{
       sb.channel("site-config-live")
         .on("postgres_changes", {event:"*", schema:"public", table:TABLE}, payload => {
@@ -35543,7 +35551,7 @@ const SITE = (function(){
   async function publish(note){
     if(!isAdmin) return toast("Admin only", true);
     if(!dirty()) return toast("Nothing to publish");
-    if(!window.sb) return toast("Not connected to the database", true);
+    if(!sb) return toast("Not connected to the database", true);
 
     const payload = clone(draft);
     let ok = false;
@@ -36735,7 +36743,7 @@ const SITE = (function(){
 
   async function loadHistory(){
     historyRows = [];
-    if(!window.sb) return paintPanel();
+    if(!sb) return paintPanel();
     try{
       const {data, error} = await sb.from("site_config_history")
         .select("id,version,label,created_at,created_by,config")
