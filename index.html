@@ -1,6 +1,10 @@
 <!DOCTYPE html>
-<!-- data-skin="ffcup": FF Cup tournament dressing. Remove this attribute to restore the standard theme. -->
-<html lang="en" data-skin="ffcup">
+<!-- The FF Cup event skin is OFF. The cup itself is still on: the marquee, the
+     countdown, the stage rail and the top-bar chip all render in the app's
+     ordinary dress (see "FF CUP — ORDINARY DRESS" in the stylesheet), and the
+     broadcast hero below it is untouched. Putting data-skin="ffcup" back on
+     this tag restores the tournament dressing; nothing was deleted. -->
+<html lang="en">
 <head>
 <!-- charset first: the encoding declaration has to land inside the first
      1024 bytes of the document, and anything placed above it (there used to
@@ -4937,6 +4941,254 @@
   }
 
 
+
+  /* ================================================================
+     FF CUP — ORDINARY DRESS
+
+     The event skin is off (no data-skin on <html>), but the event is
+     still on. Every .cupmark / .cup-* / .ffcup-chip rule in the block
+     below this one is scoped to :root[data-skin="ffcup"], so with the
+     attribute gone the marquee would paint as bare text and the top-bar
+     chip would stay display:none — the cup's DETAILS would vanish along
+     with its dressing, which is not the same decision.
+
+     So this block dresses the same markup in the app's ordinary
+     language and nothing else: --panel on --line at --r-lg, mono
+     uppercase for labels, one --accent for emphasis. No fire, no
+     scanlines, no sun, no court, no poster wordmark. The scenery
+     elements are hidden here as well as suppressed at render, so a
+     cached script can't leave an empty flame div behind.
+
+     Specificity: everything here is a plain class selector, so putting
+     data-skin="ffcup" back on <html> restores the tournament look
+     without touching this block.
+     ================================================================ */
+
+  /* the slab. An ordinary panel, sized like the section it leads. */
+  .cupmark{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--r-lg);
+    box-shadow:var(--shadow);
+    padding:24px;
+    margin-bottom:22px;
+  }
+  /* decoration belongs to the skin — off-skin it does not exist */
+  .cupmark-void,.cup-fire,.cup-sun,.cup-court,.cup-ball{display:none!important}
+  .cupmark-body{position:relative}
+
+  /* ---- head row: run-in badge, status, window ---- */
+  .cupmark-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .cup-final{
+    font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:1px;
+    text-transform:uppercase;color:#04140e;background:var(--accent);
+    border-radius:var(--r-pill);padding:3px 11px;
+  }
+  .cupmark-status{
+    display:inline-flex;align-items:center;gap:7px;
+    font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--line);border-radius:var(--r-pill);padding:3px 11px;
+  }
+  .cupmark-status i{
+    width:6px;height:6px;border-radius:50%;background:var(--dim);flex:0 0 auto;
+  }
+  .cupmark[data-phase="live"] .cupmark-status i{background:var(--accent)}
+  .cupmark[data-phase="done"] .cupmark-status i{background:var(--win)}
+  .cupmark-window{
+    font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.5px;
+    color:var(--dim);
+  }
+
+  /* ---- name and format ---- */
+  .cupmark-name{
+    margin:0;font-family:var(--font-display);font-size:clamp(26px,4.4vw,38px);
+    font-weight:700;letter-spacing:-.5px;line-height:1.1;color:var(--ink);
+  }
+  .cupmark-sub{margin-top:7px;font-size:14px;color:var(--muted);line-height:1.45}
+
+  /* ---- facts: field size, games played, what it counts for ---- */
+  .cup-facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .cup-fact{
+    font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.5px;
+    color:var(--muted);background:var(--panel-2);border:1px solid var(--line);
+    border-radius:var(--r-pill);padding:4px 12px;
+  }
+  .cup-fact b{color:var(--ink);font-weight:700}
+
+  /* ---- the clock. Four cells built like .stat, because that is what
+         the rest of the app uses for a number under a label. ---- */
+  .cup-clockbox{margin-top:22px}
+  .cup-cd-cap{
+    font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:10px;
+  }
+  .cup-cd{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;max-width:420px}
+  .cup-cd-cell{
+    background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:12px 6px 10px;text-align:center;
+  }
+  .cup-cd-cell b{
+    display:block;font-family:var(--font-mono);font-size:24px;font-weight:600;
+    color:var(--ink);line-height:1;font-variant-numeric:tabular-nums;
+  }
+  .cup-cd-cell i{
+    display:block;margin-top:5px;font-style:normal;font-family:var(--font-mono);
+    font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);
+  }
+  /* the run-in: the days cell is the one that matters, so it gets the accent */
+  .cupmark[data-final] .cup-cd-cell[data-unit="d"]{border-color:var(--accent)}
+  .cupmark[data-final] .cup-cd-cell[data-unit="d"] b{color:var(--accent)}
+
+  /* ---- stage rail: roster → group → seeding → semis → final → champion ---- */
+  .cup-rail{display:flex;align-items:flex-start;margin-top:24px}
+  .cup-step{
+    flex:1 1 0;min-width:0;position:relative;padding-top:18px;text-align:center;
+    font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1px;
+    text-transform:uppercase;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  /* the dot */
+  .cup-step::before{
+    content:'';position:absolute;top:2px;left:50%;transform:translateX(-50%);
+    width:9px;height:9px;border-radius:50%;
+    background:var(--panel-2);border:1px solid var(--line);z-index:1;
+  }
+  /* the track between this dot and the previous one */
+  .cup-step::after{
+    content:'';position:absolute;top:6px;right:50%;width:100%;height:1px;
+    background:var(--line);
+  }
+  .cup-step:first-child::after{display:none}
+  .cup-step.done{color:var(--muted)}
+  .cup-step.done::before{background:var(--accent);border-color:var(--accent)}
+  .cup-step.done::after{background:var(--accent)}
+  .cup-step.now{color:var(--ink)}
+  .cup-step.now::before{
+    background:var(--accent);border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-glow);
+  }
+  .cup-step.now::after{background:var(--accent)}
+
+  /* ---- foot: what's next, and the way in ---- */
+  .cupmark-foot{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    margin-top:24px;padding-top:18px;border-top:1px solid var(--line-soft);
+  }
+  .cupmark-line{font-size:14px;color:var(--muted);line-height:1.45}
+  .cupmark-line b{color:var(--ink);font-weight:600}
+  .cup-cta{
+    margin-left:auto;flex:0 0 auto;
+    display:inline-flex;align-items:center;gap:7px;
+    padding:11px 20px;border:1px solid transparent;border-radius:var(--r-pill);
+    background:var(--accent);color:#04140e;
+    font-family:var(--font-body);font-size:14.5px;font-weight:600;
+    cursor:pointer;transition:.2s cubic-bezier(.16,1,.3,1);
+  }
+  .cup-cta:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .cup-cta:active{transform:translateY(0)}
+  .cup-cta span{font-size:16px;line-height:1}
+
+  /* wide: stand the clock beside the wordmark rather than under it, the
+     same balance the skin struck, minus the poster */
+  @media(min-width:900px){
+    .cupmark:not(.mini) .cupmark-body{
+      display:grid;grid-template-columns:minmax(0,1fr) auto;
+      column-gap:40px;align-items:start;
+    }
+    .cupmark:not(.mini) .cupmark-head,
+    .cupmark:not(.mini) .cupmark-name,
+    .cupmark:not(.mini) .cupmark-sub,
+    .cupmark:not(.mini) .cup-facts{grid-column:1}
+    .cupmark:not(.mini) .cup-clockbox{grid-column:2;grid-row:1 / span 4;align-self:center;margin-top:0}
+    .cupmark:not(.mini) .cup-rail,
+    .cupmark:not(.mini) .cupmark-foot{grid-column:1 / -1}
+  }
+  @media(max-width:700px){
+    .cupmark{padding:18px;border-radius:var(--r-md)}
+    .cup-cd{max-width:none}
+    .cup-cd-cell b{font-size:20px}
+    .cup-cta{margin-left:0;width:100%;justify-content:center}
+  }
+
+  /* ---- mini variant: one line, wherever a screen wants the cup on it ---- */
+  .cupmark.mini{padding:12px 14px;margin-bottom:16px;border-radius:var(--r-md)}
+  .cupmark.mini .cupmark-body{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .cupmark.mini .cupmark-head{margin-bottom:0}
+  .cupmark.mini .cupmark-name{font-size:15px;font-weight:600;letter-spacing:0}
+  .cupmark.mini .cup-clock{
+    font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+  .cupmark.mini .cup-clock i{font-style:normal;color:var(--dim);padding:0 2px}
+  .cupmark.mini .cup-cta{margin-left:auto;padding:7px 14px;font-size:13px}
+  @media(max-width:700px){
+    .cupmark.mini .cup-cta{width:auto;margin-left:auto}
+  }
+
+  /* ---- top-bar chip: the cup's date range, or "N days left" in the
+         run-in. Hidden by the base rule above; shown plainly here. ---- */
+  .ffcup-chip{
+    display:inline-flex;flex-direction:column;justify-content:center;
+    gap:1px;margin-left:12px;padding:5px 11px;cursor:pointer;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm);
+    transition:border-color .18s;
+  }
+  .ffcup-chip:hover{border-color:var(--accent)}
+  .ffcup-chip b{
+    font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:1.4px;
+    text-transform:uppercase;color:var(--ink);line-height:1;
+  }
+  .ffcup-chip i{
+    font-style:normal;font-family:var(--font-mono);font-size:9px;font-weight:600;
+    letter-spacing:.6px;color:var(--muted);line-height:1;
+  }
+  :root[data-cup-final] .ffcup-chip i{color:var(--accent)}
+  @media(max-width:700px){
+    .ffcup-chip{margin-left:8px;padding:4px 8px}
+    .ffcup-chip b{font-size:9px;letter-spacing:1px}
+    .ffcup-chip i{font-size:8px}
+  }
+
+  /* ---- the dot on the tab that leads to the cup ---- */
+  .cup-flag{
+    display:block;position:absolute;top:6px;right:6px;
+    width:6px;height:6px;border-radius:50%;background:var(--accent);
+  }
+  .bb-tab.bb-more{position:relative}
+  .bb-tab.bb-more .cup-flag{top:5px;right:calc(50% - 20px)}
+
+  /* ---- load screen: the cup named under the wordmark, in the loader's
+         own quiet type rather than a lockup ---- */
+  .ls-cup{
+    position:absolute;bottom:18%;left:0;right:0;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    opacity:0;animation:ls-word-in .6s ease 1.55s forwards;
+  }
+  .ls-cup b{
+    font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:2px;
+    text-transform:uppercase;color:var(--accent);
+  }
+  .ls-cup i{
+    font-style:normal;font-family:var(--font-mono);font-size:10px;font-weight:600;
+    letter-spacing:.6px;color:var(--muted);
+  }
+
+  /* ---- the cup's row at the top of the mobile "more" sheet ---- */
+  .ms-cup{
+    display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+    width:100%;margin-bottom:12px;padding:14px 16px;cursor:pointer;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);
+    color:var(--ink);text-align:left;transition:.15s;
+  }
+  .ms-cup:hover{border-color:var(--accent)}
+  .ms-cup b{font-size:14px;font-weight:600;letter-spacing:0}
+  .ms-cup i{
+    font-style:normal;font-family:var(--font-mono);font-size:11px;font-weight:600;
+    letter-spacing:.4px;color:var(--muted);
+  }
+
   /* ================================================================
      FF CUP EVENT SKIN — "HIGH SUMMER · BLOWN OUT"
 
@@ -5326,7 +5578,10 @@
      with the cup's name struck into it and its dates underneath. The
      markup holds it, the skin is what reveals it, and cupDates() below
      fills the second line with where the tournament actually is. */
-  .ffcup-chip{display:none}
+  /* the chip belongs to the cup, not to the skin: it shows in ordinary
+     dress for the length of the event and disappears the day after, when
+     the FF CUP WINDOW script stops setting data-cup. */
+  :root:not([data-cup]) .ffcup-chip{display:none}
   :root[data-skin="ffcup"] .ffcup-chip{
     display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
     gap:1px;flex-shrink:0;line-height:1;
@@ -5716,7 +5971,7 @@
   }
   /* the cup lockup under the wordmark — the second and last place the
      branding appears, and the only other chrome type in the app */
-  .ls-cup{display:none}
+  :root:not([data-cup]) .ls-cup{display:none}
   :root[data-skin="ffcup"] .ls-cup{
     display:flex;flex-direction:column;align-items:center;gap:9px;
     position:absolute;bottom:14%;left:0;right:0;text-align:center;
@@ -5753,8 +6008,8 @@
   /* the mounts are inert markup off-skin, and collapse when empty so
      they never leave a gap in a view they aren't promoting */
   .cup-mount:empty{display:none}
-  .cup-flag{display:none}
-  .ms-cup{display:none}
+  :root:not([data-cup]) .cup-flag{display:none}
+  :root:not([data-cup]) .ms-cup{display:none}
 
   /* ---- the slab ---- */
   :root[data-skin="ffcup"] .cupmark{
@@ -16200,7 +16455,7 @@ function renderTickerBar(){
   tickerQueue = tickerQueue.slice(-12);
   /* while the cup is on it owns the empty ticker too — the one strip that is
      visible on every screen shouldn't be advertising the app to itself */
-  const idle = (document.documentElement.getAttribute("data-skin") === "ffcup" && window.FFCUP)
+  const idle = window.FFCUP
     ? (document.documentElement.getAttribute("data-cup") === "pre"
         ? `🏆 ${window.FFCUP.name} · ${window.FFCUP.range} — the field is filling up`
         : `🏆 ${window.FFCUP.name} is live · ${window.FFCUP.range} — results scroll here`)
@@ -24495,10 +24750,13 @@ window.goLiveNow = goLiveNow;
    mode), so for the length of the cup it is the first thing on
    whichever screen you open.
 
-   It is dressing, not a feature. It renders only while the skin is
-   on, so the day after the final — when the FF CUP WINDOW script
-   drops data-skin — every marquee empties itself on the next paint
-   and the app is back to its ordinary shape with nothing to undo.
+   It is promotion, not a feature. It renders for the length of the
+   event — cupOn(), not cupSkinOn() — so taking the event skin off
+   leaves the cup being announced, just in the app's ordinary dress
+   (see "FF CUP — ORDINARY DRESS" in the stylesheet). The day after
+   the final the FF CUP WINDOW script stops publishing the window,
+   every marquee empties itself on the next paint, and the app is
+   back to its ordinary shape with nothing to undo.
 
    Nothing here is a second copy of the tournament. The marquee
    reads the real row (field, stage, next fixture, champion) and
@@ -24511,6 +24769,17 @@ window.goLiveNow = goLiveNow;
 const CUP_NAME_RX = /fat[\s._-]?fitter|ff\s*cup/i;
 
 function cupSkinOn(){ return document.documentElement.getAttribute("data-skin") === "ffcup"; }
+
+/* Whether the cup is ON — which is a different question from whether it is
+   DRESSED. The skin can be taken off (and is) without the event stopping,
+   so the marquee, the countdown and the stage rail key off this instead:
+   the FF CUP WINDOW script sets data-cup and publishes window.FFCUP for the
+   length of the event and neither afterwards, so the day after the final
+   every marquee still empties itself on the next paint, exactly as it did
+   when the skin was the gate. */
+function cupOn(){
+  return document.documentElement.hasAttribute("data-cup") || !!window.FFCUP;
+}
 
 /* the event being promoted: the cup itself, or — if it hasn't been named
    that — whatever unfinished tournament the league most recently made */
@@ -24639,11 +24908,21 @@ function cupFinalDays(){
 /* the scenery behind the type: a banded sun going down, the court it is
    going down over, a ball alight above the far corner, and the flames the
    slab is standing in. All of it is inert decoration — aria-hidden on the
-   void it lives in, no text, nothing focusable — and all of it evaporates
-   with the skin, because every one of these classes styles to nothing
-   without :root[data-skin="ffcup"] in front of it. */
+   void it lives in, no text, nothing focusable — and none of it is emitted
+   at all with the skin off (see cupDressing below), so the ordinary card
+   carries the event's information and no scenery to hide. */
 const CUP_SCENERY = `<i class="cup-sun"></i><i class="cup-court"></i><i class="cup-ball"></i>`;
 const CUP_FLAMES  = `<div class="cup-fire" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`;
+
+/* The dressing, and only the dressing. With the skin off this returns
+   nothing at all rather than empty divs that style to nothing: what is left
+   in the card is then the event's information — status, name, format, field,
+   clock, stage, next fixture — and no decoration to strip. */
+function cupDressing(){
+  return cupSkinOn()
+    ? `<div class="cupmark-void" aria-hidden="true">${CUP_SCENERY}</div>${CUP_FLAMES}`
+    : "";
+}
 
 /* A bare set of digits is ambiguous — the same clock counts to first serve
    before the cup and to the last day once it's running, so it says which.
@@ -24693,8 +24972,7 @@ function cupMarqueeHtml(t, variant){
       ? `<span class="cup-clock"><span data-cup-cd="d">${p.d}</span>d<i>·</i><span data-cup-cd="h">${cupPad(p.h)}</span><i>:</i><span data-cup-cd="m">${cupPad(p.m)}</span><i>:</i><span data-cup-cd="s">${cupPad(p.s)}</span></span>`
       : "";
     return `<div class="cupmark mini" ${attrs}>
-      <div class="cupmark-void" aria-hidden="true">${CUP_SCENERY}</div>
-      ${CUP_FLAMES}
+      ${cupDressing()}
       <div class="cupmark-body">
         <span class="cupmark-status"><i></i>${esc(CUP_PHASE_LABEL[phase])}</span>
         <span class="cupmark-name">${esc(name)}</span>
@@ -24704,9 +24982,12 @@ function cupMarqueeHtml(t, variant){
     </div>`;
   }
 
-  /* a fixture dated today gets its own button — the walk-in is the
-     event's front door on the day it is actually being played */
-  const todays = (t && t.format === "robin2" && phase === "live") ? rpTodaysFixture(t) : null;
+  /* A fixture dated today gets its own button — but the walk-in is a
+     cinematic, i.e. dressing, so it only appears while the skin is on.
+     Off-skin the card keeps the fixture in its foot line and offers the
+     one ordinary way in. */
+  const todays = (t && t.format === "robin2" && phase === "live" && cupSkinOn())
+    ? rpTodaysFixture(t) : null;
 
   const facts = [];
   const field = cupField(t);
@@ -24730,8 +25011,7 @@ function cupMarqueeHtml(t, variant){
        : finalDays+" days left")}</span>`;
 
   return `<div class="cupmark" ${attrs}>
-    <div class="cupmark-void" aria-hidden="true">${CUP_SCENERY}</div>
-    ${CUP_FLAMES}
+    ${cupDressing()}
     <div class="cupmark-body">
       <div class="cupmark-head">
         ${finalBadge}
@@ -24757,8 +25037,8 @@ let cupClock = null, cupLastPhase = null;
 function renderCupMarquee(){
   const mounts = document.querySelectorAll(".cup-mount");
   if(!mounts.length) return;
-  /* off-skin the whole thing evaporates — no cup, no promotion, no markup */
-  if(!cupSkinOn()){
+  /* after the cup the whole thing evaporates — no cup, no promotion, no markup */
+  if(!cupOn()){
     mounts.forEach(m=>{ m.innerHTML = ""; });
     const sheetLine = $("msCupLine"); if(sheetLine) sheetLine.textContent = "";
     return;
