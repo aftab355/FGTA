@@ -5423,8 +5423,21 @@
   .ffi-skip:hover{color:#fff;border-color:rgba(255,255,255,.4)}
 
   /* the strap that rides along the bottom of the flight */
+  /* ---- the bracket run's caption ----
+     The film opens on the event's shape rather than on a street (see
+     THE BRACKET RUN in the script), and the one line it needs is what
+     you are looking at. It is gone by the time the ball goes into the
+     cup, which is when the strap below takes over for the city. */
+  .ffi-brk{position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));z-index:4;
+    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 3.3s ease forwards .25s}
+  .ffi-brk b{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:6px;
+    text-transform:uppercase;color:#d4ff2b;text-shadow:0 0 24px rgba(212,255,43,.7)}
+  .ffi-brk i{display:block;font-style:normal;font-family:var(--font-mono);font-size:9px;
+    letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:7px}
+  /* the strap, the working and the scrim all belong to the flight, so
+     they wait the length of the bracket run before they start */
   .ffi-strap{position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));z-index:4;
-    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4.4s ease forwards .5s}
+    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4.4s ease forwards 3.8s}
   @keyframes ffiStrap{0%{opacity:0;transform:translateY(14px)}18%{opacity:1;transform:translateY(0)}
     78%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-10px)}}
   .ffi-strap b{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:6px;
@@ -5442,7 +5455,7 @@
   .ffi-hud{position:absolute;left:0;top:0;width:min(64vw,440px);height:min(46vh,300px);z-index:5;
     pointer-events:none;background:radial-gradient(105% 90% at 0% 0%,
       rgba(4,0,12,.78) 0%, rgba(4,0,12,.5) 42%, rgba(4,0,12,0) 76%);
-    opacity:0;animation:ffiFade .8s ease forwards .25s}
+    opacity:0;animation:ffiFade .8s ease forwards 3.6s}
   .ffi-hud.gone{animation:ffiHudOut .5s ease forwards}
   @keyframes ffiHudOut{from{opacity:1}to{opacity:0}}
   .ffi-mark{position:absolute;left:calc(14px + env(safe-area-inset-left));
@@ -5468,7 +5481,7 @@
   .ffi-math.gone{opacity:0}
   .ffi-math > u{display:block;text-decoration:none;font-family:var(--font-mono);font-size:7.5px;
     letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:7px;
-    opacity:0;animation:ffiFade .6s ease forwards .9s}
+    opacity:0;animation:ffiFade .6s ease forwards 4.2s}
   .ffi-mline{display:flex;align-items:baseline;gap:7px;margin-top:5px;white-space:nowrap;
     opacity:0;transform:translateX(-8px);animation:ffiMline .5s cubic-bezier(.16,1,.3,1) forwards}
   @keyframes ffiMline{to{opacity:1;transform:translateX(0)}}
@@ -5552,6 +5565,9 @@
   @keyframes ffiShock{0%{transform:scale(.2);opacity:.9}100%{transform:scale(4);opacity:0}}
 
   .ffi-foot{width:100%;max-width:760px;margin-top:16px;opacity:0;animation:ffiFade .6s ease forwards 1s}
+  /* what the winner of this one walks into — the bracket, on the card */
+  .ffi-stake{text-align:center;font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;
+    text-transform:uppercase;color:#ffd27a;margin-top:11px;text-shadow:0 0 18px rgba(255,140,0,.5)}
   .ffi-h2h{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:9.5px;
     letter-spacing:1.4px;text-transform:uppercase;color:rgba(255,255,255,.5);justify-content:center}
   .ffi-odds{height:5px;border-radius:3px;margin-top:12px;overflow:hidden;display:flex;
@@ -5594,7 +5610,7 @@
     .ffi-vs-brand i{font-size:7px;letter-spacing:1.8px}
   }
   @media(prefers-reduced-motion:reduce){
-    .ffi-strap,.ffi-side.l,.ffi-side.r,.ffi-vsmark span,.ffi-vsmark::after,
+    .ffi-strap,.ffi-brk,.ffi-side.l,.ffi-side.r,.ffi-vsmark span,.ffi-vsmark::after,
     .ffi-vs-head,.ffi-vs-when,.ffi-foot,.ffi-mark,.ffi-vs-brand,.ffi-math > u,
     .ffi-mline{animation:none!important;opacity:1!important;transform:none!important}
   }
@@ -5730,6 +5746,147 @@
   }
   .cup-step.now::after{background:var(--accent)}
 
+  /* ---- the bracket, promoted ----
+
+     The event's whole shape on the card that announces it: four seeds
+     at the corners, a road in from each to its semifinal, one road
+     from each semifinal into the cup in the middle. It is drawn off
+     the same snapshot the event page draws (rpSnapshot's bracket) —
+     and before the group is settled, off the table as it stands, in
+     which case it says so rather than pretending the draw is made.
+
+     The roads are the point. Each one is three strokes — kerb,
+     surface, and the paint down the middle — and the paint on a road
+     somebody is travelling flows towards the cup, which is the whole
+     trick: a bracket that reads as somewhere you are going rather
+     than a diagram of who plays who.
+
+     Plain classes throughout, so the skin block below re-dresses this
+     picture in neon without a second copy of it. */
+  .cup-brkbox{margin-top:26px}
+  .cup-brk-cap{
+    font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.6px;
+    text-transform:uppercase;color:var(--dim);
+  }
+  .cup-brk-cap b{color:var(--accent);font-weight:600}
+  .cup-brk-say{font-size:13px;color:var(--muted);line-height:1.45;margin-top:7px}
+  /* the frame the whole interchange is laid out in. Container units,
+     so the type scales with the picture instead of with the page —
+     a 300px card and a 560px one draw the same drawing. */
+  .cup-brk{
+    position:relative;width:100%;max-width:560px;margin:16px auto 0;
+    aspect-ratio:400/268;container-type:inline-size;
+  }
+  @media(max-width:420px){ .cup-brk{aspect-ratio:400/300} }
+  .cup-brk-roads{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .cup-kerb{fill:none;stroke:var(--line);stroke-width:11;stroke-linecap:round;stroke-linejoin:round}
+  .cup-surf{fill:none;stroke:var(--panel-2);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+  .cup-paint{fill:none;stroke:var(--dim);stroke-width:1.6;stroke-dasharray:7 11;
+    stroke-linecap:round;opacity:.5}
+  /* a road somebody has already travelled */
+  .cup-road.on .cup-kerb{stroke:var(--accent)}
+  .cup-road.on .cup-surf{stroke:var(--accent-dim)}
+  .cup-road.on .cup-paint{stroke:var(--accent);opacity:.9;animation:cupRoadFlow 1.6s linear infinite}
+  /* and one being travelled right now */
+  .cup-road.live .cup-kerb{stroke:var(--accent)}
+  .cup-road.live .cup-surf{stroke:var(--accent-dim)}
+  .cup-road.live .cup-paint{stroke:var(--accent);opacity:1;stroke-width:2;
+    animation:cupRoadFlow .8s linear infinite}
+  .cup-road.off{opacity:.4}
+  @keyframes cupRoadFlow{to{stroke-dashoffset:-36}}
+  .cup-junc{fill:var(--panel);stroke:var(--line);stroke-width:2}
+  .cup-junc.live{fill:var(--accent);stroke:var(--accent)}
+  .cup-junc.done{fill:var(--accent);stroke:var(--accent)}
+  /* the ball running the road somebody is on right now. It carries the
+     card's own ground as a ring so it reads as an object on the road
+     rather than a hole in it, in either dress. */
+  .cup-brk-ball{fill:var(--ball);stroke:var(--panel);stroke-width:1.6;
+    filter:drop-shadow(0 0 5px var(--ball-glow))}
+
+  /* the four seats, one per corner */
+  .cup-seat{
+    position:absolute;width:25%;box-sizing:border-box;transform:translateY(-50%);
+    padding:7px 8px;text-align:center;overflow:hidden;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
+  }
+  .cup-seat i{
+    display:block;font-style:normal;font-family:var(--font-mono);
+    font-size:9px;font-size:clamp(8px,2.3cqw,11px);
+    font-weight:600;letter-spacing:1.2px;color:var(--dim);
+  }
+  .cup-seat b{
+    display:block;font-size:13px;font-size:clamp(11px,3.4cqw,16px);font-weight:600;
+    color:var(--ink);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cup-seat.n1{left:0;top:13%}
+  .cup-seat.n4{left:0;top:87%}
+  .cup-seat.n2{right:0;top:13%}
+  .cup-seat.n3{right:0;top:87%}
+  .cup-seat.thru{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+  .cup-seat.thru b{color:var(--accent)}
+  .cup-seat.out{opacity:.45}
+  .cup-seat.out b{text-decoration:line-through;text-decoration-thickness:1px}
+  .cup-seat.tbd b{color:var(--dim);font-weight:400;font-style:italic}
+
+  /* the two semifinal junctions, named on the spot */
+  .cup-sfx{
+    position:absolute;top:49.3%;transform:translate(-50%,-50%);white-space:nowrap;
+    font-family:var(--font-mono);font-size:8px;font-size:clamp(7px,2cqw,10px);
+    font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);
+    padding:3px 7px;
+  }
+  .cup-sfx.l{left:17.5%}
+  .cup-sfx.r{left:82.5%}
+  .cup-sfx i{font-style:normal}
+  .cup-sfx.live{color:var(--on-accent);background:var(--accent);border-color:var(--accent)}
+  .cup-sfx.done{color:var(--muted)}
+  /* a card this narrow has no room for a badge with a suffix on it, and
+     the roads need the height back */
+  @container (max-width:360px){
+    .cup-sfx i{display:none}
+  }
+  @supports not (container-type:inline-size){
+    .cup-sfx i{display:none}
+  }
+
+  /* and the cup in the middle, which is what all of it is pointed at */
+  .cup-hub{
+    position:absolute;left:50%;top:49.3%;transform:translate(-50%,-50%);
+    width:26%;box-sizing:border-box;padding:9px 6px;text-align:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
+  }
+  .cup-hub-cap{
+    display:block;font-family:var(--font-mono);font-size:8px;font-size:clamp(7px,2cqw,10px);
+    font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+  }
+  .cup-hub-slot{
+    display:block;font-size:12px;font-size:clamp(10px,3cqw,14px);font-weight:600;color:var(--ink);
+    margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cup-hub-slot.tbd{color:var(--dim);font-weight:400;font-style:italic}
+  .cup-hub-v{
+    display:block;font-family:var(--font-mono);font-size:8px;font-size:clamp(7px,1.9cqw,10px);
+    color:var(--dim);margin:1px 0;
+  }
+  .cup-hub.champ{border-color:var(--gold);box-shadow:0 0 0 4px rgba(138,106,30,.16)}
+  .cup-hub-champ{
+    display:block;font-size:12px;font-size:clamp(10px,3cqw,15px);font-weight:700;color:var(--gold);
+    margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cup-hub.live{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}
+
+  /* the third-place game, which is a footnote and is drawn like one */
+  .cup-brk-third{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:14px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--dim);
+  }
+  .cup-brk-third b{color:var(--muted);font-weight:600}
+  @media(prefers-reduced-motion:reduce){
+    .cup-paint{animation:none!important}
+  }
+
   /* ---- foot: what's next, and the way in ---- */
   .cupmark-foot{
     display:flex;align-items:center;gap:14px;flex-wrap:wrap;
@@ -5762,6 +5919,7 @@
     .cupmark:not(.mini) .cup-facts{grid-column:1}
     .cupmark:not(.mini) .cup-clockbox{grid-column:2;grid-row:1 / span 4;align-self:center;margin-top:0}
     .cupmark:not(.mini) .cup-rail,
+    .cupmark:not(.mini) .cup-brkbox,
     .cupmark:not(.mini) .cupmark-foot{grid-column:1 / -1}
   }
   @media(max-width:700px){
@@ -6816,6 +6974,7 @@
       grid-column:2;grid-row:1 / span 4;align-self:center;margin-top:0;
     }
     :root[data-skin="ffcup"] .cupmark:not(.mini) .cup-rail,
+    :root[data-skin="ffcup"] .cupmark:not(.mini) .cup-brkbox,
     :root[data-skin="ffcup"] .cupmark:not(.mini) .cupmark-foot{grid-column:1 / -1}
   }
 
@@ -6975,6 +7134,86 @@
       0 0 16px var(--hot), 0 0 40px rgba(255,45,143,.95);
     animation:hudPulse 2.1s ease-in-out infinite;
   }
+
+
+  /* ---- the bracket, in neon ----
+     The same picture the ordinary dress draws, lit. The roads stop
+     being diagram lines and become the thing the walk-in flies down:
+     black tarmac, a magenta kerb either side, and paint that runs
+     towards the cup. Nothing here changes the layout — the geometry
+     lives on the plain classes and this only re-dresses it. */
+  :root[data-skin="ffcup"] .cup-brkbox{margin-top:24px}
+  :root[data-skin="ffcup"] .cup-brk-cap{
+    font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:2.4px;
+    text-transform:uppercase;color:var(--dim);
+  }
+  :root[data-skin="ffcup"] .cup-brk-cap b{color:var(--hot);text-shadow:0 0 12px rgba(255,45,143,.7)}
+  :root[data-skin="ffcup"] .cup-brk-say{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.6px;color:var(--muted);
+  }
+  :root[data-skin="ffcup"] .cup-kerb{stroke:rgba(255,45,143,.28);stroke-width:12}
+  :root[data-skin="ffcup"] .cup-surf{stroke:#1a0313;stroke-width:9}
+  :root[data-skin="ffcup"] .cup-paint{stroke:rgba(255,226,168,.4);stroke-width:1.6}
+  :root[data-skin="ffcup"] .cup-road.on .cup-kerb{
+    stroke:var(--hot);filter:drop-shadow(0 0 6px rgba(255,45,143,.8));
+  }
+  :root[data-skin="ffcup"] .cup-road.on .cup-surf{stroke:#2a0520}
+  :root[data-skin="ffcup"] .cup-road.on .cup-paint{stroke:var(--flare);opacity:.95}
+  :root[data-skin="ffcup"] .cup-road.live .cup-kerb{
+    stroke:var(--flare);filter:drop-shadow(0 0 9px rgba(255,226,168,.9));
+  }
+  :root[data-skin="ffcup"] .cup-road.live .cup-surf{stroke:#2a0520}
+  :root[data-skin="ffcup"] .cup-road.live .cup-paint{stroke:#fff;opacity:1}
+  /* the one thing on the card that is not in the skin's palette. The
+     walk-in flies a chartreuse tennis ball down these same roads (BALL
+     in FFIntro) and the skin paints --ball magenta like everything
+     else, so this names the colour rather than taking the token: the
+     card and the film have to be running the same ball. */
+  :root[data-skin="ffcup"] .cup-brk-ball{
+    fill:#d4ff2b;stroke:rgba(22,2,15,.85);
+    filter:drop-shadow(0 0 7px rgba(212,255,43,.8)) drop-shadow(0 0 18px rgba(212,255,43,.45));
+  }
+  /* the junctions are named in colour rather than in --accent: the app
+     writes the ladder's accent onto <body> as an inline style at
+     runtime, which outranks every rule in this block, so anything in
+     the skin that must be magenta has to say magenta */
+  :root[data-skin="ffcup"] .cup-junc{fill:#16020f;stroke:rgba(255,45,143,.5)}
+  :root[data-skin="ffcup"] .cup-junc.live{
+    fill:var(--flare);stroke:var(--flare);filter:drop-shadow(0 0 8px rgba(255,226,168,.9));
+  }
+  :root[data-skin="ffcup"] .cup-junc.done{fill:var(--hot);stroke:var(--hot)}
+  :root[data-skin="ffcup"] .cup-seat,
+  :root[data-skin="ffcup"] .cup-sfx,
+  :root[data-skin="ffcup"] .cup-hub{
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.01)), #16020f;
+    border:1px solid var(--line);
+  }
+  :root[data-skin="ffcup"] .cup-seat i{font-weight:800;letter-spacing:1.6px;color:var(--dim)}
+  :root[data-skin="ffcup"] .cup-seat b{font-family:var(--font-mono);font-weight:800;letter-spacing:.4px}
+  :root[data-skin="ffcup"] .cup-seat.thru{
+    border-color:rgba(255,45,143,.6);
+    box-shadow:0 0 0 1px rgba(255,45,143,.35), 0 0 26px -6px var(--hot);
+  }
+  :root[data-skin="ffcup"] .cup-seat.thru b{color:var(--flare);text-shadow:0 0 14px rgba(255,226,168,.75)}
+  :root[data-skin="ffcup"] .cup-sfx.live{
+    color:#2b0016;background:var(--flare);border-color:var(--flare);
+    box-shadow:0 0 22px -4px var(--flare);
+  }
+  :root[data-skin="ffcup"] .cup-hub.live{
+    border-color:rgba(255,226,168,.55);box-shadow:0 0 34px -8px var(--flare);
+  }
+  :root[data-skin="ffcup"] .cup-hub-cap{font-weight:800;letter-spacing:2px}
+  :root[data-skin="ffcup"] .cup-hub-slot{font-family:var(--font-mono);font-weight:800}
+  :root[data-skin="ffcup"] .cup-hub.champ{
+    border-color:rgba(255,194,71,.7);box-shadow:0 0 40px -8px var(--gold);
+  }
+  :root[data-skin="ffcup"] .cup-hub-champ{
+    font-family:var(--font-mono);color:var(--gold);text-shadow:0 0 16px rgba(255,194,71,.8);
+  }
+  :root[data-skin="ffcup"] .cup-brk-third{
+    font-size:9px;font-weight:700;letter-spacing:2px;color:var(--dim);
+  }
+  :root[data-skin="ffcup"] .cup-brk-third b{color:var(--muted);font-weight:800}
 
   /* ---- the line and the way in ---- */
   :root[data-skin="ffcup"] .cupmark-foot{
@@ -26336,6 +26575,194 @@ function cupRailHtml(stage, shape){
   }).join("")}</div>`;
 }
 
+
+/* ---------- THE BRACKET, PROMOTED ----------
+
+   The marquee used to say what stage the event was at and who played
+   next, which is two thirds of a promo: it never showed the shape of
+   the thing. From the moment the group can be ranked, the card carries
+   the whole bracket — four seeds at the corners, a road in from each
+   to its semifinal, one road from each semifinal into the cup.
+
+   It is drawn off rpSnapshot, so it is the same bracket the event page
+   draws and cannot drift from it. Before the group is settled there is
+   no bracket to draw, so it draws the one the table would make if the
+   group ended tonight and says PROJECTED — which is the more promotable
+   picture anyway: everyone can see who they'd get.
+
+   Nothing here is interactive. The card already has one way in. */
+
+let cupBrkSeq = 0;
+
+/* seats, clockwise from the top left: #1, #2, #3, #4 sit at the four
+   corners, #1 and #4 feeding the left semifinal and #2 and #3 the
+   right — the same 1v4 / 2v3 seeding rpBracket makes */
+const CUP_BRK_SEATS = [
+  {cls:"n1", seed:0, semi:0, d:"M 100 35 C 132 58, 136 96, 108 132"},
+  {cls:"n4", seed:3, semi:0, d:"M 100 233 C 132 210, 136 168, 108 132"},
+  {cls:"n2", seed:1, semi:1, d:"M 300 35 C 268 58, 264 96, 292 132"},
+  {cls:"n3", seed:2, semi:1, d:"M 300 233 C 268 210, 264 168, 292 132"}
+];
+const CUP_BRK_FINALS = [{semi:0, d:"M 108 132 L 148 132"}, {semi:1, d:"M 292 132 L 252 132"}];
+
+/* the bracket as the card needs it: real when there is one, projected
+   off the table when there isn't, null when there is nothing to draw */
+function cupBracketData(t){
+  if(!t || t.format !== "robin2") return null;
+  let snap = null;
+  try{ snap = rpSnapshot(t); }catch(e){ return null; }
+  if(!snap) return null;
+
+  if(snap.br){
+    const br = snap.br, st = snap.state || {};
+    const g = i => ({p1: br.semis[i].p1, p2: br.semis[i].p2, winner: br.semis[i].winner,
+                     played: !!br.semis[i].m});
+    return {
+      seeds: (br.seeds || []).slice(0,4),
+      semis: [g(0), g(1)],
+      final: {p1: br.final.p1, p2: br.final.p2, winner: br.final.winner, played: !!br.final.m},
+      bronze: st.bronze ? {p1: br.bronze.p1, p2: br.bronze.p2, winner: br.bronze.winner} : null,
+      projected: false
+    };
+  }
+
+  const rows = snap.qual && snap.qual.rows ? snap.qual.rows : null;
+  if(!rows || rows.length < 4) return null;
+  const s = rows.slice(0,4).map(r=>r.name);
+  return {
+    seeds: s,
+    semis: [{p1:s[0], p2:s[3], winner:null, played:false},
+            {p1:s[1], p2:s[2], winner:null, played:false}],
+    final: {p1:null, p2:null, winner:null, played:false},
+    bronze: null,
+    projected: true
+  };
+}
+
+function cupBracketHtml(t){
+  const d = cupBracketData(t);
+  if(!d) return "";
+  const uid = "cb" + (++cupBrkSeq);
+  const champ = d.final.winner;
+  const reduce = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  /* a road's state is the state of the tie it leads out of: travelled,
+     being travelled right now, or a road somebody has already been
+     knocked off */
+  const seatRoad = (semi, name) => {
+    const g = d.semis[semi];
+    if(!name || d.projected) return "";
+    /* once it is won, the only road still lit is the one that went all
+       the way — a beaten finalist's road reading as bright as the
+       champion's says the wrong thing about a settled event */
+    if(champ) return champ === name ? "on" : "off";
+    if(g.winner) return g.winner === name ? "on" : "off";
+    return (g.p1 && g.p2) ? "live" : "";
+  };
+  const finalRoad = semi => {
+    const w = d.semis[semi].winner;
+    if(!w) return "";
+    if(champ) return champ === w ? "on" : "off";
+    return (d.final.p1 && d.final.p2) ? "live" : "on";
+  };
+  const road = (state, id, dpath) => `<g class="cup-road ${state}">
+      <path class="cup-kerb" d="${dpath}"/>
+      <path class="cup-surf" d="${dpath}"/>
+      <path class="cup-paint" id="${id}" d="${dpath}"/>
+    </g>`;
+  /* one tennis ball per road that is being played on, running it — the
+     same object the walk-in flies, doing the same job on the card */
+  const runner = (state, id) => (state !== "live" || reduce) ? "" :
+    `<circle class="cup-brk-ball" r="4.6">
+       <animateMotion dur="2.4s" repeatCount="indefinite" rotate="auto">
+         <mpath href="#${id}" xlink:href="#${id}"/>
+       </animateMotion>
+     </circle>`;
+
+  const roads = [], runners = [];
+  CUP_BRK_SEATS.forEach((s, i)=>{
+    const st = seatRoad(s.semi, d.seeds[s.seed]);
+    const id = uid + "s" + i;
+    roads.push(road(st, id, s.d));
+    runners.push(runner(st, id));
+  });
+  CUP_BRK_FINALS.forEach((f, i)=>{
+    const st = finalRoad(f.semi);
+    const id = uid + "f" + i;
+    roads.push(road(st, id, f.d));
+    runners.push(runner(st, id));
+  });
+
+  const seats = CUP_BRK_SEATS.map(s=>{
+    const nm = d.seeds[s.seed];
+    const g  = d.semis[s.semi];
+    let cls = "";
+    if(!nm) cls = "tbd";
+    else if(champ) cls = champ === nm ? "thru" : "out";
+    else if(g.winner) cls = g.winner === nm ? "thru" : "out";
+    return `<div class="cup-seat ${s.cls} ${cls}">
+      <i>#${s.seed+1}</i><b>${nm ? esc(nm) : "TBD"}</b>
+    </div>`;
+  }).join("");
+
+  const jcls = i => {
+    const g = d.semis[i];
+    if(d.projected) return "";
+    if(champ) return champ === g.winner ? "done" : "";
+    return g.winner ? "done" : (g.p1 && g.p2) ? "live" : "";
+  };
+
+  const sfx = [0,1].map(i=>{
+    const g = d.semis[i];
+    const live = !d.projected && g.p1 && g.p2 && !g.winner;
+    /* the "· now" is a suffix rather than part of the label so a narrow
+       card can drop it and keep the badge off the road */
+    return `<div class="cup-sfx ${i===0?"l":"r"} ${live?"live":g.winner?"done":""}">SF${i+1}${
+      live ? "<i> · now</i>" : ""
+    }</div>`;
+  }).join("");
+
+  const hubLive = !champ && !!(d.final.p1 && d.final.p2);
+  const hub = champ
+    ? `<div class="cup-hub champ">
+         <span class="cup-hub-cap">Champion</span>
+         <span class="cup-hub-champ">🏆 ${esc(champ)}</span>
+       </div>`
+    : `<div class="cup-hub ${hubLive?"live":""}">
+         <span class="cup-hub-cap">${hubLive ? "Final · now" : "Final"}</span>
+         <span class="cup-hub-slot${d.final.p1?"":" tbd"}">${d.final.p1?esc(d.final.p1):"TBD"}</span>
+         <span class="cup-hub-v">v</span>
+         <span class="cup-hub-slot${d.final.p2?"":" tbd"}">${d.final.p2?esc(d.final.p2):"TBD"}</span>
+       </div>`;
+
+  const third = d.bronze ? `<div class="cup-brk-third">3rd place · ${
+    d.bronze.winner ? `<b>${esc(d.bronze.winner)}</b> took it`
+    : (d.bronze.p1 && d.bronze.p2) ? `<b>${esc(d.bronze.p1)}</b> v <b>${esc(d.bronze.p2)}</b>`
+    : "the two beaten semifinalists"
+  }</div>` : "";
+
+  const say = d.projected
+    ? "Where the table stands tonight, seeded — top the group and you get the easiest semi."
+    : champ
+      ? "Every road ran into the middle. That is the cup."
+      : "#1 plays #4, #2 plays #3 — so the two best can only meet in the final.";
+
+  return `<div class="cup-brkbox">
+    <div class="cup-brk-cap">The bracket${d.projected?` · <b>projected</b>`:""}</div>
+    <div class="cup-brk-say">${say}</div>
+    <div class="cup-brk">
+      <svg class="cup-brk-roads" viewBox="0 0 400 268" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        ${roads.join("")}
+        <circle class="cup-junc ${jcls(0)}" cx="108" cy="132" r="5.5"/>
+        <circle class="cup-junc ${jcls(1)}" cx="292" cy="132" r="5.5"/>
+        ${runners.join("")}
+      </svg>
+      ${seats}${sfx}${hub}
+    </div>
+    ${third}
+  </div>`;
+}
+
 function cupMarqueeHtml(t, variant){
   const phase  = cupPhase(t);
   const target = cupTarget(t, phase);
@@ -26403,6 +26830,7 @@ function cupMarqueeHtml(t, variant){
       ${facts.length?`<div class="cup-facts">${facts.join("")}</div>`:""}
       ${cupCountdownHtml(target, phase)}
       ${cupRailHtml(cupStage(t, phase), cupShape(t))}
+      ${phase === "pre" ? "" : cupBracketHtml(t)}
       <div class="cupmark-foot">
         <span class="cupmark-line">${cupLine(t, phase)}</span>
         ${todays ? `<button class="cup-cta" onclick="ffPlayIntro(${t.id},'${rpJs(todays.round)}')">Watch the walk-in<span>&rsaquo;</span></button>` : ""}
@@ -35648,11 +36076,18 @@ if(COURT.api) setTimeout(()=>{ try{ fetchCourt(false); }catch(e){} }, 2200);
    ============================================================ */
 const FFIntro = (function(){
 
-  /* ---------- the beats, in seconds ---------- */
-  const T_END   = 10.9;   // the flight lands at the arena
-  const T_VS    = 11.0;   // the versus card
-  const T_HOLD  = 15;     // and how long it holds before closing itself
-  const T_LOCK  = 3.6;    // and how long before it can be skipped at all
+  /* ---------- the beats, in seconds ----------
+     Two clocks. T_BRK is the bracket run that opens the film, measured
+     on the film's own clock; T_END is where the city flight lands,
+     measured on the flight's, which starts when the run is over. T_CUT
+     is the one written in the other's terms, and every beat after the
+     flight — the card, the slam, the hold — hangs off it. */
+  const T_BRK   = 3.3;            // the bracket run, then the cut to the city
+  const T_END   = 10.9;           // the flight lands at the arena
+  const T_CUT   = T_BRK + T_END;  // ...which is here, on the film's clock
+  const T_VS    = T_CUT + 0.1;    // the versus card
+  const T_HOLD  = 15;             // and how long it holds before closing itself
+  const T_LOCK  = 4.6;            // and how long before it can be skipped at all
 
   /* ---------- deterministic noise ---------- */
   function rng(seed){
@@ -35838,9 +36273,10 @@ const FFIntro = (function(){
   }
   /* it drags a tail of where it has just been, which is most of what makes
      a two-pixel dot read as something travelling */
-  function drawHeroBall(ctx, C, u){
+  function drawHeroBall(ctx, C, u, at){
+    const src = at || ballAt;                 // the bracket run flies the same ball
     for(let i=7;i>=0;i--){
-      const b = ballAt(Math.max(0, u - i*0.045));
+      const b = src(Math.max(0, u - i*0.045));
       const q = pr(C, b[0], b[1], b[2]);
       if(!q) continue;
       const k = 1 - i/8;
@@ -35899,6 +36335,391 @@ const FFIntro = (function(){
       cr: Math.cos(roll), sr: Math.sin(roll),
       ox: W/2, oy: H/2, W, H
     };
+  }
+
+
+  /* ============================================================
+     THE BRACKET RUN — the three seconds before the city
+
+     The film used to open on a street. It now opens on the event's
+     own shape: a lit interchange hanging in the dark with the cup at
+     the middle of it, four seed roads running in from the corners,
+     two of them merging at each semifinal, and one road out of each
+     semifinal into the ring around the cup. The ball comes in off the
+     group stage at a hundred and fifty metres a second, takes this
+     fixture's own road — its player's seed, its semifinal, its road
+     to the final — whips round the ring and goes into the cup, and
+     the light that makes is the cut to the city.
+
+     Which is the whole point of putting it first: by the time the
+     street run starts you have already been told what is at stake and
+     where tonight's game sits in it, at speed, without a caption.
+
+     Same engine as the flight — same projection, same fog, same
+     helpers — laid out in its own world with the cup at the origin.
+     Everything in it is authored off the bracket the app already
+     knows (film.bracket, read from rpSnapshot), so the seeds standing
+     by the road are the real seeds and the road the ball takes is the
+     real route to the real final.
+     ============================================================ */
+  const BRK_R_SEED = 196, BRK_R_J = 116, BRK_R_RING = 34, BRK_R_OUT = 340;
+  const BRK_ANG = [140, 40, -40, 220];        // where #1, #2, #3 and #4 stand
+  const BRK_LEAD = 0.30;                       // how far ahead of the camera the ball runs
+  const D2R = Math.PI/180;
+  const GOLD = [255,206,120];
+
+  /* which side of the interchange a seat is on, and the angle its road
+     closes on — the two semifinal junctions sit on the x axis */
+  /* The city's fog is authored for a street: everything past three
+     hundred metres is haze, which is the right call there and the wrong
+     one here — the interchange is four hundred across and the point of
+     the opening is that you can see all of it. Same colour, further
+     out. */
+  function brkFog(d){ return clamp((d-90)/640, 0, 0.9); }
+  function brkFogged(c, d, al){ return rgb(mix(c, FOGC, brkFog(d)), al); }
+
+  function brkSide(A){ return Math.cos(A) < 0 ? -1 : 1; }
+  function brkShort(from, to){
+    let d = to - from;
+    while(d >  Math.PI) d -= 6.283185;
+    while(d < -Math.PI) d += 6.283185;
+    return d;
+  }
+  /* a road, as a polyline: r and the angle both interpolated, which is
+     what gives every road its sweep in towards the middle */
+  function brkArc(r0, a0, r1, a1, y, n){
+    const da = brkShort(a0, a1), pts = [];
+    for(let i=0;i<=n;i++){
+      const k = i/n, r = r0 + (r1-r0)*k, a = a0 + da*k;
+      pts.push([r*Math.cos(a), y, r*Math.sin(a)]);
+    }
+    return pts;
+  }
+
+  /* ---- the route ----
+     Authored the same way the flight is: keys on a clock, through a
+     Catmull-Rom spline, so there is no seam in the speed anywhere. It
+     lands on the cup at exactly T_BRK + BRK_LEAD, which is the frame
+     the screen goes white. */
+  function brkRoute(seat){
+    const A = BRK_ANG[seat % 4] * D2R;
+    const side = brkSide(A);
+    const jA = side < 0 ? Math.PI : 0;
+    const da = brkShort(A, jA);
+    const at = (r, k, y) => { const a = A + da*k; return [r*Math.cos(a), y, r*Math.sin(a)]; };
+    const h = at(BRK_R_OUT+120, -0.48, 34), e = at(BRK_R_OUT+10, -0.34, 22),
+          f = at(BRK_R_OUT-110, -0.12, 15), s = at(BRK_R_SEED, 0, 10),
+          g = at(168, 0.36, 8),             j = at(BRK_R_J, 1, 7);
+    return [
+      /* the run-up, which only the camera ever sees — it rides the road
+         a third of a second behind the ball, so the line has to start
+         before the ball does */
+      [-0.45, h[0], h[1], h[2]],
+      [0.00, e[0], e[1], e[2]],          // in off the group stage, high and wide
+      [0.55, f[0], f[1], f[2]],
+      [1.05, s[0], s[1], s[2]],          // over its own seed
+      [1.55, g[0], g[1], g[2]],          // the seed road, banking in
+      [2.05, j[0], j[1], j[2]],          // the semifinal junction
+      [2.45, side*82,  7,   0],          // and out down the road to the final
+      [2.85, side*48,  8,   -side*14],   // a swing onto the ring, and then
+      [3.15, side*20,  9.5, -side*17],   // nothing between it and the middle
+      [3.60, 0,        12,  0]           // into the cup
+    ];
+  }
+  let BRK_KEYS = brkRoute(0);
+  function brkAt(u){
+    const K = BRK_KEYS, last = K.length-1;
+    if(u >= K[last][0]) return K[last].slice(1);
+    if(u <= K[0][0]) return K[0].slice(1);
+    let i = 0;
+    while(i < last-1 && K[i+1][0] <= u) i++;
+    const a = K[i], b = K[i+1];
+    const t = (u - a[0]) / (b[0] - a[0]);
+    const p0 = K[Math.max(0,i-1)], p3 = K[Math.min(last,i+2)];
+    const out = [];
+    for(let c=1;c<=3;c++) out.push(cr(p0[c], a[c], b[c], p3[c], t));
+    return out;
+  }
+  function brkBallAt(u){
+    const p = brkAt(u + BRK_LEAD);
+    return [p[0], p[1], p[2]];
+  }
+  /* the camera rides the same line, a beat behind and a little above,
+     with its aim on the ball and its bank taken from the turn it is in */
+  function brkCamera(u, W, H){
+    /* Where it sits: on the road itself, a beat behind the ball and
+       above it. The follow distance is a time offset along the same
+       line rather than a step backwards in space — on a road that
+       turns this hard, a step backwards puts the camera in the dark
+       beside the road looking at a ball with nothing under it.
+
+       The height is the shot. It opens a long way above the board, far
+       enough that the four arms and the cup in the middle read as one
+       drawing — which is the picture the whole event is promoted on —
+       and drops out of the sky onto the tarmac inside the first second
+       and a half, by which point the run is at speed and the camera is
+       a car. */
+    const k    = clamp(u/T_BRK, 0, 1);
+    const drop = 1 - clamp(u/1.6, 0, 1);
+    const lag  = 0.40 - 0.26*k, up = 7 + 195*drop*drop;
+    const p = brkAt(u - lag);
+    const a = brkAt(u - lag - 0.07), b = brkAt(u - lag + 0.07);
+    const x = p[0], z = p[2], y = p[1] + up;
+
+    /* What it looks at. In the middle of the run, the ball and nothing
+       else. At the two ends, past it at the cup: at the top because the
+       first thing on screen has to be the whole bracket converging on
+       the middle, and at the bottom because the last thing has to be the
+       ball going into it. Both are the same blend towards the origin,
+       which is where the cup stands. */
+    const ball = brkBallAt(u);
+    const w = Math.max(0.85 * (1 - clamp(u/1.4, 0, 1)),
+                       0.50 * clamp((u - 2.35)/0.75, 0, 1));
+    const tx = ball[0]*(1-w), tz = ball[2]*(1-w), ty = ball[1]*(1-w) + 11*w;
+    const dx = tx-x, dy = ty-y - up*0.22*(1-w), dz = tz-z;
+    const yaw = Math.atan2(dx, dz);
+    const sy = Math.sin(yaw), cy = Math.cos(yaw);
+    const pitch = clamp(Math.atan2(dy, Math.max(6, Math.hypot(dx, dz))), -0.6, 0.3);
+
+    const a2 = brkAt(u - lag - 0.22), b2 = brkAt(u - lag + 0.22);
+    const y0 = Math.atan2(a[0]-a2[0], a[2]-a2[2]);
+    const y1 = Math.atan2(b2[0]-b[0], b2[2]-b[2]);
+    const roll = clamp(-brkShort(y0, y1)*1.15, -0.75, 0.75);
+
+    const f = Math.max(W,H) * (0.58 + clamp(u/T_BRK,0,1)*0.10);
+    return {
+      x, y, z, f, roll,
+      cy, sy,
+      cp: Math.cos(pitch), sp: Math.sin(pitch),
+      cr: Math.cos(roll),  sr: Math.sin(roll),
+      ox: W/2, oy: H/2, W, H
+    };
+  }
+
+  /* the caption under the run: the draw itself when the app knows it,
+     and the shape of it when it doesn't */
+  function brkCaption(film){
+    const bk = film.bracket;
+    if(!bk) return "#1 v #4 \u00b7 #2 v #3 \u00b7 one cup";
+    if(bk.champ) return bk.champ + " took it";
+    const a = bk.semis[0], b = bk.semis[1];
+    return (a.tag || "SF1") + " \u00b7 " + (b.tag || "SF2") + " \u00b7 winners meet in the final";
+  }
+
+  /* ---- the interchange, built once per film ---- */
+  function buildBracketRun(film){
+    const bk    = film.bracket || null;
+    const seat  = bk && bk.seat != null ? (bk.seat|0) % 4 : 0;
+    const seeds = (bk && bk.seeds) || [];
+    const semis = (bk && bk.semis) || [{},{}];
+    const roads = [], plates = [];
+
+    for(let i=0;i<4;i++){
+      const A = BRK_ANG[i]*D2R, side = brkSide(A), jA = side < 0 ? Math.PI : 0;
+      const da = brkShort(A, jA);
+      const semi = (i === 0 || i === 3) ? 0 : 1;
+      const g  = semis[semi] || {};
+      const nm = seeds[i] || null;
+      /* a road is lit if somebody is on it: the fixture's own road
+         brightest, a road already travelled next, everything else is
+         tarmac with the light off */
+      const mine = i === seat;
+      const thru = !!(nm && g.winner === nm);
+      const lit  = mine ? 2 : thru ? 1 : 0;
+      const colr = mine ? BALL : thru ? GOLD : NEON;
+
+      // the group stage, running in off the dark
+      roads.push({pts: brkArc(BRK_R_OUT+90, A - da*0.34, BRK_R_SEED, A, 0, 15),
+                  w: 6.5, lit: mine?2:0, colr: mine?BALL:NEON});
+      // and one more feeding the same seed, which is what a group is
+      roads.push({pts: brkArc(BRK_R_OUT-70, A + 0.19, BRK_R_SEED, A, 0, 9), w: 4, lit:0, colr:NEON});
+      // the seed's own road in to its semifinal
+      roads.push({pts: brkArc(BRK_R_SEED, A, BRK_R_J, jA, 0, 18), w: 8, lit, colr});
+
+      const px = BRK_R_SEED*Math.cos(A), pz = BRK_R_SEED*Math.sin(A);
+      plates.push({x: px, y: 15, z: pz, top: "SEED #"+(i+1),
+                   main: (nm || "TBD").toUpperCase(), colr, lit});
+    }
+
+    // the two roads to the final, and the ring the final is run on
+    [[-1,0],[1,1]].forEach(([side, semi])=>{
+      const g = semis[semi] || {};
+      const done = !!g.winner;
+      const mine = (semi === (seat === 0 || seat === 3 ? 0 : 1));
+      roads.push({pts: [[side*BRK_R_J,0,0],[side*90,0,0],[side*56,0,0],[side*38,0,0]],
+                  w: 10, lit: mine?2:done?1:0, colr: mine?BALL:done?GOLD:NEON});
+      plates.push({x: side*BRK_R_J, y: 19, z: 0, top: "SEMIFINAL",
+                   main: (g.tag || ("SF"+(semi+1))).toUpperCase(),
+                   colr: mine?BALL:NEON, lit: mine?2:0});
+    });
+    const ring = [];
+    for(let i=0;i<=54;i++){ const a = i/54*6.283185; ring.push([BRK_R_RING*Math.cos(a),0,BRK_R_RING*Math.sin(a)]); }
+    roads.push({pts: ring, w: 7, lit: 1, colr: GOLD, ring: true});
+
+    return {roads, plates, seat,
+            champ: (bk && bk.champ) || null,
+            name: (bk && bk.finalTag) || "THE FINAL"};
+  }
+
+  /* ---- drawing it ---- */
+  function rrect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x,   y+h, r);
+    ctx.arcTo(x,   y+h, x,   y,   r);
+    ctx.arcTo(x,   y,   x+w, y,   r);
+    ctx.closePath();
+  }
+
+  /* the floor the interchange is bolted to: three rings and a set of
+     spokes, far enough down to read as ground and faint enough to
+     read as nothing at all once the roads are lit */
+  function drawBrkFloor(ctx, C, u){
+    ctx.save();
+    ctx.lineWidth = 1;
+    for(let i=0;i<16;i++){
+      const a = i/16*6.283185;
+      line(ctx, pr(C, 70*Math.cos(a), -1.4, 70*Math.sin(a)),
+                pr(C, (BRK_R_OUT+60)*Math.cos(a), -1.4, (BRK_R_OUT+60)*Math.sin(a)),
+                rgb(NEON, 0.05), 1);
+    }
+    ctx.restore();
+  }
+
+  /* one road: tarmac, a kerb of light either side, and paint down the
+     middle that runs towards the cup — which is most of what sells the
+     speed, exactly as the avenue's dashes do in the city */
+  function drawBrkRoad(ctx, C, road, u){
+    const pts = road.pts, w = road.w, lit = road.lit, colr = road.colr;
+    const ph = Math.floor(u*26);
+    for(let i=0;i<pts.length-1;i++){
+      const a = pts[i], b = pts[i+1];
+      const mx = (a[0]+b[0])/2, mz = (a[2]+b[2])/2;
+      const d = depth(C, mx, 0, mz);
+      if(d <= 1.2 || d > 700) continue;
+      let dx = b[0]-a[0], dz = b[2]-a[2];
+      const L = Math.hypot(dx,dz) || 1; dx/=L; dz/=L;
+      const nx = -dz*w, nz = dx*w;
+      const q0 = pr(C, a[0]+nx, a[1], a[2]+nz), q1 = pr(C, b[0]+nx, b[1], b[2]+nz),
+            q2 = pr(C, b[0]-nx, b[1], b[2]-nz), q3 = pr(C, a[0]-nx, a[1], a[2]-nz);
+      if(!poly(ctx, [q0,q1,q2,q3], brkFogged(lit ? [14,5,30] : [24,10,46], d, 0.95))) continue;
+      const al = lit === 2 ? 0.95 : lit === 1 ? 0.8 : 0.62;
+      const lw = Math.max(1.5, (lit ? 0.09 : 0.06) * q0.s);
+      const kerb = rgb(mix(colr, FOGC, brkFog(d)*0.5), al);
+      line(ctx, q0, q1, kerb, lw);
+      line(ctx, q3, q2, kerb, lw);
+      // the paint, moving
+      /* not the ones right under the lens: a lane marking two metres
+         away is a white slab across the frame, not a road */
+      if(lit && d > 11 && ((i - ph) % 3 + 3) % 3 === 0){
+        const k0 = 0.22, k1 = 0.72, pw = w*0.085;
+        const ax = a[0]+dx*L*k0, az = a[2]+dz*L*k0, bx = a[0]+dx*L*k1, bz = a[2]+dz*L*k1;
+        poly(ctx, [pr(C,ax-dz*pw,a[1]+0.05,az+dx*pw), pr(C,bx-dz*pw,a[1]+0.05,bz+dx*pw),
+                   pr(C,bx+dz*pw,a[1]+0.05,bz-dx*pw), pr(C,ax+dz*pw,a[1]+0.05,az-dx*pw)],
+             brkFogged(lit === 2 ? [255,255,235] : colr, d, 0.62));
+      }
+    }
+    const end = pts[pts.length-1];
+    const eq = pr(C, end[0], end[1]+1.5, end[2]);
+    if(eq){
+      const f = 1 - brkFog(eq.d);
+      glow(ctx, eq, Math.max(9, 5*eq.s), colr, (lit === 2 ? 0.34 : lit ? 0.24 : 0.16)*f);
+    }
+  }
+
+  /* a sign by the road. Screen-space rather than pasted on a quad: at
+     this speed a billboard turning edge-on is a sliver, and the one
+     thing these have to do is be readable in the third of a second
+     they are on screen. */
+  function drawBrkPlate(ctx, C, p, u){
+    const q = pr(C, p.x, p.y, p.z);
+    if(!q || q.d > 720) return;
+    const fade = 1 - brkFog(q.d);
+    if(fade < 0.05) return;
+    const sc = clamp(q.s*0.22, 0.26, 0.95);
+    // the post it stands on
+    line(ctx, pr(C,p.x,0,p.z), q, brkFogged(p.colr, q.d, 0.45), Math.max(0.6, 0.05*q.s));
+    ctx.save();
+    ctx.globalAlpha = clamp(fade, 0, 1);
+    ctx.translate(q.x, q.y);
+    ctx.scale(sc, sc);
+    const w = 150, h = 52;
+    ctx.fillStyle = "rgba(8,2,18,.88)";
+    rrect(ctx, -w/2, -h, w, h, 9); ctx.fill();
+    ctx.strokeStyle = rgb(p.colr, p.lit ? 0.95 : 0.42);
+    ctx.lineWidth = p.lit ? 2.6 : 1.4;
+    ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = rgb(p.colr, 0.85);
+    ctx.font = "700 12px 'JetBrains Mono',monospace";
+    ctx.fillText(p.top, 0, -h+15);
+    ctx.fillStyle = "rgba(255,255,255,.97)";
+    ctx.font = "700 22px 'JetBrains Mono',monospace";
+    ctx.fillText(p.main, 0, -h+35);
+    ctx.restore();
+    if(p.lit) glow(ctx, q, Math.max(16, 20*sc), p.colr, 0.26*fade);
+  }
+
+  /* the cup, at the middle of everything, which is where every road on
+     the board is pointed and where the run ends */
+  function drawBrkCup(ctx, C, run, u){
+    const d = depth(C, 0, 12, 0);
+    if(d <= 1) return;
+    const base = pr(C, 0, 0, 0), top = pr(C, 0, 26, 0);
+    if(!base) return;
+    // the column of light standing in the ring
+    if(top){
+      /* the beam is a billboard, not a wall: a flat quad standing on a
+         fixed axis turns edge-on as you come round the ring, which is
+         where the light is supposed to be brightest */
+      const w = 5.5, rx = C.cy*w, rz = -C.sy*w;
+      const q = [pr(C,-rx,0.1,-rz), pr(C,rx,0.1,rz), pr(C,rx,30,rz), pr(C,-rx,30,-rz)];
+      if(q[0] && q[1] && q[2] && q[3]){
+        const g = ctx.createLinearGradient(base.x, base.y, top.x, top.y);
+        g.addColorStop(0, rgb(GOLD, 0.3)); g.addColorStop(1, rgb(GOLD, 0));
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        poly(ctx, q, g);
+        ctx.restore();
+      }
+    }
+    glow(ctx, base, Math.max(30, 42*base.s), GOLD, 0.55);
+    const p = pr(C, 0, 13, 0);
+    if(p){
+      const sc = clamp(p.s*0.30, 0.24, 1.5);
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - brkFog(p.d), 0, 1);
+      ctx.translate(p.x, p.y); ctx.scale(sc, sc);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "44px serif";
+      ctx.fillText("🏆", 0, -8);
+      ctx.fillStyle = rgb(GOLD, 0.95);
+      ctx.font = "700 13px 'JetBrains Mono',monospace";
+      ctx.fillText(run.champ ? "CHAMPION" : "THE FINAL", 0, 26);
+      if(run.champ){
+        ctx.fillStyle = "rgba(255,255,255,.97)";
+        ctx.font = "700 20px 'JetBrains Mono',monospace";
+        ctx.fillText(run.champ.toUpperCase(), 0, 48);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawBracketRun(ctx, C, run, film, u, city, skyGrad){
+    drawSky(ctx, C, u, city, skyGrad);
+    drawBrkFloor(ctx, C, u);
+    const list = [];
+    run.roads.forEach(r=>{
+      const m = r.pts[(r.pts.length/2)|0];
+      list.push({d: depth(C, m[0], 0, m[2]), f: ()=>drawBrkRoad(ctx, C, r, u)});
+    });
+    run.plates.forEach(p=>{
+      list.push({d: depth(C, p.x, p.y, p.z), f: ()=>drawBrkPlate(ctx, C, p, u)});
+    });
+    list.push({d: depth(C, 0, 12, 0), f: ()=>drawBrkCup(ctx, C, run, u)});
+    list.sort((a,b)=>b.d - a.d);
+    for(let i=0;i<list.length;i++) if(list[i].d > -20) list[i].f();
+    drawHeroBall(ctx, C, u, brkBallAt);
   }
 
   /* ============================================================
@@ -37017,8 +37838,10 @@ const FFIntro = (function(){
     };
   }
 
-  /* when each step of the sum arrives, in flight seconds */
-  const MATH_AT = [1.0, 2.6, 4.4, 6.3, 8.2, 9.8];
+  /* When each step of the sum arrives, on the film's clock — so the
+     working starts when the flight does and the bracket run is left to
+     say the one thing it is there to say. */
+  const MATH_AT = [1.0, 2.6, 4.4, 6.3, 8.2, 9.8].map(t => t + T_BRK);
   function mathSteps(film){
     const m = mathOf(film);
     const rows = [
@@ -37059,6 +37882,7 @@ const FFIntro = (function(){
       </div>
       <div class="ffi-foot">
         <div class="ffi-h2h">${esc(film.h2h)}</div>
+        ${film.stake?`<div class="ffi-stake">${esc(film.stake)}</div>`:""}
         <div class="ffi-odds">
           <i style="width:${a}%;background:${film.a.color}"></i>
           <i style="width:${b}%;background:${film.b.color}"></i>
@@ -37090,6 +37914,7 @@ const FFIntro = (function(){
     el.innerHTML = `
       <canvas></canvas>
       <div class="ffi-hud"></div>
+      <div class="ffi-brk"><b>The bracket</b><i>${esc(brkCaption(film))}</i></div>
       <div class="ffi-mark"><span class="ffi-ball"></span><span><b>FGTA</b><i>championship ladder</i></span></div>
       <div class="ffi-math" aria-hidden="true"><u>FGTA Elo · win expectancy</u></div>
       <div class="ffi-strap"><b>FF CUP</b><i>${esc(film.stage)} · ${esc(film.when)}</i></div>
@@ -37103,6 +37928,7 @@ const FFIntro = (function(){
     const strap  = el.querySelector(".ffi-strap");
     const mathEl = el.querySelector(".ffi-math");
     const hudEl  = el.querySelector(".ffi-hud");
+    const brkEl  = el.querySelector(".ffi-brk");
 
     /* the sum, one step at a time, off the flight clock — so the working
        is paced by the film rather than by a timer of its own, and a
@@ -37153,6 +37979,7 @@ const FFIntro = (function(){
        moving towards it */
     if(reduce){
       strap.remove();
+      brkEl.remove();
       mathEl.remove();
       hudEl.remove();
       vs.innerHTML = vsCardHtml(film);
@@ -37164,6 +37991,10 @@ const FFIntro = (function(){
 
     const budget = (window.innerWidth < 760 || (navigator.hardwareConcurrency||4) <= 4) ? 0.55 : 1;
     const city = buildCity(hash(film.key), budget);
+    /* the run that opens the film, and the road through it the ball
+       takes — this fixture's seed, its semifinal, its road to the cup */
+    const run  = buildBracketRun(film);
+    BRK_KEYS   = brkRoute(run.seat);
     const ctx  = canvas.getContext("2d");
     let W = 0, H = 0, dpr = 1, skyGrad = null, vigGrad = null;
     function size(){
@@ -37272,10 +38103,18 @@ const FFIntro = (function(){
       liveRaf = requestAnimationFrame(frame);
     }
 
-    function drawFrame(u){
-      const C = camera(u, W, H);
+    /* `gu` is the film's clock and `u` the flight's, which starts when
+       the bracket run is over. Everything below the cut is written in
+       flight seconds exactly as it always was; everything that spans
+       both — the streaks, the vignette, the card — is written in gu. */
+    function drawFrame(gu){
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.clearRect(0,0,W,H);
+      const u = gu - T_BRK;
+      if(gu < T_BRK){
+        drawBracketRun(ctx, brkCamera(gu, W, H), run, film, gu, city, skyGrad);
+      } else {
+      const C = camera(u, W, H);
       drawSky(ctx, C, u, city, skyGrad);
 
       // painter's algorithm over everything with a place in the world,
@@ -37326,10 +38165,11 @@ const FFIntro = (function(){
       }
       drawHeroBall(ctx, C, u);
       drawConfetti(ctx, C, city, u);
+      }
 
-      // speed lines while the flight is at its quickest
-      if(u > 1.4 && u < T_END){
-        const k = Math.min(1, (u-1.4)/1.6);
+      // speed lines, from the moment the run is at its quickest
+      if(gu > 0.5 && gu < T_CUT){
+        const k = Math.min(1, (gu-0.5)/1.4);
         ctx.strokeStyle = "rgba(255,255,255,.16)";
         ctx.globalAlpha = k*0.5;
         ctx.lineWidth = 1.4;
@@ -37347,6 +38187,12 @@ const FFIntro = (function(){
       // a vignette, so the middle of the frame always wins
       ctx.fillStyle = vigGrad; ctx.fillRect(0,0,W,H);
 
+      /* the ball goes into the cup, and the light it makes is the cut:
+         the bracket run ends and the street starts inside one flash */
+      if(gu > T_BRK - 0.2 && gu < T_BRK + 0.5){
+        const k = 1 - Math.abs(gu - T_BRK)/0.36;
+        if(k > 0){ ctx.fillStyle = "rgba(232,255,150,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
+      }
       // going through the glass is a bang of light, not a fade
       if(u > 6.9 && u < 7.9){
         const k = 1 - Math.abs(u - 7.2)/0.32;
@@ -37357,13 +38203,13 @@ const FFIntro = (function(){
         const k = 1 - Math.abs(u - T_END)/0.5;
         if(k > 0){ ctx.fillStyle = "rgba(255,246,235,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
       }
-      mathTo(u);
-      if(!carded && u >= T_VS){
+      mathTo(gu);
+      if(!carded && gu >= T_VS){
         carded = true;
         vs.classList.add("on");
         setTimeout(()=>{ if(liveEl === el) teardown(); }, T_HOLD*1000);
       }
-      if(!slammed && u >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
+      if(!slammed && gu >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
     }
 
     /* paint frame zero now, so a prepared film is never a blank rectangle
@@ -37444,6 +38290,40 @@ function ffFilmFor(tid, round){
     ? `Head to head ${aw}–${bw} in ${met.length} meeting${met.length===1?"":"s"}`
     : "They have never played";
 
+  /* The bracket this fixture sits in. Read through the same function
+     the home screen's card reads, so the seeds standing by the road in
+     the opening run are the seeds the app is promoting everywhere else
+     — and so a fixture played before the draw exists still gets a run,
+     off the table as it stands. */
+  let bracket = null, stake = "";
+  try{
+    const d = cupBracketData(t);
+    if(d && d.seeds.length){
+      const tag = g => (g.p1 && g.p2) ? (initials(g.p1) + " v " + initials(g.p2)) : "TBD";
+      bracket = {
+        seeds: d.seeds.slice(0,4),
+        semis: [{p1:d.semis[0].p1, p2:d.semis[0].p2, winner:d.semis[0].winner, tag:tag(d.semis[0])},
+                {p1:d.semis[1].p1, p2:d.semis[1].p2, winner:d.semis[1].winner, tag:tag(d.semis[1])}],
+        champ: d.final.winner || null,
+        projected: d.projected,
+        /* the road the ball takes is the road one of tonight's players
+           is actually on */
+        seat: Math.max(0, d.seeds.indexOf(fx.p1))
+      };
+      const half = round === "semi1" ? 0 : round === "semi2" ? 1 : -1;
+      if(half >= 0){
+        const other = bracket.semis[1-half];
+        stake = other.winner
+          ? "Winner meets " + other.winner + " in the final"
+          : (other.p1 && other.p2)
+            ? "Winner takes the final against " + other.p1 + " or " + other.p2
+            : "Winner is in the final";
+      } else if(round === "final")  stake = "This is the final";
+      else if(round === "bronze")   stake = "Third place";
+      else if(!d.projected)         stake = "Semis: " + bracket.semis[0].tag + " \u00b7 " + bracket.semis[1].tag;
+    }
+  }catch(e){}
+
   const iso  = rpDateOf(t, round);
   const when = iso
     ? rpDay(iso).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"})
@@ -37456,7 +38336,7 @@ function ffFilmFor(tid, round){
     when: when,
     whenShort: iso ? rpWhenLabel(iso) : (window.FFCUP ? window.FFCUP.range : ""),
     iA: initials(fx.p1), iB: initials(fx.p2),
-    a, b, h2h,
+    a, b, h2h, bracket, stake,
     prob: 1 / (1 + Math.pow(10, (b.rating - a.rating)/DIVISOR)),
     /* the settings the film shows its working with. Carried on the film
        rather than read at draw time, so a film cached on a night the
