@@ -42,6 +42,20 @@ const PLANT = () => {
   host.appendChild(box);
 };
 
+/* open a fresh tab on a URL and report what the layer did with it */
+async function ctxNewPage(ctx, u){
+  const t = await ctx.newPage();
+  await t.goto(u, {waitUntil:'domcontentloaded'});
+  await t.waitForTimeout(2200);
+  const out = await t.evaluate(() => ({
+    level: window.SHOW ? SHOW.level : 'n/a',
+    canvas: !!document.getElementById('showFx'),
+    stored: (function(){ try{ return JSON.parse(localStorage.getItem('fgta_showtime')||'{}').level; }catch(e){ return null; } })()
+  }));
+  await t.close();
+  return out;
+}
+
 (async () => {
   const server = http.createServer(serve);
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -228,9 +242,64 @@ const PLANT = () => {
   ok('the app exports its toast for the module to borrow',
      await p.evaluate(() => typeof window.toast === 'function'));
 
+  /* ---- 10. THE REGRESSION. -----------------------------------------
+     The foil used to be registered with the app's own FX_IDLE observer,
+     which pauses animations — `animation-play-state:paused!important` —
+     on the element AND every descendant. That is safe for the four
+     decoration-only elements already on that list, and it was not safe
+     here: a ladder row also carries `rowIn`, whose first frame is
+     opacity:0 and clip-path:inset(0 0 100% 0). A podium row marked idle
+     before it had played its entrance froze there — invisible, fully
+     clipped, and still hit-testable.
+
+     The assertion is comparative on purpose. Whether an off-screen row
+     has run its entrance yet is the app's business and the browser's,
+     and it genuinely differs by how far down the page the row is; what
+     this file is answerable for is that putting a foil on a row changes
+     none of it. So a foiled row is measured against a plain one beside
+     it, and the two have to agree. */
+  const frozen = await p.evaluate(async () => {
+    const host = document.querySelector('.col-main section') || document.body;
+    const far = document.createElement('div');
+    far.style.marginTop = '400vh';               /* well past any idle margin */
+    far.className = 'ladder';
+    far.innerHTML =
+      '<div class="brow g1" id="foilRow"><span>1</span><span>Foil</span></div>' +
+      '<div class="brow"    id="bareRow"><span>9</span><span>Bare</span></div>';
+    host.appendChild(far);
+    SHOW.adopt();
+    await new Promise(r => setTimeout(r, 1400));
+    const read = id => {
+      const el = document.getElementById(id), cs = getComputedStyle(el);
+      return {idle: el.classList.contains('fx-idle'), play: cs.animationPlayState,
+              opacity: cs.opacity, clip: cs.clipPath};
+    };
+    const out = {foil: read('foilRow'), bare: read('bareRow'),
+                 foiled: document.getElementById('foilRow').classList.contains('show-holo')};
+    far.remove();
+    return out;
+  });
+  ok('an off-screen podium row still takes the foil', frozen.foiled, frozen);
+  ok('...is never handed to the animation-pausing observer', !frozen.foil.idle, frozen);
+  ok('...never has its animations paused', frozen.foil.play !== 'paused', frozen);
+  ok('...and renders exactly as the same row without a foil does',
+     frozen.foil.opacity === frozen.bare.opacity &&
+     frozen.foil.clip === frozen.bare.clip &&
+     frozen.foil.play === frozen.bare.play, frozen);
+
+  /* ---- 11. the address-bar escape hatch ---------------------------- */
+  await p.evaluate(() => { try{ localStorage.removeItem('fgta_showtime'); }catch(e){} });
+  const hatch = await ctxNewPage(phone, url + '?fx=off');
+  ok('?fx=off turns the layer off before it builds anything',
+     hatch.level === 'off' && !hatch.canvas, hatch);
+  ok('...and is remembered, so the next load is clean too',
+     hatch.stored === 'off', hatch);
+  const back = await ctxNewPage(phone, url + '?fx=on');
+  ok('?fx=on gives it back', back.level !== 'off', back);
+
   await phone.close();
 
-  /* ---- 10. reduced motion is the last word ------------------------- */
+  /* ---- 12. reduced motion is the last word ------------------------- */
   const calm = await browser.newContext({viewport:{width:390,height:844}, reducedMotion:'reduce'});
   const q = await calm.newPage();
   q.on('pageerror', e => errs.push(e.message));
