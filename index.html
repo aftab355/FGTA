@@ -8848,9 +8848,14 @@
   #showFx{
     position:fixed;inset:0;width:100%;height:100%;
     pointer-events:none;z-index:var(--z-show-fx);
-    /* the compositor gets its own layer and never has to re-rasterise
-       the page underneath when a particle moves */
-    contain:strict;
+    /* `contain:layout paint`, not `contain:strict`. Strict adds SIZE
+       containment, which tells the browser to lay the element out as
+       though it were empty — correct here only because the width and
+       height above happen to be explicit, and a trap the moment anybody
+       changes them. The two that are actually wanted are the two that
+       are asked for: nothing inside affects layout outside, and nothing
+       paints outside the box. */
+    contain:layout paint;
   }
   /* Neither canvas is in the accessibility tree, and neither is on paper. */
   @media print{ #showFx,.show-cursor,.show-panel{display:none!important} }
@@ -8907,9 +8912,17 @@
     pointer-events:none;opacity:0;transition:opacity .3s ease;
     background:radial-gradient(320px circle at var(--tilt-mx,50%) var(--tilt-my,50%),
       color-mix(in srgb,var(--highlight-rim,#fff) 55%,transparent), transparent 62%);
-    mix-blend-mode:soft-light;z-index:1;
+    z-index:1;
   }
-  .show-tilt.live::before{opacity:1}
+  /* The blend is on .live and not on the base rule ON PURPOSE. There are
+     around fifty tilt targets on a busy view, the highlight is invisible
+     on every one of them until a pointer is actually over it, and
+     mix-blend-mode is not free when it is invisible: it forces the
+     element out of the ordinary paint path and makes its parent a
+     blending isolation boundary whether or not anything is showing. Fifty
+     of those standing open permanently is a compositing bill on a phone
+     for an effect that is only ever visible on one of them at a time. */
+  .show-tilt.live::before{opacity:1;mix-blend-mode:soft-light}
 
   /* ---- 12.4 THE FOIL ----------------------------------------------
      What the podium three are actually made of. A conic sweep of the
@@ -8937,9 +8950,19 @@
     /* steps(), not linear: an animated conic gradient is a repaint of
        the element on every frame it changes, and a rim sweep advancing
        in 45 discrete steps over five seconds is indistinguishable from
-       a continuous one at an eighth of the repaints. The rows are also
-       registered with the app's own FX_IDLE observer, so a podium
-       scrolled off screen stops repainting altogether. */
+       a continuous one at an eighth of the repaints.
+
+       THIS DELIBERATELY DOES NOT USE THE APP'S FX_IDLE OBSERVER, and the
+       first version of this file did, which was a bug. That mechanism
+       pauses animations — `animation-play-state:paused!important`, on the
+       element AND every descendant — and it is safe for its four existing
+       members because an idle animation is the only animation they have.
+       A ladder row is not like that: it also carries `rowIn`, whose first
+       frame is `opacity:0; clip-path:inset(0 0 100% 0)`. Pausing a row
+       that has not yet played its entrance freezes it there — invisible,
+       fully clipped, and still hit-testable — until it scrolls back into
+       view. The foil parks itself instead, by dropping .lit from its own
+       observer below, which touches nothing but this rule's opacity. */
     animation:showFoil 5.5s steps(45) infinite;
     transition:opacity .4s ease;
   }
@@ -11266,7 +11289,7 @@ document.addEventListener('visibilitychange', ()=>{
    of warning in each direction, so one is always already running by the time
    it is visible. Elements are re-scanned after renders because most of these
    are rebuilt by innerHTML; the observer de-duplicates via a WeakSet. */
-const FX_IDLE_SELECTOR='.ticker-track,.cupmark,.hype-fill,.pod-base,.show-holo';
+const FX_IDLE_SELECTOR='.ticker-track,.cupmark,.hype-fill,.pod-base';
 let _fxObserver=null,_fxSeen=null;
 function fxObserveAnimated(){
   if(!('IntersectionObserver' in window)) return;
@@ -41396,6 +41419,33 @@ var prefs = (function(){
 })();
 function savePrefs(){ try{ localStorage.setItem(KEY, JSON.stringify(prefs)); }catch(e){} }
 
+/* ---------------------------------------------------------------
+   1b. THE ESCAPE HATCH
+   Every switch this file offers is inside the app: the ✨ Showtime panel
+   is reached from the overflow menu, and the admin's flag is reached
+   from the Studio. Both assume the page is usable enough to tap, and
+   the one failure this layer could ever cause is a page that is not.
+
+   So there is a way in from the address bar, which needs nothing on the
+   screen to work: append ?fx=off (or #fx=off) to any URL. It turns the
+   layer off and WRITES that choice, so the next load is clean too and
+   the visitor is not stuck retyping it. ?fx=on puts it back.
+
+   Read before anything else in this module runs, so a URL that says off
+   means no canvas is ever created, no listener is ever attached and no
+   class is ever added — not "created and then hidden". If this layer is
+   ever the reason a page will not paint, that URL is the answer, and it
+   is in the README under its own heading rather than only in here. */
+(function(){
+  try{
+    var q = (location.search + " " + location.hash).toLowerCase();
+    var m = /[?&#]fx=(off|on)\b/.exec(q);
+    if(!m) return;
+    prefs.level = m[1] === "off" ? "off" : (prefs.level === "off" ? "showtime" : prefs.level);
+    savePrefs();
+  }catch(e){}
+})();
+
 /* The three vetoes. Checked live rather than cached, because two of them
    can change while the page is open: the OS setting has a media query
    that fires, and the admin can drop the feature flag from the studio. */
@@ -41649,10 +41699,13 @@ function stage(){
   try{
     fx = document.createElement("canvas"); fx.id = "showFx";
     fx.setAttribute("aria-hidden", "true");
-    /* alpha:false is not available — it composites over the page — but
-       desynchronized lets the compositor skip a frame of latency on a
-       layer that is pure decoration */
-    fctx = fx.getContext("2d", {alpha:true, desynchronized:true});
+    /* Deliberately the plainest 2D context there is. `desynchronized`
+       was here for a frame of latency that nobody can perceive on
+       confetti, and it asks the browser for a low-latency path that is
+       composited differently from the rest of the page — on some mobile
+       GPU/driver combinations that is its own class of rendering bug,
+       and it is not a trade worth making for decoration. */
+    fctx = fx.getContext("2d", {alpha:true});
     if(!fctx) return false;
     document.body.appendChild(fx);
     resize();
@@ -42293,13 +42346,27 @@ function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
    animation, and one that is paused by the existing .fx-idle machinery
    the moment it scrolls away.
    --------------------------------------------------------------- */
+var foilIo = null;
 function foilAdopt(root){
   if(!prefs.foil || !atLeast("calm")) return;
+  /* Its own observer, and it toggles .lit and nothing else. .lit drives
+     only the opacity of this file's own ::after, so a row that scrolls
+     away stops repainting its conic gradient and keeps every other
+     property — and every other animation — exactly as the app left it.
+     See the note over 12.4 for what happened when this borrowed the
+     app's FX_IDLE observer instead. */
+  if(!foilIo && "IntersectionObserver" in window){
+    foilIo = new IntersectionObserver(function(entries){
+      for(var j = 0; j < entries.length; j++)
+        entries[j].target.classList.toggle("lit", entries[j].isIntersecting && prefs.foil);
+    }, {rootMargin:"60% 0px"});
+  }
   var els = (root || document).querySelectorAll(".brow.g1,.brow.g2,.brow.g3,.trophy"), i, el;
   for(i = 0; i < els.length; i++){
     el = els[i];
     if(el.classList.contains("show-holo")) continue;
     el.classList.add("show-holo", "lit");
+    if(foilIo) foilIo.observe(el);
   }
 }
 
