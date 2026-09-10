@@ -5424,20 +5424,20 @@
 
   /* the strap that rides along the bottom of the flight */
   /* ---- the bracket run's caption ----
-     The film opens on the event's shape rather than on a street (see
-     THE BRACKET RUN in the script), and the one line it needs is what
-     you are looking at. It is gone by the time the ball goes into the
-     cup, which is when the strap below takes over for the city. */
+     The film opens above the whole board (see THE BRACKET RUN in the
+     script), and the one line that shot needs is what you are looking
+     at. It is gone by the time the camera is on the road, which is
+     when the strap below takes over with the fixture's own line. */
   .ffi-brk{position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));z-index:4;
-    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 3.3s ease forwards .25s}
+    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4s ease forwards .25s}
   .ffi-brk b{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:6px;
     text-transform:uppercase;color:#d4ff2b;text-shadow:0 0 24px rgba(212,255,43,.7)}
   .ffi-brk i{display:block;font-style:normal;font-family:var(--font-mono);font-size:9px;
     letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:7px}
-  /* the strap, the working and the scrim all belong to the flight, so
-     they wait the length of the bracket run before they start */
+  /* the strap, the working and the scrim all belong to the run at road
+     level, so they wait out the shot that opens over the board */
   .ffi-strap{position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));z-index:4;
-    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4.4s ease forwards 3.8s}
+    text-align:center;pointer-events:none;opacity:0;animation:ffiStrap 4.4s ease forwards 4.4s}
   @keyframes ffiStrap{0%{opacity:0;transform:translateY(14px)}18%{opacity:1;transform:translateY(0)}
     78%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-10px)}}
   .ffi-strap b{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:6px;
@@ -5455,7 +5455,7 @@
   .ffi-hud{position:absolute;left:0;top:0;width:min(64vw,440px);height:min(46vh,300px);z-index:5;
     pointer-events:none;background:radial-gradient(105% 90% at 0% 0%,
       rgba(4,0,12,.78) 0%, rgba(4,0,12,.5) 42%, rgba(4,0,12,0) 76%);
-    opacity:0;animation:ffiFade .8s ease forwards 3.6s}
+    opacity:0;animation:ffiFade .8s ease forwards 3.0s}
   .ffi-hud.gone{animation:ffiHudOut .5s ease forwards}
   @keyframes ffiHudOut{from{opacity:1}to{opacity:0}}
   .ffi-mark{position:absolute;left:calc(14px + env(safe-area-inset-left));
@@ -5481,7 +5481,7 @@
   .ffi-math.gone{opacity:0}
   .ffi-math > u{display:block;text-decoration:none;font-family:var(--font-mono);font-size:7.5px;
     letter-spacing:2.4px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:7px;
-    opacity:0;animation:ffiFade .6s ease forwards 4.2s}
+    opacity:0;animation:ffiFade .6s ease forwards 3.2s}
   .ffi-mline{display:flex;align-items:baseline;gap:7px;margin-top:5px;white-space:nowrap;
     opacity:0;transform:translateX(-8px);animation:ffiMline .5s cubic-bezier(.16,1,.3,1) forwards}
   @keyframes ffiMline{to{opacity:1;transform:translateX(0)}}
@@ -36077,17 +36077,11 @@ if(COURT.api) setTimeout(()=>{ try{ fetchCourt(false); }catch(e){} }, 2200);
 const FFIntro = (function(){
 
   /* ---------- the beats, in seconds ----------
-     Two clocks. T_BRK is the bracket run that opens the film, measured
-     on the film's own clock; T_END is where the city flight lands,
-     measured on the flight's, which starts when the run is over. T_CUT
-     is the one written in the other's terms, and every beat after the
-     flight — the card, the slam, the hold — hangs off it. */
-  const T_BRK   = 3.3;            // the bracket run, then the cut to the city
-  const T_END   = 10.9;           // the flight lands at the arena
-  const T_CUT   = T_BRK + T_END;  // ...which is here, on the film's clock
-  const T_VS    = T_CUT + 0.1;    // the versus card
-  const T_HOLD  = 15;             // and how long it holds before closing itself
-  const T_LOCK  = 4.6;            // and how long before it can be skipped at all
+     One run, one clock. */
+  const T_END   = 10.7;   // the ball goes into the cup
+  const T_VS    = 10.85;  // and the versus card lands in the light it makes
+  const T_HOLD  = 15;     // and how long it holds before closing itself
+  const T_LOCK  = 4.6;    // and how long before it can be skipped at all
 
   /* ---------- deterministic noise ---------- */
   function rng(seed){
@@ -36118,7 +36112,7 @@ const FFIntro = (function(){
   const clamp = (v,a,b) => v<a?a:v>b?b:v;
   function mix(a,b,k){ k=clamp(k,0,1); return [a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k, a[2]+(b[2]-a[2])*k]; }
   function rgb(c,al){ return "rgba("+(c[0]|0)+","+(c[1]|0)+","+(c[2]|0)+","+(al===undefined?1:al)+")"; }
-  function fogAt(d){ return clamp((d-40)/330, 0, 0.93); }
+  function fogAt(d){ return clamp((d-140)/1000, 0, 0.88); }
   function fogged(c,d,al){ return rgb(mix(c, FOGC, fogAt(d)), al); }
 
   /* ---------- projection ----------
@@ -36197,86 +36191,21 @@ const FFIntro = (function(){
     ctx.restore();
   }
 
-  /* ============================================================
-     THE FLIGHT PATH
-
-     Keyframes, not formulas. The first version of this switched
-     between three hand-written phases, and where two phases met the
-     camera's speed jumped — a visible hitch two thirds of the way
-     through, in the middle of the best shot. A Catmull-Rom spline
-     through the keys below is continuous in velocity everywhere, so
-     there is no seam left to hit.
-
-     z is authored on a smoothly accelerating curve (40 units/s off
-     the line, 98 by the arena); x, y, pitch and roll are the
-     choreography. Yaw is not authored at all — it is taken from the
-     camera's own velocity, which is what makes it look into its
-     turns instead of sliding through them.
-     ============================================================ */
-  const ROAD = 9;                       // half-width of the avenue
-  const ARENA_Z = 1010, ARENA_Y = 128;
-  const PORTAL = {x: 20, z0: 452, z1: 488, w: 26, h: 46,
-                  wx: 20, wy: 15.5, ww: 11, wh: 9};   // the window it goes through
-
-  //          t      x      y     z     pitch   roll
-  const KEYS = [
-    [ 0.0,   0.0,   3.2,   -45,   0.03,  0.00],   // engines on, street level
-    [ 1.0,   1.6,   2.2,   -5,    0.05, -0.14],   // low, hugging the road
-    [ 1.9,  -2.5,   7.0,    45,   0.09,  0.24],   // under the banner, rising
-    [ 2.8,  -6.0,  17.0,   103,  -0.03,  0.34],   // up over the rooftop court
-    [ 3.6,  -3.5,  23.0,   160,  -0.12, -0.06],   // apex, looking down into it
-    [ 4.4,   1.0,   7.0,   220,   0.10, -0.38],   // dive back to the plaza
-    [ 5.2,   5.0,   3.6,   283,   0.12, -0.10],   // skimming the road
-    [ 6.0,  11.0,   8.0,   349,   0.03,  0.52],   // bank right, out of the avenue
-    [ 6.6,  16.0,  12.0,   400,   0.01,  1.20],   // lining up on the window
-    [ 7.2,  20.0,  15.0,   452,   0.00,  2.20],   // through the glass
-    [ 7.6,  20.0,  15.4,   488,   0.02,  3.10],   // out the far side
-    [ 8.3,  13.0,  25.0,   551,   0.10,  4.50],   // climbing out, still turning
-    [ 9.1,   2.0,  50.0,   626,   0.16,  6.283],  // high over everything, roll closes
-    [ 9.9,   0.0,  30.0,   702,   0.02,  6.283],  // and back down among the towers
-    [10.9,   0.0,  90.0,   800,   0.235, 6.283]   // the last climb, arena in the frame
-  ];
+  /* the avenue's half-width, which a few of the roadside props below
+     still measure themselves against — a banner or a gantry spans the
+     road it is thrown across, and the roads on the board are the same
+     sort of width the avenue was */
+  const ROAD = 9;
 
   function cr(p0,p1,p2,p3,t){
     const t2=t*t, t3=t2*t;
     return 0.5*((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
   }
-  /* the path sampled at u, as [x,y,z,pitch,roll] */
-  function pathAt(u){
-    const last = KEYS.length-1;
-    if(u >= KEYS[last][0]) return KEYS[last].slice(1);
-    let i = 0;
-    while(i < last-1 && KEYS[i+1][0] <= u) i++;
-    const a = KEYS[i], b = KEYS[i+1];
-    const t = (u - a[0]) / (b[0] - a[0]);
-    const p0 = KEYS[Math.max(0,i-1)], p3 = KEYS[Math.min(last,i+2)];
-    const out = [];
-    for(let c=1;c<=5;c++) out.push(cr(p0[c], a[c], b[c], p3[c], t));
-    return out;
-  }
-
-  /* ---- THE BALL ----
-     Every move the camera makes is a move after this. It is sampled from
-     the same spline, half a second further along, so the camera is always
-     chasing it and the two can never disagree: the rise over the rooftop
-     court is the camera following it up off a rally, the dive is following
-     it down, the bank out of the avenue is following it round the gantry,
-     and the window is where it goes through and the camera goes after it.
-     A small perpendicular wobble keeps it from sitting dead centre like a
-     thing on a rail. */
-  const BALL_LEAD = 0.52;
-  function ballAt(u){
-    const p = pathAt(Math.min(T_END, u + BALL_LEAD));
-    return [p[0] + Math.sin(u*2.3)*1.7,
-            Math.max(1.2, p[1] + Math.cos(u*1.8)*1.1 + 1.3),
-            p[2]];
-  }
   /* it drags a tail of where it has just been, which is most of what makes
      a two-pixel dot read as something travelling */
   function drawHeroBall(ctx, C, u, at){
-    const src = at || ballAt;                 // the bracket run flies the same ball
     for(let i=7;i>=0;i--){
-      const b = src(Math.max(0, u - i*0.045));
+      const b = at(Math.max(0, u - i*0.045));
       const q = pr(C, b[0], b[1], b[2]);
       if(!q) continue;
       const k = 1 - i/8;
@@ -36300,84 +36229,51 @@ const FFIntro = (function(){
     }
   }
 
-  function camera(u, W, H){
-    let x, y, z, pitch, roll, f = Math.max(W,H) * 0.62;
-
-    if(u <= T_END){
-      const p = pathAt(u);
-      x = p[0]; y = Math.max(1.4, p[1]); z = p[2]; pitch = p[3]; roll = p[4];
-      f *= 1 + clamp(u/T_END, 0, 1) * 0.12;      // the lens creeps in as the speed builds
-    } else {
-      /* held back from the island rather than inside it — the card is the
-         subject now, and the arena is the thing it stands on */
-      const k = clamp((u-T_END)/9, 0, 1);
-      x = Math.sin(u*0.16)*20;
-      y = 90 + Math.sin(u*0.25)*2.4;
-      z = 800 + k*12;
-      pitch = 0.235; roll = 6.283;
-      f *= 1.12;
-    }
-
-    /* yaw comes from where the camera is going, at half strength — full
-       strength reads as a chase cam, none at all reads as a slide */
-    let yaw = 0;
-    if(u <= T_END){
-      const a = pathAt(Math.max(0, u-0.06)), b = pathAt(Math.min(T_END, u+0.06));
-      yaw = Math.atan2(b[0]-a[0], Math.max(0.001, b[2]-a[2])) * 0.5;
-    } else {
-      yaw = -x/((ARENA_Z-z)||1);
-    }
-
-    return {
-      x, y, z, f, roll,
-      cy: Math.cos(yaw), sy: Math.sin(yaw),
-      cp: Math.cos(pitch), sp: Math.sin(pitch),
-      cr: Math.cos(roll), sr: Math.sin(roll),
-      ox: W/2, oy: H/2, W, H
-    };
-  }
-
-
   /* ============================================================
-     THE BRACKET RUN — the three seconds before the city
+     THE BRACKET RUN — the whole film
 
-     The film used to open on a street. It now opens on the event's
-     own shape: a lit interchange hanging in the dark with the cup at
-     the middle of it, four seed roads running in from the corners,
-     two of them merging at each semifinal, and one road out of each
-     semifinal into the ring around the cup. The ball comes in off the
-     group stage at a hundred and fifty metres a second, takes this
-     fixture's own road — its player's seed, its semifinal, its road
-     to the final — whips round the ring and goes into the cup, and
-     the light that makes is the cut to the city.
+     One shot, eleven seconds, and the event's own shape is the set.
+     A lit interchange hanging in the dark with the cup at the middle
+     of it: four seed roads running in from the corners, two merging
+     at each semifinal, one road out of each semifinal into the ring
+     the final is run on, and a web of group-stage roads feeding the
+     whole thing from out in the fog.
 
-     Which is the whole point of putting it first: by the time the
-     street run starts you have already been told what is at stake and
-     where tonight's game sits in it, at speed, without a caption.
+     The camera opens a long way above it, turning, with the four arms
+     and the cup reading as one drawing — the picture the event is
+     promoted on — then falls out of the sky onto the tarmac and stays
+     there. The ball comes in off the group at a hundred metres a
+     second and takes THIS FIXTURE'S OWN ROAD: its player's seed, its
+     seed road, its semifinal, the road out of it to the final, a lap
+     of the ring, and into the cup. The light that makes is the cut to
+     the versus card.
 
-     Same engine as the flight — same projection, same fog, same
-     helpers — laid out in its own world with the cup at the origin.
-     Everything in it is authored off the bracket the app already
-     knows (film.bracket, read from rpSnapshot), so the seeds standing
-     by the road are the real seeds and the road the ball takes is the
-     real route to the real final.
+     Everything standing by the road is real. The seeds are the seeds,
+     the signs at the junctions carry the actual pairings, the route is
+     the route to the actual final — all read off film.bracket, which
+     is the same rpSnapshot the marquee's board is drawn from. And
+     scattered along it is the app itself, the way the old city flight
+     scattered it through a skyline: the brand ball where the moon
+     should be, the rating galaxy as a constellation, the ladder's
+     podium and its crowd beside the ring, the top bar's ticker running
+     along a wall, the load screen's court painted on the road to the
+     final, the Elo working on two boards, and FX.celebrate's confetti
+     drifting through all of it.
+
+     It is one canvas and one overlay, drawn from nothing — no library,
+     no assets, hand-rolled perspective with a painter's sort. The
+     whole thing is dressing: FFIntro.play() is safe to call at any
+     time and safe to never call, and it removes itself on the way out.
      ============================================================ */
-  const BRK_R_SEED = 196, BRK_R_J = 116, BRK_R_RING = 34, BRK_R_OUT = 340;
+  const BRK_R_SEED = 196, BRK_R_J = 116, BRK_R_RING = 34;
+  const BRK_R_OUT = 340, BRK_R_WEB = 620;     // the group stage, and its far edge
   const BRK_ANG = [140, 40, -40, 220];        // where #1, #2, #3 and #4 stand
-  const BRK_LEAD = 0.30;                       // how far ahead of the camera the ball runs
+  const BRK_LEAD = 0.34;                      // how far ahead of the camera the ball runs
   const D2R = Math.PI/180;
   const GOLD = [255,206,120];
 
-  /* which side of the interchange a seat is on, and the angle its road
-     closes on — the two semifinal junctions sit on the x axis */
-  /* The city's fog is authored for a street: everything past three
-     hundred metres is haze, which is the right call there and the wrong
-     one here — the interchange is four hundred across and the point of
-     the opening is that you can see all of it. Same colour, further
-     out. */
-  function brkFog(d){ return clamp((d-90)/640, 0, 0.9); }
-  function brkFogged(c, d, al){ return rgb(mix(c, FOGC, brkFog(d)), al); }
-
+  /* which side of the interchange a seat is on: the two semifinal
+     junctions sit on the x axis, so every road closes on 0 or π */
   function brkSide(A){ return Math.cos(A) < 0 ? -1 : 1; }
   function brkShort(from, to){
     let d = to - from;
@@ -36397,34 +36293,50 @@ const FFIntro = (function(){
   }
 
   /* ---- the route ----
-     Authored the same way the flight is: keys on a clock, through a
-     Catmull-Rom spline, so there is no seam in the speed anywhere. It
-     lands on the cup at exactly T_BRK + BRK_LEAD, which is the frame
-     the screen goes white. */
+     Keys on a clock through a Catmull-Rom spline, so the speed is
+     continuous everywhere and there is no seam to hit. It is authored
+     in the fixture's own frame: `at(r, k, y)` is r metres out, k of
+     the way round from this seat's angle to its semifinal, y off the
+     deck — so the same keys draw #1's run and #3's, mirrored. It lands
+     on the cup at T_END + BRK_LEAD, which is the frame the screen goes
+     white. */
   function brkRoute(seat){
     const A = BRK_ANG[seat % 4] * D2R;
     const side = brkSide(A);
     const jA = side < 0 ? Math.PI : 0;
     const da = brkShort(A, jA);
     const at = (r, k, y) => { const a = A + da*k; return [r*Math.cos(a), y, r*Math.sin(a)]; };
-    const h = at(BRK_R_OUT+120, -0.48, 34), e = at(BRK_R_OUT+10, -0.34, 22),
-          f = at(BRK_R_OUT-110, -0.12, 15), s = at(BRK_R_SEED, 0, 10),
-          g = at(168, 0.36, 8),             j = at(BRK_R_J, 1, 7);
-    return [
-      /* the run-up, which only the camera ever sees — it rides the road
+    const K = [
+      /* the run-up, which only the camera ever sees: it rides the road
          a third of a second behind the ball, so the line has to start
          before the ball does */
-      [-0.45, h[0], h[1], h[2]],
-      [0.00, e[0], e[1], e[2]],          // in off the group stage, high and wide
-      [0.55, f[0], f[1], f[2]],
-      [1.05, s[0], s[1], s[2]],          // over its own seed
-      [1.55, g[0], g[1], g[2]],          // the seed road, banking in
-      [2.05, j[0], j[1], j[2]],          // the semifinal junction
-      [2.45, side*82,  7,   0],          // and out down the road to the final
-      [2.85, side*48,  8,   -side*14],   // a swing onto the ring, and then
-      [3.15, side*20,  9.5, -side*17],   // nothing between it and the middle
-      [3.60, 0,        12,  0]           // into the cup
+      [-0.70, at(462, -2.55, 50)],
+      [ 0.00, at(452, -2.35, 46)],   // in off the group, wide of its own arm
+      [ 1.30, at(430, -1.82, 34)],   // sweeping round the outside of the board
+      [ 2.30, at(408, -1.40, 21)],   // and the camera comes down to meet it
+      [ 3.20, at(390, -1.02, 13)],
+      [ 4.10, at(360, -0.70,  9.5)], // down on the deck, and it stays there
+      [ 5.00, at(312, -0.44,  8.5)],
+      [ 5.80, at(258, -0.20,  8.5)],
+      [ 6.40, at(BRK_R_SEED, 0, 9)], // over its own seed
+      [ 7.05, at(170, 0.34, 8)],     // the seed road, banking in
+      [ 7.60, at(138, 0.72, 7.5)],
+      [ 8.05, at(BRK_R_J, 1, 7)],    // the semifinal junction
+      /* and out down the road to the final, straight at the cup. This
+         used to take a lap of the ring, which was a lovely shot of the
+         trophy and a terrible one of the ball: on a ring thirty metres
+         across, the way you are going and the way the cup is are sixty
+         degrees apart, and the thing the whole film is following spends
+         the last two seconds outside the frame. It crosses the ring
+         head-on instead. */
+      [ 8.55, [side*86,  7,    0]],
+      [ 9.25, [side*58,  7.5,  -side*8]],   // a weave, so it isn't a ruler
+      [ 9.90, [side*32,  10.5,  -side*4]],  // across the ring
+      [10.86, [0,        12,   0]],         // and into the cup, on the frame
+      [11.30, [0,        13,   0]]          // the screen goes white. Held, so
+                                            // the spline has nothing to overshoot into.
     ];
+    return K.map(k => [k[0], k[1][0], k[1][1], k[1][2]]);
   }
   let BRK_KEYS = brkRoute(0);
   function brkAt(u){
@@ -36440,64 +36352,111 @@ const FFIntro = (function(){
     for(let c=1;c<=3;c++) out.push(cr(p0[c], a[c], b[c], p3[c], t));
     return out;
   }
-  function brkBallAt(u){
-    const p = brkAt(u + BRK_LEAD);
-    return [p[0], p[1], p[2]];
+  /* how far ahead the ball runs. It shortens over the last two seconds:
+     out on the road a long lead reads as speed, but on a ring thirty
+     metres across it reads as a ball that has left the shot. */
+  function brkLead(u){ return BRK_LEAD * (1 - 0.55*clamp((u - 8.4)/1.6, 0, 1)); }
+  function brkBallAt(u){ return brkAt(u + brkLead(u)); }
+  /* the route's heading at t, which is what everything standing beside
+     it is squared up to */
+  function brkHeading(t){
+    const a = brkAt(t-0.09), b = brkAt(t+0.09);
+    return Math.atan2(b[0]-a[0], b[2]-a[2]);
   }
-  /* the camera rides the same line, a beat behind and a little above,
-     with its aim on the ball and its bank taken from the turn it is in */
-  function brkCamera(u, W, H){
-    /* Where it sits: on the road itself, a beat behind the ball and
-       above it. The follow distance is a time offset along the same
-       line rather than a step backwards in space — on a road that
-       turns this hard, a step backwards puts the camera in the dark
-       beside the road looking at a ball with nothing under it.
 
-       The height is the shot. It opens a long way above the board, far
-       enough that the four arms and the cup in the middle read as one
-       drawing — which is the picture the whole event is promoted on —
-       and drops out of the sky onto the tarmac inside the first second
-       and a half, by which point the run is at speed and the camera is
-       a car. */
-    const k    = clamp(u/T_BRK, 0, 1);
-    const drop = 1 - clamp(u/1.6, 0, 1);
-    const lag  = 0.40 - 0.26*k, up = 7 + 195*drop*drop;
-    const p = brkAt(u - lag);
-    const a = brkAt(u - lag - 0.07), b = brkAt(u - lag + 0.07);
-    const x = p[0], z = p[2], y = p[1] + up;
+  /* ---- the camera ----
+     Two cameras, crossfaded once. The first hangs above the board and
+     turns, because the first thing the film has to say is what shape
+     the event is; the second rides the road itself, a beat behind the
+     ball, because everything after that is the run. They are blended
+     as positions and as aim points rather than as finished matrices,
+     so the handover is one continuous fall out of the sky rather than
+     a cut. */
+  const T_DROP0 = 0.0, T_DROP1 = 2.5;         // where the fall starts and ends
+  function brkCamera(u, W, H){
+    /* It rides the road the whole way. The follow distance is a time
+       offset along the same line rather than a step backwards in
+       space — on a road that turns this hard a step backwards puts the
+       camera in the dark beside it, looking at a ball with nothing
+       under it.
+
+       The height is the only thing that changes: it opens well over
+       three hundred metres above the board, where the four arms and the cup
+       read as one drawing — the picture the event is promoted on — and
+       falls onto the tarmac over the first three seconds. It lifts a
+       little again for the ring, because from six feet up the last
+       turn is a wall and from twenty it is a turn. */
+    const k    = clamp(u/T_END, 0, 1);
+    const lag  = 0.42 - 0.28*k;
+    const lift = 13 * clamp((u - 8.6)/1.2, 0, 1);
+    const rp   = brkAt(u - lag);
+
+    const drop = clamp((u - T_DROP0) / (T_DROP1 - T_DROP0), 0, 1);
+    const m    = drop*drop*(3 - 2*drop);            // smoothstep, so it settles
+    const x = rp[0], z = rp[2], y = rp[1] + 7 + lift + 340*(1-m);
 
     /* What it looks at. In the middle of the run, the ball and nothing
-       else. At the two ends, past it at the cup: at the top because the
-       first thing on screen has to be the whole bracket converging on
-       the middle, and at the bottom because the last thing has to be the
-       ball going into it. Both are the same blend towards the origin,
-       which is where the cup stands. */
+       else. At the two ends, the cup: at the top because the shot is
+       the board, and at the bottom because a lap of the ring is a lap
+       around the trophy and then a dive into it. Both are the same
+       blend towards the origin. */
     const ball = brkBallAt(u);
-    const w = Math.max(0.85 * (1 - clamp(u/1.4, 0, 1)),
-                       0.50 * clamp((u - 2.35)/0.75, 0, 1));
-    const tx = ball[0]*(1-w), tz = ball[2]*(1-w), ty = ball[1]*(1-w) + 11*w;
-    const dx = tx-x, dy = ty-y - up*0.22*(1-w), dz = tz-z;
+    const w = Math.max(1 - m, 0.62 * clamp((u - 8.9)/1.1, 0, 1));
+    const tx = ball[0]*(1-w), tz = ball[2]*(1-w), ty = ball[1]*(1-w) + 12*w;
+    const dx = tx-x, dy = ty-y, dz = tz-z;
     const yaw = Math.atan2(dx, dz);
-    const sy = Math.sin(yaw), cy = Math.cos(yaw);
-    const pitch = clamp(Math.atan2(dy, Math.max(6, Math.hypot(dx, dz))), -0.6, 0.3);
+    const pitch = clamp(Math.atan2(dy, Math.max(6, Math.hypot(dx, dz))), -1.15, 0.3);
 
+    /* the bank comes off the turn the road is in, and only once the
+       camera is on the road to be banked by it */
     const a2 = brkAt(u - lag - 0.22), b2 = brkAt(u - lag + 0.22);
-    const y0 = Math.atan2(a[0]-a2[0], a[2]-a2[2]);
-    const y1 = Math.atan2(b2[0]-b[0], b2[2]-b[2]);
-    const roll = clamp(-brkShort(y0, y1)*1.15, -0.75, 0.75);
+    const a1 = brkAt(u - lag - 0.07), b1 = brkAt(u - lag + 0.07);
+    const y0 = Math.atan2(a1[0]-a2[0], a1[2]-a2[2]);
+    const y1 = Math.atan2(b2[0]-b1[0], b2[2]-b1[2]);
+    const roll = clamp(-brkShort(y0, y1)*1.15, -0.75, 0.75) * m;
 
-    const f = Math.max(W,H) * (0.58 + clamp(u/T_BRK,0,1)*0.10);
+    const f = Math.max(W,H) * (0.56 + k*0.13);
     return {
-      x, y, z, f, roll,
-      cy, sy,
+      x, y, z, f, roll, yaw,
+      cy: Math.cos(yaw), sy: Math.sin(yaw),
       cp: Math.cos(pitch), sp: Math.sin(pitch),
       cr: Math.cos(roll),  sr: Math.sin(roll),
       ox: W/2, oy: H/2, W, H
     };
   }
 
-  /* the caption under the run: the draw itself when the app knows it,
-     and the shape of it when it doesn't */
+  /* ---- standing something beside the road ----
+
+     Every prop below this line was authored for the old city flight,
+     which ran down one straight avenue: they build their quads in the
+     xy plane at a fixed z, so they all face down +z and a road at any
+     other heading would show them edge-on.
+
+     Rather than teach two dozen draw functions about headings, the
+     camera is turned instead. `brkSpin(C, phi)` is the same camera
+     seen from a world rotated by phi about the y axis — rotate the
+     camera's position the other way, add phi to its yaw, leave pitch
+     and roll alone (a turn about y commutes with both) — and
+     `brkFrame` puts a world position into that same rotated frame. So
+     a sign authored facing +z, drawn through a spun camera, faces
+     whichever way the road was going when it was planted. */
+  function brkSpin(C, phi){
+    const c = Math.cos(phi), s = Math.sin(phi), yaw = C.yaw + phi;
+    return {
+      x: C.x*c + C.z*s, y: C.y, z: -C.x*s + C.z*c,
+      f: C.f, roll: C.roll, yaw,
+      cy: Math.cos(yaw), sy: Math.sin(yaw),
+      cp: C.cp, sp: C.sp, cr: C.cr, sr: C.sr,
+      ox: C.ox, oy: C.oy, W: C.W, H: C.H
+    };
+  }
+  function brkFrame(x, z, phi){
+    const c = Math.cos(phi), s = Math.sin(phi);
+    return [x*c + z*s, -x*s + z*c];
+  }
+
+  /* the one line the opening shot needs: the draw itself when the app
+     knows it, and the shape of it when it doesn't */
   function brkCaption(film){
     const bk = film.bracket;
     if(!bk) return "#1 v #4 \u00b7 #2 v #3 \u00b7 one cup";
@@ -36507,12 +36466,17 @@ const FFIntro = (function(){
   }
 
   /* ---- the interchange, built once per film ---- */
-  function buildBracketRun(film){
+  function buildBracketRun(film, budget){
     const bk    = film.bracket || null;
     const seat  = bk && bk.seat != null ? (bk.seat|0) % 4 : 0;
     const seeds = (bk && bk.seeds) || [];
     const semis = (bk && bk.semis) || [{},{}];
+    /* the route has to exist before anything can be placed along it */
+    BRK_KEYS = brkRoute(seat);
+
+    const R = rng(hash(film.key));
     const roads = [], plates = [];
+    const mySemi = (seat === 0 || seat === 3) ? 0 : 1;
 
     for(let i=0;i<4;i++){
       const A = BRK_ANG[i]*D2R, side = brkSide(A), jA = side < 0 ? Math.PI : 0;
@@ -36528,26 +36492,53 @@ const FFIntro = (function(){
       const lit  = mine ? 2 : thru ? 1 : 0;
       const colr = mine ? BALL : thru ? GOLD : NEON;
 
-      // the group stage, running in off the dark
-      roads.push({pts: brkArc(BRK_R_OUT+90, A - da*0.34, BRK_R_SEED, A, 0, 15),
-                  w: 6.5, lit: mine?2:0, colr: mine?BALL:NEON});
-      // and one more feeding the same seed, which is what a group is
-      roads.push({pts: brkArc(BRK_R_OUT-70, A + 0.19, BRK_R_SEED, A, 0, 9), w: 4, lit:0, colr:NEON});
+      /* the group stage, running in off the dark. Three roads a seat:
+         the one this fixture's player came in on and two more, because
+         a group is everybody playing everybody. */
+      if(!mine) roads.push({pts: brkArc(BRK_R_WEB+280, A - da*0.7, BRK_R_SEED, A, 0, 24),
+                            w: 6, lit:0, colr:NEON});
+      roads.push({pts: brkArc(BRK_R_WEB, A + 0.21, BRK_R_SEED, A, 0, 12), w: 5, lit:0, colr:NEON});
+      roads.push({pts: brkArc(BRK_R_WEB-90, A - 0.26, BRK_R_SEED, A, 0, 12), w: 4.5, lit:0, colr:NEON});
+      // one chord across, so the web reads as a group and not as four spurs
+      roads.push({pts: brkArc(BRK_R_WEB-40, A + 0.21, BRK_R_WEB-40, A + 1.35, 0, 16),
+                  w: 3, lit:0, colr:NEON});
       // the seed's own road in to its semifinal
-      roads.push({pts: brkArc(BRK_R_SEED, A, BRK_R_J, jA, 0, 18), w: 8, lit, colr});
+      if(!mine) roads.push({pts: brkArc(BRK_R_SEED, A, BRK_R_J, jA, 0, 20), w: 8, lit, colr});
 
       const px = BRK_R_SEED*Math.cos(A), pz = BRK_R_SEED*Math.sin(A);
       plates.push({x: px, y: 15, z: pz, top: "SEED #"+(i+1),
                    main: (nm || "TBD").toUpperCase(), colr, lit});
     }
 
-    // the two roads to the final, and the ring the final is run on
+    /* THE ROAD THIS FIXTURE IS ON, which is the route itself with the
+       hover taken out of it — laid as one continuous road from out in
+       the group, over its seed, through its semifinal and onto the
+       ring. Sampling the spline rather than drawing an arc beside it is
+       the whole point: a road authored separately is a road the ball
+       drifts off, and it did. */
+    /* ...and laid in lengths rather than as one polyline. The painter's
+       sort places a road by its middle, and the middle of a road eleven
+       seconds long is behind the camera for most of the film — one
+       polyline for the whole route sorted itself off the screen. */
+    let own = [], i0 = 0;
+    for(let t=-1.0; t<=9.63; t+=0.2){
+      const q = brkAt(t);
+      own.push([q[0], 0, q[2]]);
+      if(own.length >= 9){
+        roads.push({pts: own, w: 9, lit: 2, colr: BALL, i0});
+        i0 += own.length - 1;
+        own = [own[own.length-1]];
+      }
+    }
+    if(own.length > 1) roads.push({pts: own, w: 9, lit: 2, colr: BALL, i0});
+
+    // the other road to the final, and the ring the final is run on
     [[-1,0],[1,1]].forEach(([side, semi])=>{
       const g = semis[semi] || {};
       const done = !!g.winner;
-      const mine = (semi === (seat === 0 || seat === 3 ? 0 : 1));
-      roads.push({pts: [[side*BRK_R_J,0,0],[side*90,0,0],[side*56,0,0],[side*38,0,0]],
-                  w: 10, lit: mine?2:done?1:0, colr: mine?BALL:done?GOLD:NEON});
+      const mine = semi === mySemi;
+      if(!mine) roads.push({pts: [[side*BRK_R_J,0,0],[side*90,0,0],[side*56,0,0],[side*38,0,0]],
+                            w: 10, lit: done?1:0, colr: done?GOLD:NEON});
       plates.push({x: side*BRK_R_J, y: 19, z: 0, top: "SEMIFINAL",
                    main: (g.tag || ("SF"+(semi+1))).toUpperCase(),
                    colr: mine?BALL:NEON, lit: mine?2:0});
@@ -36556,9 +36547,104 @@ const FFIntro = (function(){
     for(let i=0;i<=54;i++){ const a = i/54*6.283185; ring.push([BRK_R_RING*Math.cos(a),0,BRK_R_RING*Math.sin(a)]); }
     roads.push({pts: ring, w: 7, lit: 1, colr: GOLD, ring: true});
 
-    return {roads, plates, seat,
-            champ: (bk && bk.champ) || null,
-            name: (bk && bk.finalTag) || "THE FINAL"};
+    /* ---- the app, standing beside its own bracket ----
+       Laid along the route by the clock rather than by coordinates, so
+       it arrives one thing at a time however the fixture's arm is
+       angled: `at` is a time on the route, `off` how far to its right,
+       and each one is squared up to the road it stands on. */
+    const props = [];
+    const put = (kind, at, off, y, extra)=>{
+      const p = brkAt(at), h = brkHeading(at);
+      const wx = p[0] + Math.cos(h)*off, wz = p[2] - Math.sin(h)*off;
+      const fr = brkFrame(wx, wz, h);
+      props.push(Object.assign({kind, phi: h, x: fr[0], z: fr[1], y: y || 0,
+                                wx, wz, seed:(R()*1e9)|0}, extra || {}));
+    };
+    /* and a few by where they are rather than by when you pass them —
+       the ones that belong to the cup rather than to the road */
+    const at_ = (kind, r, deg, y, extra)=>{
+      const a = deg*D2R, wx = r*Math.cos(a), wz = r*Math.sin(a);
+      const h = a + Math.PI/2;                        // facing the middle
+      const fr = brkFrame(wx, wz, h);
+      props.push(Object.assign({kind, phi: h, x: fr[0], z: fr[1], y: y || 0,
+                                wx, wz, seed:(R()*1e9)|0}, extra || {}));
+    };
+
+    put("sign",     0.9,  52, 24, {text:"FF CUP"});      // the event, named, out in the dark
+    put("trophy",   1.4, -46, 15);                       // and the thing all this is for
+    put("tron",     2.6, -52, 16);                       // a screen out in the group
+    put("debris",   3.7,   0,  0);
+    put("birds",    4.0,  22, 18);
+    put("banner",   4.4,   0, 15, {text:"FF CUP"});      // the gantry over the road
+    put("mathwall", 5.0, -32, 18, {step:0});             // the two ratings
+    put("ticker",   5.6,  30,  6);
+    put("sign",     6.3, -34, 22, {text:"FGTA"});        // at its own seed
+    put("court",    6.9,  46, 17);                       // a show court off the seed road
+    put("gantry",   7.9,   0, 13);                       // over the semifinal
+    put("drones",   8.4,   0,  0);
+    put("lscourt",  8.8,   0,  0);                       // painted on the road to the final
+    put("mathwall", 9.1,   0, 26, {step:1, center:true});// the formula, over the road
+    at_("tron",   96,  52, 14);
+    at_("plaza",  88, 150,  0);
+    at_("podium", 84, -64,  0);
+    at_("blimp",  40,  200, 54);
+    at_("fireworks", 0,  0,  0);
+
+    /* the crowds, swarms and flocks the props above expect to be handed */
+    props.forEach(p=>{
+      const PR = rng(p.seed);
+      if(p.kind === "plaza" || p.kind === "podium"){
+        const n = Math.round((p.kind === "podium" ? 90 : 150) * budget), crowd = [];
+        for(let i=0;i<n;i++) crowd.push({
+          dx:(PR()-0.5)*26, dz:(PR()-0.5)*30, ph:PR()*6.28, phone: PR()<0.24, s:0.8+PR()*0.5
+        });
+        p.crowd = crowd;
+      }
+      if(p.kind === "drones"){
+        const swarm = [];
+        for(let i=0;i<14;i++) swarm.push({dx:(PR()-0.5)*30, y:8+PR()*26, dz:PR()*90, ph:PR()*6.28, sp:0.5+PR()});
+        p.swarm = swarm;
+      }
+      if(p.kind === "birds"){
+        const flock = [];
+        for(let i=0;i<12;i++) flock.push({
+          dx:(PR()-0.5)*10, dy:(PR()-0.5)*4, dz:(PR()-0.5)*12,
+          vx:(PR()-0.5)*13, vy:2.5+PR()*7, vz:2+PR()*11,
+          t0: 3.9 + PR()*0.5, ph: PR()*6.28
+        });
+        p.flock = flock;
+      }
+      if(p.kind === "debris"){
+        const bits = [];
+        for(let i=0;i<Math.round(34*budget);i++) bits.push({
+          x:(PR()-0.5)*ROAD*1.9, dz:(PR()-0.5)*34, h:1.4+PR()*4.5,
+          sp:0.5+PR()*1.3, ph:PR()*6.28, warm: PR()<0.55
+        });
+        p.bits = bits;
+      }
+    });
+
+    /* the confetti off FX.celebrate, drifting through the whole run */
+    const CONF = ["🎾","✨","🏆","🔥","⭐"];
+    const confetti = [];
+    for(let i=0;i<Math.round(30*budget);i++) confetti.push({
+      x:(R()-0.5)*260, y:2+R()*60, z:(R()-0.5)*260, e:CONF[(R()*CONF.length)|0],
+      ph:R()*6.28, sp:0.4+R()*0.9, sz:0.8+R()*1.2
+    });
+
+    /* the rating galaxy, hung in the sky as a constellation */
+    const GR = rng(hash(film.key) ^ 0x5bf03635), gal = {nodes:[], links:[]};
+    for(let i=0;i<9;i++) gal.nodes.push({
+      a:-0.9 + GR()*1.8, h:0.10 + GR()*0.26, r:1.6 + GR()*3.4, tw:GR()*6.28
+    });
+    for(let i=0;i<11;i++) gal.links.push([(GR()*9)|0, (GR()*9)|0]);
+
+    // a handful of stars, fixed to the dome rather than the world
+    const stars = [];
+    for(let i=0;i<90;i++) stars.push({a:R()*6.283, h:R(), b:0.25+R()*0.75, tw:R()*6.283});
+
+    return {roads, plates, props, confetti, gal, stars, seat,
+            champ: (bk && bk.champ) || null};
   }
 
   /* ---- drawing it ---- */
@@ -36572,24 +36658,35 @@ const FFIntro = (function(){
     ctx.closePath();
   }
 
-  /* the floor the interchange is bolted to: three rings and a set of
-     spokes, far enough down to read as ground and faint enough to
-     read as nothing at all once the roads are lit */
+  /* the floor the interchange is bolted to: spokes out to the edge of
+     the group, faint enough that the roads stay the drawing */
   function drawBrkFloor(ctx, C, u){
     ctx.save();
     ctx.lineWidth = 1;
     for(let i=0;i<16;i++){
       const a = i/16*6.283185;
-      line(ctx, pr(C, 70*Math.cos(a), -1.4, 70*Math.sin(a)),
-                pr(C, (BRK_R_OUT+60)*Math.cos(a), -1.4, (BRK_R_OUT+60)*Math.sin(a)),
+      line(ctx, pr(C, 40*Math.cos(a), -1.4, 40*Math.sin(a)),
+                pr(C, (BRK_R_WEB+140)*Math.cos(a), -1.4, (BRK_R_WEB+140)*Math.sin(a)),
                 rgb(NEON, 0.05), 1);
     }
+    [BRK_R_J, BRK_R_SEED, BRK_R_OUT, BRK_R_WEB].forEach((r, ri)=>{
+      ctx.beginPath();
+      let on = false;
+      for(let i=0;i<=48;i++){
+        const a = i/48*6.283185;
+        const q = pr(C, r*Math.cos(a), -1.4, r*Math.sin(a));
+        if(!q){ on = false; continue; }
+        if(!on){ ctx.moveTo(q.x, q.y); on = true; } else ctx.lineTo(q.x, q.y);
+      }
+      ctx.strokeStyle = rgb(NEON, 0.055 - ri*0.008);
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
   /* one road: tarmac, a kerb of light either side, and paint down the
      middle that runs towards the cup — which is most of what sells the
-     speed, exactly as the avenue's dashes do in the city */
+     speed, the same job the avenue's dashes used to do */
   function drawBrkRoad(ctx, C, road, u){
     const pts = road.pts, w = road.w, lit = road.lit, colr = road.colr;
     const ph = Math.floor(u*26);
@@ -36597,33 +36694,33 @@ const FFIntro = (function(){
       const a = pts[i], b = pts[i+1];
       const mx = (a[0]+b[0])/2, mz = (a[2]+b[2])/2;
       const d = depth(C, mx, 0, mz);
-      if(d <= 1.2 || d > 700) continue;
+      if(d <= 1.2 || d > 900) continue;
       let dx = b[0]-a[0], dz = b[2]-a[2];
       const L = Math.hypot(dx,dz) || 1; dx/=L; dz/=L;
       const nx = -dz*w, nz = dx*w;
       const q0 = pr(C, a[0]+nx, a[1], a[2]+nz), q1 = pr(C, b[0]+nx, b[1], b[2]+nz),
             q2 = pr(C, b[0]-nx, b[1], b[2]-nz), q3 = pr(C, a[0]-nx, a[1], a[2]-nz);
-      if(!poly(ctx, [q0,q1,q2,q3], brkFogged(lit ? [14,5,30] : [24,10,46], d, 0.95))) continue;
+      if(!poly(ctx, [q0,q1,q2,q3], fogged(lit ? [14,5,30] : [24,10,46], d, 0.95))) continue;
       const al = lit === 2 ? 0.95 : lit === 1 ? 0.8 : 0.62;
       const lw = Math.max(1.5, (lit ? 0.09 : 0.06) * q0.s);
-      const kerb = rgb(mix(colr, FOGC, brkFog(d)*0.5), al);
+      const kerb = rgb(mix(colr, FOGC, fogAt(d)*0.5), al);
       line(ctx, q0, q1, kerb, lw);
       line(ctx, q3, q2, kerb, lw);
-      // the paint, moving
-      /* not the ones right under the lens: a lane marking two metres
-         away is a white slab across the frame, not a road */
-      if(lit && d > 11 && ((i - ph) % 3 + 3) % 3 === 0){
+      /* the paint, moving — but not the markings right under the lens:
+         a lane dash two metres away is a white slab across the frame,
+         not a road */
+      if(lit && d > 22 && ((i + (road.i0||0) - ph) % 3 + 3) % 3 === 0){
         const k0 = 0.22, k1 = 0.72, pw = w*0.085;
         const ax = a[0]+dx*L*k0, az = a[2]+dz*L*k0, bx = a[0]+dx*L*k1, bz = a[2]+dz*L*k1;
         poly(ctx, [pr(C,ax-dz*pw,a[1]+0.05,az+dx*pw), pr(C,bx-dz*pw,a[1]+0.05,bz+dx*pw),
                    pr(C,bx+dz*pw,a[1]+0.05,bz-dx*pw), pr(C,ax+dz*pw,a[1]+0.05,az-dx*pw)],
-             brkFogged(lit === 2 ? [255,255,235] : colr, d, 0.62));
+             fogged(lit === 2 ? [255,255,235] : colr, d, 0.62));
       }
     }
     const end = pts[pts.length-1];
     const eq = pr(C, end[0], end[1]+1.5, end[2]);
     if(eq){
-      const f = 1 - brkFog(eq.d);
+      const f = 1 - fogAt(eq.d);
       glow(ctx, eq, Math.max(9, 5*eq.s), colr, (lit === 2 ? 0.34 : lit ? 0.24 : 0.16)*f);
     }
   }
@@ -36634,12 +36731,12 @@ const FFIntro = (function(){
      they are on screen. */
   function drawBrkPlate(ctx, C, p, u){
     const q = pr(C, p.x, p.y, p.z);
-    if(!q || q.d > 720) return;
-    const fade = 1 - brkFog(q.d);
+    if(!q || q.d > 900) return;
+    const fade = 1 - fogAt(q.d);
     if(fade < 0.05) return;
     const sc = clamp(q.s*0.22, 0.26, 0.95);
     // the post it stands on
-    line(ctx, pr(C,p.x,0,p.z), q, brkFogged(p.colr, q.d, 0.45), Math.max(0.6, 0.05*q.s));
+    line(ctx, pr(C,p.x,0,p.z), q, fogged(p.colr, q.d, 0.45), Math.max(0.6, 0.05*q.s));
     ctx.save();
     ctx.globalAlpha = clamp(fade, 0, 1);
     ctx.translate(q.x, q.y);
@@ -36664,31 +36761,25 @@ const FFIntro = (function(){
   /* the cup, at the middle of everything, which is where every road on
      the board is pointed and where the run ends */
   function drawBrkCup(ctx, C, run, u){
-    const d = depth(C, 0, 12, 0);
-    if(d <= 1) return;
-    const base = pr(C, 0, 0, 0), top = pr(C, 0, 26, 0);
+    const base = pr(C, 0, 0, 0);
     if(!base) return;
-    // the column of light standing in the ring
-    if(top){
-      /* the beam is a billboard, not a wall: a flat quad standing on a
-         fixed axis turns edge-on as you come round the ring, which is
-         where the light is supposed to be brightest */
-      const w = 5.5, rx = C.cy*w, rz = -C.sy*w;
-      const q = [pr(C,-rx,0.1,-rz), pr(C,rx,0.1,rz), pr(C,rx,30,rz), pr(C,-rx,30,-rz)];
-      if(q[0] && q[1] && q[2] && q[3]){
-        const g = ctx.createLinearGradient(base.x, base.y, top.x, top.y);
-        g.addColorStop(0, rgb(GOLD, 0.3)); g.addColorStop(1, rgb(GOLD, 0));
-        ctx.save(); ctx.globalCompositeOperation = "lighter";
-        poly(ctx, q, g);
-        ctx.restore();
-      }
+    /* the column of light standing in the ring. Stacked glows rather
+       than a gradient-filled quad: a quad has edges, and by the time
+       the camera is inside the ring the edges are the only thing you
+       can see of it. */
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for(let i=0;i<6;i++){
+      const q = pr(C, 0, 2 + i*5.5, 0);
+      if(q) glow(ctx, q, Math.max(12, (24 - i*2.6)*q.s), GOLD, 0.15 - i*0.021);
     }
+    ctx.restore();
     glow(ctx, base, Math.max(30, 42*base.s), GOLD, 0.55);
     const p = pr(C, 0, 13, 0);
     if(p){
-      const sc = clamp(p.s*0.30, 0.24, 1.5);
+      const sc = clamp(p.s*0.30, 0.24, 1.1);
       ctx.save();
-      ctx.globalAlpha = clamp(1 - brkFog(p.d), 0, 1);
+      ctx.globalAlpha = clamp(1 - fogAt(p.d), 0, 1);
       ctx.translate(p.x, p.y); ctx.scale(sc, sc);
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.font = "44px serif";
@@ -36705,198 +36796,70 @@ const FFIntro = (function(){
     }
   }
 
-  function drawBracketRun(ctx, C, run, film, u, city, skyGrad){
-    drawSky(ctx, C, u, city, skyGrad);
+  /* one prop, through a camera turned to face the road it stands on */
+  function drawBrkProp(ctx, C, p, u, film){
+    const S = brkSpin(C, p.phi);
+    switch(p.kind){
+      case "court":     return drawCourt(ctx, S, p, u);
+      case "plaza":     return drawPlaza(ctx, S, p, u);
+      case "podium":    return drawPodium(ctx, S, p, u);
+      case "trophy":    return drawTrophy(ctx, S, p, u);
+      case "sign":      return drawSign(ctx, S, p, u);
+      case "ticker":    return drawTicker(ctx, S, p, u, film);
+      case "lscourt":   return drawLsCourt(ctx, S, p, u);
+      case "tron":      return drawTron(ctx, S, p, u, film);
+      case "mathwall":  return drawMathWall(ctx, S, p, u, film);
+      case "banner":    return drawBanner(ctx, S, p, u);
+      case "drones":    return drawDrones(ctx, S, p, u);
+      case "blimp":     return drawBlimp(ctx, S, p, u);
+      case "gantry":    return drawGantry(ctx, S, p, u);
+      case "birds":     return drawBirds(ctx, S, p, u);
+      case "debris":    return drawDebris(ctx, S, p, u);
+      case "fireworks": return drawFireworks(ctx, S, p, u);
+    }
+  }
+
+  function drawBracketRun(ctx, C, run, film, u, skyGrad){
+    drawSky(ctx, C, u, run, skyGrad);
     drawBrkFloor(ctx, C, u);
+
+    // painter's sort over everything with a place on the board
     const list = [];
     run.roads.forEach(r=>{
       const m = r.pts[(r.pts.length/2)|0];
-      list.push({d: depth(C, m[0], 0, m[2]), f: ()=>drawBrkRoad(ctx, C, r, u)});
+      /* `road` so the cull below leaves it alone: a length of road with
+         its middle behind the camera still has most of itself in front,
+         and drawBrkRoad drops the segments that aren't */
+      list.push({d: depth(C, m[0], 0, m[2]), road: true, f: ()=>drawBrkRoad(ctx, C, r, u)});
     });
     run.plates.forEach(p=>{
       list.push({d: depth(C, p.x, p.y, p.z), f: ()=>drawBrkPlate(ctx, C, p, u)});
     });
+    run.props.forEach(p=>{
+      /* sorted on where it really is, drawn in the frame it was planted
+         in — the two are the same distance from the camera either way */
+      const d = depth(C, p.wx, p.y || 4, p.wz);
+      if(d > 900) return;
+      list.push({d, f: ()=>drawBrkProp(ctx, C, p, u, film)});
+    });
     list.push({d: depth(C, 0, 12, 0), f: ()=>drawBrkCup(ctx, C, run, u)});
     list.sort((a,b)=>b.d - a.d);
-    for(let i=0;i<list.length;i++) if(list[i].d > -20) list[i].f();
+    for(let i=0;i<list.length;i++) if(list[i].road || list[i].d > -40) list[i].f();
+
     drawHeroBall(ctx, C, u, brkBallAt);
-  }
-
-  /* ============================================================
-     THE CITY — generated once per fixture
-     ============================================================ */
-  function buildCity(seed, budget){
-    const R = rng(seed);
-    const pick = arr => arr[(R()*arr.length)|0];
-    const blocks = [];
-
-    // three ranks either side: the near wall the camera skims, a taller
-    // second rank behind it, and silhouettes holding the horizon
-    const ranks = [
-      {from: ROAD+1,  spread: 13, hMin: 11, hMax: 26, gap: 15, detail: 2},
-      {from: ROAD+16, spread: 22, hMin: 20, hMax: 58, gap: 21, detail: 1},
-      {from: ROAD+44, spread: 60, hMin: 30, hMax: 96, gap: 34, detail: 0}
-    ];
-    ranks.forEach((rk, ri)=>{
-      for(let side=-1; side<=1; side+=2){
-        for(let z=-60; z<960; z += rk.gap * (0.7 + R()*0.7)){
-          if(ri === 2 && R() < 0.3) continue;
-          const w = 6 + R()*rk.spread*0.5;
-          const d = 7 + R()*rk.spread*0.6;
-          const h = rk.hMin + R()*(rk.hMax - rk.hMin);
-          blocks.push({
-            x: side * (rk.from + R()*rk.spread + w/2),
-            z: z, w: w, d: d, h: h,
-            rank: ri, detail: rk.detail,
-            seed: (R()*1e9)|0,
-            lit: 0.18 + R()*0.4,             // how much of it is awake
-            hue: R(),                        // pale stone vs. warmer stone
-            roof: pick(["flat","peak","tank","mast","flat"])
-          });
-        }
-      }
-    });
-    if(budget < 1) blocks.sort((a,b)=>a.rank-b.rank).splice((blocks.length*budget)|0);
-
-    /* what the city is doing tonight, laid along the flight so it
-       arrives one thing at a time. The app's own furniture is in here
-       too — the podium, the ticker, the wordmark, the trophy. */
-    const props = [
-      {kind:"terrace",  z: 46,  x: ROAD+3,   seed:(R()*1e9)|0},
-      {kind:"banner",   z: 104, y: 15,       seed:(R()*1e9)|0, text:"FF CUP"},
-      {kind:"mathwall", z: 245, x: ROAD+1,  y: 19, step:0, seed:(R()*1e9)|0},   // the two ratings
-      {kind:"lscourt",  z: 150, seed:(R()*1e9)|0},          // the load screen's court, painted on the road
-      {kind:"blimp",    z: 250, y: 48,       seed:(R()*1e9)|0},
-      {kind:"court",    z: 250, x:-(ROAD+9), y: 20, seed:(R()*1e9)|0},
-      {kind:"birds",    z: 214, x:-14, y: 23, seed:(R()*1e9)|0},
-      {kind:"sign",     z: 292, x:-(ROAD+2), y: 24, seed:(R()*1e9)|0, text:"FGTA"},
-      {kind:"ticker",   z: 200, x: ROAD+1,   y: 5,  seed:(R()*1e9)|0},
-      {kind:"podium",   z: 300, x: ROAD+13,  seed:(R()*1e9)|0},
-      {kind:"tron",     z: 352, x:-(ROAD+1), seed:(R()*1e9)|0},
-      {kind:"debris",   z: 292, seed:(R()*1e9)|0},
-      {kind:"gantry",   z: 345, y: 13,       seed:(R()*1e9)|0},
-      {kind:"birds",    z: 372, x: 14, y: 20, seed:(R()*1e9)|0},
-      {kind:"tram",     z: 404, y: 24,       seed:(R()*1e9)|0},
-      {kind:"drones",   z: 430, seed:(R()*1e9)|0},
-      {kind:"portal",   z: (PORTAL.z0+PORTAL.z1)/2, x: PORTAL.x, y: PORTAL.h/2, seed:(R()*1e9)|0},
-      {kind:"trophy",   z: 512, x:-(ROAD+12), y: 22, seed:(R()*1e9)|0},
-      {kind:"plaza",    z: 560, x:-(ROAD+15), seed:(R()*1e9)|0},
-      {kind:"rain",     z: 600, x: ROAD+22,  seed:(R()*1e9)|0},
-      {kind:"tron",     z: 640, x: ROAD+1,   seed:(R()*1e9)|0},
-      {kind:"mathwall", z: 762, x: 0, y: 26, step:1, center:true, seed:(R()*1e9)|0},  // and the formula, over the avenue
-      {kind:"fireworks",z: 790, seed:(R()*1e9)|0}
-    ];
-
-    /* A court, a plaza, a screen or the window needs somewhere to be.
-       Clear the blocks standing where one goes, so it arrives in a gap
-       in the skyline instead of fighting a tower for the same cubic
-       metres — the painter's sort cannot resolve that argument, and it
-       always looks like a mistake. */
-    const CLEAR = {court:[15,19], plaza:[17,20], podium:[17,20], tron:[14,12],
-                   portal:[22,26], lscourt:[26,22], sign:[12,12], trophy:[11,12],
-                   mathwall:[16,24]};
-    props.forEach(p=>{
-      const box = CLEAR[p.kind];
-      if(!box) return;
-      for(let i=blocks.length-1;i>=0;i--){
-        const b = blocks[i];
-        if(b.rank > 1) continue;
-        if(Math.abs(b.x - (p.x||0)) < box[0] && Math.abs(b.z - p.z) < box[1]) blocks.splice(i,1);
-      }
-    });
-
-    /* And the camera needs air. The flight leaves the avenue twice — out
-       to the window and back again — and a procedural skyline has no idea
-       it is standing in the way. Sample the path and delete anything it
-       would pass through, so the one building the camera goes inside is
-       the one built for it. */
-    (function carve(){
-      const CLEAR_X = 7, CLEAR_Z = 6, CLEAR_Y = 4;
-      const pts = [];
-      for(let t=0; t<=T_END; t+=0.05){ const q = pathAt(t); pts.push([q[0], q[1], q[2]]); }
-      for(let i=blocks.length-1;i>=0;i--){
-        const b = blocks[i];
-        const hx = b.w/2 + CLEAR_X, hz = b.d/2 + CLEAR_Z, top = b.h + CLEAR_Y;
-        for(let j=0;j<pts.length;j++){
-          const q = pts[j];
-          if(q[1] < top && Math.abs(q[0]-b.x) < hx && Math.abs(q[2]-b.z) < hz){
-            blocks.splice(i,1); break;
-          }
-        }
-      }
-    })();
-
-    props.forEach(p=>{
-      if(p.kind === "plaza" || p.kind === "podium"){
-        const PR = rng(p.seed), crowd = [];
-        const n = Math.round((p.kind === "podium" ? 90 : 150) * budget);
-        for(let i=0;i<n;i++) crowd.push({
-          dx:(PR()-0.5)*26, dz:(PR()-0.5)*30, ph:PR()*6.28, phone: PR()<0.24, s:0.8+PR()*0.5
-        });
-        p.crowd = crowd;
-      }
-      if(p.kind === "drones"){
-        const PR = rng(p.seed), swarm = [];
-        for(let i=0;i<14;i++) swarm.push({dx:(PR()-0.5)*30, y:8+PR()*26, dz:PR()*90, ph:PR()*6.28, sp:0.5+PR()});
-        p.swarm = swarm;
-      }
-      if(p.kind === "birds"){
-        const PR = rng(p.seed), flock = [];
-        // scattered outward and upward, each starting a beat after the last
-        for(let i=0;i<12;i++) flock.push({
-          dx:(PR()-0.5)*10, dy:(PR()-0.5)*4, dz:(PR()-0.5)*12,
-          vx:(PR()-0.5)*13, vy:2.5+PR()*7, vz:2+PR()*11,
-          t0: 1.4 + PR()*0.5, ph: PR()*6.28
-        });
-        p.flock = flock;
-      }
-      if(p.kind === "debris"){
-        const PR = rng(p.seed), bits = [];
-        for(let i=0;i<Math.round(34*budget);i++) bits.push({
-          x:(PR()-0.5)*ROAD*1.9, dz:(PR()-0.5)*34, h:1.4+PR()*4.5,
-          sp:0.5+PR()*1.3, ph:PR()*6.28, warm: PR()<0.55
-        });
-        p.bits = bits;
-      }
-      if(p.kind === "rain"){
-        const PR = rng(p.seed), drops = [];
-        for(let i=0;i<Math.round(90*budget);i++) drops.push({dx:(PR()-0.5)*40, dz:(PR()-0.5)*50, y:PR()*34, sp:14+PR()*10});
-        p.drops = drops;
-      }
-    });
-
-    /* the confetti off FX.celebrate, drifting through the whole flight */
-    const CONF = ["🎾","✨","🏆","🔥","⭐"];
-    const confetti = [];
-    for(let i=0;i<Math.round(34*budget);i++) confetti.push({
-      x:(R()-0.5)*90, y:2+R()*46, z:R()*900, e:CONF[(R()*CONF.length)|0],
-      ph:R()*6.28, sp:0.4+R()*0.9, sz:0.8+R()*1.2
-    });
-
-    /* the rating galaxy, hung in the sky as a constellation */
-    const GR = rng(seed ^ 0x5bf03635), gal = {nodes:[], links:[]};
-    for(let i=0;i<9;i++) gal.nodes.push({
-      a:-0.9 + GR()*1.8, h:0.10 + GR()*0.26, r:1.6 + GR()*3.4, tw:GR()*6.28
-    });
-    for(let i=0;i<11;i++) gal.links.push([(GR()*9)|0, (GR()*9)|0]);
-
-    // a handful of stars, fixed to the dome rather than the world
-    const stars = [];
-    for(let i=0;i<90;i++) stars.push({a:R()*6.283, h:R(), b:0.25+R()*0.75, tw:R()*6.283});
-
-    return {blocks, props, stars, confetti, gal, seed};
+    drawConfetti(ctx, C, run, u);
   }
 
   /* ============================================================
      THE DRAW
      ============================================================ */
-  function drawSky(ctx, C, u, city, skyGrad){
+  function drawSky(ctx, C, u, world, skyGrad){
     const {W,H} = C;
     ctx.fillStyle = skyGrad; ctx.fillRect(0,0,W,H);
 
     // stars sit on the dome: they shift with the camera's aim, not its position
     const sx = -C.sy*W*0.9, sy2 = C.sp*H*1.4;
-    city.stars.forEach(s=>{
+    world.stars.forEach(s=>{
       const px = ((s.a/6.283)*W*2 + sx) % (W*2) - W*0.5;
       const py = s.h*H*0.6 + sy2 - H*0.1;
       if(px<-20||px>W+20||py<-20||py>H) return;
@@ -36907,11 +36870,11 @@ const FFIntro = (function(){
     /* THE RATING GALAXY, as a constellation — the same force-directed
        cluster the Analytics tab draws, hung on the dome */
     const gx = -C.sy*W*0.9 + W*0.62, gy = C.sp*H*1.4 + H*0.16;
-    const gp = city.gal.nodes.map(n=>({x: gx + n.a*W*0.20, y: gy + n.h*H*0.34, r:n.r, tw:n.tw}));
+    const gp = world.gal.nodes.map(n=>({x: gx + n.a*W*0.20, y: gy + n.h*H*0.34, r:n.r, tw:n.tw}));
     if(gp.some(p=>p.x>-60 && p.x<W+60 && p.y>-40 && p.y<H*0.7)){
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      city.gal.links.forEach(([a,b])=>{
+      world.gal.links.forEach(([a,b])=>{
         if(a===b || !gp[a] || !gp[b]) return;
         line(ctx, gp[a], gp[b], "rgba(255,45,120,.13)", 1);
       });
@@ -36925,7 +36888,7 @@ const FFIntro = (function(){
 
     /* THE BRAND BALL, where the moon should be — lit from the upper
        left with the seam coming round the rim, exactly like .tb-ball */
-    const mp = pr(C, -560, 330, ARENA_Z + 900);
+    const mp = pr(C, -1500, 620, 2100);
     if(mp){
       const r = Math.max(8, 90*mp.s);
       glow(ctx, mp, r*2.6, BALL, 0.13);
@@ -36949,107 +36912,14 @@ const FFIntro = (function(){
     }
   }
 
-  function drawGround(ctx, C, u){
-    const near = C.z + 4, far = C.z + 780;
-    const q = [pr(C,-320,0,far), pr(C,320,0,far), pr(C,320,0,near), pr(C,-320,0,near)];
-    poly(ctx, q, rgb([20,8,32], 0.98));
-
-    // the avenue, wet enough to carry the city back up at you
-    const road = [pr(C,-ROAD,0.02,far), pr(C,ROAD,0.02,far), pr(C,ROAD,0.02,near), pr(C,-ROAD,0.02,near)];
-    if(poly(ctx, road, rgb([34,14,52], 0.95))){
-      ctx.save(); ctx.clip();
-      const sheen = ctx.createLinearGradient(0, C.oy, 0, C.H);
-      sheen.addColorStop(0, rgb(NEON, 0.16));
-      sheen.addColorStop(1, rgb(NEON, 0));
-      ctx.fillStyle = sheen; ctx.fillRect(0, C.oy, C.W, C.H);
-      ctx.restore();
-    }
-    // centre dashes, which are most of what sells the speed
-    const step = 14, first = Math.floor((C.z+6)/step)*step;
-    for(let z=first; z<C.z+420; z+=step){
-      const a = pr(C,-0.5,0.05,z), b = pr(C,0.5,0.05,z), c = pr(C,0.5,0.05,z+6), d = pr(C,-0.5,0.05,z+6);
-      poly(ctx, [a,b,c,d], fogged([255,214,120], z-C.z, 0.5));
-    }
-    // street lamps down both kerbs
-    for(let z=first-step; z<C.z+260; z+=26){
-      for(let s=-1;s<=1;s+=2){
-        const base = pr(C, s*(ROAD-0.6), 0, z), top = pr(C, s*(ROAD-0.6), 6.4, z);
-        if(!base||!top) continue;
-        line(ctx, base, top, fogged([120,96,150], top.d, 0.75), Math.max(0.6, 0.22*top.s));
-        glow(ctx, top, Math.max(4, 3.2*top.s), WARM, 0.7*(1-fogAt(top.d)));
-      }
-    }
-  }
-
-  /* ---- one building ----
-     `corners` is the eight projected corners the cull pass already
-     computed; re-projecting them here would double the cost of the
-     cheapest half of the frame. */
-  function drawBlock(ctx, C, b, u, budget){
-    const x0=b.x-b.w/2, x1=b.x+b.w/2, z0=b.z-b.d/2, z1=b.z+b.d/2, h=b.h;
-    const d = depth(C, b.x, h/2, b.z);
-
-    const face  = mix(mix(SHADE, STONE, 0.62 + b.hue*0.3), SHADE, b.rank*0.22);
-    const front = fogged(face, d);
-    const side  = fogged(mix(face, SHADE, 0.5), d);
-    const top   = fogged(mix(face, STONE, 0.25), d);
-
-    if(C.z < z0) poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,0,z0),pr(C,x0,0,z0)], front);
-    if(C.z > z1) poly(ctx, [pr(C,x1,h,z1),pr(C,x0,h,z1),pr(C,x0,0,z1),pr(C,x1,0,z1)], front);
-    if(C.x < x0) poly(ctx, [pr(C,x0,h,z1),pr(C,x0,h,z0),pr(C,x0,0,z0),pr(C,x0,0,z1)], side);
-    if(C.x > x1) poly(ctx, [pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x1,0,z1),pr(C,x1,0,z0)], side);
-    if(C.y > h)  poly(ctx, [pr(C,x0,h,z0),pr(C,x1,h,z0),pr(C,x1,h,z1),pr(C,x0,h,z1)], top);
-
-    // the hairline that keeps the skyline readable against its own fog
-    line(ctx, pr(C,x0,h,z0), pr(C,x1,h,z0), fogged(STONE, d, 0.55), 0.7);
-
-    if(!b.detail || d > 210*budget) return;
-
-    // lit windows — only the lit ones past the near band, none at all far out
-    const cols = Math.max(1, Math.floor(b.w/2.9)), rows = Math.max(1, Math.floor(h/3.7));
-    const WR = rng(b.seed);
-    /* the dark panes only just before a face fills the lens — drawing a
-       whole unlit grid on a building that is about to be behind you was
-       half the cost of the worst frame in the opening seconds */
-    const all = d < 26*budget;
-    const cw = (b.w-0.9)/cols, ch = (h-1.2)/rows;
-    if(C.z < z0){
-      for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-          const k = WR();
-          const on = k < b.lit;
-          if(!on && !all) continue;
-          const flick = on && Math.sin(u*1.4 + k*40 + r) > 0.985 ? 0.35 : 1;
-          const wx = x0+0.45+c*cw, wy = 0.7+r*ch;
-          poly(ctx, [pr(C,wx,wy+ch*0.62,z0-0.05), pr(C,wx+cw*0.66,wy+ch*0.62,z0-0.05),
-                     pr(C,wx+cw*0.66,wy,z0-0.05), pr(C,wx,wy,z0-0.05)],
-            on ? fogged(k < b.lit*0.22 ? NEON : WARM, d, 0.9*flick) : fogged(SHADE, d, 0.5));
-        }
-      }
-    }
-
-    if(b.detail < 2 || d > 150) return;
-    // roof kit: a tank, a mast with a warning light, or a peak
-    const cx = b.x, cz = b.z;
-    if(b.roof === "mast"){
-      const a = pr(C,cx,h,cz), t2 = pr(C,cx,h+5.5,cz);
-      if(a && t2){
-        line(ctx, a, t2, fogged(SHADE, d, 0.9), Math.max(0.6, 0.14*a.s));
-        if(Math.sin(u*2.4 + b.seed) > 0) glow(ctx, t2, Math.max(3, 1.6*t2.s), [255,60,60], 0.9);
-      }
-    } else if(b.roof === "tank"){
-      poly(ctx, [pr(C,cx-1.3,h+2.4,cz-1.3),pr(C,cx+1.3,h+2.4,cz-1.3),
-                 pr(C,cx+1.3,h,cz-1.3),pr(C,cx-1.3,h,cz-1.3)], fogged(mix(SHADE,STONE,0.4), d));
-    } else if(b.roof === "peak"){
-      poly(ctx, [pr(C,cx,h+3.4,cz),pr(C,x1,h,z0),pr(C,x0,h,z0)], fogged(mix(STONE,SHADE,0.35), d));
-    }
-  }
-
   /* ============================================================
-     WHAT THE CITY IS DOING TONIGHT
-     ============================================================ */
+     WHAT IS STANDING BESIDE THE ROAD
 
-  /* a floodlit court on a roof, mid-rally */
+     The app itself, scattered along the bracket the way it used to be
+     scattered through a skyline. Each of these is authored facing +z
+     and planted through brkSpin(), which turns the camera rather than
+     the prop, so it squares up to whichever road it was put beside.
+     ============================================================ */  /* a floodlit court on a roof, mid-rally */
   function drawCourt(ctx, C, p, u){
     const y = p.y, x = p.x, z = p.z, d = depth(C, x, y, z);
     if(d < 1 || d > 460) return;
@@ -37412,24 +37282,6 @@ const FFIntro = (function(){
     });
   }
 
-  /* an elevated line, and a train crossing it */
-  function drawTram(ctx, C, p, u){
-    const y = p.y, z = p.z, d = depth(C, 0, y, z);
-    if(d < 1 || d > 460) return;
-    line(ctx, pr(C,-90,y,z), pr(C,90,y,z), fogged(SHADE, d, 0.95), Math.max(1.4, 30/d));
-    const tx = -70 + ((u*16) % 150);
-    for(let c=0;c<5;c++){
-      const cx0 = tx + c*7.4;
-      poly(ctx, [pr(C,cx0,y+3.2,z-1.4),pr(C,cx0+6.4,y+3.2,z-1.4),
-                 pr(C,cx0+6.4,y+0.4,z-1.4),pr(C,cx0,y+0.4,z-1.4)], fogged([236,232,250], d, 0.92));
-      for(let w=0;w<4;w++){
-        const wx = cx0+0.7+w*1.5;
-        poly(ctx, [pr(C,wx,y+2.6,z-1.5),pr(C,wx+1,y+2.6,z-1.5),
-                   pr(C,wx+1,y+1.3,z-1.5),pr(C,wx,y+1.3,z-1.5)], fogged(WARM, d, 0.95));
-      }
-    }
-  }
-
   /* camera drones weaving over the street */
   function drawDrones(ctx, C, p, u){
     p.swarm.forEach(s=>{
@@ -37465,38 +37317,6 @@ const FFIntro = (function(){
     ctx.fillText("FF CUP", c.x, c.y);
     ctx.restore();
     glow(ctx, tail, Math.max(2, ry*0.5), [255,70,70], 0.8);
-  }
-
-  /* a terrace still full, screen on */
-  function drawTerrace(ctx, C, p, u){
-    const d = depth(C, p.x, 2, p.z);
-    if(d < 1 || d > 300) return;
-    poly(ctx, [pr(C,p.x-1,4.2,p.z-7),pr(C,p.x+7,4.2,p.z-7),
-               pr(C,p.x+7,4.2,p.z+7),pr(C,p.x-1,4.2,p.z+7)], fogged([255,138,43], d, 0.5));
-    const R2 = rng(p.seed);
-    for(let i=0;i<9;i++){
-      const tx = p.x + 0.6 + R2()*5, tz = p.z - 6 + R2()*12;
-      const b = pr(C, tx, 0, tz), h = pr(C, tx, 1.5, tz);
-      if(!b||!h) continue;
-      line(ctx, b, h, fogged([16,6,24], d, 0.9), Math.max(0.7, 0.28*b.s));
-      glow(ctx, pr(C, tx, 0.9, tz), Math.max(2, 0.6*b.s), WARM, 0.5*(1-fogAt(d)));
-    }
-  }
-
-  /* THE WEATHER FX — one district getting rained on */
-  function drawRain(ctx, C, p, u){
-    const d = depth(C, p.x, 14, p.z);
-    if(d < 1 || d > 420) return;
-    ctx.strokeStyle = fogged([170,200,255], d, 0.35);
-    ctx.lineWidth = Math.max(0.5, 40/d);
-    ctx.beginPath();
-    p.drops.forEach(r=>{
-      const y = 34 - ((u*r.sp + r.y*3) % 34);
-      const a = pr(C, p.x+r.dx, y, p.z+r.dz), b = pr(C, p.x+r.dx+0.4, y-1.6, p.z+r.dz);
-      if(!a||!b) return;
-      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-    });
-    ctx.stroke();
   }
 
   /* THE GANTRY — a crane arm slung across the avenue with its counterweight
@@ -37593,106 +37413,10 @@ const FFIntro = (function(){
     }
   }
 
-  /* ---- THE WINDOW ----
-     The tower the camera goes through. Its two long faces are drawn as
-     four bands around a hole, so you can see the lit corridor through
-     the opening on the way in and the city again through the far one.
-     Inside, the corridor's ceiling strips are what make 36 metres of
-     office feel like a tunnel at ninety a second. */
-  function drawPortalFace(ctx, C, P, z, d, colr, lit){
-    const x0 = P.x - P.w/2, x1 = P.x + P.w/2;
-    const wx0 = P.wx - P.ww/2, wx1 = P.wx + P.ww/2;
-    const wy0 = P.wy - P.wh/2, wy1 = P.wy + P.wh/2;
-    const band = (a,b,c,e) => poly(ctx, [pr(C,a,e,z),pr(C,b,e,z),pr(C,b,c,z),pr(C,a,c,z)], colr);
-    band(x0, x1, wy1, P.h);          // above the opening
-    band(x0, x1, 0,   wy0);          // below it
-    band(x0, wx0, wy0, wy1);         // left of it
-    band(wx1, x1, wy0, wy1);         // right of it
-    /* the rest of the floor, so the tower the camera is aiming at reads
-       as a building with one window open rather than a blank cliff.
-       Dropped at the same range as every other building's grid — left on
-       further out, it is the only lit grid in the distance and reads as
-       a slab hanging over the avenue. */
-    if(lit && d < 230){
-      const PR = rng(0x9e3779b9);
-      for(let r=0;r<Math.floor(P.h/3.7);r++){
-        for(let c=0;c<Math.floor(P.w/2.9);c++){
-          const k = PR();
-          const wx = x0+0.8+c*2.9, wy = 0.9+r*3.7;
-          if(wx+1.9 > wx0 && wx < wx1 && wy+2.4 > wy0 && wy < wy1) continue;   // the opening
-          poly(ctx, [pr(C,wx,wy+2.4,z-0.05),pr(C,wx+1.9,wy+2.4,z-0.05),
-                     pr(C,wx+1.9,wy,z-0.05),pr(C,wx,wy,z-0.05)],
-               k < 0.34 ? fogged(k < 0.07 ? NEON : WARM, d, 0.9) : fogged(SHADE, d, 0.55));
-        }
-      }
-    }
-    // the frame, lit from inside
-    const fr = fogged([255,206,150], d, 0.7);
-    line(ctx, pr(C,wx0,wy0,z), pr(C,wx1,wy0,z), fr, 1.6);
-    line(ctx, pr(C,wx0,wy1,z), pr(C,wx1,wy1,z), fr, 1.6);
-  }
-
-  function drawPortal(ctx, C, P, u){
-    const cz = (P.z0 + P.z1)/2, d = depth(C, P.x, P.h/2, cz);
-    if(d < -40 || d > 520) return;
-    const body   = fogged(mix(SHADE, STONE, 0.58), Math.max(4,d));
-    const inner  = fogged([26,12,40], Math.max(6,d), 0.99);   // what a wall looks like from indoors
-    const wx0 = P.wx - P.ww/2, wx1 = P.wx + P.ww/2;
-    const wy0 = P.wy - P.wh/2, wy1 = P.wy + P.wh/2;
-
-    /* The far wall: its inside face while the camera is still short of
-       the building or inside it, its outside face once it is past. */
-    if(C.z < P.z1) drawPortalFace(ctx, C, P, P.z1, d, inner, false);
-    else           drawPortalFace(ctx, C, P, P.z1, d, body,  true);
-
-    // the corridor: four walls between the two openings, lit down the middle
-    const wall = (ax,ay,bx,by) => poly(ctx,
-      [pr(C,ax,ay,P.z0), pr(C,bx,by,P.z0), pr(C,bx,by,P.z1), pr(C,ax,ay,P.z1)], inner);
-    wall(wx0, wy1, wx1, wy1);        // ceiling
-    wall(wx0, wy0, wx1, wy0);        // floor
-    wall(wx0, wy0, wx0, wy1);        // left
-    wall(wx1, wy0, wx1, wy1);        // right
-    /* the strip lights, which are what make thirty-six metres of office
-       feel like a tunnel at ninety a second. Their width is capped: one
-       passing a hand from the lens would otherwise be a bar across the
-       whole frame. */
-    for(let z = P.z0 + 3; z < P.z1; z += 5){
-      const a = pr(C, wx0+1.4, wy1-0.25, z), b = pr(C, wx1-1.4, wy1-0.25, z);
-      if(!a||!b) continue;
-      line(ctx, a, b, "rgba(255,222,170,.9)", Math.min(9, Math.max(1, 0.22*a.s)));
-      glow(ctx, {x:(a.x+b.x)/2, y:(a.y+b.y)/2}, Math.min(90, Math.max(3, 2.4*a.s)), WARM, 0.32);
-    }
-    // and something on the wall to have flown past
-    onQuad(ctx, pr(C,wx0+0.05,wy1-1.2,P.z0+4), pr(C,wx0+0.05,wy1-1.2,P.z0+11),
-           pr(C,wx0+0.05,wy1-4.4,P.z0+4), 90, 42, cx=>{
-      cx.fillStyle = "rgba(255,45,143,.9)"; cx.fillRect(0,0,90,42);
-      cx.fillStyle = "rgba(255,255,255,.95)";
-      cx.font = "700 15px 'JetBrains Mono',monospace";
-      cx.textAlign = "center"; cx.textBaseline = "middle";
-      cx.fillText("FGTA", 45, 21);
-    });
-
-    /* the flanks and the roof, so that from anywhere but head-on the
-       tower is a box and not a pair of billboards with a gap between */
-    const px0 = P.x - P.w/2, px1 = P.x + P.w/2;
-    if(C.x < px0) poly(ctx, [pr(C,px0,P.h,P.z1),pr(C,px0,P.h,P.z0),
-                             pr(C,px0,0,P.z0),pr(C,px0,0,P.z1)], fogged(mix(SHADE,STONE,0.3), Math.max(4,d)));
-    if(C.x > px1) poly(ctx, [pr(C,px1,P.h,P.z0),pr(C,px1,P.h,P.z1),
-                             pr(C,px1,0,P.z1),pr(C,px1,0,P.z0)], fogged(mix(SHADE,STONE,0.3), Math.max(4,d)));
-    if(C.y > P.h) poly(ctx, [pr(C,px0,P.h,P.z0),pr(C,px1,P.h,P.z0),
-                             pr(C,px1,P.h,P.z1),pr(C,px0,P.h,P.z1)], fogged(mix(SHADE,STONE,0.7), Math.max(4,d)));
-
-    // the near face last, so it covers everything except the way in
-    if(C.z < P.z0){
-      drawPortalFace(ctx, C, P, P.z0, d, body, true);
-      glow(ctx, pr(C, P.wx, P.wy, P.z0), Math.min(160, Math.max(8, 5*(C.f/Math.max(8,d)))), WARM, 0.4);
-    }
-  }
-
   /* THE CONFETTI off FX.celebrate, drifting through the whole city */
-  function drawConfetti(ctx, C, city, u){
+  function drawConfetti(ctx, C, world, u){
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    city.confetti.forEach(c=>{
+    world.confetti.forEach(c=>{
       const y = c.y + Math.sin(u*c.sp + c.ph)*1.8;
       const x = c.x + Math.sin(u*0.4 + c.ph)*3;
       const q = pr(C, x, y, c.z);
@@ -37704,84 +37428,6 @@ const FFIntro = (function(){
       ctx.fillText(c.e, q.x, q.y);
       ctx.globalAlpha = 1;
     });
-  }
-
-  /* ---- the arena the whole flight is aimed at ---- */
-  function drawArena(ctx, C, u){
-    const d = depth(C, 0, ARENA_Y, ARENA_Z);
-    if(d < 1) return;
-    const R = 62, seg = 30;
-    const rim = [], base = [], top = [];
-    for(let i=0;i<seg;i++){
-      const a = (i/seg)*6.2832;
-      rim.push(pr(C, Math.cos(a)*R, ARENA_Y, Math.sin(a)*R*0.72 + ARENA_Z));
-      top.push(pr(C, Math.cos(a)*R*0.74, ARENA_Y+16, Math.sin(a)*R*0.53 + ARENA_Z));
-      base.push(pr(C, Math.cos(a)*R*0.96, ARENA_Y-3, Math.sin(a)*R*0.69 + ARENA_Z));
-    }
-    const tip = pr(C, 0, ARENA_Y-78, ARENA_Z);
-    // the crystal underside
-    if(tip){
-      for(let i=0;i<seg;i++){
-        const a = base[i], b = base[(i+1)%seg];
-        if(!a||!b) continue;
-        const k = 0.35 + 0.45*Math.abs(Math.cos((i/seg)*6.2832));
-        poly(ctx, [a,b,tip], rgb(mix([48,26,96],[150,120,235], k), 0.95));
-      }
-    }
-    // the deck, and the bowl standing on it
-    poly(ctx, rim.filter(Boolean), rgb(mix(STONE,[190,180,230],0.4), 0.97));
-    for(let i=0;i<seg;i++){
-      const a = rim[i], b = rim[(i+1)%seg], c = top[(i+1)%seg], e = top[i];
-      if(!a||!b||!c||!e) continue;
-      const k = 0.4 + 0.5*Math.abs(Math.cos((i/seg)*6.2832 + 0.6));
-      poly(ctx, [a,b,c,e], rgb(mix([64,40,110], STONE, k), 0.96));
-    }
-    // spires, because a stadium on an island in the sky may as well
-    for(let i=0;i<9;i++){
-      const a = (i/9)*6.2832 + 0.3;
-      const bx = Math.cos(a)*R*0.62, bz = Math.sin(a)*R*0.44 + ARENA_Z;
-      const hgt = 20 + ((i*37)%11);
-      poly(ctx, [pr(C,bx-2.4,ARENA_Y+16,bz), pr(C,bx+2.4,ARENA_Y+16,bz),
-                 pr(C,bx+0.6,ARENA_Y+16+hgt,bz), pr(C,bx-0.6,ARENA_Y+16+hgt,bz)],
-           rgb(mix(STONE,[150,140,210],0.35), 0.96));
-    }
-    /* the house sign. The flight ends here, and the place it ends at is
-       the app's own — so the arena says whose it is, big enough to read
-       from the last hundred metres of the approach. */
-    (function(){
-      const fz = ARENA_Z - R*0.68, by = ARENA_Y + 2.5, bw = 48, bh = 11;
-      const s0 = pr(C,-bw/2,by+bh,fz), s1 = pr(C,bw/2,by+bh,fz),
-            s2 = pr(C,bw/2,by,fz),     s3 = pr(C,-bw/2,by,fz);
-      if(!s0||!s1||!s3) return;
-      poly(ctx, [s0,s1,s2,s3], "rgba(8,3,20,.82)", "rgba(212,255,43,.35)", 1);
-      onQuad(ctx, s0, s1, s3, 230, 55, cx=>{
-        cx.textAlign = "center"; cx.textBaseline = "middle";
-        cx.fillStyle = "rgba(212,255,43,.95)";
-        cx.font = "700 29px 'JetBrains Mono',monospace";
-        cx.fillText("FGTA", 115, 21);
-        cx.fillStyle = "rgba(255,255,255,.62)";
-        cx.font = "700 10px 'JetBrains Mono',monospace";
-        cx.fillText("CHAMPIONSHIP LADDER", 115, 43);
-      });
-      glow(ctx, pr(C,0,by+bh/2,fz), Math.max(18, 22*s0.s), BALL, 0.20);
-    })();
-
-    // the ring of light, and the beams it throws up. Drawn additively —
-    // a searchlight brightens what it crosses, it does not tint it brown
-    const heart = pr(C, 0, ARENA_Y+18, ARENA_Z);
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    glow(ctx, heart, Math.max(30, 70*(heart?heart.s:1)), [255,214,140], 0.5);
-    for(let i=0;i<6;i++){
-      const a = u*0.35 + (i/6)*6.2832;
-      const bx = Math.cos(a)*R*0.8, bz = Math.sin(a)*R*0.56 + ARENA_Z;
-      const b0 = pr(C, bx, ARENA_Y+8, bz), b1 = pr(C, bx*2.4, ARENA_Y+170, bz + Math.sin(a)*40);
-      if(!b0||!b1) continue;
-      const g = ctx.createLinearGradient(b0.x,b0.y,b1.x,b1.y);
-      g.addColorStop(0, "rgba(255,206,130,.30)"); g.addColorStop(1, "rgba(255,45,143,0)");
-      poly(ctx, [b0, {x:b1.x-18,y:b1.y}, {x:b1.x+18,y:b1.y}], g);
-    }
-    ctx.restore();
   }
 
   /* ============================================================
@@ -37838,10 +37484,10 @@ const FFIntro = (function(){
     };
   }
 
-  /* When each step of the sum arrives, on the film's clock — so the
-     working starts when the flight does and the bracket run is left to
-     say the one thing it is there to say. */
-  const MATH_AT = [1.0, 2.6, 4.4, 6.3, 8.2, 9.8].map(t => t + T_BRK);
+  /* when each step of the sum arrives, on the run's clock — it starts
+     once the camera is on the road, so the shot that opens the film is
+     left to say the one thing it is there to say */
+  const MATH_AT = [3.4, 4.6, 5.8, 7.0, 8.2, 9.4];
   function mathSteps(film){
     const m = mathOf(film);
     const rows = [
@@ -37990,11 +37636,11 @@ const FFIntro = (function(){
     }
 
     const budget = (window.innerWidth < 760 || (navigator.hardwareConcurrency||4) <= 4) ? 0.55 : 1;
-    const city = buildCity(hash(film.key), budget);
-    /* the run that opens the film, and the road through it the ball
-       takes — this fixture's seed, its semifinal, its road to the cup */
-    const run  = buildBracketRun(film);
-    BRK_KEYS   = brkRoute(run.seat);
+    /* the board, and the road through it the ball takes — this
+       fixture's seed, its semifinal, its road to the cup. Generated
+       from the fixture's own key, so every game gets its own scatter
+       of scenery and the same game always gets the same one. */
+    const run  = buildBracketRun(film, budget);
     const ctx  = canvas.getContext("2d");
     let W = 0, H = 0, dpr = 1, skyGrad = null, vigGrad = null;
     function size(){
@@ -38025,76 +37671,6 @@ const FFIntro = (function(){
     const onResize = afterIdle(()=>size(), 160);
     window.addEventListener("resize", onResize, {passive:true});
 
-    /* scratch for the cull pass — allocated once, not sixty times a second */
-    const CORN = new Array(8), FACE = new Array(4);
-
-    /* Is the whole viewport inside this convex quad? A building face that
-       contains all four screen corners hides everything behind it, and at
-       street level there is almost always one — the near rank is a solid
-       wall a few metres away. Without this the painter's order draws the
-       entire city and then buries it, which is where the worst frames of
-       the opening seconds came from. */
-    function coversViewport(q, W, H){
-      for(let c=0;c<4;c++){
-        const px = (c&1) ? W : 0, py = (c&2) ? H : 0;
-        let sign = 0;
-        for(let i=0;i<4;i++){
-          const a = q[i], b = q[(i+1)&3];
-          const cr = (b.x-a.x)*(py-a.y) - (b.y-a.y)*(px-a.x);
-          if(cr === 0) continue;
-          const sg = cr > 0 ? 1 : -1;
-          if(sign === 0) sign = sg; else if(sg !== sign) return false;
-        }
-      }
-      return true;
-    }
-    /* the depth at which the city stops being visible this frame */
-    function occlusionDepth(C){
-      let at = Infinity;
-      const bl = city.blocks;
-      for(let i=0;i<bl.length;i++){
-        const b = bl[i];
-        const d = depth(C, b.x, b.h/2, b.z);
-        if(d <= 1 || d > 80 || d >= at) continue;
-        const x0=b.x-b.w/2, x1=b.x+b.w/2, z0=b.z-b.d/2, z1=b.z+b.d/2;
-        const faces = [];
-        if(C.z < z0) faces.push([[x0,b.h,z0],[x1,b.h,z0],[x1,0,z0],[x0,0,z0]]);
-        if(C.z > z1) faces.push([[x1,b.h,z1],[x0,b.h,z1],[x0,0,z1],[x1,0,z1]]);
-        if(C.x < x0) faces.push([[x0,b.h,z1],[x0,b.h,z0],[x0,0,z0],[x0,0,z1]]);
-        if(C.x > x1) faces.push([[x1,b.h,z0],[x1,b.h,z1],[x1,0,z1],[x1,0,z0]]);
-        for(let fi=0; fi<faces.length; fi++){
-          const f = faces[fi];
-          let ok = true;
-          for(let k=0;k<4;k++){
-            const p = pr(C, f[k][0], f[k][1], f[k][2]);
-            if(!p){ ok = false; break; }
-            FACE[k] = p;
-          }
-          if(ok && coversViewport(FACE, C.W, C.H)){ at = d; break; }
-        }
-      }
-      return at;
-    }
-    /* Is any part of this box on screen? Eight projections cost a fraction
-       of one fill, and most of the city on any given frame is off to the
-       side or behind you. Skipping those took the worst frame of the
-       opening seconds from ~118ms to a fifth of that. */
-    function boxOnScreen(C, x, y0, y1, z, hw, hd){
-      let minx=1e9, maxx=-1e9, miny=1e9, maxy=-1e9, any=false, behind=false;
-      for(let i=0;i<8;i++){
-        const px = x + ((i&1)?hw:-hw), py = (i&2)?y1:y0, pz = z + ((i&4)?hd:-hd);
-        const p = pr(C, px, py, pz);
-        CORN[i] = p;
-        if(!p){ behind = true; continue; }
-        any = true;
-        if(p.x<minx)minx=p.x; if(p.x>maxx)maxx=p.x;
-        if(p.y<miny)miny=p.y; if(p.y>maxy)maxy=p.y;
-      }
-      if(!any) return false;
-      if(behind) return true;                       // straddling the near plane — keep it
-      return !(maxx < 0 || minx > C.W || maxy < 0 || miny > C.H);
-    }
-
     let slammed = false, carded = false, t0 = 0;
 
     function frame(now){
@@ -38107,69 +37683,16 @@ const FFIntro = (function(){
        the bracket run is over. Everything below the cut is written in
        flight seconds exactly as it always was; everything that spans
        both — the streaks, the vignette, the card — is written in gu. */
-    function drawFrame(gu){
+    function drawFrame(u){
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.clearRect(0,0,W,H);
-      const u = gu - T_BRK;
-      if(gu < T_BRK){
-        drawBracketRun(ctx, brkCamera(gu, W, H), run, film, gu, city, skyGrad);
-      } else {
-      const C = camera(u, W, H);
-      drawSky(ctx, C, u, city, skyGrad);
+      drawBracketRun(ctx, brkCamera(u, W, H), run, film, u, skyGrad);
 
-      // painter's algorithm over everything with a place in the world,
-      // minus whatever a nearer wall is already covering
-      const far = occlusionDepth(C);
-      const list = [];
-      for(let i=0;i<city.blocks.length;i++){
-        const b = city.blocks[i];
-        const d = depth(C, b.x, b.h/2, b.z);
-        if(d <= 1 || d > 640 || d > far) continue;
-        if(!boxOnScreen(C, b.x, 0, b.h, b.z, b.w/2, b.d/2)) continue;
-        list.push({d, b, f: null});
-      }
-      city.props.forEach(p=>{
-        const d = depth(C, p.x||0, p.y||4, p.z);
-        if(d <= -40 || d > 660 || d > far) return;
-        const f = p.kind === "court"     ? ()=>drawCourt(ctx, C, p, u)
-                : p.kind === "plaza"     ? ()=>drawPlaza(ctx, C, p, u)
-                : p.kind === "podium"    ? ()=>drawPodium(ctx, C, p, u)
-                : p.kind === "trophy"    ? ()=>drawTrophy(ctx, C, p, u)
-                : p.kind === "sign"      ? ()=>drawSign(ctx, C, p, u)
-                : p.kind === "ticker"    ? ()=>drawTicker(ctx, C, p, u, film)
-                : p.kind === "lscourt"   ? ()=>drawLsCourt(ctx, C, p, u)
-                : p.kind === "tron"      ? ()=>drawTron(ctx, C, p, u, film)
-                : p.kind === "mathwall"  ? ()=>drawMathWall(ctx, C, p, u, film)
-                : p.kind === "banner"    ? ()=>drawBanner(ctx, C, p, u)
-                : p.kind === "tram"      ? ()=>drawTram(ctx, C, p, u)
-                : p.kind === "drones"    ? ()=>drawDrones(ctx, C, p, u)
-                : p.kind === "blimp"     ? ()=>drawBlimp(ctx, C, p, u)
-                : p.kind === "terrace"   ? ()=>drawTerrace(ctx, C, p, u)
-                : p.kind === "rain"      ? ()=>drawRain(ctx, C, p, u)
-                : p.kind === "gantry"    ? ()=>drawGantry(ctx, C, p, u)
-                : p.kind === "birds"     ? ()=>drawBirds(ctx, C, p, u)
-                : p.kind === "debris"    ? ()=>drawDebris(ctx, C, p, u)
-                : p.kind === "portal"    ? ()=>drawPortal(ctx, C, PORTAL, u)
-                : p.kind === "fireworks" ? ()=>drawFireworks(ctx, C, p, u)
-                : null;
-        if(f) list.push({d, b:null, f});
-      });
-      const ad = depth(C, 0, ARENA_Y, ARENA_Z);
-      if(ad < far) list.push({d: ad, b:null, f: ()=>drawArena(ctx, C, u)});
-      list.sort((a,b)=>b.d - a.d);
-
-      drawGround(ctx, C, u);
-      for(let i=0;i<list.length;i++){
-        const it = list[i];
-        if(it.b) drawBlock(ctx, C, it.b, u, budget); else it.f();
-      }
-      drawHeroBall(ctx, C, u);
-      drawConfetti(ctx, C, city, u);
-      }
-
-      // speed lines, from the moment the run is at its quickest
-      if(gu > 0.5 && gu < T_CUT){
-        const k = Math.min(1, (gu-0.5)/1.4);
+      /* speed lines, from the moment the camera is on the road — the
+         orbit that opens the film is the one shot in it that is not
+         going anywhere */
+      if(u > 1.3 && u < T_END){
+        const k = Math.min(1, (u-1.3)/1.4);
         ctx.strokeStyle = "rgba(255,255,255,.16)";
         ctx.globalAlpha = k*0.5;
         ctx.lineWidth = 1.4;
@@ -38187,29 +37710,19 @@ const FFIntro = (function(){
       // a vignette, so the middle of the frame always wins
       ctx.fillStyle = vigGrad; ctx.fillRect(0,0,W,H);
 
-      /* the ball goes into the cup, and the light it makes is the cut:
-         the bracket run ends and the street starts inside one flash */
-      if(gu > T_BRK - 0.2 && gu < T_BRK + 0.5){
-        const k = 1 - Math.abs(gu - T_BRK)/0.36;
-        if(k > 0){ ctx.fillStyle = "rgba(232,255,150,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
-      }
-      // going through the glass is a bang of light, not a fade
-      if(u > 6.9 && u < 7.9){
-        const k = 1 - Math.abs(u - 7.2)/0.32;
-        if(k > 0){ ctx.fillStyle = "rgba(255,236,200,"+(k*k*0.55)+")"; ctx.fillRect(0,0,W,H); }
-      }
-      // and so is the arrival
-      if(u > T_END - 0.35 && u < T_END + 0.6){
+      /* the ball goes into the cup, and the light it makes is the cut
+         to the card — a bang, not a fade */
+      if(u > T_END - 0.4 && u < T_END + 0.7){
         const k = 1 - Math.abs(u - T_END)/0.5;
-        if(k > 0){ ctx.fillStyle = "rgba(255,246,235,"+(k*k*0.95)+")"; ctx.fillRect(0,0,W,H); }
+        if(k > 0){ ctx.fillStyle = "rgba(236,255,175,"+(k*k*0.97)+")"; ctx.fillRect(0,0,W,H); }
       }
-      mathTo(gu);
-      if(!carded && gu >= T_VS){
+      mathTo(u);
+      if(!carded && u >= T_VS){
         carded = true;
         vs.classList.add("on");
         setTimeout(()=>{ if(liveEl === el) teardown(); }, T_HOLD*1000);
       }
-      if(!slammed && gu >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
+      if(!slammed && u >= T_VS + 0.5){ slammed = true; try{ sfx("setWin"); }catch(e){} }
     }
 
     /* paint frame zero now, so a prepared film is never a blank rectangle
