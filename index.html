@@ -963,7 +963,14 @@
     background:radial-gradient(ellipse at center, var(--panel), var(--bg) 75%);
     flex-direction:column;gap:20px;
   }
-  .loadscreen.done{animation:ls-out .6s cubic-bezier(.6,0,.4,1) forwards}
+  /* pointer-events:none lands the instant .done is set, not 600ms later when
+     the fade-out animation finishes and visibility:hidden takes effect. The
+     screen is a fixed, full-viewport, z-index:10000 layer, so without this
+     the very first tap on the app — thrown the moment the app *looks* ready,
+     which is well before the JS removes this element 650ms after the fade
+     starts — lands on the (by then invisible) load screen instead of
+     whatever button is actually underneath, and is silently swallowed. */
+  .loadscreen.done{animation:ls-out .6s cubic-bezier(.6,0,.4,1) forwards;pointer-events:none}
   @keyframes ls-out{to{opacity:0;visibility:hidden;transform:scale(1.06)}}
 
   /* ===== TAB-SWITCH TRANSITION — racket-strings wipe with a leading ball ===== */
