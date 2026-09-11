@@ -35671,11 +35671,19 @@ if(configured && sb){
   $("tagline").textContent=taglineText();
   /* wrapped rather than passed bare: load() reads an options argument now,
      and a bare `.then(load)` hands it whatever the promise resolved to */
-  refreshAdminStatus().then(()=>load());
-  refreshMyProfile().then(()=>afterIdentityChange());
+  /* .catch() before .then() so a broken stored session — a refresh token the
+     server has already rotated out from under it, which answers with a 400
+     rather than a session — cannot take the rest of boot down with it. Both
+     calls read `sb.auth.getSession()`, and neither had a catch: reject there
+     and the .then() never runs, which for the first line means load() never
+     runs either. Not a future-proofing guess — the .catch() logs, forwarded
+     to the same warn every other Supabase call already treats a failure as
+     nothing more than. */
+  refreshAdminStatus().catch(e=>console.warn("[boot] admin status check failed", e)).then(()=>load());
+  refreshMyProfile().catch(e=>console.warn("[boot] profile check failed", e)).then(()=>afterIdentityChange());
   sb.auth.onAuthStateChange((event,session)=>{
-    refreshAdminStatus().then(()=>refreshAfterAdminChange());
-    refreshMyProfile().then(()=>afterIdentityChange());
+    refreshAdminStatus().catch(e=>console.warn("[auth] admin status refresh failed", e)).then(()=>refreshAfterAdminChange());
+    refreshMyProfile().catch(e=>console.warn("[auth] profile refresh failed", e)).then(()=>afterIdentityChange());
   });
   /* Live updates. Each of these used to be wired straight to `load`, so a
      busy minute in the feed — or one of your own writes, which comes back at
