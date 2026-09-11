@@ -12530,14 +12530,28 @@ async function ptSubmit(){
      exists to prevent. If that column is missing, the error is the answer. */
   const OPTIONAL=["umpire_rating","rallies","games","round"];
   let error;
-  for(let attempt=0; attempt<=OPTIONAL.length; attempt++){
-    ({error}=await sb.from("matches").insert(row));
-    if(!error) break;
-    const missing=OPTIONAL.find(c=>row[c]!==undefined && new RegExp(c).test(error.message));
-    if(!missing) break;
-    delete row[missing];
+  /* every other write in the app goes through optWrite(), which wraps its
+     call in try/catch for exactly this reason — a dead `sb` (client never
+     loaded) or a request that rejects outright throws before ever
+     producing an {error} to check, and unlike a normal await chain that
+     skips straight past `if(btn) btn.disabled=false` below, leaving the
+     one button that finalizes two hours of point-by-point tennis
+     permanently disabled with nothing saved and no way to retry short of
+     a reload. This loop predates optWrite and never got the same guard,
+     so it gets its own try/finally instead. */
+  try{
+    for(let attempt=0; attempt<=OPTIONAL.length; attempt++){
+      ({error}=await sb.from("matches").insert(row));
+      if(!error) break;
+      const missing=OPTIONAL.find(c=>row[c]!==undefined && new RegExp(c).test(error.message));
+      if(!missing) break;
+      delete row[missing];
+    }
+  }catch(e){
+    error = e;
+  }finally{
+    if(btn) btn.disabled=false;
   }
-  if(btn) btn.disabled=false;
   if(error){
     /* A REFFED MATCH IS THE WORST THING IN THE APP TO LOSE — two hours of
        somebody's afternoon, tapped in point by point, on a phone at a public
@@ -20726,9 +20740,19 @@ function _showViewCore(v){
 
 /* wraps the real view-switch in a racket-strings wipe transition */
 let twBusy=false;
+let twCoreTimer=null;
 function showView(v){
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if(reduce || twBusy){ _showViewCore(v); return; }
+  if(reduce || twBusy){
+    /* A tab tapped while the previous wipe is still in flight jumps
+       straight there — but the first tap's own delayed _showViewCore(v)
+       is still sitting in a timer, and it used to fire anyway 300ms after
+       ITS click, stomping this one and snapping the view back to the
+       first tab. Cancel it: this tap is the one that should stick. */
+    clearTimeout(twCoreTimer);
+    _showViewCore(v);
+    return;
+  }
   twBusy=true;
   let ov=document.getElementById("tabWipe");
   if(!ov){
@@ -20739,7 +20763,7 @@ function showView(v){
   const strings=ov.querySelector(".tw-strings");
   ov.classList.add("show");
   strings.classList.remove("play"); void strings.offsetWidth; strings.classList.add("play");
-  setTimeout(()=>_showViewCore(v), 300);
+  twCoreTimer=setTimeout(()=>_showViewCore(v), 300);
   setTimeout(()=>{ ov.classList.remove("show"); strings.classList.remove("play"); twBusy=false; }, 660);
 }
 window.showView = showView;
