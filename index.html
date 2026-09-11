@@ -1246,7 +1246,7 @@
   .fx-chip{font-family:var(--font-mono);font-size:10px;letter-spacing:.3px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);padding:2px 8px;border-radius:8px}
   .recap{font-size:15px;line-height:1.75;color:var(--ink)}
   .pool-line{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin:-8px 0 10px;letter-spacing:.5px}
-  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)}
+  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)} .pool-drift{color:var(--dim)}
   .streak-badge{font-size:12px;font-family:var(--font-mono);color:var(--pending);vertical-align:middle}
   .cfti{
     position:fixed;top:-12px;width:9px;height:14px;z-index:200;pointer-events:none;border-radius:3px;
@@ -20448,12 +20448,17 @@ function render(){
   const leagueSeq = {};
   computeLeagueStats().players.forEach(p=>leagueSeq[p.name]=p.seq);
   $("playerCount").textContent = standings.length;
-  // Elo pool integrity: raw ratings must sum to players × START (zero-sum check)
+  // Elo pool integrity: raw ratings must sum to players × START, PLUS whatever
+  // dynamic K has deliberately moved it by (see DYNAMIC K / ELO_DRIFT above) —
+  // that part is accounted for and healthy, so it must not read as a leak here.
+  // Mirrors the same accounting renderAudit() uses for the Lab's data audit.
   if(standings.length){
     const pool = standings.reduce((s,p)=>s+p.rating,0);
-    const expected = standings.length*START;
+    const drift = DYNK_ENABLED ? ELO_DRIFT : 0;
+    const expected = standings.length*START + drift;
     const ok = Math.abs(pool-expected)<0.01;
-    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
+    const driftNote = Math.abs(drift)>=0.05 ? ` <span class="pool-drift">(${drift>0?'+':''}${drift.toFixed(1)} from dynamic K)</span>` : '';
+    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}${driftNote}`;
   } else $("poolLine").innerHTML='';
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====
