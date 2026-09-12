@@ -17596,15 +17596,22 @@ async function generateCommentary(matchId, mode){
     });
     const d=await res.json().catch(()=>({}));
     if(!res.ok || d.error==='not_configured'){
+      if(d.detail) console.error('[ai]', res.status, d.detail);
       box.innerHTML='<div class="c-empty" style="margin-top:10px">AI isn\'t set up on this deploy yet.</div>';
       return;
     }
     if(d.error || !d.text){
+      // The proxy fails open with a friendly message here — the actual
+      // upstream reason (bad key, no model access, rate limit, ...) lands
+      // in `detail` and would otherwise be invisible to whoever is
+      // debugging a "couldn't reach the AI" report after the fact.
+      console.error('[ai]', d.error, d.detail);
       box.innerHTML='<div class="c-empty" style="margin-top:10px">Couldn\'t reach the AI right now.</div>';
       return;
     }
     box.innerHTML=`<div class="epic-story" style="margin-top:10px">"${esc(String(d.text).trim())}"</div>`;
   }catch(e){
+    console.error('[ai]', e);
     box.innerHTML='<div class="c-empty" style="margin-top:10px">Couldn\'t reach the AI right now.</div>';
   }
 }
