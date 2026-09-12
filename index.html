@@ -10317,6 +10317,11 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Only used by scoreboard export's fast path (pairs with WebCodecs to encode a
+     video far faster than real time) — deferred since nothing needs it until
+     that button is actually pressed. Falls back to the slower realtime path
+     if this hasn't loaded yet, or the browser has no WebCodecs at all. -->
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.min.js" defer></script>
 <script>
 /* ============================================================
    FRAME SCHEDULING
@@ -12083,7 +12088,7 @@ function ptCloseGame(winSide, wasTiebreak){
   const setDone = wasTiebreak || ((PT.gamesA>=6||PT.gamesB>=6) && Math.abs(PT.gamesA-PT.gamesB)>=2);
   if(setDone) ptCloseSet(winSide);
 }
-function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} try{ptDraftBackup();}catch(e){} try{ if(SBX) sbxDrawFrame(); }catch(e){} }
+function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} try{ptDraftBackup();}catch(e){} }
 
 /* ============================================================
    LIVE DRAFT BACKUP — see docs/live-drafts.sql.
@@ -13199,27 +13204,45 @@ window.ptReplayScoreboard=ptReplayScoreboard;
 /* ============================================================
    SCOREBOARD EXPORT — an actual downloadable video file. No OBS, no
    screen recorder, no second device: this draws the scoreboard on a
-   canvas and records the canvas itself, right here in the browser.
+   canvas and encodes the canvas itself, right here in the browser.
 
    Runs the exact same replay ptReplayScoreboard does — the match's own
-   points, fed back through ptPoint() at their real gaps — but instead of
-   broadcasting to overlay.html for something else to capture, this draws
-   every state straight onto an offscreen canvas and records THAT with
-   MediaRecorder. No broadcast session, no Supabase, no second device:
-   this works with no signal at all.
+   points, fed back through ptPoint() — but instead of broadcasting to
+   overlay.html for something else to capture, this draws every state
+   straight onto an offscreen canvas and encodes THAT into a video file.
+   No broadcast session, no Supabase, no second device: this works with
+   no signal at all.
 
-   The canvas is a flat, solid colour, not transparent. A browser's
-   MediaRecorder does not reliably preserve an alpha channel across
+   TWO WAYS IT DOES THAT, because they have very different speed:
+
+   The fast path (sbxExportFast) simulates the ENTIRE match instantly —
+   there is no reason to wait out real gaps between points when nothing is
+   watching live — then draws and encodes frames at a fixed rate straight
+   through, using WebCodecs (VideoEncoder) muxed into an MP4 by the
+   mp4-muxer library. A 74-minute match takes seconds to render, not
+   74 minutes, because encoding speed and the video's own timeline are
+   two separate things once you're not just recording a canvas in real
+   time. This is what actually answers "surely there's a faster way" —
+   there is, it just isn't MediaRecorder.
+
+   The realtime path (sbxExportRealtime) is the fallback for a browser
+   with no WebCodecs (older Firefox, some mobile browsers): the same
+   canvas, captured with MediaRecorder as it plays out live, which is
+   inherently real-time — MediaRecorder has no notion of "encode faster
+   than the stream arrives". Slower, but works nearly everywhere.
+
+   Either way the canvas is a flat, solid colour, not transparent. A
+   browser cannot reliably hand back a real alpha channel across
    browsers — promising "transparent" and having it silently not work on
-   whatever's actually available tonight is worse than just being honest
-   that this needs one keying step in the editor, same as any green-screen
-   footage. See docs/scoreboard-export.md for why, and for what to do if
-   the file it hands you is a .webm your editor won't import — some do,
-   some don't, and that's a real gap this can't paper over from a browser.
+   whatever's actually available tonight is worse than being upfront that
+   this needs one keying step in the editor, same as any green-screen
+   footage. See docs/scoreboard-export.md for why, and what to do if the
+   realtime path's .webm won't import somewhere.
    ============================================================ */
-let SBX = null;               // {canvas, recorder, chunks, myPT, tick} while an export is running
+let SBX = null;               // {canvas, ctx, myPT, cancelled, mode, ...} while an export is running
 const SBX_BG = "#00b140";     // deliberately not near any colour already used in the bug below
 const SBX_W = 1920, SBX_H = 1080;
+const SBX_FPS = 4;            // the fast path's output frame rate — plenty for a clock and a scoreboard
 
 function sbxPanel(){
   let el = document.getElementById("sbxPanel");
@@ -13245,21 +13268,36 @@ function sbxRoundRect(ctx,x,y,w,h,r){
    CSS bug — canvas can't render arbitrary HTML, and rasterizing DOM to
    canvas is exactly the kind of cross-browser-flaky trick this feature is
    trying to avoid. Simpler, same information, every browser draws it the
-   same way. */
-function sbxDrawFrame(){
-  if(!SBX || !PT) return;
-  const ctx=SBX.ctx, s=PT;
+   same way.
+
+   Takes an explicit state rather than always reading the live global PT:
+   the fast path draws snapshots from a match that finished simulating
+   instantly, often well before or after whatever PT currently holds, so
+   "whatever PT is right now" would be the wrong state most of the frames. */
+function sbxDrawFrame(ctx, s){
+  if(!s) return;
   ctx.fillStyle=SBX_BG; ctx.fillRect(0,0,SBX_W,SBX_H);
   const x=64, wPlate=620, rowH=68, y0=SBX_H-64-rowH*2;
   const decided = !!(s.winner||s.draw);
 
-  if(s.startedAt){
-    const el = sbxFmtClock(Math.floor(((s.endedAt||Date.now())-s.startedAt)/1000));
-    ctx.fillStyle="rgba(8,6,18,.88)";
-    sbxRoundRect(ctx,x,y0-46,120,32,16); ctx.fill();
-    ctx.fillStyle="#fff"; ctx.font="700 16px monospace"; ctx.textAlign="left"; ctx.textBaseline="middle";
-    ctx.fillText(el, x+16, y0-30);
-  }
+  /* "which game" pill. There is deliberately no match clock here any more —
+     it was drawn from Date.now() at the moment each frame was ENCODED, not
+     from the timestamp the frame actually represents, so on the fast path
+     (frames encoded in a tight loop, not spread over real time) it only
+     ever showed roughly "now", and only looked like it moved when the score
+     also happened to change nearby in real time. Real tennis broadcasts
+     don't run a live stopwatch either, so this is dropped rather than
+     plumbed through properly — nothing in the layout below needs it back
+     if that ever changes. */
+  ctx.font="700 16px monospace"; ctx.textAlign="left"; ctx.textBaseline="middle";
+  const setNum = (s.sets?s.sets.length:0) + 1;
+  const gameNum = (s.gamesA||0) + (s.gamesB||0) + 1;
+  const gameTxt = decided ? "FINAL" : (setNum>1 ? `SET ${setNum} · GAME ${gameNum}` : `GAME ${gameNum}`);
+  const gameW = ctx.measureText(gameTxt).width + 32;
+
+  ctx.fillStyle="rgba(8,6,18,.88)";
+  sbxRoundRect(ctx,x,y0-46,gameW,32,16); ctx.fill();
+  ctx.fillStyle="#ffcc00"; ctx.fillText(gameTxt, x+16, y0-30);
 
   ctx.fillStyle="rgba(8,6,18,.92)";
   sbxRoundRect(ctx,x,y0,wPlate,rowH*2,14); ctx.fill();
@@ -13300,6 +13338,21 @@ function sbxDrawFrame(){
       : s.tiebreak ? (isA?s.tbA:s.tbB) : (isA?s.ptsA:s.ptsB);
     ctx.fillText(String(pt), x+wPlate-35, ry+rowH/2);
   });
+
+  /* the mark — so a clip lifted off this file still says where it came
+     from, same reasoning as the one on overlay.html's own broadcast bug */
+  const markY = y0+rowH*2+30;
+  ctx.fillStyle="#d4ff2b";
+  ctx.beginPath(); ctx.arc(x+7, markY, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle="rgba(255,255,255,.6)"; ctx.font="800 15px monospace";
+  ctx.textAlign="left"; ctx.textBaseline="middle";
+  sbxSpacedText(ctx, "FGTA", x+24, markY, 3);
+}
+/* canvas fillText has no letter-spacing of its own — drawn one character at
+   a time instead, same visual effect the overlay's CSS gets for free. */
+function sbxSpacedText(ctx, text, x, y, spacing){
+  let cx=x;
+  for(const ch of text){ ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + spacing; }
 }
 /* Not exported by a locally-defined shortName inside overlay.html — this
    page has no equivalent, so it gets its own copy. Same reasoning as
@@ -13321,13 +13374,15 @@ function sbxPickMime(){
   return {mime:"", ext:"webm"};
 }
 
-function sbxRenderProgress(totalSec){
+function sbxRenderProgress(totalSec, fast){
   const el=sbxPanel();
   el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">🎥 Rendering scoreboard…</div>
     <div style="font-family:monospace;font-size:13px;color:#aaa">
-      <span id="sbxProg">0:00</span> / ${sbxFmtClock(totalSec)}
+      <span id="sbxProg">${fast?"0%":"0:00"}</span>${fast?"":" · "+sbxFmtClock(totalSec)+" match"}
     </div>
-    <div style="font-size:12px;color:#aaa;margin:8px 0">Keep this tab open and awake until it finishes.</div>
+    <div style="font-size:12px;color:#aaa;margin:8px 0">${fast
+      ? "Usually done in well under a minute — keep this tab open till then."
+      : `This match runs ${sbxFmtClock(totalSec)}, and this browser can only capture it in real time — keep this tab open and awake the whole way.`}</div>
     <button class="btn ghost" style="margin:0;padding:7px 10px;font-size:12px" onclick="sbxStopExport()">Stop &amp; save now</button>`;
 }
 function sbxRenderDone(data, url, ext){
@@ -13343,29 +13398,147 @@ function sbxRenderDone(data, url, ext){
 
 function sbxStopExport(){
   if(!SBX) return;
-  try{ SBX.recorder.stop(); }catch(e){}
+  SBX.cancelled = true;                                  // checked by the fast path's loop
+  try{ SBX.recorder && SBX.recorder.stop(); }catch(e){}   // the realtime path's own way to stop
 }
 window.sbxStopExport=sbxStopExport;
 
+/* Common setup: validate the match has timings, guard against clobbering a
+   match actually being tracked live on this device, and put PT into the
+   same "replaying this match" state ptReplayScoreboard uses — same
+   __replayOf flag, so ptSubmit() still warns rather than re-filing it. */
 function ptExportScoreboardVideo(matchId){
   const m = matches.find(x=>x.id===matchId); if(!m) return;
   const data = rrParse(m);
   if(!data) return toast("No point timings were recorded for this match", true);
-  if(!window.MediaRecorder) return toast("This browser can't record video for export — try Chrome or Safari", true);
   if(SBX) return toast("A scoreboard export is already running", true);
   if(PT && !PT.winner && !PT.draw){
     if(!confirm(`This clears the match currently being tracked here and renders ${data.a} vs ${data.b}'s scoreboard instead. Continue?`)) return;
   }
+  /* Export doesn't need a broadcast session and never opens one — but if one
+     is already open on this device, the rapid-fire synthetic points below
+     would flash straight through pt_sync to whoever's actually watching (or
+     OBS). Rare, but a live broadcast is exactly the wrong place for a silent
+     surprise, so ask first rather than only scoreboard-replay-style guarding
+     the viewer-role case. */
+  if(PTStream && !confirm("A broadcast session is open on this device — exporting will briefly send this replay's scores through it too if it's live. Continue anyway?")) return;
   ptHistory=[]; ptFuture=[];
   PT=ptDefaultState(data.a, data.b);
-  PT.__replayOf=matchId;   // same guard as scoreboard replay: no live-draft backup, warns before re-submitting
+  PT.__replayOf=matchId;
   const p0=data.points[0];
   if(p0 && p0.sv){
     PT.server=p0.sv;
     if(p0.en) PT.endA = p0.sv==='a' ? p0.en : (p0.en==='near'?'far':'near');
   }
-  const myPT=PT;
 
+  if(window.VideoEncoder && window.VideoFrame && window.Mp4Muxer) sbxExportFast(data);
+  else sbxExportRealtime(data);
+}
+window.ptExportScoreboardVideo=ptExportScoreboardVideo;
+
+/* Picks a codec string VideoEncoder will actually accept — configure() throws
+   on one it won't, and hardcoding a single profile bet the whole feature on
+   guessing right for every browser this runs in. Ordered roughly
+   high-compatibility-first; the first one the browser confirms wins. */
+async function sbxPickAvcCodec(){
+  const candidates=["avc1.640028","avc1.4d4028","avc1.42001f"];
+  for(const codec of candidates){
+    try{
+      const support = await VideoEncoder.isConfigSupported({codec, width:SBX_W, height:SBX_H});
+      if(support && support.supported) return codec;
+    }catch(e){}
+  }
+  return null;
+}
+
+/* THE FAST PATH. Simulates every point in the match with no delay at all —
+   ptPoint() runs exactly as it does live, just back to back rather than
+   spaced out — snapshotting the state after each one. Then walks the
+   snapshots at a fixed output frame rate, drawing and encoding each frame
+   in a tight loop with no wait for real time to pass. The output video's
+   own timeline still runs at the match's real pace (that's what makes
+   "slide it onto the footage" still work with no retiming); only how long
+   your computer spends MAKING that video is decoupled from it. */
+async function sbxExportFast(data){
+  const myPT=PT;
+  const codec = await sbxPickAvcCodec();
+  if(!codec) return sbxExportRealtime(data);   // this browser's WebCodecs can't do H.264 — fall back rather than fail
+
+  // Run the whole match instantly, keeping a snapshot after every point.
+  const snaps=[ptClone(PT)];
+  const times=[0];
+  data.points.forEach(pt=>{
+    window.ptPoint(pt.w, pt.ace===1);
+    snaps.push(ptClone(PT));
+    times.push(pt.t);
+  });
+  const totalMs = times[times.length-1] + 2000;   // a couple of extra seconds so the final score holds
+
+  const canvas=document.createElement("canvas");
+  canvas.width=SBX_W; canvas.height=SBX_H;
+  const ctx=canvas.getContext("2d");
+
+  let muxer, encoder;
+  try{
+    muxer = new Mp4Muxer.Muxer({
+      target: new Mp4Muxer.ArrayBufferTarget(),
+      video: {codec:"avc", width:SBX_W, height:SBX_H, frameRate:SBX_FPS},
+      fastStart: "in-memory"
+    });
+    encoder = new VideoEncoder({
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      error: e => console.warn("[sbx] encode error", e)
+    });
+    encoder.configure({codec, width:SBX_W, height:SBX_H, bitrate:2_500_000, framerate:SBX_FPS});
+  }catch(e){
+    return sbxExportRealtime(data);   // configure() itself can still throw on an odd browser — same fallback
+  }
+
+  SBX={canvas, ctx, myPT, cancelled:false};
+  sbxRenderProgress(Math.round(totalMs/1000), true);
+
+  const totalFrames = Math.ceil(totalMs/1000*SBX_FPS);
+  let snapIdx=0;
+  for(let f=0; f<totalFrames; f++){
+    if(SBX.cancelled || PT!==myPT) break;
+    const tMs = f*1000/SBX_FPS;
+    while(snapIdx+1<times.length && times[snapIdx+1]<=tMs) snapIdx++;
+    sbxDrawFrame(ctx, snaps[snapIdx]);
+    const frame=new VideoFrame(canvas, {timestamp: Math.round(tMs*1000), duration: Math.round(1e6/SBX_FPS)});
+    encoder.encode(frame);
+    frame.close();
+    if(f % (SBX_FPS*2) === 0){   // yield every couple of seconds of output so the tab can still repaint/respond
+      const el=document.getElementById("sbxProg");
+      if(el) el.textContent = Math.round(f/totalFrames*100)+"%";
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+  await encoder.flush();
+  muxer.finalize();
+  const blob=new Blob([muxer.target.buffer], {type:"video/mp4"});
+  const url=URL.createObjectURL(blob);
+  sbxRenderDone(data, url, "mp4");
+  SBX=null;
+}
+
+/* THE FALLBACK PATH — real time, via MediaRecorder. Used only when this
+   browser has no WebCodecs (or it rejected every codec offered above): the
+   same canvas, the same scoreboard, but MediaRecorder has no way to encode
+   faster than the stream feeding it, so this plays the match out for real,
+   same as scoreboard export originally did. */
+function sbxPickMime(){
+  const candidates=[
+    ["video/mp4;codecs=avc1", "mp4"], ["video/mp4", "mp4"],
+    ["video/webm;codecs=vp9", "webm"], ["video/webm;codecs=vp8", "webm"], ["video/webm", "webm"]
+  ];
+  for(const [mime,ext] of candidates){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mime)) return {mime,ext};
+  }
+  return {mime:"", ext:"webm"};
+}
+function sbxExportRealtime(data){
+  if(!window.MediaRecorder) return toast("This browser can't render video for export — try a recent Chrome, Edge, or Safari", true);
+  const myPT=PT;
   const canvas=document.createElement("canvas");
   canvas.width=SBX_W; canvas.height=SBX_H;
   const ctx=canvas.getContext("2d");
@@ -13392,23 +13565,23 @@ function ptExportScoreboardVideo(matchId){
     sbxRenderDone(data, url, ext);
     SBX=null;
   };
-  SBX={canvas, ctx, recorder, chunks, myPT, tick};
+  SBX={canvas, ctx, recorder, chunks, myPT, tick, cancelled:false};
   recorder.start(1000);
-  sbxRenderProgress(Math.round(totalMs/1000));
-  sbxDrawFrame();
+  sbxRenderProgress(Math.round(totalMs/1000), false);
+  sbxDrawFrame(ctx, PT);
 
   data.points.forEach(pt=>{
     setTimeout(()=>{
       if(PT!==myPT || !SBX) return;
       window.ptPoint(pt.w, pt.ace===1);
+      sbxDrawFrame(SBX.ctx, PT);
     }, pt.t);
   });
   setTimeout(()=>{
     if(PT!==myPT || !SBX) return;
     sbxStopExport();
-  }, totalMs+2000);   // a couple of extra seconds so the final score holds on screen
+  }, totalMs+2000);
 }
-window.ptExportScoreboardVideo=ptExportScoreboardVideo;
 
 function rrCompute(){
   const R=REEL; if(!R) return;
