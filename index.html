@@ -23617,7 +23617,7 @@ function toggleBetComposer(marketId, type){
 window.toggleBetComposer = toggleBetComposer;
 
 async function submitBet(marketId){
-  if(!requireLogin(()=>submitBet(marketId))) return;
+  if(!requireLogin(()=>{})) return;
   const mkt = betMarkets.find(x=>x.id===marketId);
   if(!mkt) return toast("Market not found",true);
   const type = betComposerType;
