@@ -493,10 +493,14 @@
     border-top:1px solid var(--chrome-line);
     grid-template-columns:repeat(6,1fr);
     transition:transform .25s cubic-bezier(.4,0,.2,1);
+    touch-action:manipulation;
   }
+  /* without this, Chrome/Android can hold a tap to see if it's the start of
+     a double-tap-zoom, delaying or dropping the click on the slightest drift */
   .bb-tab{
     background:none;border:none;border-top:3px solid transparent;color:var(--on-chrome-dim);cursor:pointer;
     display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;margin-top:-2.5px;transition:.15s;
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent;
   }
   .bb-ico{font-size:19px;line-height:1;transition:transform .15s}
   .bb-lbl{font-size:9px;font-weight:600;letter-spacing:.4px;text-transform:uppercase}
