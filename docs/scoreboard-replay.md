@@ -4,6 +4,12 @@ For whoever has three phones and no laptop: one filming, one for whoever's
 watching, one for the ref running the point tracker as normal. No streaming,
 no YouTube, no latency to fight — just a video file and a live match.
 
+**If you don't already use OBS, you probably want
+[scoreboard export](scoreboard-export.md) instead** — one click, a
+downloadable video file, no screen recorder or second device needed. This
+page is for compositing live inside OBS specifically; export is the simpler
+default for everyone else.
+
 The gap that leaves is the scoreboard. [The live setup](youtube-live.md) can
 only burn one into the picture via OBS's Browser Source, which needs a
 laptop. This is the phone-only alternative: score the match natively, film it

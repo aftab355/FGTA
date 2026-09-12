@@ -12083,7 +12083,7 @@ function ptCloseGame(winSide, wasTiebreak){
   const setDone = wasTiebreak || ((PT.gamesA>=6||PT.gamesB>=6) && Math.abs(PT.gamesA-PT.gamesB)>=2);
   if(setDone) ptCloseSet(winSide);
 }
-function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} try{ptDraftBackup();}catch(e){} }
+function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} try{ptDraftBackup();}catch(e){} try{ if(SBX) sbxDrawFrame(); }catch(e){} }
 
 /* ============================================================
    LIVE DRAFT BACKUP — see docs/live-drafts.sql.
@@ -13195,6 +13195,220 @@ function ptReplayScoreboard(matchId){
   });
 }
 window.ptReplayScoreboard=ptReplayScoreboard;
+
+/* ============================================================
+   SCOREBOARD EXPORT — an actual downloadable video file. No OBS, no
+   screen recorder, no second device: this draws the scoreboard on a
+   canvas and records the canvas itself, right here in the browser.
+
+   Runs the exact same replay ptReplayScoreboard does — the match's own
+   points, fed back through ptPoint() at their real gaps — but instead of
+   broadcasting to overlay.html for something else to capture, this draws
+   every state straight onto an offscreen canvas and records THAT with
+   MediaRecorder. No broadcast session, no Supabase, no second device:
+   this works with no signal at all.
+
+   The canvas is a flat, solid colour, not transparent. A browser's
+   MediaRecorder does not reliably preserve an alpha channel across
+   browsers — promising "transparent" and having it silently not work on
+   whatever's actually available tonight is worse than just being honest
+   that this needs one keying step in the editor, same as any green-screen
+   footage. See docs/scoreboard-export.md for why, and for what to do if
+   the file it hands you is a .webm your editor won't import — some do,
+   some don't, and that's a real gap this can't paper over from a browser.
+   ============================================================ */
+let SBX = null;               // {canvas, recorder, chunks, myPT, tick} while an export is running
+const SBX_BG = "#00b140";     // deliberately not near any colour already used in the bug below
+const SBX_W = 1920, SBX_H = 1080;
+
+function sbxPanel(){
+  let el = document.getElementById("sbxPanel");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "sbxPanel";
+    el.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:9999;max-width:320px;"
+      + "background:#0b0710;color:#fff;border:1px solid rgba(255,255,255,.16);border-radius:12px;"
+      + "padding:14px 16px;font:14px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+const sbxFmtClock = s => Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
+
+function sbxRoundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+/* Deliberately a plain Canvas 2D redraw rather than a copy of overlay.html's
+   CSS bug — canvas can't render arbitrary HTML, and rasterizing DOM to
+   canvas is exactly the kind of cross-browser-flaky trick this feature is
+   trying to avoid. Simpler, same information, every browser draws it the
+   same way. */
+function sbxDrawFrame(){
+  if(!SBX || !PT) return;
+  const ctx=SBX.ctx, s=PT;
+  ctx.fillStyle=SBX_BG; ctx.fillRect(0,0,SBX_W,SBX_H);
+  const x=64, wPlate=620, rowH=68, y0=SBX_H-64-rowH*2;
+  const decided = !!(s.winner||s.draw);
+
+  if(s.startedAt){
+    const el = sbxFmtClock(Math.floor(((s.endedAt||Date.now())-s.startedAt)/1000));
+    ctx.fillStyle="rgba(8,6,18,.88)";
+    sbxRoundRect(ctx,x,y0-46,120,32,16); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="700 16px monospace"; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillText(el, x+16, y0-30);
+  }
+
+  ctx.fillStyle="rgba(8,6,18,.92)";
+  sbxRoundRect(ctx,x,y0,wPlate,rowH*2,14); ctx.fill();
+
+  ["a","b"].forEach((side,i)=>{
+    const isA = side==="a";
+    const ry = y0+i*rowH;
+    const ac = isA ? "#ff2d78" : "#1ec9dd";
+    ctx.fillStyle=ac; ctx.fillRect(x,ry,6,rowH);
+    if(i>0){
+      ctx.strokeStyle="rgba(255,255,255,.16)"; ctx.beginPath();
+      ctx.moveTo(x,ry); ctx.lineTo(x+wPlate,ry); ctx.stroke();
+    }
+    const serving = !decided && ptServerNow(s)===side;
+    if(serving){
+      ctx.fillStyle="#ffe600"; ctx.beginPath(); ctx.arc(x+26,ry+rowH/2,6,0,Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle="#fff"; ctx.font="700 26px -apple-system,Arial,sans-serif";
+    ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillText(String(shortName(isA?s.a:s.b)).toUpperCase(), x+48, ry+rowH/2);
+
+    let sx = x+wPlate-220;
+    (s.sets||[]).forEach(set=>{
+      const mine=isA?set.a:set.b, theirs=isA?set.b:set.a;
+      ctx.fillStyle = mine>theirs ? "#ffcc00" : "#6e6795";
+      ctx.font="700 22px monospace"; ctx.textAlign="center";
+      ctx.fillText(String(mine), sx, ry+rowH/2);
+      sx += 40;
+    });
+    if(!decided){
+      ctx.fillStyle="#fff"; ctx.font="700 22px monospace"; ctx.textAlign="center";
+      ctx.fillText(String(isA?s.gamesA:s.gamesB), sx, ry+rowH/2);
+    }
+
+    ctx.fillStyle=ac; ctx.fillRect(x+wPlate-70,ry,70,rowH);
+    ctx.fillStyle="#04140e"; ctx.font="800 28px monospace"; ctx.textAlign="center";
+    const pt = decided ? (isA?s.setsA:s.setsB)
+      : s.tiebreak ? (isA?s.tbA:s.tbB) : (isA?s.ptsA:s.ptsB);
+    ctx.fillText(String(pt), x+wPlate-35, ry+rowH/2);
+  });
+}
+/* Not exported by a locally-defined shortName inside overlay.html — this
+   page has no equivalent, so it gets its own copy. Same reasoning as
+   overlay.html's own comment on this: small enough that importing it isn't
+   worth a dependency. */
+function shortName(n){
+  const p=String(n==null?"":n).trim().split(/\s+/).filter(Boolean);
+  return (p.length>1?p[p.length-1]:p[0])||"—";
+}
+
+function sbxPickMime(){
+  const candidates=[
+    ["video/mp4;codecs=avc1", "mp4"], ["video/mp4", "mp4"],
+    ["video/webm;codecs=vp9", "webm"], ["video/webm;codecs=vp8", "webm"], ["video/webm", "webm"]
+  ];
+  for(const [mime,ext] of candidates){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mime)) return {mime,ext};
+  }
+  return {mime:"", ext:"webm"};
+}
+
+function sbxRenderProgress(totalSec){
+  const el=sbxPanel();
+  el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">🎥 Rendering scoreboard…</div>
+    <div style="font-family:monospace;font-size:13px;color:#aaa">
+      <span id="sbxProg">0:00</span> / ${sbxFmtClock(totalSec)}
+    </div>
+    <div style="font-size:12px;color:#aaa;margin:8px 0">Keep this tab open and awake until it finishes.</div>
+    <button class="btn ghost" style="margin:0;padding:7px 10px;font-size:12px" onclick="sbxStopExport()">Stop &amp; save now</button>`;
+}
+function sbxRenderDone(data, url, ext){
+  const el=sbxPanel();
+  const fname = ("scoreboard-"+data.a+"-vs-"+data.b).replace(/[^a-z0-9-]+/gi,"_")+"."+ext;
+  el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">✅ Scoreboard ready</div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:10px">Flat green (#00b140) — key it out in your editor, then slide it onto the footage.</div>
+    <a class="btn" href="${url}" download="${esc(fname)}" style="display:inline-block;margin:0 0 8px;padding:8px 12px;text-decoration:none">⬇ Download .${ext}</a>
+    <div><button class="btn ghost" style="margin:0;padding:6px 10px;font-size:12px" onclick="document.getElementById('sbxPanel').remove()">Dismiss</button></div>`;
+  /* offered both ways: the link above always works even if this is blocked */
+  try{ const a=document.createElement("a"); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }catch(e){}
+}
+
+function sbxStopExport(){
+  if(!SBX) return;
+  try{ SBX.recorder.stop(); }catch(e){}
+}
+window.sbxStopExport=sbxStopExport;
+
+function ptExportScoreboardVideo(matchId){
+  const m = matches.find(x=>x.id===matchId); if(!m) return;
+  const data = rrParse(m);
+  if(!data) return toast("No point timings were recorded for this match", true);
+  if(!window.MediaRecorder) return toast("This browser can't record video for export — try Chrome or Safari", true);
+  if(SBX) return toast("A scoreboard export is already running", true);
+  if(PT && !PT.winner && !PT.draw){
+    if(!confirm(`This clears the match currently being tracked here and renders ${data.a} vs ${data.b}'s scoreboard instead. Continue?`)) return;
+  }
+  ptHistory=[]; ptFuture=[];
+  PT=ptDefaultState(data.a, data.b);
+  PT.__replayOf=matchId;   // same guard as scoreboard replay: no live-draft backup, warns before re-submitting
+  const p0=data.points[0];
+  if(p0 && p0.sv){
+    PT.server=p0.sv;
+    if(p0.en) PT.endA = p0.sv==='a' ? p0.en : (p0.en==='near'?'far':'near');
+  }
+  const myPT=PT;
+
+  const canvas=document.createElement("canvas");
+  canvas.width=SBX_W; canvas.height=SBX_H;
+  const ctx=canvas.getContext("2d");
+  const {mime,ext}=sbxPickMime();
+  let recorder;
+  try{
+    const stream=canvas.captureStream(5);
+    recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+  }catch(e){
+    return toast("This browser couldn't start recording video — try Chrome or Safari", true);
+  }
+  const chunks=[];
+  const totalMs = data.points[data.points.length-1].t;
+  recorder.ondataavailable = e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+  const startedWall=Date.now();
+  const tick=setInterval(()=>{
+    const el=document.getElementById("sbxProg");
+    if(el) el.textContent = sbxFmtClock(Math.min(Math.round(totalMs/1000), Math.round((Date.now()-startedWall)/1000)));
+  },1000);
+  recorder.onstop = ()=>{
+    clearInterval(tick);
+    const blob=new Blob(chunks,{type:mime||"video/webm"});
+    const url=URL.createObjectURL(blob);
+    sbxRenderDone(data, url, ext);
+    SBX=null;
+  };
+  SBX={canvas, ctx, recorder, chunks, myPT, tick};
+  recorder.start(1000);
+  sbxRenderProgress(Math.round(totalMs/1000));
+  sbxDrawFrame();
+
+  data.points.forEach(pt=>{
+    setTimeout(()=>{
+      if(PT!==myPT || !SBX) return;
+      window.ptPoint(pt.w, pt.ace===1);
+    }, pt.t);
+  });
+  setTimeout(()=>{
+    if(PT!==myPT || !SBX) return;
+    sbxStopExport();
+  }, totalMs+2000);   // a couple of extra seconds so the final score holds on screen
+}
+window.ptExportScoreboardVideo=ptExportScoreboardVideo;
 
 function rrCompute(){
   const R=REEL; if(!R) return;
@@ -21637,8 +21851,10 @@ function openMatch(id){
       return `<div class="rr-cta">
         <button class="btn ghost rr-cta-btn" onclick="openReel(${m.id})">🎬 Rally reel
           <i>${d.points.length} points, timed${rrCanPlay(d)?' · on video':''}</i></button>
+        <button class="btn ghost rr-cta-btn" onclick="ptExportScoreboardVideo(${m.id})">⬇ Export scoreboard video
+          <i>a downloadable file, green background — see docs/scoreboard-export.md</i></button>
         <button class="btn ghost rr-cta-btn" onclick="ptReplayScoreboard(${m.id})">🖥️ Scoreboard replay
-          <i>for OBS or a screen recording — see docs/scoreboard-replay.md</i></button>
+          <i>for OBS instead — see docs/scoreboard-replay.md</i></button>
       </div>`;
     })()}
     <div id="reelBox"></div>
