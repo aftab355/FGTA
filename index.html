@@ -9234,6 +9234,15 @@
     <div id="pendingList"></div>
   </section>
 
+  <!-- LIVE DRAFTS (admin only) — a running backup of whatever the Point Tracker
+       is doing, written on every point, so a ref who forgets to Submit (or a
+       phone that never makes it back) isn't the only copy of what happened.
+       See docs/live-drafts.md. -->
+  <section id="draftsSec" style="display:none">
+    <div class="sec-label">🛟 Live &amp; unsubmitted tracked matches <span class="count-pill" id="draftsCount">0</span></div>
+    <div id="draftsList"></div>
+  </section>
+
   <div class="layout">
 
   <!-- === MAIN COLUMN === -->
@@ -10426,6 +10435,7 @@ let dms = [];           // direct messages
 let dmPeer = null;      // who you're currently chatting with
 let mutedNames = [];    // names blocked from posting (admin managed)
 let adminActions = [];  // audit log rows (admin-only select, empty for everyone else)
+let matchDrafts = [];   // in-progress Point Tracker matches, backed up live (admin-only select, empty for everyone else — see live-drafts.sql)
 let playerRoster = [];  // email -> locked name pairs (admin-only select, empty for everyone else)
 let scheduledMatches = []; // upcoming/completed/cancelled marquee 1v1s (scheduled-matches.sql)
 const EMOJI = ["🔥","😂","💀","👏","🐐"];
@@ -12073,7 +12083,67 @@ function ptCloseGame(winSide, wasTiebreak){
   const setDone = wasTiebreak || ((PT.gamesA>=6||PT.gamesB>=6) && Math.abs(PT.gamesA-PT.gamesB)>=2);
   if(setDone) ptCloseSet(winSide);
 }
-function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} }
+function ptAfterMutate(){ ptPersist(); renderTracker(); try{buzz(10);}catch(e){} try{ptAnnounceScore();}catch(e){} try{ptDraftBackup();}catch(e){} }
+
+/* ============================================================
+   LIVE DRAFT BACKUP — see docs/live-drafts.sql.
+
+   ptPersist() above already saves every point to THIS phone. That's no
+   help if this is the only phone that ever knew the match happened — lost,
+   dead battery, or a ref who just never comes back to press Submit after a
+   match that clearly finished. This pushes the same PT object to the server
+   on every point, under an admin-only table nobody but an admin can browse,
+   so there's a copy of "what actually happened" independent of this one
+   device and independent of anyone remembering to file it.
+
+   Deliberately not the tracker's job to be sure this succeeds: it is a
+   background safety net, not a requirement for scoring to work, so every
+   failure here — no signal, table doesn't exist yet, sb never loaded — is
+   swallowed the same way ptSyncBroadcastIfLive already swallows its own.
+   A scoreboard replay (PT.__replayOf) is explicitly excluded: that's a
+   match replaying data that's already filed, not a new one that needs
+   recovering. */
+function ptDraftBackup(){
+  if(!sb || !PT || PT.__replayOf) return;
+  if(!PT.__draftId){
+    PT.__draftId = (typeof crypto!=="undefined" && crypto.randomUUID)
+      ? crypto.randomUUID() : (ptRandCode()+ptRandCode()+Date.now());
+  }
+  const row={id:PT.__draftId, p1:PT.a, p2:PT.b, pt:PT,
+             status:(PT.winner||PT.draw)?"ended":"live", updated_at:new Date().toISOString()};
+  try{ sb.from("match_drafts").upsert(row).then(()=>{}, ()=>{}); }catch(e){}
+}
+
+/* Called once the real thing is safely filed (or deliberately thrown away)
+   — from that point on the backup is just clutter in an admin's recovery
+   list, not a safety net for anything. Reads PT.__draftId, so this must run
+   BEFORE whichever caller sets PT=null. Same fire-and-forget posture as
+   ptDraftBackup: a failure here just means a stale row an admin has to
+   ignore, never a reason to hold up ptSubmit/ptAbandon. */
+function ptClearDraftBackup(){
+  if(!sb || !PT || !PT.__draftId) return;
+  try{ sb.from("match_drafts").delete().eq("id", PT.__draftId).then(()=>{}, ()=>{}); }catch(e){}
+}
+
+/* The admin side of the recovery net — see the 🛟 section renderMatchDrafts
+   draws. Loads a backed-up PT straight into THIS device's tracker so an
+   admin can eyeball it and press the ordinary Submit game button
+   themselves; nothing about submission is reimplemented. */
+function ptRecoverDraft(draftId){
+  const d = matchDrafts.find(x=>String(x.id)===String(draftId));
+  if(!d || !d.pt) return toast("That backup is gone",true);
+  if(PT && !PT.winner && !PT.draw){
+    if(!confirm("This replaces the match currently being tracked on this device with the recovered one. Continue?")) return;
+  }
+  PT=d.pt; ptHistory=[]; ptFuture=[];
+  ptPersist();
+  const setup=$("ptSetup"), live=$("ptLive");
+  if(setup) setup.style.display="none";
+  if(live) live.style.display="";
+  renderTracker();
+  toast(`Recovered ${d.p1} vs ${d.p2} — check the score, then Submit game when ready`);
+}
+window.ptRecoverDraft=ptRecoverDraft;
 /* Every scoring path — point, ace, game, set, undo and redo — funnels through
    ptAfterMutate, so one call here covers all of them. The sentence is built
    from state rather than scraped from the DOM, so it stays correct however
@@ -12388,6 +12458,7 @@ window.ptDraw=ptDraw;
 
 function ptAbandon(){
   if(!confirm("Abandon this tracked match? All points will be lost.")) return;
+  ptClearDraftBackup();  // a deliberately-thrown-away match isn't an emergency to recover
   PT=null; ptHistory=[]; ptFuture=[];
   ptPersist();
   $("ptA").value=""; $("ptB").value="";
@@ -12677,6 +12748,11 @@ async function ptSubmit(){
   broadcastTicker(`🎾 ${PT.a} vs ${PT.b} — ${PT.draw?'drawn':'tracked live'}`);
   toast(target ? `Submitted to ${target.name} — waiting for approval ✓`
                : "Submitted to the ladder — waiting for approval ✓");
+  /* only here, not in the offline-outbox branch above: THAT match hasn't
+     actually reached the server yet, just been queued to try again, so the
+     live-draft backup is exactly the thing that should keep standing until
+     it truly has. */
+  ptClearDraftBackup();
   PT=null; ptHistory=[]; ptFuture=[];
   ptPersist();
   $("ptA").value=""; $("ptB").value="";
@@ -20713,8 +20789,9 @@ function render(){
   $("pastGameSec").style.display = isAdmin ? "block" : "none";
   $("adminToolsSec").style.display = isAdmin ? "block" : "none";
   if($("scheduleMatchSec")) $("scheduleMatchSec").style.display = isAdmin ? "block" : "none";
+  if($("draftsSec")) $("draftsSec").style.display = isAdmin ? "block" : "none";
   renderUpcomingBroadcast();
-  if(isAdmin){ renderDivisorPanel(); renderMutedNames(); renderAuditLog(); renderPlayerRoster(); }
+  if(isAdmin){ renderDivisorPanel(); renderMutedNames(); renderAuditLog(); renderPlayerRoster(); renderMatchDrafts(); }
   updateDMBadge();
   if (isAdmin){
     const bar = $("pendSelectAll"); if(bar) bar.checked = false;
@@ -22683,6 +22760,7 @@ const LOAD_TABLES = [
   ["dms",               d=>{ dms = d; }],
   ["muted_names",       d=>{ mutedNames = d; }],
   ["admin_actions",     d=>{ adminActions = d; }],
+  ["match_drafts",      d=>{ matchDrafts = d; }],
   ["player_roster",     d=>{ playerRoster = d; }],
   ["scheduled_matches", d=>{ scheduledMatches = d; }],
   /* The Kit's two tables. Both are optional — a deployment that never ran
@@ -29863,6 +29941,34 @@ function renderAuditLog(){
         <div class="pend-meta">${when(a.created_at)}${a.detail?' · '+esc(JSON.stringify(a.detail)).slice(0,140):''}</div></div>
       </div>`).join("")
     : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">No admin actions logged yet.</div>';
+}
+
+/* ============================================================
+   LIVE DRAFTS (admin) — see docs/live-drafts.sql and ptDraftBackup above.
+   A recovery list, not a spectator feed: what the Point Tracker has backed
+   up from ANY device, so a match that finished but was never submitted (or
+   is still going) isn't only ever visible on the ref's own phone.
+   ============================================================ */
+function renderMatchDrafts(){
+  const el=$("draftsList"); if(!el) return;
+  const rows = matchDrafts.slice().sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+  if($("draftsCount")) $("draftsCount").textContent = rows.length;
+  el.innerHTML = rows.length
+    ? rows.map(d=>{
+        const p=d.pt||{};
+        const ended = !!(p.winner||p.draw);
+        const pts = p.tiebreak ? `${p.tbA||0}-${p.tbB||0} (tb)` : `${p.ptsA||0}-${p.ptsB||0}`;
+        const scoreLine = `sets ${p.setsA||0}-${p.setsB||0} · games ${p.gamesA||0}-${p.gamesB||0} · pts ${pts}`;
+        return `<div class="pend">
+          <div><div class="pend-info"><b>${esc(d.p1)}</b> vs <b>${esc(d.p2)}</b>
+            ${ended?' · <span style="color:var(--danger)">ended, not submitted</span>':' · still live'}</div>
+          <div class="pend-meta">${esc(scoreLine)} · updated ${when(d.updated_at)}</div></div>
+          <div class="pend-actions">
+            <button class="mini yes" onclick="ptRecoverDraft('${d.id}')">Recover here</button>
+          </div>
+        </div>`;
+      }).join("")
+    : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">Nothing being tracked right now.</div>';
 }
 
 /* ============================================================
