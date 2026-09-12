@@ -1246,7 +1246,7 @@
   .fx-chip{font-family:var(--font-mono);font-size:10px;letter-spacing:.3px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);padding:2px 8px;border-radius:8px}
   .recap{font-size:15px;line-height:1.75;color:var(--ink)}
   .pool-line{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin:-8px 0 10px;letter-spacing:.5px}
-  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)} .pool-drift{color:var(--dim)}
+  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)}
   .streak-badge{font-size:12px;font-family:var(--font-mono);color:var(--pending);vertical-align:middle}
   .cfti{
     position:fixed;top:-12px;width:9px;height:14px;z-index:200;pointer-events:none;border-radius:3px;
@@ -10943,11 +10943,11 @@ function _computeStandings(){
     const Eb = 1 - Ea;
     const Sa = Number(m.outcome);        // 1 / 0.5 / 0  (from p1's view)
     const Sb = 1 - Sa;
-    /* one K per side from DYNK_START on; the same number both sides before it,
-       which is what keeps every pre-existing rating exactly where it was */
+    /* always one shared K per match — see DYNAMIC K — so this and the game
+       before it move a pair by equal and opposite amounts, no exceptions */
     const {kA, kB} = KT.pair(m, a.rating, b.rating);
     const dA = kA * (Sa - Ea), dB = kB * (Sb - Eb);
-    drift += dA + dB;                    // 0 whenever the two Ks match — see DYNAMIC K
+    drift += dA + dB;                    // invariant: always 0 — see DYNAMIC K
     a.rating += dA;
     b.rating += dB;
     a.games++; b.games++;
@@ -11278,14 +11278,13 @@ function movMultiplier(m, rWinner, rLoser){
    newcomer spends a dozen mismatched games climbing out of the
    middle of the table.
 
-   So K stops being one number and becomes a per-player one, sized
-   by how much the ladder actually knows about that player:
+   So K stops being one flat constant and becomes experience-aware,
+   sized by how much the ladder actually knows about EACH player in
+   the match:
 
      - games played: 64 for the first five, easing down to 20 once
        a rating has fifty games under it. A newcomer finds their
-       level in a handful of games instead of a season, and does it
-       WITHOUT dragging their opponents around — the opponent moves
-       by their own K, not the newcomer's.
+       level in a handful of games instead of a season.
      - time away: a rating three months old is a guess. 90+ days
        out lifts that player's K by a quarter, 180+ by a half
        (never past DYNK_RUST_CAP), so the first games back re-price
@@ -11297,12 +11296,22 @@ function movMultiplier(m, rWinner, rLoser){
        A breaker played in place of a set is scored as the short
        thing it is rather than the long set its score looks like.
 
-   The per-player K is clamped to [DYNK_MIN, DYNK_MAX], and margin of
+   Each side's raw number comes from their own history, but the
+   match is played for a single shared K — the average of the two —
+   so a game ALWAYS moves the winner up and the loser down by the
+   same amount. A newcomer playing a veteran still gets placed
+   faster than the old flat K would, just not at the newcomer's own
+   number alone: the veteran's steadier number pulls the shared K
+   partway back down, so the veteran isn't dragged around by a
+   rookie's full K, and the rookie doesn't get a free ride at the
+   veteran's expense either. Splitting the difference, not picking
+   a side, is the point.
+
+   The shared K is clamped to [DYNK_MIN, DYNK_MAX], and margin of
    victory (above) then multiplies the match as it always has. The
    clamp deliberately sits INSIDE the margin multiplier: put it
-   outside and a big upset bonus shoves both sides up against the
-   ceiling, which quietly hands a newcomer and a veteran the same K
-   again in exactly the games where they should differ most.
+   outside and a big upset bonus could shove the match past the
+   ceiling before the clamp ever saw it.
 
    WHAT THIS DELIBERATELY DOES NOT TOUCH
      - Any game created before DYNK_START. Same date gate the
@@ -11318,11 +11327,11 @@ function movMultiplier(m, rWinner, rLoser){
        single-game "what would this result do" projections use the
        live per-player K, because that is what you would play for.
 
-   ZERO-SUM: two different K values mean a game no longer moves the
-   pair by equal and opposite amounts, so the rating pool drifts
-   slightly. That is the price of letting an uncertain rating move
-   faster than a settled one, and it is tracked in ELO_DRIFT and
-   reported in the Lab's data audit rather than hidden.
+   STRICTLY ZERO-SUM: because both sides always play for the same K,
+   a game moves the pair by equal and opposite amounts, full stop.
+   ELO_DRIFT is kept and reported in the Lab's data audit purely as
+   a live invariant check — it should never read anything but zero,
+   and a nonzero value there means a real bug, not an accepted cost.
    ============================================================ */
 const DYNK_ENABLED = true;
 const DYNK_START   = "2026-08-29";   // games on/after this date get a per-player K
@@ -11390,21 +11399,21 @@ function playerK(ctx){
   return k;
 }
 
-/* the K each side of a match plays for. Identical numbers — the flat K, margin
-   scaled — for anything dynamic K does not apply to, so every pre-DYNK_START
-   game and every event game replays exactly as it did before. */
+/* the K both sides of a match play for — always identical, so a game moves
+   the winner up and the loser down by the same amount. The flat K, margin
+   scaled, for anything dynamic K does not apply to, so every pre-DYNK_START
+   game and every event game replays exactly as it did before. Otherwise the
+   average of each player's own experience-based number, clamped once as a
+   pair rather than each side separately. */
 function matchKPair(m, rA, rB, ctxA, ctxB){
   const o    = Number(m.outcome);
   const mov  = movMultiplier(m, o === 1 ? rA : rB, o === 1 ? rB : rA);
   const flat = K * mov;
   if(!dynKApplies(m)) return {kA:flat, kB:flat, dynamic:false};
-  const fmt   = formatReliability(m);
-  const clamp = k => Math.max(DYNK_MIN, Math.min(DYNK_MAX, k));
-  return {
-    kA: clamp(playerK(ctxA) * fmt) * mov,
-    kB: clamp(playerK(ctxB) * fmt) * mov,
-    dynamic: true
-  };
+  const fmt    = formatReliability(m);
+  const clamp  = k => Math.max(DYNK_MIN, Math.min(DYNK_MAX, k));
+  const shared = clamp((playerK(ctxA) + playerK(ctxB)) / 2 * fmt) * mov;
+  return { kA: shared, kB: shared, dynamic: true };
 }
 
 /* Keeps games-played and last-played per name while a replay walks the history
@@ -20084,15 +20093,15 @@ function renderAudit(){
   const standings=computeStandings().filter(p=>p.games>0);
   const unreliable=standings.filter(p=>p.games<5);
   const pool=standings.reduce((s,p)=>s+p.rating,0);
-  /* Dynamic K gives the two sides of a game different K values, so the pool no
-     longer has to come out at START x players — ELO_DRIFT is exactly how much
-     that has moved it. Accounted-for drift is healthy; anything beyond it is a
-     real bug, which is what this row is for. */
+  /* every match plays for one shared K, so a game always moves the pair by
+     equal and opposite amounts — the pool must land on START x players
+     exactly. ELO_DRIFT is kept as a live invariant check: it should always
+     read zero, and this row exists to catch it if that ever stops holding. */
   const drift=DYNK_ENABLED?ELO_DRIFT:0;
-  const expected=standings.length*START+drift;
+  const expected=standings.length*START;
   const conserved=Math.abs(pool-expected)<0.01;
   const driftNote=Math.abs(drift)>=0.05
-    ? `${drift>0?'+':''}${drift.toFixed(1)} from dynamic K`
+    ? `unexplained drift: ${drift>0?'+':''}${drift.toFixed(1)}`
     : "zero-sum intact";
   // duplicate detection: same pair, same day, same outcome
   const seen={}, dupes=[];
@@ -20107,7 +20116,7 @@ function renderAudit(){
     ${note?`<span class="au-note">${note}</span>`:''}</div>`;
   el.innerHTML =
     row("Set scores recorded", setPct+"%", setPct>=80, `${approved.length-withSets} missing`) +
-    row("Elo pool conserved", pool.toFixed(1)+" / "+expected.toFixed(1), conserved, conserved?driftNote:"unexplained drift") +
+    row("Elo pool conserved", pool.toFixed(1)+" / "+expected.toFixed(1), conserved, driftNote) +
     row("Ratings reliable (5+ games)", `${standings.length-unreliable.length}/${standings.length}`, !unreliable.length,
         unreliable.length?unreliable.map(p=>esc(p.name)).join(", "):"all settled") +
     row("Possible duplicates", dupes.length, dupes.length===0, dupes.length?"same pair, day & result":"none found") +
@@ -20448,17 +20457,14 @@ function render(){
   const leagueSeq = {};
   computeLeagueStats().players.forEach(p=>leagueSeq[p.name]=p.seq);
   $("playerCount").textContent = standings.length;
-  // Elo pool integrity: raw ratings must sum to players × START, PLUS whatever
-  // dynamic K has deliberately moved it by (see DYNAMIC K / ELO_DRIFT above) —
-  // that part is accounted for and healthy, so it must not read as a leak here.
-  // Mirrors the same accounting renderAudit() uses for the Lab's data audit.
+  // Elo pool integrity: every match plays for one shared K (see DYNAMIC K),
+  // so a game always moves the pair by equal and opposite amounts and the
+  // pool must land on players × START exactly — any gap here is a real bug.
   if(standings.length){
     const pool = standings.reduce((s,p)=>s+p.rating,0);
-    const drift = DYNK_ENABLED ? ELO_DRIFT : 0;
-    const expected = standings.length*START + drift;
+    const expected = standings.length*START;
     const ok = Math.abs(pool-expected)<0.01;
-    const driftNote = Math.abs(drift)>=0.05 ? ` <span class="pool-drift">(${drift>0?'+':''}${drift.toFixed(1)} from dynamic K)</span>` : '';
-    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}${driftNote}`;
+    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
   } else $("poolLine").innerHTML='';
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====

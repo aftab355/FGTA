@@ -201,10 +201,11 @@ section('the per-player K — how much the ladder still has to learn about you')
   ok(f('6-4, 4-6, 6-4') === 1, 'and three sets is capped at the reference, not rewarded past it');
 }
 
-section('the two sides of a game are allowed to move by different amounts');
+section('experience still speeds up placement, but both sides always move equally');
 {
-  /* a newcomer against a veteran, after the gate: the whole point of the
-     dynamic K is that placing the newcomer must not drag the veteran around */
+  /* a newcomer against a veteran, after the gate: dynamic K still gets the
+     newcomer placed faster than the flat K would, but the match is played
+     for one shared K, so the pair still moves by equal and opposite amounts */
   const veteranHistory = [];
   for(let i = 0; i < 60; i++)
     veteranHistory.push(game('Vet', 'Filler' + i, 1, '2026-08-' + String((i % 28) + 1).padStart(2, '0')));
@@ -212,11 +213,11 @@ section('the two sides of a game are allowed to move by different amounts');
   const S = e.computeStandings();
   const before = E(veteranHistory).computeStandings().find(p => p.name === 'Vet').rating;
   const vet = S.find(p => p.name === 'Vet'), nu = S.find(p => p.name === 'New');
-  ok(Math.abs(nu.rating - 500) > Math.abs(vet.rating - before),
-     'the newcomer moves further than the veteran they beat',
+  ok(near(Math.abs(nu.rating - 500), Math.abs(vet.rating - before)),
+     'the newcomer and the veteran move by exactly the same amount',
      (nu.rating - 500).toFixed(1) + ' vs ' + (vet.rating - before).toFixed(1));
-  ok(Math.abs(e.drift()) > 1e-9,
-     'which means the pool is no longer strictly zero-sum, and the engine says so',
+  ok(near(e.drift(), 0),
+     'so the pool stays strictly zero-sum even when dynamic K applies',
      e.drift().toFixed(3));
 }
 {
@@ -240,7 +241,9 @@ section('the two sides of a game are allowed to move by different amounts');
   const pair = (ga, gb) => e.matchKPair({created_at: AFTER_DYNK + 'T12:00:00Z', outcome: 1, sets: '6-4, 6-4'},
     500, 500, {games: ga, daysSince: null}, {games: gb, daysSince: null});
   const p = pair(0, 60);
-  ok(p.dynamic && p.kA > p.kB, 'the newcomer plays for a bigger K than the veteran');
+  ok(p.dynamic && near(p.kA, p.kB), 'the newcomer and the veteran always share one K');
+  ok(p.kA > e.K && p.kA < 64, 'that shared K still sits above the old flat K, pulled up by the newcomer',
+     p.kA.toFixed(1));
   let inBand = true;
   [[0,0],[0,99],[99,0],[3,7],[200,200]].forEach(([a, b]) => {
     const r = pair(a, b);
