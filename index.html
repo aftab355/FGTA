@@ -13501,16 +13501,31 @@ async function sbxExportFast(data){
   let snapIdx=0;
   for(let f=0; f<totalFrames; f++){
     if(SBX.cancelled || PT!==myPT) break;
+    /* THE ACTUAL MEMORY BUG, and the fix: encode() doesn't block, it just
+       queues — a raw 1920x1080 frame is ~8MB, and this loop was handing the
+       encoder frames far faster than any encoder (software or hardware)
+       can actually get through them. Over a long match that's thousands of
+       uncompressed frames piling up in memory before the encoder gets to
+       them, which is exactly what ran the tab out of memory — nothing to
+       do with browser vs. native, or this device vs. a more powerful one;
+       an unthrottled producer outrunning its consumer does this on any
+       machine. encodeQueueSize is the encoder saying "this many are still
+       waiting" — waiting for it to drain keeps memory flat no matter how
+       long the match is, the same fix a native app would need too. */
+    while(encoder.encodeQueueSize > 4){
+      await new Promise(r=>setTimeout(r,10));
+      if(SBX.cancelled || PT!==myPT) break;
+    }
+    if(SBX.cancelled || PT!==myPT) break;
     const tMs = f*1000/SBX_FPS;
     while(snapIdx+1<times.length && times[snapIdx+1]<=tMs) snapIdx++;
     sbxDrawFrame(ctx, snaps[snapIdx]);
     const frame=new VideoFrame(canvas, {timestamp: Math.round(tMs*1000), duration: Math.round(1e6/SBX_FPS)});
     encoder.encode(frame);
     frame.close();
-    if(f % (SBX_FPS*2) === 0){   // yield every couple of seconds of output so the tab can still repaint/respond
+    if(f % (SBX_FPS*2) === 0){   // also refresh the on-screen progress at the same cadence
       const el=document.getElementById("sbxProg");
       if(el) el.textContent = Math.round(f/totalFrames*100)+"%";
-      await new Promise(r=>setTimeout(r,0));
     }
   }
   await encoder.flush();
