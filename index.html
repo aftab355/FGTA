@@ -23613,7 +23613,7 @@ function betMarketFor(scheduledMatchId){
 function scheduledOddsTagHTML(scheduledMatchId){
   const mkt = betMarketFor(scheduledMatchId);
   if(!mkt) return '';
-  const label = mkt.status==="open" ? '' : mkt.status==="locked" ? ' · locked'
+  const label = mkt.status==="open" ? '' : mkt.status==="locked" ? ' · betting closed'
     : mkt.status==="resolved" ? ' · settled' : ' · void';
   return `<span class="sched-odds-tag" title="Betting odds">🎲 ${esc(mkt.p1)} ×${Number(mkt.odds_p1).toFixed(2)} · ${esc(mkt.p2)} ×${Number(mkt.odds_p2).toFixed(2)}${label}</span>`;
 }
@@ -23629,11 +23629,17 @@ function scheduledOddsBlockHTML(sched){
       <button class="mini yes" onclick="adminOpenMarket(${sched.id})">Open betting</button>
     </div>`;
   }
-  const statusWord = mkt.status==="open" ? 'Open' : mkt.status==="locked" ? 'Locked'
+  const statusWord = mkt.status==="open" ? 'Open' : mkt.status==="locked" ? 'Betting closed'
     : mkt.status==="resolved" ? `Settled — ${esc(mkt.result_winner)} won ${esc(mkt.result_sets||'')}` : 'Void — refunded';
+  const adminToggle = isAdmin && (mkt.status==="open"||mkt.status==="locked")
+    ? `<button class="mini ${mkt.status==="open"?"no":"yes"}" onclick="setBetMarketStatus(${mkt.id},'${mkt.status==="open"?"locked":"open"}')">${mkt.status==="open"?"Close betting":"Reopen betting"}</button>`
+    : '';
   return `<div class="modal-notes" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <span>🎲 ${esc(mkt.p1)} ×${Number(mkt.odds_p1).toFixed(2)} · ${esc(mkt.p2)} ×${Number(mkt.odds_p2).toFixed(2)} <span class="pred-hint" style="display:inline">(${statusWord})</span></span>
-    <button class="mini no" onclick="closeMatch();showView('bets')">${mkt.status==="open"?"Place a bet":"View in Bets"}</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${adminToggle}
+      <button class="mini no" onclick="closeMatch();showView('bets')">${mkt.status==="open"?"Place a bet":"View in Bets"}</button>
+    </div>
   </div>`;
 }
 
@@ -23719,7 +23725,7 @@ async function setBetMarketStatus(marketId, status){
   if(!isAdmin) return;
   const {error} = await sb.rpc("set_bet_market_status", {p_market_id: marketId, p_status: status});
   if(error){ toast(optErrorText(error, error.message),true); return; }
-  toast(status==="locked" ? "Betting locked" : status==="void" ? "Market voided — every stake refunded" : "Betting reopened");
+  toast(status==="locked" ? "Betting closed — no new bets accepted" : status==="void" ? "Market voided — every stake refunded" : "Betting reopened");
   await load();
 }
 window.setBetMarketStatus = setBetMarketStatus;
@@ -23880,15 +23886,15 @@ function betAdminOpenMarketHTML(){
 function betMarketCardHTML(mkt){
   const sched = scheduledMatches.find(m=>String(m.id)===String(mkt.scheduled_match_id));
   const statusTag = mkt.status==="open" ? '<span style="color:var(--good,#3ba55d)">OPEN</span>'
-    : mkt.status==="locked" ? '<span style="color:var(--muted)">LOCKED</span>'
+    : mkt.status==="locked" ? '<span style="color:var(--muted)">BETTING CLOSED</span>'
     : mkt.status==="resolved" ? `<span style="color:var(--accent,#4a9eff)">SETTLED — ${esc(mkt.result_winner)} won ${esc(mkt.result_sets||'')}</span>`
     : '<span style="color:var(--danger)">VOID — refunded</span>';
   const marketBets = bets.filter(b=>String(b.market_id)===String(mkt.id));
   const adminControls = isAdmin && (mkt.status==="open"||mkt.status==="locked") ? `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
       <button class="mini no" onclick="adminOpenMarket(${sched?sched.id:mkt.scheduled_match_id})">Re-price</button>
-      ${mkt.status==="open" ? `<button class="mini no" onclick="setBetMarketStatus(${mkt.id},'locked')">Lock</button>`
-        : `<button class="mini no" onclick="setBetMarketStatus(${mkt.id},'open')">Reopen</button>`}
+      ${mkt.status==="open" ? `<button class="mini no" onclick="setBetMarketStatus(${mkt.id},'locked')">Close betting</button>`
+        : `<button class="mini yes" onclick="setBetMarketStatus(${mkt.id},'open')">Reopen betting</button>`}
       <button class="mini no" onclick="adminResolveMarketPrompt(${mkt.id},'${esc(mkt.p1).replace(/'/g,"\\'")}','${esc(mkt.p2).replace(/'/g,"\\'")}')">Settle now</button>
       <button class="mini no" style="color:var(--danger)" onclick="voidBetMarket(${mkt.id})">Void</button>
     </div>` : '';
