@@ -8924,6 +8924,7 @@
     <button class="tb-tab" data-view="events" onclick="showView('events')">Events<span class="cup-flag" aria-hidden="true"></span></button>
     <button class="tb-tab" data-view="doubles" onclick="showView('doubles')">Doubles</button>
     <button class="tb-tab" data-view="training" onclick="showView('training')">Training</button>
+    <button class="tb-tab" data-view="bets" onclick="showView('bets')">Bets <span class="tab-count" id="tabBetCount"></span></button>
     <button class="tb-tab" data-view="dms" onclick="showView('dms')">Messages <span class="tab-count" id="dmBadge"></span></button>
     <span class="tb-indicator" id="tbIndicator"></span>
   </nav>
@@ -9059,6 +9060,7 @@
       <button onclick="showView('kit');toggleMoreSheet()"><span>🎽</span>The Kit</button>
       <button onclick="showView('court');toggleMoreSheet()"><span>📍</span>Court</button>
       <button onclick="showView('events');toggleMoreSheet()"><span>🏆</span>Events</button>
+      <button onclick="showView('bets');toggleMoreSheet()"><span>🎲</span>Bets</button>
       <button onclick="showView('dms');toggleMoreSheet()"><span>✉</span>Messages</button>
       <button onclick="openSearch();toggleMoreSheet()"><span>⌕</span>Search</button>
       <button onclick="cycleSurface()"><span>◉</span>Surface</button>
@@ -10014,6 +10016,11 @@
     </div>
   </div><!-- /view-dms -->
 
+  <!-- ===== BETS VIEW ===== -->
+  <div id="view-bets" style="display:none">
+    <div id="betsBody"></div>
+  </div><!-- /view-bets -->
+
   <!-- ===== EVENTS VIEW ===== -->
   <div id="view-events" style="display:none">
     <div class="cup-mount" data-cup-mount="full"></div>
@@ -10443,6 +10450,13 @@ let adminActions = [];  // audit log rows (admin-only select, empty for everyone
 let matchDrafts = [];   // in-progress Point Tracker matches, backed up live (admin-only select, empty for everyone else — see live-drafts.sql)
 let playerRoster = [];  // email -> locked name pairs (admin-only select, empty for everyone else)
 let scheduledMatches = []; // upcoming/completed/cancelled marquee 1v1s (scheduled-matches.sql)
+/* ---- fake-currency betting (see docs/betting.sql) ---- */
+let wallets = [];            // {name_key, name, balance} for everyone who's ever picked a name
+let betMarkets = [];         // one betting line per scheduled match that has one opened
+let bets = [];                // every wager, any status
+let bettingTables = {wallets: true, bet_markets: true, bets: true}; // false once load() sees the table is missing
+let betComposerType = "winner"; // which of the three bet-type tabs is open per market, keyed below
+let betComposerOpenMarket = null; // market id whose bet-composer panel is expanded, or null
 const EMOJI = ["🔥","😂","💀","👏","🐐"];
 /* ============================================================
    FX ENGINE — tennis-flavoured animation & effects
@@ -21251,6 +21265,8 @@ function render(){
   const approvedCount = matches.filter(m=>m.status==="approved").length;
   const tc = $("tabMatchCount"); if(tc) tc.textContent = approvedCount || "";
   if(activeView==="matches") renderAllMatches();
+  const tbc = $("tabBetCount");
+  if(tbc) tbc.textContent = (isAdmin && bets.filter(b=>b.status==="pending").length) || "";
 }
 
 function refreshOdds(){
@@ -21277,13 +21293,14 @@ const VIEW_GROUPS = {
   doubles:   { views:["doubles"] },
   training:  { views:["training"] },
   kit:       { views:["kit"] },
-  dms:       { views:["dms"] }
+  dms:       { views:["dms"] },
+  bets:      { views:["bets"] }
 };
 let subState = { matches:"tracker", predict:"forecast", analytics:"overview" };
 
 const ALL_VIEWS = ["feed","ladder","matches","profile","predict","predict-forecast","predict-live",
   "events","stats","fixtures","lab","deep","pro","rivalry","dms","court","tracker",
-  "analytics-ratings","analytics-validation","doubles","training"];
+  "analytics-ratings","analytics-validation","doubles","training","bets"];
 
 function hideAllViews(){
   ALL_VIEWS.forEach(id=>{ const el=$("view-"+id); if(el) el.style.display="none"; });
@@ -21312,6 +21329,7 @@ function renderForView(id){
   else if(id==="analytics-validation") renderAnalyticsValidation();
   else if(id==="court"){ renderCourt(); renderNearby(); }
   else if(id==="dms"){ renderDMs(); markDMsSeen(); updateDMBadge(); }
+  else if(id==="bets") renderBets();
 }
 
 /* ---- animation system: reflow-retrigger helper so an entrance keyframe replays
@@ -21375,7 +21393,7 @@ function _showViewCore(v){
   });
   // events/dms live in the "more" sheet — highlight the More button for them
   const more=document.querySelector(".bb-more");
-  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court"||v==="kit");
+  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court"||v==="kit"||v==="bets");
   /* the marquee mounts sit inside the views, so a view that has just been
      shown needs it filled in — this is what keeps the cup on every screen */
   renderCupMarquee();
@@ -23167,6 +23185,12 @@ const LOAD_TABLES = [
   ["match_drafts",      d=>{ matchDrafts = d; }],
   ["player_roster",     d=>{ playerRoster = d; }],
   ["scheduled_matches", d=>{ scheduledMatches = d; }],
+  /* Betting's three tables — optional, same graceful-miss handling as the
+     Kit's: a deployment that hasn't run docs/betting.sql yet just shows
+     the "run this SQL" notice on the Bets tab instead of an empty screen. */
+  ["wallets",           d=>{ wallets = d; }],
+  ["bet_markets",       d=>{ betMarkets = d; }],
+  ["bets",              d=>{ bets = d; }],
   /* The Kit's two tables. Both are optional — a deployment that never ran
      docs/kit.sql gets an error here, which the loop below already treats as
      "keep what is in memory", and the view says which table is missing
@@ -23213,10 +23237,12 @@ async function load(opts){
            signed-out visitor: keep whatever is already in memory */
         console.warn("[load] " + table + " unavailable", res.error.message || res.error);
         if(table in kitTables) kitTables[table] = false;
+        if(table in bettingTables) bettingTables[table] = false;
         if(table === "fall_exhibition") fallExhibitionTableMissing = true;
         return;
       }
       if(table in kitTables) kitTables[table] = true;
+      if(table in bettingTables) bettingTables[table] = true;
       if(table === "fall_exhibition") fallExhibitionTableMissing = false;
       assign(res.data || []);
       touched.push(table);
@@ -23234,6 +23260,7 @@ async function load(opts){
     render();
     if(openMatchId !== null) renderComments(openMatchId);
     if(openScheduledMatchId !== null) openScheduledMatch(openScheduledMatchId);
+    if(activeView === "bets") renderBets();
     /* the draw is in memory now, so this is the first moment the app can
        know whether the cup has a game on today — see ffBootWalkIn, which
        only ever fires once and only on the day of a fixture */
@@ -23506,6 +23533,8 @@ async function cancelScheduledMatch(id){
     fail  : "Couldn't cancel that match."
   });
   if(ok) logAdminAction("cancel_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
+  const mkt = betMarkets.find(x=>String(x.scheduled_match_id)===String(id) && (x.status==="open"||x.status==="locked"));
+  if(ok && mkt) await voidBetMarket(mkt.id, true);
 }
 window.cancelScheduledMatch = cancelScheduledMatch;
 
@@ -23524,8 +23553,350 @@ async function completeScheduledMatch(id){
     fail  : "Couldn't mark that match completed."
   });
   if(ok) logAdminAction("complete_scheduled_match",{id,p1:m&&m.p1,p2:m&&m.p2});
+  const mkt = betMarkets.find(x=>String(x.scheduled_match_id)===String(id) && (x.status==="open"||x.status==="locked"));
+  if(ok && mkt && confirm(`There's a bet market on ${m.p1} vs ${m.p2}. Enter the result now to settle it?`)){
+    await adminResolveMarketPrompt(mkt.id, m.p1, m.p2);
+  }
 }
 window.completeScheduledMatch = completeScheduledMatch;
+
+/* ============================================================
+   BETTING — fake-currency wagers on scheduled matches (docs/betting.sql)
+
+   The house is the admin: they open a market with odds they pick
+   (no Elo/rating math anywhere here), players and spectators bet FC
+   against that price, the admin reviews each bet before it's live,
+   and once the match is played the admin enters the real result and
+   every accepted bet settles itself. All balance movement happens in
+   SECURITY DEFINER Postgres functions — the client never writes
+   wallets/bets/bet_markets directly, only calls sb.rpc(...) and
+   reloads. See docs/betting.sql for exactly what each RPC does.
+   ============================================================ */
+
+function myWallet(){
+  const key = myName().trim().toLowerCase();
+  if(!key) return null;
+  return wallets.find(w=>w.name_key===key) || null;
+}
+function myBalance(){
+  const w = myWallet();
+  return w ? w.balance : null; // null = wallet not created yet (name not set, or ensureWallet hasn't landed)
+}
+
+/* called from afterIdentityChange() — idempotent, never resets an
+   existing balance, just guarantees a name has 300 FC the first time
+   it's ever seen. Silent no-op if the betting tables aren't migrated
+   in yet, same graceful-miss posture as the Kit. */
+async function ensureWallet(name){
+  if(!sb || !name || !name.trim() || !bettingTables.wallets) return;
+  try{
+    const {error} = await sb.rpc("ensure_wallet", {p_name: name.trim()});
+    if(error){ console.warn("[betting] ensure_wallet failed", error.message||error); return; }
+    await load({quiet:true});
+  }catch(e){ console.warn("[betting] ensure_wallet threw", e); }
+}
+
+function betMarketFor(scheduledMatchId){
+  return betMarkets.find(x=>String(x.scheduled_match_id)===String(scheduledMatchId)) || null;
+}
+
+/* the price a given pick actually pays right now, before any stake is
+   entered — shown live in the bet composer so nobody has to do the
+   multiplication themselves */
+function betOdds(mkt, side, type){
+  const base = side==="p1" ? Number(mkt.odds_p1) : Number(mkt.odds_p2);
+  const mult = type==="margin" ? Number(mkt.margin_multiplier) : type==="exact_score" ? Number(mkt.exact_multiplier) : 1;
+  return base * mult;
+}
+
+function toggleBetComposer(marketId, type){
+  if(betComposerOpenMarket===marketId && betComposerType===type){ betComposerOpenMarket=null; }
+  else { betComposerOpenMarket=marketId; betComposerType=type; }
+  renderBets();
+}
+window.toggleBetComposer = toggleBetComposer;
+
+async function submitBet(marketId){
+  if(!requireLogin(()=>submitBet(marketId))) return;
+  const mkt = betMarkets.find(x=>x.id===marketId);
+  if(!mkt) return toast("Market not found",true);
+  const type = betComposerType;
+  const sideSel = $("betSide_"+marketId+"_"+type);
+  const side = sideSel ? sideSel.value : "p1";
+  const winner = side==="p1" ? mkt.p1 : mkt.p2;
+  const stakeEl = $("betStake_"+marketId+"_"+type);
+  const stake = Math.round(Number(stakeEl && stakeEl.value));
+  if(!stake || stake<=0) return toast("Enter a stake",true);
+  const bal = myBalance();
+  if(bal!=null && stake>bal) return toast(`You only have ${bal} FC`,true);
+  let margin=null, sets=null;
+  if(type==="margin"){
+    const sel = $("betMargin_"+marketId);
+    margin = sel ? sel.value : null;
+    if(!margin) return toast("Pick a set margin",true);
+  }
+  if(type==="exact_score"){
+    const inp = $("betSets_"+marketId);
+    sets = inp ? inp.value.trim() : "";
+    if(!sets) return toast("Enter the exact set scores, e.g. 6-4, 6-3",true);
+  }
+  const odds = betOdds(mkt, side, type);
+  if(!confirm(`Bet ${stake} FC on ${winner}${type==="margin"?" ("+margin+")":type==="exact_score"?" ("+sets+")":""} to win — pays ${Math.round(stake*odds)} FC if the house accepts and you're right?`)) return;
+  const {error} = await sb.rpc("place_bet", {
+    p_market_id: marketId, p_name: myName(), p_bet_type: type,
+    p_pick_winner: winner, p_pick_margin: margin, p_pick_sets: sets, p_stake: stake
+  });
+  if(error){ toast(optErrorText(error, error.message),true); return; }
+  toast("Bet placed — waiting on the house to review it");
+  betComposerOpenMarket=null;
+  await load();
+}
+window.submitBet = submitBet;
+
+async function adminOpenMarket(scheduledMatchId){
+  if(!isAdmin) return;
+  const m = scheduledMatches.find(x=>String(x.id)===String(scheduledMatchId));
+  if(!m) return;
+  const existing = betMarketFor(scheduledMatchId);
+  const o1 = prompt(`Decimal odds for ${m.p1} (payout = stake × odds; the favourite should be closer to 1, e.g. 1.3):`, existing?existing.odds_p1:"1.9");
+  if(o1===null) return;
+  const o2 = prompt(`Decimal odds for ${m.p2}:`, existing?existing.odds_p2:"1.9");
+  if(o2===null) return;
+  const mm = prompt("Margin-bet multiplier (stacked on top of the winner odds for picking the winner + set margin):", existing?existing.margin_multiplier:"2");
+  if(mm===null) return;
+  const em = prompt("Exact-score multiplier (stacked on top of the winner odds for picking every set score):", existing?existing.exact_multiplier:"5");
+  if(em===null) return;
+  const {error} = await sb.rpc("open_bet_market", {
+    p_scheduled_match_id: scheduledMatchId,
+    p_odds_p1: Number(o1), p_odds_p2: Number(o2),
+    p_margin_multiplier: Number(mm), p_exact_multiplier: Number(em)
+  });
+  if(error){ toast(optErrorText(error, error.message),true); return; }
+  toast(existing ? "Odds updated ✓" : "Betting opened ✓");
+  await load();
+  logAdminAction("open_bet_market",{scheduledMatchId,p1:m.p1,p2:m.p2,odds_p1:o1,odds_p2:o2});
+}
+window.adminOpenMarket = adminOpenMarket;
+
+async function setBetMarketStatus(marketId, status){
+  if(!isAdmin) return;
+  const {error} = await sb.rpc("set_bet_market_status", {p_market_id: marketId, p_status: status});
+  if(error){ toast(optErrorText(error, error.message),true); return; }
+  toast(status==="locked" ? "Betting locked" : status==="void" ? "Market voided — every stake refunded" : "Betting reopened");
+  await load();
+}
+window.setBetMarketStatus = setBetMarketStatus;
+
+async function voidBetMarket(marketId, silent){
+  if(!isAdmin) return;
+  if(!silent && !confirm("Void this market and refund every stake on it?")) return;
+  await setBetMarketStatus(marketId, "void");
+}
+window.voidBetMarket = voidBetMarket;
+
+async function adminDecideBet(betId, accept){
+  if(!isAdmin) return;
+  if(!confirm(accept ? "Accept this bet?" : "Reject this bet and refund the stake?")) return;
+  const {error} = await sb.rpc("admin_decide_bet", {p_bet_id: betId, p_accept: accept});
+  if(error){ toast(optErrorText(error, error.message),true); return; }
+  toast(accept ? "Bet accepted ✓" : "Bet rejected — stake refunded");
+  await load();
+}
+window.adminDecideBet = adminDecideBet;
+
+async function adminResolveMarketPrompt(marketId, p1, p2){
+  if(!isAdmin) return;
+  const winner = prompt(`Who won — ${p1} or ${p2}?`, p1);
+  if(winner===null) return;
+  if(winner.trim().toLowerCase()!==p1.toLowerCase() && winner.trim().toLowerCase()!==p2.toLowerCase()){
+    return toast(`Winner must be ${p1} or ${p2}`,true);
+  }
+  const sets = prompt(`Set scores, ${p1}-first (e.g. 6-4, 3-6, 7-5):`, "");
+  if(sets===null) return;
+  if(!sets.trim()) return toast("Set scores required",true);
+  if(!confirm(`Settle every bet on ${p1} vs ${p2}: ${winner} won ${sets}?`)) return;
+  const {error} = await sb.rpc("resolve_bet_market", {p_market_id: marketId, p_winner: winner.trim(), p_sets: sets.trim()});
+  if(error){ toast(optErrorText(error, error.message),true); return; }
+  toast("Bets settled ✓");
+  logAdminAction("resolve_bet_market",{marketId,winner:winner.trim(),sets:sets.trim()});
+  await load();
+}
+window.adminResolveMarketPrompt = adminResolveMarketPrompt;
+
+/* ---- rendering ---- */
+
+function betsNoTableHTML(){
+  const missing = ["wallets","bet_markets","bets"].filter(t=>!bettingTables[t]);
+  return '<div class="panel kit-setup">'
+    + '<div class="tool-h">🎲 Betting needs ' + (missing.length===1?'a table':'tables') + ' that '
+    + (missing.length===1?"isn't":"aren't") + ' there yet — <code>' + missing.map(esc).join('</code>, <code>') + '</code></div>'
+    + '<div class="pred-hint">Paste <code>docs/betting.sql</code> into the Supabase SQL editor and run it '
+    + 'on its own (Supabase runs a tab as one transaction, so pasting it alongside anything else risks the '
+    + 'whole paste rolling back on an unrelated error). It creates the wallets, markets and bets tables plus '
+    + 'every function that moves FC — safe to run more than once.</div></div>';
+}
+
+function betWalletHTML(){
+  const name = myName();
+  if(!name) return '<div class="panel"><div class="pred-hint">Pick a name to get your 300 FC and start betting.</div>'
+    + '<button class="btn" style="width:auto;margin-top:10px" onclick="openNameModal()">Pick a name</button></div>';
+  const w = myWallet();
+  const bal = w ? w.balance : "…";
+  return `<div class="panel" style="display:flex;align-items:center;gap:14px">
+    ${avatar(name,44)}
+    <div>
+      <div style="font-weight:800;font-size:1.3em">${esc(String(bal))} FC</div>
+      <div class="pred-hint" style="margin:0">${esc(name)}'s balance</div>
+    </div>
+  </div>`;
+}
+
+const MARGIN_OPTIONS = ["2-0","2-1"]; // best-of-3 assumed, same as the rest of this app's set reporting
+
+function betComposerHTML(mkt){
+  const myBets = bets.filter(b=>String(b.market_id)===String(mkt.id) && b.bettor_key===myName().trim().toLowerCase());
+  const types = [["winner","Winner"],["margin","Margin"],["exact_score","Exact score"]];
+  const tabs = types.map(([t,label])=>
+    `<button class="mini ${betComposerOpenMarket===mkt.id && betComposerType===t?'yes':'no'}" onclick="toggleBetComposer(${mkt.id},'${t}')">${label}</button>`
+  ).join(' ');
+  let panel = '';
+  if(betComposerOpenMarket===mkt.id){
+    const type = betComposerType;
+    const oddsP1 = betOdds(mkt,'p1',type).toFixed(2);
+    const oddsP2 = betOdds(mkt,'p2',type).toFixed(2);
+    panel = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+      <div class="grid2">
+        <select id="betSide_${mkt.id}_${type}">
+          <option value="p1">${esc(mkt.p1)} (×${oddsP1})</option>
+          <option value="p2">${esc(mkt.p2)} (×${oddsP2})</option>
+        </select>
+        <input id="betStake_${mkt.id}_${type}" type="number" min="1" step="1" placeholder="stake (FC)">
+      </div>
+      ${type==="margin" ? `<select id="betMargin_${mkt.id}" style="margin-top:10px;width:100%">
+          <option value="">set margin…</option>
+          ${MARGIN_OPTIONS.map(m=>`<option value="${m}">${m}</option>`).join('')}
+        </select>` : ''}
+      ${type==="exact_score" ? `<input id="betSets_${mkt.id}" style="margin-top:10px;width:100%" placeholder="${esc(mkt.p1)}-first set scores, e.g. 6-4, 6-3">` : ''}
+      <div class="pred-hint" style="margin-top:8px">${type==="winner"?"Straight pick — who wins.":type==="margin"?"Pick the winner AND the set margin (2-0 or 2-1) — riskier, pays more.":"Pick the winner AND every set's exact score — the riskiest bet, the biggest multiplier."}</div>
+      <button class="btn" style="width:auto;margin-top:10px" onclick="submitBet(${mkt.id})">Place bet</button>
+    </div>`;
+  }
+  const mine = myBets.length ? `<div style="margin-top:10px">${myBets.map(betRowHTML).join('')}</div>` : '';
+  return `<div style="margin-top:12px">${tabs}${panel}${mine}</div>`;
+}
+
+function betStatusColor(status){
+  return status==="won" ? "var(--good,#3ba55d)" : status==="lost" ? "var(--danger)"
+    : status==="accepted" ? "var(--accent,#4a9eff)" : status==="pending" ? "var(--muted)" : "var(--muted)";
+}
+
+function betRowHTML(b){
+  const pick = b.bet_type==="winner" ? b.pick_winner
+    : b.bet_type==="margin" ? `${b.pick_winner} (${b.pick_margin})`
+    : `${b.pick_winner} (${b.pick_sets})`;
+  return `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:.92em;border-top:1px dashed var(--line)">
+    <span>${esc(b.bettor_name)} bet <b>${b.stake} FC</b> on ${esc(pick)}</span>
+    <span style="color:${betStatusColor(b.status)};font-weight:700;text-transform:uppercase;font-size:.85em">${b.status}${b.status==="pending"||b.status==="accepted"?` · pays ${b.potential_payout}`:''}</span>
+  </div>`;
+}
+
+function betAdminPendingHTML(){
+  if(!isAdmin) return '';
+  const pending = bets.filter(b=>b.status==="pending");
+  if(!pending.length) return '';
+  return `<section><div class="sec-label">Pending bets — review as the house</div><div class="panel">
+    ${pending.map(b=>{
+      const mkt = betMarkets.find(m=>m.id===b.market_id);
+      const pick = b.bet_type==="winner" ? b.pick_winner : b.bet_type==="margin" ? `${b.pick_winner} (${b.pick_margin})` : `${b.pick_winner} (${b.pick_sets})`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed var(--line)">
+        <div>
+          <div><b>${esc(b.bettor_name)}</b> — ${esc(mkt?mkt.p1+' vs '+mkt.p2:'')}</div>
+          <div class="pred-hint" style="margin:0">${esc(b.bet_type)}: ${esc(pick)} · staking ${b.stake} FC to win ${b.potential_payout} FC</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="mini yes" onclick="adminDecideBet(${b.id},true)">Accept</button>
+          <button class="mini no" onclick="adminDecideBet(${b.id},false)">Reject</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div></section>`;
+}
+
+function betAdminOpenMarketHTML(){
+  if(!isAdmin) return '';
+  const openable = scheduledMatches.filter(m=>m.status==="upcoming");
+  if(!openable.length) return '';
+  return `<section><div class="sec-label">Open betting on a scheduled match</div><div class="panel">
+    ${openable.map(m=>{
+      const mkt = betMarketFor(m.id);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed var(--line)">
+        <div>
+          <b>${esc(m.p1)} vs ${esc(m.p2)}</b>
+          <div class="pred-hint" style="margin:0">${esc(fmtScheduledDateTime(m.scheduled_at))}${mkt?` · market ${mkt.status} · ${mkt.odds_p1}× / ${mkt.odds_p2}×`:' · no market yet'}</div>
+        </div>
+        <button class="mini ${mkt?'no':'yes'}" onclick="adminOpenMarket(${m.id})">${mkt?'Re-price':'Open betting'}</button>
+      </div>`;
+    }).join('')}
+  </div></section>`;
+}
+
+function betMarketCardHTML(mkt){
+  const sched = scheduledMatches.find(m=>String(m.id)===String(mkt.scheduled_match_id));
+  const statusTag = mkt.status==="open" ? '<span style="color:var(--good,#3ba55d)">OPEN</span>'
+    : mkt.status==="locked" ? '<span style="color:var(--muted)">LOCKED</span>'
+    : mkt.status==="resolved" ? `<span style="color:var(--accent,#4a9eff)">SETTLED — ${esc(mkt.result_winner)} won ${esc(mkt.result_sets||'')}</span>`
+    : '<span style="color:var(--danger)">VOID — refunded</span>';
+  const marketBets = bets.filter(b=>String(b.market_id)===String(mkt.id));
+  const adminControls = isAdmin && (mkt.status==="open"||mkt.status==="locked") ? `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+      <button class="mini no" onclick="adminOpenMarket(${sched?sched.id:mkt.scheduled_match_id})">Re-price</button>
+      ${mkt.status==="open" ? `<button class="mini no" onclick="setBetMarketStatus(${mkt.id},'locked')">Lock</button>`
+        : `<button class="mini no" onclick="setBetMarketStatus(${mkt.id},'open')">Reopen</button>`}
+      <button class="mini no" onclick="adminResolveMarketPrompt(${mkt.id},'${esc(mkt.p1).replace(/'/g,"\\'")}','${esc(mkt.p2).replace(/'/g,"\\'")}')">Settle now</button>
+      <button class="mini no" style="color:var(--danger)" onclick="voidBetMarket(${mkt.id})">Void</button>
+    </div>` : '';
+  return `<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <b>${esc(mkt.p1)} vs ${esc(mkt.p2)}</b>${statusTag}
+    </div>
+    <div class="pred-hint" style="margin-top:2px">${sched?esc(fmtScheduledDateTime(sched.scheduled_at)):''}${sched&&sched.note?' · '+esc(sched.note):''}</div>
+    <div class="grid2" style="margin-top:10px">
+      <div>${esc(mkt.p1)}<br><b>×${Number(mkt.odds_p1).toFixed(2)}</b></div>
+      <div>${esc(mkt.p2)}<br><b>×${Number(mkt.odds_p2).toFixed(2)}</b></div>
+    </div>
+    ${mkt.status==="open" ? betComposerHTML(mkt) : ''}
+    ${mkt.status!=="open" && marketBets.length ? `<div style="margin-top:10px">${marketBets.map(betRowHTML).join('')}</div>` : ''}
+    ${adminControls}
+  </div>`;
+}
+
+function renderBets(){
+  const box = $("betsBody");
+  const tc = $("tabBetCount");
+  if(tc) tc.textContent = (isAdmin && bets.filter(b=>b.status==="pending").length) || "";
+  if(!box) return;
+  if(!bettingTables.wallets || !bettingTables.bet_markets || !bettingTables.bets){
+    box.innerHTML = betsNoTableHTML();
+    return;
+  }
+  const open = betMarkets.filter(m=>m.status==="open"||m.status==="locked")
+    .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const settled = betMarkets.filter(m=>m.status==="resolved"||m.status==="void")
+    .sort((a,b)=>new Date(b.resolved_at||b.created_at)-new Date(a.resolved_at||a.created_at));
+
+  box.innerHTML =
+      `<section>${betWalletHTML()}</section>`
+    + `<div class="pred-hint" style="margin:0 0 14px">The admin is the house: they set the odds and review every bet before `
+    + `it's live. Winner bets pay the market price straight; margin bets (winner + set margin) and exact-score bets (winner + `
+    + `every set score) pay more the riskier the pick.</div>`
+    + betAdminOpenMarketHTML()
+    + betAdminPendingHTML()
+    + `<section><div class="sec-label">Open markets</div>`
+    + (open.length ? open.map(betMarketCardHTML).join('') : '<div class="panel"><div class="pred-hint">No betting markets open right now.</div></div>')
+    + `</section>`
+    + (settled.length ? `<section><div class="sec-label">Settled</div>${settled.map(betMarketCardHTML).join('')}</section>` : '');
+}
+window.renderBets = renderBets;
 
 /* ===== set-score builder for the main "Report a game" form ===== */
 function pickOutcome(val){
@@ -36170,7 +36541,10 @@ function afterIdentityChange(){
   renderComposerIdentity();
   renderCommentIdentity();
   if(activeView==="dms") renderDMs();
+  if(activeView==="bets") renderBets();
   refreshAfterAdminChange();
+  const nm = myName();
+  if(nm) ensureWallet(nm);
 }
 
 function openLoginModal(){
@@ -36523,7 +36897,8 @@ if(configured && sb){
      (Handlers are also called with a payload argument, which `load` would
      have read as its options object.) */
   const liveTables = ["matches","comments","posts","reactions","challenges",
-                      "polls","poll_votes","feed_replies","dms","scheduled_matches"];
+                      "polls","poll_votes","feed_replies","dms","scheduled_matches",
+                      "wallets","bet_markets","bets"];
   const liveChan = sb.channel("matches-live");
   liveTables.forEach(table=>{
     liveChan.on("postgres_changes",{event:"*",schema:"public",table},()=>optRefreshSoon(600));
