@@ -10018,6 +10018,8 @@
   <div id="view-events" style="display:none">
     <div class="cup-mount" data-cup-mount="full"></div>
     <div class="live-mount"></div>
+    <div id="faMount"></div>
+    <div id="faDetail" style="display:none"></div>
     <section id="newTournSec" style="display:none">
       <div class="sec-label">New tournament</div>
       <div class="panel">
@@ -10418,6 +10420,11 @@ let currentUser = null, myProfileName = null, myProfileEmail = null;
 let matches = [];  // all matches from db
 let comments = []; // all comments from db
 let tournaments = []; // all tournaments from db
+/* admin-editable close of the Fall Exhibition window (see docs/fall-exhibition.sql);
+   this default holds until that table loads, and forever if it was never migrated */
+const FALL_END_DEFAULT = "2026-11-30";
+let fallEndDate = FALL_END_DEFAULT;
+let fallExhibitionTableMissing = false;
 let playerRatings = {}; // name -> attribute ratings
 let posts = [];         // standalone feed posts
 let reactions = [];     // emoji reactions on matches / posts / comments
@@ -11519,6 +11526,84 @@ function winProb(rA, rB){
   return 1 / (1 + Math.pow(10, (rB - rA) / DIVISOR));
 }
 /* ==== ELO-ENGINE-END ==== */
+
+/* ==== FALL-EXHIBITION-START ====
+   A parallel leaderboard, not a ladder reset. Main Elo keeps moving through
+   every fall game exactly as it always has — computeStandings() above is
+   never touched for this — this only measures, off the same match log, how
+   much of that movement happened from FALL_START on, against a baseline of
+   where each player stood the moment before.
+
+   The baseline is never stored. It falls out of the replay for free: the
+   first time a player is seen at or after FALL_START, whatever their rating
+   is at that instant — carried forward from their last pre-fall game, or
+   START if they have none — IS their Sept-13-eve rating, because nothing
+   moves a rating except a game, and there is no game between then and now.
+   So there is no snapshot to take, store, or let go stale; a correction to
+   an old match reflows into the baseline the same way it reflows into the
+   ladder, and the two never disagree with each other.
+
+   Deliberately a second, independent loop rather than a branch inside
+   _computeStandings() — the one function in this file "everybody argues
+   about" — reusing only the shared primitives (kTracker, countsForElo,
+   DIVISOR, START) it already reuses elsewhere (computeRatingTimeline,
+   computeReignStats, preGameRatings all repeat this same loop shape).
+
+   Matches past the admin-set end date are excluded outright — approved is
+   sorted chronologically, so the first one past it ends the replay — which
+   is what "finalize once the end date passes" means: nothing after it can
+   move the fall numbers again, even though it keeps moving the real ladder. */
+const FALL_START     = "2026-09-14";   // local midnight; first day the fall window counts
+const FALL_MIN_GAMES = 3;              // fall games needed before a player is ranked
+
+function computeFallExhibition(endDateStr){
+  const startMs = new Date(FALL_START + "T00:00:00").getTime();
+  const endMs   = new Date((endDateStr || FALL_START) + "T23:59:59.999").getTime();
+
+  const approved = matches
+    .filter(m => m.status === "approved" && countsForElo(m))
+    .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const P = {};
+  const ensure = n => P[n] || (P[n] = {name:n, rating:START, baseline:null, fallGames:0});
+  const KT = kTracker();
+
+  for (const m of approved){
+    const t = new Date(m.created_at).getTime();
+    if (t > endMs) break;   // chronological order — every match from here is also past it
+
+    const a = ensure(m.p1), b = ensure(m.p2);
+    if (t >= startMs){
+      if (a.baseline === null) a.baseline = a.rating;
+      if (b.baseline === null) b.baseline = b.rating;
+    }
+
+    const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
+    const Sa = Number(m.outcome);
+    const {kA, kB} = KT.pair(m, a.rating, b.rating);
+    a.rating += kA * (Sa - Ea);
+    b.rating += kB * ((1 - Sa) - (1 - Ea));
+
+    if (t >= startMs){ a.fallGames++; b.fallGames++; }
+  }
+
+  /* nobody seen at or after FALL_START has a baseline at all — there is
+     nothing to rank them on, so, unlike the main ladder, they don't appear */
+  const rows = Object.values(P)
+    .filter(p => p.baseline !== null)
+    .map(p => ({
+      name: p.name, baseline: p.baseline, rating: p.rating,
+      gain: p.rating - p.baseline, fallGames: p.fallGames,
+      eligible: p.fallGames >= FALL_MIN_GAMES
+    }));
+
+  return {
+    eligible: rows.filter(r => r.eligible).sort((a,b) => b.gain - a.gain),
+    pending:  rows.filter(r => !r.eligible).sort((a,b) => b.fallGames - a.fallGames || b.gain - a.gain),
+    startMs, endMs
+  };
+}
+/* ==== FALL-EXHIBITION-END ==== */
 
 /* ============================================================
    ATTRIBUTE-AWARE PREDICTION LAYER
@@ -22684,7 +22769,10 @@ const LOAD_TABLES = [
      rather than showing an empty bag. kitTables is what tells those two
      cases apart, so it is set from the same result. */
   ["rackets",           d=>{ rackets = d; }],
-  ["string_jobs",       d=>{ stringJobs = d; }]
+  ["string_jobs",       d=>{ stringJobs = d; }],
+  /* optional: a deployment that hasn't run docs/fall-exhibition.sql yet just
+     keeps FALL_END_DEFAULT, same graceful-miss handling as the Kit's tables */
+  ["fall_exhibition",   d=>{ if(d && d[0] && d[0].end_date) fallEndDate = d[0].end_date; }]
 ];
 
 let _loadInFlight = null;
@@ -22721,9 +22809,11 @@ async function load(opts){
            signed-out visitor: keep whatever is already in memory */
         console.warn("[load] " + table + " unavailable", res.error.message || res.error);
         if(table in kitTables) kitTables[table] = false;
+        if(table === "fall_exhibition") fallExhibitionTableMissing = true;
         return;
       }
       if(table in kitTables) kitTables[table] = true;
+      if(table === "fall_exhibition") fallExhibitionTableMissing = false;
       assign(res.data || []);
       touched.push(table);
     });
@@ -27101,6 +27191,7 @@ window.openCupEvent = openCupEvent;
 
 function renderTournaments(){
   renderCupMarquee();
+  renderFallExhibition();
   $("newTournSec").style.display = isAdmin ? "block" : "none";
   const list = $("tournList");
   $("tournCount").textContent = tournaments.length;
@@ -27273,6 +27364,154 @@ async function addTournGame(tid){
   });
 }
 window.addTournGame = addTournGame;
+
+/* ============================================================
+   FALL EXHIBITION — Events tab promo card + leaderboard.
+
+   Not a bracket, so it isn't a `tournaments` row: it's a straight
+   ranking layered over computeFallExhibition(). This block is pure
+   presentation — every number it shows comes from that one function
+   plus `fallEndDate`, both defined up in the Elo engine section.
+   ============================================================ */
+let faOpen = false;   // whether the detail panel below the promo card is expanded
+
+function faMidnight(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+function faDaysLeft(endMs){
+  return Math.max(0, Math.round((faMidnight(new Date(endMs)) - faMidnight(new Date())) / 86400000));
+}
+function faDateLabel(dateStr){
+  return new Date(dateStr+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+}
+
+/* upcoming: before FALL_START. live: counting games. final: past the admin end date —
+   frozen, because computeFallExhibition() itself already excludes anything after it */
+function faBadge(){
+  const now = Date.now();
+  const startMs = new Date(FALL_START+"T00:00:00").getTime();
+  const endMs = new Date(fallEndDate+"T23:59:59.999").getTime();
+  if(now < startMs) return {phase:"upcoming", text:"starts "+faDateLabel(FALL_START)};
+  if(now > endMs) return {phase:"final", text:"final standings"};
+  const d = faDaysLeft(endMs);
+  return {phase:"live", text: d===0 ? "last day" : d===1 ? "1 day left" : d+" days left"};
+}
+
+function renderFallExhibition(){
+  const mount = $("faMount");
+  if(!mount) return;
+  const badge = faBadge();
+  const exo = badge.phase === "upcoming" ? null : computeFallExhibition(fallEndDate);
+  const leader = exo && exo.eligible.length ? exo.eligible[0] : null;
+
+  mount.innerHTML = `
+    <section>
+      <div class="sec-label">Events</div>
+      <div class="pend clickable promo" onclick="toggleFallExhibitionDetail()"><div>
+        <div class="pend-info"><b>Fall Exhibition</b>
+          <span class="tag p">${esc(badge.text)}</span>
+        </div>
+        <div class="pend-meta">Net Elo gained since Sept 13 — real ladder games, tracked separately.${leader?` · ${esc(leader.name)} +${Math.round(leader.gain)}`:''}</div>
+      </div></div>
+    </section>`;
+
+  const detail = $("faDetail");
+  if(!faOpen){ if(detail) detail.style.display = "none"; return; }
+  renderFallExhibitionDetail(badge, exo);
+}
+window.renderFallExhibition = renderFallExhibition;
+
+function toggleFallExhibitionDetail(){
+  faOpen = !faOpen;
+  renderFallExhibition();
+  if(faOpen) setTimeout(()=>{ const d=$("faDetail"); if(d) d.scrollIntoView({behavior:"smooth", block:"start"}); }, 50);
+}
+window.toggleFallExhibitionDetail = toggleFallExhibitionDetail;
+
+function renderFallExhibitionDetail(badge, exo){
+  const box = $("faDetail");
+  if(!box) return;
+  box.style.display = "block";
+
+  if(badge.phase === "upcoming"){
+    box.innerHTML = `
+      <div class="sec-label" style="margin-top:26px">Fall Exhibition <span class="tag p">upcoming</span></div>
+      <div class="panel promo-panel">
+        <div class="pred-hint">From ${faDateLabel(FALL_START)}, every ladder game also counts toward this: whoever gains the most Elo off their Sept 13 rating by ${faDateLabel(fallEndDate)} is the Fall Player. Needs at least ${FALL_MIN_GAMES} fall games to qualify. The main ladder — same Elo, same match log — is completely unaffected.</div>
+        <div class="promo-countdown">Starts ${faDateLabel(FALL_START)}</div>
+      </div>
+      ${isAdmin ? faAdminControls() : ''}`;
+    return;
+  }
+
+  const rows = exo || {eligible:[], pending:[]};
+  const eligibleRows = rows.eligible.length ? `
+    <table class="sim-table">
+      <tr><th>#</th><th>Player</th><th>Baseline → Now</th><th>Gain</th></tr>
+      ${rows.eligible.map((r,i)=>`<tr>
+        <td class="pw-dim">${i+1}</td>
+        <td class="st-name">${esc(r.name)}</td>
+        <td class="st-t3">${Math.round(r.baseline)} → ${Math.round(r.rating)}</td>
+        <td class="st-t3">${r.gain>=0?'+':''}${Math.round(r.gain)}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="c-empty">No player has reached the 3-game minimum yet.</div>';
+
+  const pendingRows = rows.pending.length ? `
+    <div class="sec-label" style="margin-top:16px">Not yet eligible</div>
+    <table class="sim-table">
+      <tr><th>Player</th><th>Fall games</th><th>Gain so far</th></tr>
+      ${rows.pending.map(r=>`<tr>
+        <td class="st-name">${esc(r.name)}</td>
+        <td class="st-t3">${r.fallGames}/${FALL_MIN_GAMES} games</td>
+        <td class="st-t3">${r.gain>=0?'+':''}${Math.round(r.gain)}</td>
+      </tr>`).join('')}
+    </table>` : '';
+
+  const champion = badge.phase !== "final" ? '' : rows.eligible.length
+    ? `<div class="panel" style="margin-bottom:14px"><div class="pred-hint">🏆 <b>${esc(rows.eligible[0].name)}</b> is the Fall Player — +${Math.round(rows.eligible[0].gain)} Elo since Sept 13.</div></div>`
+    : `<div class="panel" style="margin-bottom:14px"><div class="pred-hint">Nobody reached the ${FALL_MIN_GAMES}-game minimum — no Fall Player crowned.</div></div>`;
+
+  box.innerHTML = `
+    <div class="sec-label" style="margin-top:26px">Fall Exhibition <span class="${badge.phase==='final'?'c-badge':'tag p'}">${esc(badge.text)}</span></div>
+    ${champion}
+    <div class="panel">
+      <div class="pred-hint">Net Elo gained since Sept 13, from real ladder games only — the same games, the same Elo math, just ranked by movement instead of by rating.</div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="sec-label" style="margin-top:0">Standings</div>
+      ${eligibleRows}
+      ${pendingRows}
+    </div>
+    ${isAdmin ? faAdminControls() : ''}`;
+}
+
+function faAdminControls(){
+  return `
+    <div class="edit-sec">
+      <div class="sec-label">Admin: Fall Exhibition end date</div>
+      ${fallExhibitionTableMissing ? `<div class="sp-warn"><b>fall_exhibition table not found.</b> Edits here won't be saved for other visitors until you run <code>docs/fall-exhibition.sql</code> in the Supabase SQL editor.</div>` : ''}
+      <div class="grid2">
+        <div><label>Ends</label><input id="faEndInput" type="date" min="${FALL_START}" value="${esc(fallEndDate)}"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn ghost" style="margin:0" onclick="saveFallEndDate()">Save</button></div>
+      </div>
+    </div>`;
+}
+
+async function saveFallEndDate(){
+  if(!isAdmin) return;
+  const input = $("faEndInput");
+  const v = input && input.value;
+  if(!v) return toast("Pick a date", true);
+  if(new Date(v+"T00:00:00") < new Date(FALL_START+"T00:00:00")) return toast("End date can't be before Sept 14", true);
+  const {error} = await sb.from("fall_exhibition").upsert({id:1, end_date:v, updated_at:new Date().toISOString()});
+  if(error){
+    fallExhibitionTableMissing = /relation .* does not exist|not found/i.test(error.message||"");
+    return toast(fallExhibitionTableMissing ? "fall_exhibition table missing — run docs/fall-exhibition.sql" : "Couldn't save: "+(error.message||error), true);
+  }
+  fallExhibitionTableMissing = false;
+  fallEndDate = v;
+  toast("Fall Exhibition end date updated ✓");
+  renderFallExhibition();
+}
+window.saveFallEndDate = saveFallEndDate;
 
 async function crownChampion(tid){
   if(!isAdmin) return;
