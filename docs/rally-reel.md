@@ -169,3 +169,8 @@ the serve inside the gap — is a slider that takes ten seconds to set.
 **Render anything in the browser.** Watching costs nothing because nothing is
 produced; cutting produces a file, and that happens on a machine with the
 file already on it.
+
+---
+
+Want a scoreboard burnt into the footage instead of a cut of it? Same
+underlying data, different tool — see [scoreboard replay](scoreboard-replay.md).

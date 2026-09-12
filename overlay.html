@@ -37,6 +37,10 @@
     scale  1 (default) — multiplies every dimension, for non-1080p canvases
     idle   1 (default) shows a small "waiting" chip until the app connects;
            idle=0 stays fully transparent until there is a score to show
+    bg     transparent (default, for an OBS Browser Source) — or a solid
+           color (a name or hex, e.g. bg=green or bg=00ff00) for recording
+           this page with an ordinary screen recorder, no OBS involved, then
+           keying that color out in an editor. See docs/scoreboard-replay.md.
 -->
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -137,6 +141,18 @@ const CODE = (Q.get("code") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 32).toU
 const POS = ["bl", "br", "tl", "tr"].includes(Q.get("pos")) ? Q.get("pos") : "bl";
 const SCALE = Math.max(0.25, Math.min(4, Number(Q.get("scale")) || 1));
 const SHOW_IDLE = Q.get("idle") !== "0";
+/* Plain screen recorders (unlike OBS's Browser Source) capture whatever is
+   actually on screen, and "transparent" on screen is just the desktop behind
+   the window — not a usable alpha channel. So bg=<color> paints a real,
+   keyable background instead; left off, this page behaves exactly as it
+   always has. Any valid CSS color works; a bare word with no # is tried as a
+   named color first ("green") and as a hex triplet second ("0f0"). */
+const BG = (Q.get("bg") || "").trim();
+if (BG && BG.toLowerCase() !== "transparent") {
+  const color = /^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(BG) ? "#" + BG : BG;
+  document.documentElement.style.background = color;
+  document.body.style.background = color;
+}
 
 document.documentElement.style.setProperty("--u", SCALE + "px");
 const bug = document.getElementById("bug");

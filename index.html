@@ -12509,6 +12509,13 @@ window.ptRenderTargetMounts = ptRenderTargetMounts;
 
 async function ptSubmit(){
   if(!PT || (!PT.winner && !PT.draw)) return;
+  /* A scoreboard replay (see ptReplayScoreboard) reuses this same tracker to
+     regenerate a burnt-in scoreboard for a match that was very likely already
+     scored and filed once, live. Submitting it again would file the same
+     match twice under a fresh id — worth a confirm, not a silent block, since
+     replaying an UNfiled match (one hand-typed in afterwards, then replayed
+     for a highlight cut) is a legitimate reason to still want this to go in. */
+  if(PT.__replayOf && !confirm("This tracker is playing back an existing match to build a scoreboard recording. Submit it as a NEW match anyway? (Say no if it was already filed.)")) return;
   const outcome = PT.winner==='a'?1:(PT.winner==='b'?0:0.5);
   const umpireRating = ($("ptUmpireRating")?.value||"");
   const row={p1:PT.a,p2:PT.b,outcome,status:"pending",sets:ptSetsString()||null,games:JSON.stringify(ptGamesPayload())};
@@ -12962,6 +12969,71 @@ function closeReel(){
   const b=$("reelBox"); if(b) b.innerHTML='';
 }
 window.closeReel=closeReel;
+
+/* ============================================================
+   SCOREBOARD REPLAY — a burnt-in scoreboard for people with no OBS and no
+   laptop, just phones and DaVinci Resolve.
+
+   The ref already scores every match tap-by-tap into `matches.rallies` (see
+   the RALLY REEL section above) — a point winner, a timestamp, and the
+   server/end that point was played under. That is everything ptPoint() needs
+   to reconstruct the match, so this doesn't re-derive the score from the `b`
+   strings or reimplement any scoring rule: it clears the live tracker, feeds
+   the SAME points back through the SAME ptPoint() the ref's own taps went
+   through, spaced at the real gaps between them, with pt_sync broadcasting
+   exactly as it would for a live match. overlay.html is not touched at all —
+   whoever wants the file points a screen recorder (or OBS, recording rather
+   than streaming) at the ordinary overlay URL and gets a video the length of
+   the match, to slide onto the real footage in an editor and nudge until it
+   lines up. No live compositing, no latency slider, nothing to keep in sync
+   in the moment — the price is that it runs in real time, exactly as long as
+   the match took the first time.
+
+   PT.server/PT.endA for the very first point are read back off the first
+   rally's own `sv`/`en` (who served it and from which end), rather than
+   guessed at "a" — every point after that falls out of the ordinary
+   alternation ptCloseGame already does, so the serving dot matches the
+   footage rather than just the score. */
+function ptReplayScoreboard(matchId){
+  const m = matches.find(x=>x.id===matchId); if(!m) return;
+  const data = rrParse(m);
+  if(!data) return toast("No point timings were recorded for this match", true);
+  /* pt_sync only ever goes out for a HOST session (see ptSyncBroadcastIfLive)
+     — a viewer session left open would silently eat every replayed point with
+     nothing broadcast at all, which is a much worse failure than asking first.
+     Checked before anything below is touched, so declining leaves whatever
+     was being tracked here untouched. */
+  if(PTStream && PTStream.role!=='host') return toast("You're set up to watch a stream — leave it first, then try Scoreboard replay again", true);
+  if(PT && !PT.winner && !PT.draw){
+    if(!confirm(`This clears the match currently being tracked here and replays ${data.a} vs ${data.b} instead, to build a scoreboard recording. Continue?`)) return;
+  }
+  ptHistory=[]; ptFuture=[];
+  PT=ptDefaultState(data.a, data.b);
+  PT.__replayOf=matchId;      // ptSubmit() below warns rather than re-filing this
+  const p0=data.points[0];
+  if(p0 && p0.sv){
+    PT.server=p0.sv;
+    if(p0.en) PT.endA = p0.sv==='a' ? p0.en : (p0.en==='near'?'far':'near');
+  }
+  const myPT=PT;
+  if(!PTStream) ptStartBroadcast();
+  ptPersist();
+  const setup=$("ptSetup"), live=$("ptLive");
+  if(setup) setup.style.display="none";
+  if(live) live.style.display="";
+  renderTracker();
+  const url = PTStream ? ptOverlayUrl(PTStream.code) : null;
+  toast(url
+    ? `Replay running (${data.points.length} points, ~${Math.round(data.points[data.points.length-1].t/1000)}s) — record ${url} now`
+    : "Replay running, but no broadcast session is open — check Supabase connectivity", !url);
+  data.points.forEach(pt=>{
+    setTimeout(()=>{
+      if(PT!==myPT) return;   // a new match or another replay has taken over since
+      window.ptPoint(pt.w, pt.ace===1);
+    }, pt.t);
+  });
+}
+window.ptReplayScoreboard=ptReplayScoreboard;
 
 function rrCompute(){
   const R=REEL; if(!R) return;
@@ -21403,6 +21475,8 @@ function openMatch(id){
       return `<div class="rr-cta">
         <button class="btn ghost rr-cta-btn" onclick="openReel(${m.id})">🎬 Rally reel
           <i>${d.points.length} points, timed${rrCanPlay(d)?' · on video':''}</i></button>
+        <button class="btn ghost rr-cta-btn" onclick="ptReplayScoreboard(${m.id})">🖥️ Scoreboard replay
+          <i>for OBS or a screen recording — see docs/scoreboard-replay.md</i></button>
       </div>`;
     })()}
     <div id="reelBox"></div>

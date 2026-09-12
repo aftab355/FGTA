@@ -94,6 +94,12 @@ made once:
 The rest of this doc is written for the phone path first, since that's what
 most people are actually holding at a court, with OBS's equivalents alongside.
 
+**Don't want to stream at all** — no YouTube, just a phone recording and
+another one reffing? [Scoreboard replay](scoreboard-replay.md) gets you a
+burnt-in scoreboard without any of the above: film natively, ref natively,
+and generate the scoreboard as its own clip afterwards to line up in an
+editor.
+
 ### At the court, this is the whole routine
 
 Assuming the one-time setup below is done:
