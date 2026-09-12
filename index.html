@@ -491,7 +491,7 @@
     backdrop-filter:blur(18px) saturate(1.4);
     -webkit-backdrop-filter:blur(18px) saturate(1.4);
     border-top:1px solid var(--chrome-line);
-    grid-template-columns:repeat(6,1fr);
+    grid-template-columns:repeat(7,1fr);
     transition:transform .25s cubic-bezier(.4,0,.2,1);
   }
   .bb-tab{
@@ -3905,6 +3905,10 @@
     box-shadow:0 0 0 0 var(--danger);animation:bcastpulse 1.8s infinite}
   @keyframes bcastpulse{0%{box-shadow:0 0 0 0 rgba(255,100,89,.55)}70%{box-shadow:0 0 0 8px rgba(255,100,89,0)}100%{box-shadow:0 0 0 0 rgba(255,100,89,0)}}
   .bcast-title{font-size:12px;font-weight:600;letter-spacing:2px;color:var(--muted)}
+  /* compact betting-odds pill on a scheduled-match card — see docs/betting.sql */
+  .sched-odds-tag{display:block;font-size:11px;font-weight:600;letter-spacing:.2px;
+    color:var(--on-chrome-dim,var(--muted));padding:7px 20px;background:var(--panel-2);
+    border-bottom:1px solid var(--line-soft);font-family:var(--font-mono)}
   .bcast-meta{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
   /* the live pill used to be a two-colour neon sign: a red-to-black gradient
@@ -9043,6 +9047,8 @@
     <span class="bb-ico">◎</span><span class="bb-lbl">Predict</span></button>
   <button class="bb-tab" data-view="analytics" onclick="showView('analytics')">
     <span class="bb-ico">📊</span><span class="bb-lbl">Stats</span></button>
+  <button class="bb-tab" data-view="bets" onclick="showView('bets')">
+    <span class="bb-ico">🎲</span><span class="bb-lbl">Bets</span></button>
   <button class="bb-tab bb-more" onclick="toggleMoreSheet()">
     <span class="bb-ico">⋯</span><span class="bb-lbl">More</span><span class="cup-flag" aria-hidden="true"></span></button>
 </nav>
@@ -9060,7 +9066,6 @@
       <button onclick="showView('kit');toggleMoreSheet()"><span>🎽</span>The Kit</button>
       <button onclick="showView('court');toggleMoreSheet()"><span>📍</span>Court</button>
       <button onclick="showView('events');toggleMoreSheet()"><span>🏆</span>Events</button>
-      <button onclick="showView('bets');toggleMoreSheet()"><span>🎲</span>Bets</button>
       <button onclick="showView('dms');toggleMoreSheet()"><span>✉</span>Messages</button>
       <button onclick="openSearch();toggleMoreSheet()"><span>⌕</span>Search</button>
       <button onclick="cycleSurface()"><span>◉</span>Surface</button>
@@ -21393,7 +21398,7 @@ function _showViewCore(v){
   });
   // events/dms live in the "more" sheet — highlight the More button for them
   const more=document.querySelector(".bb-more");
-  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court"||v==="kit"||v==="bets");
+  if(more) more.classList.toggle("on", v==="events"||v==="dms"||v==="court"||v==="kit");
   /* the marquee mounts sit inside the views, so a view that has just been
      shown needs it filled in — this is what keeps the cup on every screen */
   renderCupMarquee();
@@ -23408,6 +23413,7 @@ function renderUpcomingBroadcast(){
         <span class="bcast-live upcoming"><span class="bcast-dot upcoming"></span>UPCOMING FACE-OFF</span>
         <span class="bcast-meta">${esc(fmtScheduledDate(head.scheduled_at))} · <span id="upBcastCount" class="bcast-count">…</span></span>
       </div>
+      ${scheduledOddsTagHTML(head.id)}
       <div class="face-hero">
         <div class="face-bg"><div class="face-bg-a" style="background:${colorA}"></div><div class="face-bg-b" style="background:${colorB}"></div></div>
         <div class="face-fighter">
@@ -23443,7 +23449,7 @@ function renderUpcomingBroadcast(){
       </div>
       ${upcoming.length>1?`<div class="bcast-queue">
         ${restCap.map(m=>`<div class="bcast-queue-row" onclick="event.stopPropagation();openScheduledMatch(${m.id})">
-          <span>${esc(m.p1)} vs ${esc(m.p2)}</span><span>${esc(fmtScheduledDate(m.scheduled_at))}</span>
+          <span>${esc(m.p1)} vs ${esc(m.p2)}</span><span>${esc(fmtScheduledDate(m.scheduled_at))}${betMarketFor(m.id)?' · 🎲':''}</span>
         </div>`).join('')}
         ${overflow>0?`<div class="bcast-queue-row" style="opacity:.65;cursor:default">+${overflow} more upcoming</div>`:''}
       </div>`:''}
@@ -23474,6 +23480,7 @@ function openScheduledMatch(id){
     <div class="modal-date">${esc(fmtScheduledDateTime(m.scheduled_at))} ${statusTag}</div>
     ${m.status==="upcoming"?`<div class="sched-count-big" id="schedModalCount">…</div>`:''}
     ${m.note?`<div class="modal-notes">📝 ${esc(m.note)}</div>`:''}
+    ${scheduledOddsBlockHTML(m)}
     ${isAdmin && m.status==="upcoming"?`<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn ghost" style="margin:0;width:auto;flex:1;padding:9px" onclick="completeScheduledMatch(${m.id})">Mark completed</button>
       <button class="btn ghost" style="margin:0;width:auto;flex:1;padding:9px;color:var(--danger);border-color:var(--danger)" onclick="cancelScheduledMatch(${m.id})">Cancel</button>
@@ -23598,6 +23605,36 @@ async function ensureWallet(name){
 
 function betMarketFor(scheduledMatchId){
   return betMarkets.find(x=>String(x.scheduled_match_id)===String(scheduledMatchId)) || null;
+}
+
+/* compact odds badge for a scheduled-match card — the broadcast hero, its
+   queue rows, and the full hype modal all show the same tag so the price is
+   visible without opening the Bets tab. Empty string if there's no market. */
+function scheduledOddsTagHTML(scheduledMatchId){
+  const mkt = betMarketFor(scheduledMatchId);
+  if(!mkt) return '';
+  const label = mkt.status==="open" ? '' : mkt.status==="locked" ? ' · locked'
+    : mkt.status==="resolved" ? ' · settled' : ' · void';
+  return `<span class="sched-odds-tag" title="Betting odds">🎲 ${esc(mkt.p1)} ×${Number(mkt.odds_p1).toFixed(2)} · ${esc(mkt.p2)} ×${Number(mkt.odds_p2).toFixed(2)}${label}</span>`;
+}
+
+/* fuller odds block for the scheduled-match modal, with a way straight into
+   the Bets tab to actually place one */
+function scheduledOddsBlockHTML(sched){
+  const mkt = betMarketFor(sched.id);
+  if(!mkt){
+    if(!isAdmin || sched.status!=="upcoming") return '';
+    return `<div class="modal-notes" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>No betting market yet</span>
+      <button class="mini yes" onclick="adminOpenMarket(${sched.id})">Open betting</button>
+    </div>`;
+  }
+  const statusWord = mkt.status==="open" ? 'Open' : mkt.status==="locked" ? 'Locked'
+    : mkt.status==="resolved" ? `Settled — ${esc(mkt.result_winner)} won ${esc(mkt.result_sets||'')}` : 'Void — refunded';
+  return `<div class="modal-notes" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>🎲 ${esc(mkt.p1)} ×${Number(mkt.odds_p1).toFixed(2)} · ${esc(mkt.p2)} ×${Number(mkt.odds_p2).toFixed(2)} <span class="pred-hint" style="display:inline">(${statusWord})</span></span>
+    <button class="mini no" onclick="closeMatch();showView('bets')">${mkt.status==="open"?"Place a bet":"View in Bets"}</button>
+  </div>`;
 }
 
 /* the price a given pick actually pays right now, before any stake is
