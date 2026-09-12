@@ -103,6 +103,29 @@ function loadElo(opts){
   return api;
 }
 
+/* The Fall Exhibition replay: same engine as the ladder (ELO-ENGINE comes in
+   with it, same as loadElo), plus the one thing that's genuinely new here —
+   where the baseline falls out of the replay and where the eligibility floor
+   cuts in. FALL_START and FALL_MIN_GAMES are real constants in the region
+   (not injected) so a test that widens either one fails loudly, the same
+   protection loadElo gives MOV_START/DYNK_START. */
+function loadFallExhibition(opts){
+  const o = opts || {};
+  const code = region('ELO-ENGINE') + '\n' + region('FALL-EXHIBITION');
+  const names = ['FALL_START','FALL_MIN_GAMES','computeFallExhibition'];
+  const pre = [
+    'const K = ' + (o.K == null ? 32 : o.K) + ';',
+    'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
+    'const START = ' + (o.start == null ? 500 : o.start) + ';',
+    'let matches = arguments[0].matches;',
+    'const countsForElo = arguments[0].countsForElo || (() => true);'
+  ].join('\n');
+  return new Function(pre + '\n' + code +
+    '\nreturn {' + names.join(',') +
+    ',setMatches:(m)=>{matches=m;}, K, START, get DIVISOR(){return DIVISOR;}};')(
+      {matches: o.matches || [], countsForElo: o.countsForElo});
+}
+
 /* The outbox. The classifier is the interesting part — everything else in
    the queue hangs off whether a failure is read as "refused" or "never
    arrived" — and it is pure, so the test hands it errors rather than a
@@ -233,4 +256,4 @@ function loadEloScope(tournaments){
                       '\nreturn {' + names.join(',') + '};')(tournaments || []);
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadOutbox,loadModels,APP};
+module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadFallExhibition,loadOutbox,loadModels,APP};
