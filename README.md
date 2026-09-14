@@ -176,6 +176,16 @@ Between "here is the table" and "here is the draw" sat the only question anyone 
 
 **Hybrid events get the same panel, computed exactly.** A hybrid is four games and the shape is known from the start — top 3 off the ladder, a 4v5 play-in, semis, final — so there is nothing to sample: `hybridForecast()` walks every path through the bracket and weights it, which makes the numbers the exact ones the model implies rather than an approximation of them. Round-robin and straight knockout have no fixture list to play out, so they get no forecast.
 
+#### Titles — winning an event follows the player home
+
+Crowning a champion writes one field, `tournaments.champion`, and that is the only place a title is ever recorded. The winner's profile reads it back: `titleBadges()` scans the tournament rows for completed events this player won and puts a gold cup at the front of their **trophy case**, ahead of every badge, named after the event it was won at — *FF Cup champion*, not a generic *Champion* that says nothing about which cup. Underneath it carries the month of the **final** (the last game played in that event, not the day the event row was created, which can be weeks earlier) and the size of the field.
+
+Nobody's name appears in the code. A new event needs none: crown someone and the trophy appears; un-crown them and it goes. Rename the event and the trophy renames itself. Two titles are two cups, newest first, keyed by event id so they can never collide.
+
+**It does not depend on the ladder.** `computeBadges()` bails early for a player with no ladder standing — which is every player whose only games were exhibition games — so the titles are resolved *before* those guards. The FF Cup moves no Elo, and a title someone actually won must not quietly require an Elo rating to show up. The cup also rides along in `badgeStrip()`, so it shows next to the champion's name on the feed roster and the player-of-the-week card, not only on the profile.
+
+The one thing this needs from a human: **the event has to be marked completed with a champion**. Until an admin crowns one, a finished event is still `live` to the app — no trophy, and it keeps leading the ref's "Submit toward" picker.
+
 #### What an event counts for
 One flag used to answer two different questions. `counts_elo` decided what a game was worth on the ladder, and because every stat and every model read the same filter, it also quietly decided whether the game had *happened*. So the FF Cup — three weeks of the year's best-attended tennis — produced no form, no streaks, no head-to-head, no rivalries, nothing in the records and no data for a single one of the predictive models.
 
@@ -560,6 +570,7 @@ No dependencies, no build, no runner: each file is `node test/<name>.test.js` an
 - `recap.test.js` — the weekly recap's fact sheet. The only part of the Edge Function worth testing and the only part that can be: everything the model is *allowed to say* is computed here, in code, before the model is involved. The pointed assertion is that no raw match field reaches the fact sheet — the model never sees a result, so it cannot invent one.
 - `outbox.test.js` — the offline queue, and mostly its classifier: the real failure messages from Postgres, PostgREST and four browsers, sorted into "the server said no" and "it never got there".
 - `palette.test.js` — the fuzzy matcher and ranker, held to the ordering promises in the section above.
+- `title-badges.test.js` — the trophy-case titles. The point being protected is that a title is *derived* and never declared: no champion's name is written into the app, a live event crowns nobody however its `champion` field reads, and un-crowning takes the cup back. Plus the one that is easy to regress — the cup surviving an exhibition, where the champion may have no ladder standing to hang a badge on.
 - `robin-plus.test.js`, `park-busy.test.js`, `score*.test.js`, `serve*.test.js`, `floor.test.js`, `studio*.test.js` — the draw solver, the busyness model, the score reconstruction, and the Admin Studio.
 - The video tests (`ball`, `bigfile`, `dynamics`, `onsets`, `preview`, `render`, `scoreboard`, `serve-vision`) need fixtures first — run the `test/make-*.js` scripts — and some need a Playwright chromium. They say so and exit 2 rather than failing.
 

@@ -256,4 +256,23 @@ function loadEloScope(tournaments){
                       '\nreturn {' + names.join(',') + '};')(tournaments || []);
 }
 
-module.exports={region,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadFallExhibition,loadOutbox,loadModels,APP};
+/* The trophy-case titles. Everything it reaches for outside the region —
+   the tournament rows and the two per-event readers — comes in from the
+   caller, so the test hands it rows rather than a database. */
+function loadTitleBadges(o){
+  const opts = o || {};
+  const code = region('TITLE-BADGES');
+  return new Function(
+    'const tournaments = arguments[0].tournaments;\n' +
+    'const tournGames = arguments[0].tournGames;\n' +
+    'const tournStandings = arguments[0].tournStandings;\n' + code +
+    '\nreturn {titleBadges};')({
+      /* passed through exactly as given, not defaulted: the region's own
+         Array.isArray guard is the thing under test when rows are null */
+      tournaments: 'tournaments' in opts ? opts.tournaments : [],
+      tournGames: opts.tournGames || (() => []),
+      tournStandings: opts.tournStandings || (() => [])
+    });
+}
+
+module.exports={region,loadTitleBadges,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadFallExhibition,loadOutbox,loadModels,APP};

@@ -1629,6 +1629,18 @@
   .tr-icon{font-size:28px;line-height:1}
   .tr-name{font-weight:700;font-size:13px;margin-top:7px;color:var(--gold)}
   .tr-desc{font-family:var(--font-mono);font-size:9.5px;color:var(--dim);margin-top:4px;line-height:1.4}
+  /* A title is not a badge. The badges are things you pick up along the way;
+     this is the thing itself, so it gets the gold rim, a gold wash and a
+     bigger cup, and computeBadges() puts it at the front of the case. */
+  .trophy.tr-title{
+    border-color:color-mix(in srgb, var(--gold) 55%, var(--line));
+    background:linear-gradient(180deg,
+      color-mix(in srgb, var(--gold) 13%, var(--panel-2)),
+      var(--panel-2) 70%);
+  }
+  .trophy.tr-title:hover{border-color:var(--gold)}
+  .trophy.tr-title .tr-icon{font-size:34px}
+  .trophy.tr-title .tr-desc{color:var(--muted)}
   .prof-status{font-style:italic;color:var(--muted);font-size:14px;margin-top:5px}
   .fcard-poll,.fcard-challenge{cursor:default}
 
@@ -21943,7 +21955,7 @@ function renderProfile(p){
     <div class="panel">${(()=>{
       const bs=computeBadges(p.name);
       if(!bs.length) return '<div class="c-empty">No badges yet — they unlock as you play.</div>';
-      return `<div class="trophy-case">${bs.map(b=>`<div class="trophy">
+      return `<div class="trophy-case">${bs.map(b=>`<div class="trophy${b.cls?' '+b.cls:''}">
         <div class="tr-icon">${b.icon}</div>
         <div class="tr-name">${esc(b.name)}</div>
         <div class="tr-desc">${esc(b.desc)}</div></div>`).join('')}</div>`;
@@ -33001,11 +33013,48 @@ const BADGE_DEFS = [
   {k:"comeback",icon:"↩️", name:"Comeback Kid",  desc:"Won after losing the first set"},
 ];
 
+/* ==== TITLE-BADGES-START ==== */
+
+/* Every event this player has won, newest first.
+
+   These are deliberately NOT in BADGE_DEFS: there is one per title rather
+   than one per player, and each has to name its own event — "FF Cup
+   champion", not a generic "Champion" that says nothing about which cup.
+   Built straight off the tournament rows, so a new event needs no code:
+   crown a champion and the trophy appears on their profile. */
+function titleBadges(name){
+  const who = (name||"").toLowerCase();
+  const all = Array.isArray(tournaments) ? tournaments : [];
+  return all
+    .filter(t => t && t.status === "completed" && (t.champion||"").toLowerCase() === who)
+    /* the final is the date a title was won; created_at is when the event
+       was made, which can be weeks earlier */
+    .map(t => {
+      const games = tournGames(t.id);
+      const won = (games.length ? games[games.length-1].created_at : t.created_at) || null;
+      return {t, when: won ? new Date(won).getTime() : 0, field: tournStandings(t.id).length};
+    })
+    .sort((a,b) => b.when - a.when)
+    .map(({t, when, field}) => ({
+      k:    "champ:" + t.id,
+      icon: "🏆",
+      cls:  "tr-title",
+      name: t.name + " champion",
+      desc: [when ? new Date(when).toLocaleDateString(undefined,{month:"short",year:"numeric"}) : "",
+             field > 1 ? field + "-player field" : ""].filter(Boolean).join(" \u00b7 ")
+    }));
+}
+/* ==== TITLE-BADGES-END ==== */
+
 function computeBadges(name){
+  /* Resolved before the guards below, on purpose: the cup is an exhibition,
+     so a champion whose only games were cup games has no ladder standing —
+     and a title they actually won must not depend on having one. */
+  const titles = titleBadges(name);
   const prof = computeProfile(name);
-  if(!prof) return [];
+  if(!prof) return titles;
   const standings = computeStandings().filter(p=>p.games>0);
-  if(!standings.length) return [];
+  if(!standings.length) return titles;
   const topDays = computeDaysAtTop();
   const L = computeLeagueStats();
   const lp = L.players.find(p=>p.name===name);
@@ -33028,7 +33077,8 @@ function computeBadges(name){
   if(prof.games===maxGames && maxGames>0) out.add("iron");
   const maxPeak = Math.max.apply(null, standings.map(p=>p.peak));
   if(Math.abs(prof.peak-maxPeak)<0.01) out.add("peak");
-  return BADGE_DEFS.filter(b=>out.has(b.k));
+  /* titles lead — winning the event outranks every badge that counts games */
+  return titles.concat(BADGE_DEFS.filter(b=>out.has(b.k)));
 }
 
 function badgeStrip(name,limit){
