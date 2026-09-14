@@ -8,7 +8,7 @@
  * Bump VERSION on deploys that change what's precached; it's what forces old
  * caches to be dropped on activate.
  */
-const VERSION = "2026-09-09a";
+const VERSION = "2026-09-14a";
 const CACHE = `fgta-shell-${VERSION}`;
 const SHELL_URLS = [
   "/",
@@ -16,6 +16,13 @@ const SHELL_URLS = [
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  /* The scoreboard video export loads whichever of these its codec needs, the
+     first time it runs — which is often at a court, on the one phone that
+     filmed the match, with no signal. They are precached rather than left to
+     the cache-on-first-fetch branch below so that first time doesn't have to
+     be online. ~60KB the pair. See vendor/README.md. */
+  "/vendor/mp4-muxer.min.js",
+  "/vendor/webm-muxer.min.js",
 ];
 
 self.addEventListener("install", (event) => {
