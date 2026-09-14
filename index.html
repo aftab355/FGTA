@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<!-- The FF Cup event skin is OFF. The cup itself is still on: the marquee, the
-     countdown, the stage rail and the top-bar chip all render in the app's
-     ordinary dress (see "FF CUP — ORDINARY DRESS" in the stylesheet), and the
-     broadcast hero below it is untouched. Putting data-skin="ffcup" back on
-     this tag restores the tournament dressing; nothing was deleted. -->
-<html lang="en">
+<!-- Skin: "fall" (the Fall Exhibition). See "FALL EXHIBITION SKIN" and
+     "FF CUP" in the stylesheet; both are scoped to :root[data-skin], so
+     this one attribute is the whole switch. Keep this comment short —
+     the charset meta below must land in the first 1024 bytes. -->
+<html lang="en" data-skin="fall">
 <head>
 <!-- charset first: the encoding declaration has to land inside the first
      1024 bytes of the document, and anything placed above it (there used to
@@ -13,9 +12,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- matches --chrome, the colour of the fixed top/bottom bars, so the phone's
-     own status bar reads as the top of the same dark-green frame rather than a
-     black band above it. Follows the palette: change --chrome, change this. -->
-<meta name="theme-color" content="#04231A">
+     own status bar reads as the top of the same frame rather than a black band
+     above it. Follows the palette: change --chrome, change this. #3A2010 is the
+     fall skin's roasted brown; the championship theme's own chrome is #0B3B26,
+     which is what this should go back to when data-skin comes off <html>. -->
+<meta name="theme-color" content="#3A2010">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -8795,6 +8796,386 @@
     animation-play-state:paused!important;
   }
 
+
+  /* ================================================================
+     FALL EXHIBITION SKIN — "LATE LIGHT"
+
+     Event dressing for the Fall Exhibition (FALL_START, Sep 14 →
+     whatever the admin sets as the end date). Every rule below is
+     scoped to :root[data-skin="fall"], the same contract the FF Cup
+     skin signed: the whole look comes off by taking data-skin="fall"
+     off <html>, and nothing underneath it was changed.
+
+     It is deliberately NOT the cup's approach. The cup graded the page
+     into a dark, blown-out frame; this one keeps the championship
+     system exactly as it is — white-ish paper, dark type, one accent
+     that marks everything you can act on — and only moves the
+     TEMPERATURE. The paper goes to cream, the type to bark, the
+     accent from championship green to burnt maple, the chrome from
+     dark green to roasted brown. A ladder table is a thing people read
+     for ten minutes at a time, and a season skin is not a reason to
+     make that harder.
+
+     Which is also why every colour here that is ever set as type was
+     measured against the three grounds it can land on (--bg #FDF6EC,
+     --panel #FFFBF5, --panel-2 #F3E3CE) rather than against white
+     alone — the cream panel-2 is the darkest paper in the skin and is
+     therefore the one that decides. Worst-case ratios are noted per
+     token; the floor is 4.87:1 and everything clears AA.
+
+     Three things actually move: the palette, the load screen (maple
+     leaves opening onto the wordmark) and a slow leaf drift behind the
+     page. The drift is the one piece of ever-running motion in the skin
+     and it is registered in the Admin Studio's FX list, so it can be
+     switched off for everyone without touching this block.
+     ================================================================ */
+
+  /* -- 1. palette · the same system, one season warmer ---------------
+     Written at :root AND at body so it outranks the live weather
+     themes (body[data-heat] / body[data-wx]), which retint the app at
+     runtime. During the exhibition the season wins — but see the
+     weather note further down: rain and heat still get to speak, they
+     just speak in this palette's own voice now. */
+  :root[data-skin="fall"],
+  :root[data-skin="fall"] body,
+  :root[data-skin="fall"] body[data-heat],
+  :root[data-skin="fall"] body[data-wx]{
+    color-scheme:light;
+
+    /* the paper. Cream, not white — the ground the whole skin is
+       graded from. --panel stays the lightest thing on the page so a
+       card still reads as lifted off the page rather than sunk into
+       it, exactly as it does on the default theme. */
+    --bg:#FDF6EC; --panel:#FFFBF5; --panel-2:#F3E3CE;
+    --line:rgba(60,34,14,.20); --line-soft:rgba(60,34,14,.10);
+
+    /* type: bark, not black. 13.58 / 7.95 / 5.48 worst-case. */
+    --ink:#2B1708; --muted:#5E3A1E; --dim:#775237;
+
+    /* burnt maple — the interactive colour, and the one thing on the
+       page that is allowed to say "you can press this". 5.26 worst
+       case as type; --on-accent reads 6.19 on top of it as a fill. */
+    --accent:#A33A12; --accent-dim:#F8E3D4; --accent-glow:rgba(163,58,18,.24);
+    --on-accent:#FFF6EA;
+
+    /* the chrome — roasted brown. Solid, like the default's dark
+       green and unlike the cup's gradient, so every rule that paints
+       from --chrome keeps working without a special case.
+       --on-chrome reads 13.37 on it. */
+    --chrome:#3A2010;
+    --on-chrome:#FBF0E0; --on-chrome-dim:rgba(251,240,224,.70);
+    --chrome-line:rgba(251,240,224,.20);
+
+    /* --ball is a TEXT colour in ~18 places, so it is the amber a
+       ball reads as under low sun, not a fluorescent. 4.98. */
+    --ball:#7E5A07; --ball-glow:rgba(126,90,7,.26);
+    /* --court is type as often as it is a fill (.pt-target-elo,
+       .rp-step.done, .cn-tag.winter), so it is measured too: 5.39. */
+    --court:#8A4B14; --court-dim:#F5E2D0;
+
+    /* metals. The text golds had to come down a step: on the cream
+       --panel-2 the default #8A6A1E lands at 4.39 and quietly misses
+       AA, which is the same trap the base palette documents against
+       white. 5.14 / 4.97 / 4.90 now. The --medal-* fills are
+       untouched in spirit — a metal still has to look like metal —
+       only warmed to sit on cream. */
+    --gold:#7D5714; --silver:#5D6259; --bronze:#8A5524;
+    --medal-gold:#D4A02B; --medal-silver:#BFC0B8; --medal-bronze:#C08A4E;
+    --on-medal:#2A1B05;
+
+    /* the four signals. --accent is orange here, which puts it closer
+       to --danger than it is on the default theme, so --danger was
+       pulled toward wine (bluer, darker) to keep the two apart, and
+       --win toward harvest olive so it still reads as green against a
+       page full of orange. 6.67 / 5.14 / 4.87. */
+    --danger:#94202B; --pending:#7D5714; --win:#4C6B1B;
+
+    /* the weather canvas draws in this — bark, so rain and snow read
+       on cream instead of disappearing into it */
+    --wx-ink:122,92,64;
+
+    /* shadows carry the ground's colour, never black */
+    --shadow:0 14px 34px -26px rgba(60,34,14,.42);
+
+    /* -- depth layer, autumn-graded ------------------------------
+       Same ten tokens, same jobs. The light is low and warm, the
+       shadows go to bark, and the two counterweights that are NOT
+       warm — pine and lake — are what stop a page of orange from
+       flattening into one hue. */
+    --highlight-rim:#FFFFFF;
+    --highlight-ambient:#F2CFA0;
+    --shadow-tinted:#B09274;
+    --surface-sunken:#F0E2CE;
+    /* the loudest thing allowed: the evergreen behind the maples.
+       Maximum separation from every warm token on the page. 7.30. */
+    --accent-pop:#1D5138;
+    /* supports: a late-aster plum and the cold lake the trees stand
+       in. 5.50 and 5.63. */
+    --accent-split-a:#7A4A6E;
+    --accent-split-b:#1F6070;
+    /* edges and washes only, never type — same exemption the base
+       palette claims for these two */
+    --surface-bevel-light:#FFFFFF;
+    --surface-bevel-shadow:#D8C2A5;
+    --glow-mesh:#D98A3D;
+  }
+
+  /* the phone's own status bar joins the chrome. The <meta
+     name="theme-color"> in the head is set to #3A2010 to match; change
+     --chrome above and change it there too. */
+  :root[data-skin="fall"]{background:#FDF6EC}
+  :root[data-skin="fall"] ::selection{background:var(--accent);color:var(--on-accent)}
+
+  /* -- 2. the ground · low sun from the top left --------------------
+     The default paints one faint green ellipse from the top. This is
+     the same gesture with the sun moved off-centre and a second, very
+     weak warm bounce coming back off the bottom, which is what an
+     afternoon in October actually looks like. Static — no animation,
+     no attachment cost beyond the default's own. */
+  :root[data-skin="fall"] body{
+    background:
+      radial-gradient(ellipse 120% 70% at 18% -12%, rgba(217,138,61,.16), transparent 58%),
+      radial-gradient(ellipse 90% 50% at 88% 6%, rgba(163,58,18,.08), transparent 60%),
+      radial-gradient(ellipse 140% 60% at 50% 108%, rgba(125,87,20,.07), transparent 62%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+
+  /* -- 3. panels · the rule on top runs the season ------------------
+     One line changed per surface. The default's accent→gold hairline
+     becomes maple→gold→bark, and the card's shadow picks up the
+     ground's brown so nothing looks cut out and pasted on. */
+  :root[data-skin="fall"] .panel::before{
+    background:linear-gradient(90deg,var(--accent),var(--gold) 46%,var(--court));
+  }
+  :root[data-skin="fall"] .panel{
+    box-shadow:0 0 0 1px rgba(60,34,14,.05) inset, 0 14px 34px -26px rgba(60,34,14,.45);
+  }
+  /* the exhibition's own card, on the Events tab. A leaf watermark in
+     the corner and the gold left rule warmed — the one place in the
+     app the skin is allowed to name itself.
+
+     The watermark is a pseudo-element rather than a second background
+     layer, and that is not a style preference: the depth pass further
+     up paints `.pend{background:…!important}`, so nothing can add a
+     background to a match row from a stylesheet rule — which is also
+     why the base theme's own `.pend.promo` gradient has not been
+     painting for some time. `.pend` is already `position:relative;
+     overflow:hidden` and its `::after` is the highlight wash, so the
+     leaf takes `::before`, which is free. */
+  :root[data-skin="fall"] .pend.promo{border-left-color:var(--accent)}
+  :root[data-skin="fall"] .pend.promo::before{
+    content:'';position:absolute;right:16px;top:50%;width:44px;height:44px;
+    transform:translateY(-50%) rotate(-13deg);
+    background:var(--accent);opacity:.14;pointer-events:none;
+    -webkit-mask:var(--maple-leaf) center/contain no-repeat;
+            mask:var(--maple-leaf) center/contain no-repeat;
+  }
+  :root[data-skin="fall"] .promo-panel{
+    border-color:var(--accent);
+    background:linear-gradient(160deg,rgba(163,58,18,.07),var(--panel));
+  }
+  :root[data-skin="fall"] .promo-countdown{color:var(--accent)}
+
+  /* -- 4. weather, still allowed to speak ---------------------------
+     The palette block above outranks body[data-heat] / body[data-wx],
+     so the live themes can no longer retint the app during the
+     exhibition — by design; a season skin that changes colour with
+     the forecast is not a skin. What survives is the *texture*: the
+     rain drip on panels keeps running, because "the covers are on" is
+     information, not decoration. It just runs in bark now. */
+  :root[data-skin="fall"] body[data-wx="rain"] .panel::after,
+  :root[data-skin="fall"] body[data-wx="storm"] .panel::after{
+    background-image:repeating-linear-gradient(102deg, transparent 0 6px, rgba(60,34,14,.5) 6px 7px, transparent 7px 42px);
+  }
+
+  /* =================================================================
+     5. THE OPENING — maple leaves opening onto the wordmark
+
+     The default load screen draws a court and drops a ball on it. For
+     the exhibition it is a bud of leaves at the centre of the page
+     that opens: eleven maple leaves, each a different autumn colour,
+     fan outward along their own angle, turn as they go, and drift off
+     the top of the frame — and the FGTA wordmark comes up through the
+     gap they leave.
+
+     Mechanics worth stating, because they are why this is cheap:
+
+       · one element per leaf, no SVG DOM. The leaf is a mask
+         (--maple-leaf, defined once) over a flat background colour,
+         so the shape is shared and the colour is a custom property.
+       · one animation per leaf, transform and opacity only — nothing
+         here reads or writes layout, so the whole opening composites.
+       · the direction each leaf opens along, how far it goes, how
+         fast it turns and what colour it is are ALL custom properties
+         set in the markup. The keyframes are written in terms of
+         var(), which resolves per element, so eleven leaves share one
+         @keyframes rule rather than needing eleven.
+
+     Timing is pinned to the loader's own 2400ms hold (see the
+     "cinematic load screen" IIFE): the bud opens by ~1.1s, the
+     wordmark lands at ~1.35s, the leaves are gone by ~2.2s and the
+     wipe takes the whole thing at 2.4s. Nothing here changes that
+     script — if the hold is ever retuned, retune --ls-run with it.
+     ================================================================= */
+
+  /* the shape, once. Every leaf on the page — the loader's, the
+     ambient drift's, the promo card's watermark — is this mask. */
+  :root[data-skin="fall"]{
+    --maple-leaf:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M49.6 3.9 L44.3 14.3 C43.7 15.4 42.6 15.3 41.5 14.7 L37.6 12.7 L40.5 28.1 C41.1 30.9 39.2 30.9 38.2 29.7 L31.5 22.1 L30.4 25.9 C30.3 26.4 29.7 27 28.7 26.8 L20.2 25 L22.4 33.1 C22.9 34.9 23.3 35.7 21.9 36.2 L18.9 37.6 L33.4 49.4 C34.4 50.3 35 51.8 34.6 53.2 L33.3 57.4 C38.9 56.8 43.9 55.6 49.5 55 C50 55 50.8 55.8 50.8 56.4 L50.1 76 L53 76 L52.6 56.5 C52.6 55.9 53.3 55 53.8 55 C59.4 55.6 64.4 56.8 70 57.4 L68.7 53.2 C68.3 51.8 68.9 50.3 69.9 49.4 L84.4 37.6 L81.4 36.2 C80 35.7 80.4 34.9 80.9 33.1 L83.1 25 L74.6 26.8 C73.6 27 73 26.4 72.9 25.9 L71.8 22.1 L65.1 29.7 C64.1 30.9 62.2 30.9 62.8 28.1 L65.7 12.7 L61.8 14.7 C60.7 15.3 59.6 15.4 59 14.3 Z'/%3E%3C/svg%3E");
+    --ls-run:2.2s;
+  }
+
+  /* off-skin the scenery does not exist — same rule the cup's fire
+     follows, so a cached script can never leave an empty bud behind */
+  .ls-maple{display:none}
+  :root[data-skin="fall"] .ls-maple{
+    display:block;position:absolute;inset:0;overflow:hidden;pointer-events:none;
+  }
+  /* the court and the finished cup's dates are the default loader's
+     story, not this one's */
+  :root[data-skin="fall"] .ls-court,
+  :root[data-skin="fall"] .ls-cup{display:none}
+
+  /* The loader is the one dark frame in the skin, and it is dark on
+     purpose. The app underneath is cream paper — the right ground for a
+     table you read for ten minutes — but cream is the wrong ground for
+     a maple leaf: burnt orange on near-white is a smudge. So the
+     opening is played at dusk under the canopy, the leaves carry the
+     only light in the frame, and the wipe at 2.4s opens onto the
+     daylight page. The default loader's own ground (--panel fading to
+     --bg) is what this replaces. */
+  :root[data-skin="fall"] .loadscreen{
+    background:
+      radial-gradient(46vmax 38vmax at 50% 44%, #5A3216 0%, #3A1E0C 44%, transparent 78%),
+      radial-gradient(64vmax 40vmax at 50% -8%, rgba(217,138,61,.22), transparent 70%),
+      radial-gradient(70vmax 44vmax at 50% 112%, rgba(163,58,18,.20), transparent 74%),
+      #1D0F05;
+  }
+  /* the light coming through the gap the leaves leave */
+  :root[data-skin="fall"] .ls-maple::after{
+    content:'';position:absolute;left:50%;top:46%;width:min(96vw,620px);height:min(96vw,620px);
+    transform:translate(-50%,-50%);border-radius:50%;
+    background:radial-gradient(circle, rgba(255,186,96,.30), rgba(230,130,50,.12) 44%, transparent 70%);
+    opacity:0;animation:ls-glow 1.4s ease .85s both;
+  }
+  @keyframes ls-glow{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}
+                     55%{opacity:1}
+                     100%{opacity:.9;transform:translate(-50%,-50%) scale(1)}}
+
+  :root[data-skin="fall"] .ls-maple i{
+    position:absolute;left:50%;top:46%;
+    width:var(--s);height:var(--s);margin:calc(var(--s) / -2);
+    background:var(--c);
+    -webkit-mask:var(--maple-leaf) center/contain no-repeat;
+            mask:var(--maple-leaf) center/contain no-repeat;
+    will-change:transform,opacity;
+    filter:drop-shadow(0 6px 18px rgba(0,0,0,.45));
+    animation:ls-leaf var(--ls-run) cubic-bezier(.2,.74,.28,1) var(--d) both;
+  }
+  /* --a  the direction this leaf opens along
+     --r  how far out it ends up
+     --w  how much it turns on the way (its own tilt is --a inverted
+          at the start, so a closed bud reads as leaves stacked flat
+          rather than as a pinwheel) */
+  @keyframes ls-leaf{
+    0%{   transform:rotate(var(--a)) translateY(0) rotate(calc(var(--a) * -1)) scale(.12); opacity:0 }
+    7%{   opacity:1 }
+    16%{  transform:rotate(var(--a)) translateY(-6px) rotate(calc(var(--a) * -1)) scale(.26); opacity:1 }
+    50%{  transform:rotate(var(--a)) translateY(calc(var(--r) * var(--rk,1) * -1)) rotate(var(--w)) scale(1); opacity:1 }
+    72%{  transform:rotate(var(--a)) translateY(calc(var(--r) * var(--rk,1) * -1.22)) rotate(calc(var(--w) + 16deg)) scale(.98); opacity:.9 }
+    100%{ transform:rotate(var(--a)) translateY(calc(var(--r) * var(--rk,1) * -2.3)) rotate(calc(var(--w) + 74deg)) scale(.55); opacity:0 }
+  }
+
+  /* the wordmark. Same element the default loader uses — one source of
+     truth for "FGTA LADDER" — moved to dead centre and retimed to land
+     in the gap rather than under the court. */
+  :root[data-skin="fall"] .ls-word{
+    position:absolute;inset:0;bottom:0;
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    text-align:center;
+    font-size:clamp(28px,7vw,54px);
+    /* the loader is the dark frame: --ink is bark and would vanish on it,
+       so the mark reads in the chrome's ivory and LADDER takes the amber.
+       Maple on bark is the one pairing in this palette that does not
+       carry, which is why --accent is not used here. */
+    color:#FBF0E0;
+    animation:ls-fall-word .85s cubic-bezier(.16,1,.3,1) 1.35s both;
+  }
+  :root[data-skin="fall"] .ls-word span{margin-left:0;color:#E9A64A}
+  @keyframes ls-fall-word{
+    from{opacity:0;transform:scale(.88);filter:blur(6px)}
+    to{opacity:1;transform:none;filter:blur(0)}
+  }
+  /* what the season is called, under the mark, in the loader's own
+     quiet type — the same treatment the cup's dates had */
+  .ls-season{display:none}
+  :root[data-skin="fall"] .ls-season{
+    display:flex;flex-direction:column;align-items:center;gap:11px;
+    position:absolute;left:0;right:0;top:calc(50% + clamp(30px,5vw,44px));
+    opacity:0;animation:ls-fall-word .7s ease 1.62s forwards;
+  }
+  :root[data-skin="fall"] .ls-season em{
+    display:block;width:88px;height:1px;
+    background:linear-gradient(90deg,transparent,#C98A2E,transparent);
+  }
+  /* same reason as the wordmark above: on the dark loader the palette's
+     own --accent and --gold are both too dark to read */
+  :root[data-skin="fall"] .ls-season b{
+    font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:2.6px;
+    text-transform:uppercase;color:#E9A64A;
+  }
+
+  /* =================================================================
+     6. THE DRIFT — leaves coming down behind the page
+
+     The one ever-running thing in the skin, and it is here on purpose:
+     the hot weather theme's flames were deleted from this stylesheet
+     precisely because three infinite animations per panel, on every
+     panel, is not a look — it is a cost. This is the opposite shape
+     of that. Eight elements total for the whole document (not per
+     card), transform and opacity only, behind everything at z-index
+     -1, at 12-16% opacity, on 18-34s cycles. It is closer to a
+     texture than to an effect, and it is in the Admin Studio's FX
+     list ("Falling leaves") so it can be switched off for everyone.
+
+     Off under prefers-reduced-motion, like every other ambient layer
+     in the file — not paused, removed.
+     ================================================================= */
+  .fall-leaves{display:none}
+  :root[data-skin="fall"] .fall-leaves{
+    display:block;position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+  }
+  :root[data-skin="fall"] .fall-leaves i{
+    position:absolute;top:0;left:var(--x);
+    width:var(--s);height:var(--s);
+    background:var(--c);opacity:0;
+    -webkit-mask:var(--maple-leaf) center/contain no-repeat;
+            mask:var(--maple-leaf) center/contain no-repeat;
+    animation:leaf-drift var(--t) linear var(--d) infinite;
+  }
+  @keyframes leaf-drift{
+    0%{   transform:translate3d(0,-14vh,0) rotate(0deg); opacity:0 }
+    9%{   opacity:.15 }
+    50%{  transform:translate3d(calc(var(--sway) * 1), 50vh, 0) rotate(calc(var(--turn) / 2)) }
+    88%{  opacity:.15 }
+    100%{ transform:translate3d(var(--drift), 116vh, 0) rotate(var(--turn)); opacity:0 }
+  }
+
+  @media(prefers-reduced-motion:reduce){
+    :root[data-skin="fall"] .fall-leaves{display:none}
+    :root[data-skin="fall"] .ls-maple i,
+    :root[data-skin="fall"] .ls-maple::after,
+    :root[data-skin="fall"] .ls-word,
+    :root[data-skin="fall"] .ls-season{animation:none}
+  }
+  /* a phone is a narrower frame: the bud opens less far, and half the
+     drift comes off so the layer stays cheap on a mid-range device */
+  @media(max-width:560px){
+    :root[data-skin="fall"] .ls-maple i{--rk:.72}
+    :root[data-skin="fall"] .fall-leaves i:nth-child(2n){display:none}
+  }
+
 </style>
 
 <!-- ===== ADMIN STUDIO — PRE-PAINT BOOTSTRAP =====================
@@ -8887,6 +9268,22 @@
      tongues and the roll bar; they carry no content and no meaning. -->
 <div class="ff-fire" id="ffFire" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 <div class="ff-crt" id="ffCrt" aria-hidden="true"><i></i></div>
+<!-- The fall skin's leaf drift. Eight elements for the whole document, behind
+     everything at z-index -1, transform and opacity only. Each <i> carries
+     where it starts across the page, its size and colour, how long it takes to
+     cross and how it sways on the way; the negative delays are deliberate, so
+     the sky is already half full on the first frame instead of starting empty.
+     Inert off-skin and removed under prefers-reduced-motion. -->
+<div class="fall-leaves" id="fallLeaves" aria-hidden="true">
+  <i style="--x:6%;--s:26px;--c:#A33A12;--t:26s;--d:-3s;--drift:8vw;--sway:4vw;--turn:300deg"></i>
+  <i style="--x:18%;--s:18px;--c:#CA8A04;--t:34s;--d:-14s;--drift:-6vw;--sway:-3vw;--turn:-260deg"></i>
+  <i style="--x:31%;--s:34px;--c:#8E2809;--t:21s;--d:-8s;--drift:5vw;--sway:3vw;--turn:380deg"></i>
+  <i style="--x:44%;--s:22px;--c:#D98324;--t:29s;--d:-21s;--drift:-9vw;--sway:-5vw;--turn:-320deg"></i>
+  <i style="--x:57%;--s:30px;--c:#7C2D12;--t:24s;--d:-1s;--drift:7vw;--sway:4vw;--turn:240deg"></i>
+  <i style="--x:69%;--s:16px;--c:#E0A020;--t:37s;--d:-17s;--drift:-4vw;--sway:-2vw;--turn:-400deg"></i>
+  <i style="--x:82%;--s:28px;--c:#C1440E;--t:19s;--d:-11s;--drift:10vw;--sway:6vw;--turn:340deg"></i>
+  <i style="--x:93%;--s:20px;--c:#B45309;--t:31s;--d:-26s;--drift:-7vw;--sway:-4vw;--turn:-280deg"></i>
+</div>
 <canvas id="wxfx" aria-hidden="true"></canvas>
 <div class="loadscreen" id="loadScreen">
   <svg class="ls-court" viewBox="0 0 300 400" fill="none">
@@ -8900,7 +9297,29 @@
     <line class="ls-net" x1="40" y1="200" x2="260" y2="200" stroke="var(--ink)" stroke-width="4" stroke-dasharray="3 3"/>
     <circle class="ls-ball" cx="150" cy="200" r="9" fill="var(--ball)"/>
   </svg>
+  <!-- The fall skin's opening. Eleven maple leaves gathered into a bud at the
+       centre, which opens outward and drifts off the frame while the wordmark
+       comes up through the gap. Every <i> is one leaf and carries nothing but
+       the six numbers that make it its own: the angle it opens along, how far
+       it travels, its size, how much it turns on the way, its colour and when
+       it starts. The shape itself is a mask shared by every leaf on the site
+       (--maple-leaf). Inert off-skin: .ls-maple is display:none unless
+       data-skin="fall" is on <html>. -->
+  <div class="ls-maple" aria-hidden="true">
+    <i style="--a:-158deg;--r:206px;--s:96px;--w:-24deg;--c:#C1440E;--d:.00s"></i>
+    <i style="--a:-118deg;--r:178px;--s:78px;--w:30deg;--c:#E08A1E;--d:.05s"></i>
+    <i style="--a:-74deg;--r:214px;--s:104px;--w:-18deg;--c:#B4451A;--d:.02s"></i>
+    <i style="--a:-32deg;--r:172px;--s:82px;--w:26deg;--c:#E0A82A;--d:.09s"></i>
+    <i style="--a:12deg;--r:208px;--s:98px;--w:-30deg;--c:#8E2809;--d:.04s"></i>
+    <i style="--a:56deg;--r:184px;--s:80px;--w:22deg;--c:#D4622A;--d:.11s"></i>
+    <i style="--a:104deg;--r:220px;--s:106px;--w:-14deg;--c:#C97316;--d:.07s"></i>
+    <i style="--a:148deg;--r:176px;--s:86px;--w:34deg;--c:#A33A12;--d:.13s"></i>
+    <i style="--a:-96deg;--r:104px;--s:56px;--w:40deg;--c:#F0BE4A;--d:.16s"></i>
+    <i style="--a:34deg;--r:112px;--s:62px;--w:-38deg;--c:#7C2D12;--d:.19s"></i>
+    <i style="--a:172deg;--r:98px;--s:54px;--w:44deg;--c:#E2762B;--d:.17s"></i>
+  </div>
   <div class="ls-word">FGTA<span>LADDER</span></div>
+  <div class="ls-season" aria-hidden="true"><em></em><b>Fall Exhibition</b></div>
   <div class="ls-cup" aria-hidden="true"><b>FF Cup</b><i>Aug 17 &mdash; Sep 13</i></div>
 </div>
 
@@ -8977,9 +9396,15 @@
    has not created it yet — so the event is promoted from the day the
    dates are set, not the day the draw is made.
 
-   When the cup is over this drops data-skin and the app is back to its
+   When the cup is over this drops ITS OWN skin and the app is back to its
    normal self on the next paint; deleting the CSS block is then the only
-   cleanup left. */
+   cleanup left. "Its own" is the whole of the fix on the line below: this
+   used to remove data-skin unconditionally, on the assumption that ffcup
+   was the only skin there would ever be. The moment a second one existed
+   (the Fall Exhibition, which starts the day after this cup ends) that
+   assumption became a bug — a finished tournament's cleanup silently took
+   the successor's dressing off on the first paint, every load, and the
+   attribute in the markup looked like it was doing nothing. */
 (function(){
   var START='2026-08-17', END='2026-09-13';           // inclusive, local time
   function at(s,endOfDay){
@@ -8990,7 +9415,7 @@
     return at(s).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   }
   var root=document.documentElement, now=new Date(), start=at(START), end=at(END,true);
-  if(now>end){ root.removeAttribute('data-skin'); return; }
+  if(now>end){ if(root.getAttribute('data-skin')==='ffcup') root.removeAttribute('data-skin'); return; }
   root.dataset.cup = now<start ? 'pre' : 'live';
   var range = short(START)+' – '+short(END);
 
@@ -22610,10 +23035,22 @@ function pinnedComment(matchId){
    own disc. This set is the same eight hues taken down to printing weight:
    every one clears 5:1 on white and 4.4:1 on a hovered row, and they stay
    apart from each other in hue rather than in lightness, so a colour-blind
-   reader loses no more of them than before. The cup skin keeps its own. */
-const CHART_COLORS = document.documentElement.dataset.skin === "ffcup"
-  ? ["#ff2d8f","#ff8a2b","#ffc247","#e0166f","#ff9ec9","#ff5a1f","#ffe6a8","#b30e62"]
-  : ["#2A6E4F","#B3541E","#1F5FA8","#A32A5A","#6B4FA8","#0E7070","#8A6A1E","#A03A2F"];
+   reader loses no more of them than before. An event skin brings its own set
+   and is looked up by name; anything not in the table falls through to this
+   one, so a skin that does not care about charts needs no entry. */
+const CHART_SERIES = {
+  ffcup: ["#ff2d8f","#ff8a2b","#ffc247","#e0166f","#ff9ec9","#ff5a1f","#ffe6a8","#b30e62"],
+  /* The fall set. Same rule as the default one below — printing weight,
+     separated by HUE rather than by lightness — but measured against the
+     fall skin's cream paper instead of white, because that is the ground it
+     lands on: 4.87:1 at worst on --panel-2, which is the darkest of the
+     three. It walks the wheel (rust, ochre, olive, pine, lake, indigo,
+     aster, wine) rather than staying inside the season's warms, since eight
+     shades of orange are eight series nobody can tell apart. */
+  fall:  ["#A33A12","#7D5714","#4C6B1B","#1D5138","#1F6070","#3C4A8C","#7A4A6E","#94202B"]
+};
+const CHART_COLORS = CHART_SERIES[document.documentElement.dataset.skin]
+  || ["#2A6E4F","#B3541E","#1F5FA8","#A32A5A","#6B4FA8","#0E7070","#8A6A1E","#A03A2F"];
 let isolated = null; // name of isolated player, or null for all
 
 function drawChart(standings){
@@ -33346,6 +33783,12 @@ function renderNews(){
    The comment inside applySurface() already knew this shape of bug — it is
    the reason the ffcup skin deletes these three properties rather than
    trusting them. This is the same failure without a skin to catch it. */
+/* The skins that redefine the palette, and therefore outrank the surface
+   toggle above. Add a skin here when its stylesheet block writes --accent
+   (every event skin in this file does); leave it out if it only dresses
+   surfaces and wants the court colours to keep working underneath it. */
+const SKIN_OWNS_PALETTE = {ffcup:true, fall:true};
+
 const SURFACES = {
   grass: {name:"Grass", accent:"#00623C", dim:"#E3EFE7", tint:"#FFFFFF"},
   clay:  {name:"Clay",  accent:"#A8501E", dim:"#F6EAE1", tint:"#FEFCFA"},
@@ -33355,14 +33798,23 @@ function currentSurface(){ try{ return localStorage.getItem("fgta_surface")||"gr
 function applySurface(key){
   const s=SURFACES[key]||SURFACES.grass;
   const r=document.body;
-  /* During the FF Cup the skin owns the palette. This function writes
-     --accent/--accent-dim/--bg as INLINE styles on <body>, and an inline
-     custom property outranks every stylesheet rule — which is exactly how
-     the old default "hard court" pink got back into the LIVE badge, the
-     "copy for chat" link and the Elo pool line while everything painted
-     from the skin's own literals stayed green. The preference is still
-     stored and the button still reads correctly; it just doesn't paint. */
-  if(document.documentElement.dataset.skin==="ffcup"){
+  /* While an event skin is on, the skin owns the palette. This function
+     writes --accent/--accent-dim/--bg as INLINE styles on <body>, and an
+     inline custom property outranks every stylesheet rule — which is
+     exactly how the old default "hard court" pink got back into the LIVE
+     badge, the "copy for chat" link and the Elo pool line while everything
+     painted from the skin's own literals stayed green. The preference is
+     still stored and the button still reads correctly; it just doesn't
+     paint until the skin comes off.
+
+     This test used to name ffcup directly, which made it a fact about one
+     tournament rather than about skins. The Fall Exhibition skin hit the
+     identical bug on its first load: the maple accent was live on <html>
+     and on every rule in the sheet, and three inline properties on <body>
+     put championship green straight back over it, so buttons, links and
+     the report form painted green on a page that was otherwise entirely
+     autumn. A skin that redefines the palette belongs in the table below. */
+  if(SKIN_OWNS_PALETTE[document.documentElement.dataset.skin]){
     r.style.removeProperty("--accent");
     r.style.removeProperty("--accent-dim");
     r.style.removeProperty("--bg");
@@ -39736,8 +40188,15 @@ const SITE = (function(){
      css:"*,*::before,*::after{animation:none!important;transition:none!important}"},
 
     {id:"loadscreen",group:"Chrome",     label:"Cinematic load screen",
-     hint:"The court-drawing intro on a cold open.",
+     hint:"The intro on a cold open \u2014 the court drawing itself, or, under the Fall Exhibition skin, the maple leaves opening onto the wordmark.",
      css:"#loadScreen{display:none!important}"},
+
+    /* Separate from the load screen on purpose: the opening is two and a
+       half seconds once a session and the drift runs for as long as the tab
+       is open, so they are not the same decision to make. */
+    {id:"fallleaves",group:"Chrome",     label:"Falling leaves",
+     hint:"The slow leaf drift behind the page. Fall Exhibition skin only \u2014 nothing to switch off when the skin is not on.",
+     css:".fall-leaves{display:none!important}"},
 
     {id:"hud",       group:"Chrome",     label:"HUD grid backdrop",
      hint:"The faint grid layer behind the whole page.",
@@ -39805,6 +40264,28 @@ const SITE = (function(){
       "--surface-bevel-light":"#FFFFFF","--surface-bevel-shadow":"#C9C6BB",
       "--glow-mesh":"#9B7FC7","--shadow-tinted":"#B4B1A7",
       "--shadow":"0 16px 38px -28px rgba(10,36,24,.4)"
+    },
+    /* The Fall Exhibition skin's palette on its own, with no leaves, no dark
+       load screen and no event attached to it. Two reasons it is here: an
+       admin who wants the season's colours without its scenery has somewhere
+       to click, and when the exhibition is over and the skin block is
+       deleted from the stylesheet, the palette it was built on does not go
+       with it. Every text token was measured against the cream --panel-2,
+       which is the darkest of its three grounds; the floor is 4.87:1. */
+    "Fall exhibition": {
+      "--bg":"#FDF6EC","--panel":"#FFFBF5","--panel-2":"#F3E3CE",
+      "--line":"rgba(60,34,14,.20)","--line-soft":"rgba(60,34,14,.10)",
+      "--ink":"#2B1708","--muted":"#5E3A1E","--dim":"#775237",
+      "--accent":"#A33A12","--accent-dim":"#F8E3D4","--accent-glow":"rgba(163,58,18,.24)",
+      "--on-accent":"#FFF6EA","--chrome":"#3A2010",
+      "--accent-pop":"#1D5138","--accent-split-a":"#7A4A6E","--accent-split-b":"#1F6070",
+      "--ball":"#7E5A07","--court":"#8A4B14",
+      "--gold":"#7D5714","--silver":"#5D6259","--bronze":"#8A5524",
+      "--win":"#4C6B1B","--danger":"#94202B","--pending":"#7D5714",
+      "--surface-sunken":"#F0E2CE","--highlight-rim":"#FFFFFF","--highlight-ambient":"#F2CFA0",
+      "--surface-bevel-light":"#FFFFFF","--surface-bevel-shadow":"#D8C2A5",
+      "--glow-mesh":"#D98A3D","--shadow-tinted":"#B09274",
+      "--shadow":"0 14px 34px -26px rgba(60,34,14,.42)"
     },
     "Court clay": {
       "--bg":"#1a1210","--panel":"#251a17","--panel-2":"#33241f",
@@ -41725,10 +42206,11 @@ const SITE = (function(){
         }).join("")}
       </div>`).join("") +
       `<div class="sp-group"><div class="sp-gh">Skin</div>
-        <div class="sp-note">The FF Cup dressing is a whole alternate look bundled in the stylesheet. "Leave as coded" keeps whatever the markup and the cup's own date window decide.</div>
+        <div class="sp-note">Each event skin is a whole alternate look bundled in the stylesheet, palette included — which is why a skin outranks the colours set above and the court toggle in the ☰ menu. "Leave as coded" keeps whatever the markup and the events' own date windows decide.</div>
         <select class="sp-in" data-act="skin">
           <option value="null" ${cfg().skin == null ? "selected" : ""}>Leave as coded</option>
           <option value="" ${cfg().skin === "" ? "selected" : ""}>Off — standard theme</option>
+          <option value="fall" ${cfg().skin === "fall" ? "selected" : ""}>Fall Exhibition</option>
           <option value="ffcup" ${cfg().skin === "ffcup" ? "selected" : ""}>FF Cup</option>
         </select>
       </div>
