@@ -10,6 +10,7 @@
 'use strict';
 const align = require('../tools/rally-trim/align.js');
 const boardMod = require('../tools/rally-trim/board.js');
+const audioMod = require('../tools/rally-trim/audio.js');
 const serve = require('../tools/rally-trim/serve.js');
 const motion = require('../tools/rally-trim/motion.js');
 const { build } = require('./tensors.js');
@@ -257,5 +258,74 @@ console.log('\nreading the scoreboard');
     wrong.events.length + ' events, reason: ' + (wrong.reason || 'none'));
 }
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
-process.exit(fail ? 1 : 0);
+/* ------------------------------------------------------- decoding the audio
+
+   The decoder writes samples straight into their final array as they arrive,
+   because holding the track three times over peaked near 2.8GB on a four-hour
+   recording. The risk that buys is a float split across two reads: ffmpeg's
+   pipe does not hand over whole samples, it hands over bytes. So drive it with
+   a stand-in that emits deliberately awkward chunk sizes. */
+console.log('\nreading the soundtrack');
+{
+  const fs2 = require('fs'), os2 = require('os'), path2 = require('path');
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'trim-audio-'));
+  const emit = path2.join(dir, 'emit.js');
+  fs2.writeFileSync(emit, '#!/usr/bin/env node\n' + `
+    const n = +process.env.N, step = +process.env.STEP;
+    const b = Buffer.alloc(n * 4);
+    for (let i = 0; i < n; i++) b.writeFloatLE(Math.sin(i / 7), i * 4);
+    let i = 0;
+    (function w(){
+      if (i >= b.length) return process.stdout.end();
+      const e = Math.min(b.length, i + step);
+      const ok = process.stdout.write(b.subarray(i, e)); i = e;
+      if (ok) setImmediate(w); else process.stdout.once('drain', w);
+    })();
+  `);
+  fs2.chmodSync(emit, 0o755);
+
+  const run = (n, step, duration) => {
+    process.env.N = String(n); process.env.STEP = String(step);
+    return audioMod.decode('ignored', { ffmpeg: emit, duration });
+  };
+  const exact = (x, n) => {
+    if (x.length !== n) return 'length ' + x.length + ' != ' + n;
+    for (let i = 0; i < n; i++) {
+      const want = Math.fround(Math.sin(i / 7));
+      if (x[i] !== want) return 'sample ' + i + ': ' + x[i] + ' != ' + want;
+    }
+    return null;
+  };
+
+  (async () => {
+    /* 7 bytes at a time leaves 3 dangling on the first read and never lands on
+       a float boundary — the case that breaks a naive reader. */
+    const a = await run(5000, 7, 5000 / 16000);
+    ok(exact(a.samples, 5000) === null, 'a stream chopped every 7 bytes decodes exactly',
+      exact(a.samples, 5000));
+
+    const b = await run(5000, 1, 5000 / 16000);
+    ok(exact(b.samples, 5000) === null, 'and one byte at a time', exact(b.samples, 5000));
+
+    const c = await run(20000, 4096, 20000 / 16000);
+    ok(exact(c.samples, 20000) === null, 'and on clean 4096-byte boundaries', exact(c.samples, 20000));
+
+    /* No duration hint, and far more audio than the fallback guess: this is
+       the only path that ever reallocates. */
+    const d = await run(60000, 997, null);
+    ok(exact(d.samples, 60000) === null, 'and with no duration hint, growing as it goes',
+      exact(d.samples, 60000));
+
+    /* A duration that overshoots must not leave the tail padded with zeros. */
+    const e = await run(3000, 512, 60);
+    ok(e.samples.length === 3000, 'an over-long duration hint does not pad the end',
+      e.samples.length);
+    ok(Math.abs(e.seconds - 3000 / 16000) < 1e-9, 'and seconds reflects what arrived',
+      e.seconds);
+
+    try { fs2.rmSync(dir, { recursive: true, force: true }); } catch (err) { /* */ }
+    console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
+    process.exit(fail ? 1 : 0);
+  })();
+}
+

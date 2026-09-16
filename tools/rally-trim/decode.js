@@ -173,26 +173,6 @@ function decodeChunk(file, chunk, board, opt, onGrid) {
   });
 }
 
-/* Audio, in one piece, concurrently with the video workers. */
-function decodeAudio(file, sr, opt) {
-  return new Promise((resolve, reject) => {
-    const args = ['-nostdin', '-loglevel', 'error', '-i', file,
-      '-vn', '-ac', '1', '-ar', String(sr), '-f', 'f32le', 'pipe:1'];
-    const p = spawn(opt.ffmpeg || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const chunks = []; let total = 0, err = '';
-    p.stdout.on('data', b => { chunks.push(b); total += b.length; });
-    p.stderr.on('data', b => { err += b.toString(); });
-    p.on('error', e => reject(new Error('could not run ffmpeg: ' + e.message)));
-    p.on('close', c => {
-      if (c !== 0) return reject(new Error('ffmpeg failed decoding audio:\n' + err.trim()));
-      const buf = Buffer.concat(chunks, total), n = Math.floor(buf.length / 4);
-      const x = new Float32Array(n);
-      for (let i = 0; i < n; i++) x[i] = buf.readFloatLE(i * 4);
-      resolve({ samples: x, sr, seconds: n / sr });
-    });
-  });
-}
-
 async function pool(items, limit, worker) {
   const out = new Array(items.length);
   let next = 0;
@@ -211,6 +191,6 @@ function mkTmp(prefix) { return fs.mkdtempSync(path.join(os.tmpdir(), prefix || 
 function rmTmp(dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* best effort */ } }
 
 module.exports = {
-  capabilities, info, probeFrames, chunksOf, decodeChunk, decodeAudio, pool, mkTmp, rmTmp,
+  capabilities, info, probeFrames, chunksOf, decodeChunk, pool, mkTmp, rmTmp,
   MOT_W, MOT_H, MOT_FPS, BOARD_FPS, BOARD_W, PROBE_W, PROBE_H
 };

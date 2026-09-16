@@ -58,6 +58,7 @@ Cut
   --board-lag N    ref's reaction, subtracted from each board change (from tuning)
 
 Output
+  --check          say whether this machine can run it, and what is missing
   --render         encode the cut (default). --no-render for scripts only
   --proof          also render the proof reel: a couple of seconds around
                    every clip's opening, to check the whole cut in minutes
@@ -71,12 +72,58 @@ Output
 function fail(msg) { process.stderr.write('rally-trim: ' + msg + '\n'); process.exit(1); }
 function say(msg) { process.stderr.write(msg + '\n'); }
 
+/* Worth being able to ask BEFORE pointing this at an eight-gigabyte file and
+   finding out twenty seconds later that ffprobe is missing. */
+const INSTALL = [
+  '  macOS           brew install ffmpeg',
+  '  Debian/Ubuntu   sudo apt install ffmpeg',
+  '  Fedora          sudo dnf install ffmpeg',
+  '  Windows         winget install Gyan.FFmpeg     (then run this from Git Bash or WSL)',
+  '  Node            https://nodejs.org  — any version 18 or newer'
+];
+
+function check(o) {
+  const caps = decode.capabilities(o);
+  const major = parseInt(process.versions.node, 10);
+  let ok = true;
+
+  say('node           ' + process.version + (major >= 18 ? '' : '   — too old, needs 18 or newer'));
+  if (major < 18) ok = false;
+
+  if (!caps.ok) {
+    say('ffmpeg         NOT FOUND');
+    ok = false;
+  } else {
+    say('ffmpeg         ' + caps.version);
+    say('cores          ' + caps.cores + '   (will use ' + Math.max(1, Math.floor(caps.cores / 2)) + ' decoders)');
+    const enc = renderMod.pickEncoder(caps, o);
+    say('encoder        ' + enc.name + (enc.hw ? '   (hardware — the render will be quick)'
+      : '   (software — the render is the slow part; nothing to fix, just slower)'));
+  }
+
+  /* ffprobe is a separate binary and is separately missable. */
+  const probe = require('child_process').spawnSync(o.ffprobe || 'ffprobe',
+    ['-hide_banner', '-version'], { encoding: 'utf8' });
+  if (probe.error || probe.status !== 0) { say('ffprobe        NOT FOUND'); ok = false; }
+  else say('ffprobe        ' + ((/ffprobe version (\S+)/.exec(probe.stdout || '') || [, '?'])[1]));
+
+  if (!ok) {
+    say('\nSomething is missing. Install it with whichever of these fits:');
+    for (const l of INSTALL) say(l);
+    say('\nffmpeg and ffprobe ship together — if one is missing, install the pair.');
+  } else {
+    say('\nGood to go. Next:  node tools/rally-trim.js <your-video> --board-preview');
+  }
+  return ok;
+}
+
 function args(argv) {
   const o = { _: [], motion: true, board: true, render: true };
   const num = (k, v) => { if (!isFinite(+v)) fail(`--${k} needs a number`); return +v; };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') { process.stdout.write(USAGE); process.exit(0); }
+    else if (a === '--check') o.check = true;
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--proof') o.proof = true;
     else if (a === '--render') o.render = true;
@@ -129,6 +176,7 @@ function previewCrops(file, box, times, dir, opt) {
 async function main() {
   const t0 = Date.now();
   const o = args(process.argv.slice(2));
+  if (o.check) { process.exit(check(o) ? 0 : 1); }
   if (!o._.length) { process.stdout.write(USAGE); process.exit(0); }
   const video = o._[0];
   const cutFile = o._[1] || null;
@@ -216,7 +264,11 @@ async function main() {
       st.prev = cur;
     };
 
-    const audioP = audioMod.decode(video, o).catch(e => ({ error: e }));
+    /* The duration lets the decoder size its buffer once instead of doubling
+       its way there, which on a long recording is the difference between one
+       copy of the track and several. */
+    const audioP = audioMod.decode(video, Object.assign({}, o, { duration: info.duration }))
+      .catch(e => ({ error: e }));
     const done = await decode.pool(chunks, jobs, c => decode.decodeChunk(video, c, box, Object.assign({ tmp }, o), onGrid));
     const dec = await audioP;
     if (dec.error) fail(dec.error.message);

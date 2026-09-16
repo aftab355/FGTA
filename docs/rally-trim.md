@@ -6,11 +6,59 @@ because somebody tapped it, and has no measurement at all of where any point
 assumption is the dead weight.
 
 ```bash
+node tools/rally-trim.js --check                            # once, per machine
 node tools/rally-trim.js match.mp4 --board-preview          # check the box
-node tools/rally-trim.js match.mp4 fgta-alice-vs-bob-cut.sh --proof
+node tools/rally-trim.js match.mp4 --proof                  # cut it
 ```
 
 One command, one decode of the file, an .mp4 at the end of it.
+
+## Start here
+
+**This is not the Auto-cut tab.** That tab is for footage nobody reffed, it
+works by ear alone, and on a big file it plays the recording through at 4× —
+which is where "about 15 minutes left" comes from. Nothing in this tool runs in
+the browser, and the app is unchanged by it.
+
+1. **`--check`** — says whether `ffmpeg`, `ffprobe` and Node are present, how
+   many cores it will use, and which encoder it will render with. Worth running
+   before pointing anything at an eight-gigabyte file. It prints install lines
+   for whatever is missing and exits non-zero, so it works as a precondition.
+
+2. **`--board-preview`** — writes PNG crops of the scoreboard it found, taken
+   from five points across the match. Each should be a readable scoreboard and
+   nothing else. This is the one manual step and it is not a formality: if the
+   box is wrong, everything downstream is wrong in a way that still looks
+   plausible. If it grabbed the wrong thing, say where it is:
+   `--board x,y,w,h`.
+
+3. **The cut.** `--proof` also writes a reel of a couple of seconds around every
+   clip's opening, which is how you check the whole thing in about five minutes.
+   Add `--dry-run` to see the report without encoding anything.
+
+### Do I need the cut list?
+
+**No.** The scoreboard is enough on its own — point endings come off the plate
+and the serve off the soundtrack, neither of which needs the taps. The cut list
+only supplies labels: set, game, score before the point, who won it.
+
+If you want those labels, export it from the match itself — **Archive → the
+match → 🎬 Rally reel → ⬇ ffmpeg script** — and pass it as the second argument:
+
+```bash
+node tools/rally-trim.js match.mp4 fgta-alice-vs-bob-cut.sh --proof
+```
+
+The tool compares the number of board changes against the number of points in
+the list and says so if they disagree, rather than zipping them together and
+mislabelling everything after the first discrepancy.
+
+### Long recordings
+
+The soundtrack is decoded to 16 kHz mono and held once — 230 MB per hour of
+recording. An earlier version held it three times over, which was fine for the
+90-minute match it was written against and about 2.8 GB for a four-hour one.
+The file's own size does not matter much; its *duration* does.
 
 ---
 

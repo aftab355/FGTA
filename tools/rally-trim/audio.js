@@ -38,9 +38,21 @@ function ffprobeDuration(file, ffprobe) {
   return isFinite(d) ? d : null;
 }
 
-/* Decode the whole soundtrack to mono f32. At 16 kHz that is 64 kB a second —
-   about 300 MB for a long match, which is the price of handing the detector
-   the array it was written for rather than a chunked approximation of it. */
+/* Decode the whole soundtrack to mono f32, holding exactly one copy of it.
+
+   At 16 kHz that is 64 kB a second — 230 MB per hour of recording. The first
+   version of this collected the stream as Buffer chunks, concatenated them,
+   and then copied that into a Float32Array, so the peak was THREE times the
+   track: fine for the 90-minute match it was written against, and about 2.8 GB
+   for a four-hour one, which does not survive.
+
+   So the samples go straight into their final array as they arrive. `duration`
+   (from ffprobe) sizes it up front; without one it starts small and doubles,
+   which is the only case that ever copies. The 0-3 bytes left at the end of a
+   chunk when it does not divide by four are carried into the next one — a
+   float split across two reads is the bug this would otherwise have. */
+const EMPTY = Buffer.alloc(0);
+
 function decode(file, opt) {
   opt = opt || {};
   const ffmpeg = opt.ffmpeg || 'ffmpeg';
@@ -48,19 +60,42 @@ function decode(file, opt) {
     const args = ['-nostdin', '-loglevel', 'error', '-i', file,
       '-vn', '-ac', '1', '-ar', String(SR), '-f', 'f32le', '-'];
     const p = spawn(ffmpeg, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const chunks = []; let total = 0, err = '';
-    p.stdout.on('data', b => { chunks.push(b); total += b.length; });
+
+    let cap = Math.max(SR, Math.ceil((opt.duration || 240) * SR) + SR);
+    let x = new Float32Array(cap);
+    let n = 0, err = '', carry = EMPTY;
+
+    p.stdout.on('data', b => {
+      const buf = carry.length ? Buffer.concat([carry, b]) : b;
+      const whole = buf.length >>> 2;
+      if (whole) {
+        if (n + whole > cap) {
+          cap = Math.max(cap * 2, n + whole);
+          const next = new Float32Array(cap);
+          next.set(x.subarray(0, n));
+          x = next;
+        }
+        /* A 4-byte-aligned chunk can be read as a typed array and copied in
+           one go; otherwise fall back to reading it float by float. */
+        if ((buf.byteOffset & 3) === 0) {
+          x.set(new Float32Array(buf.buffer, buf.byteOffset, whole), n);
+          n += whole;
+        } else {
+          for (let i = 0; i < whole; i++) x[n++] = buf.readFloatLE(i << 2);
+        }
+      }
+      const rem = buf.length & 3;
+      carry = rem ? Buffer.from(buf.subarray(buf.length - rem)) : EMPTY;
+    });
+
     p.stderr.on('data', b => { err += b.toString(); });
     p.on('error', e => reject(new Error('could not run ffmpeg: ' + e.message)));
     p.on('close', code => {
       if (code !== 0) return reject(new Error('ffmpeg failed decoding audio:\n' + err.trim()));
-      if (!total) return reject(new Error('no audio decoded from ' + file));
-      const buf = Buffer.concat(chunks, total);
-      /* Buffer may not be 4-byte aligned for a Float32Array view, so copy. */
-      const n = Math.floor(buf.length / 4);
-      const x = new Float32Array(n);
-      for (let i = 0; i < n; i++) x[i] = buf.readFloatLE(i * 4);
-      resolve({ samples: x, sr: SR, seconds: n / SR });
+      if (!n) return reject(new Error('no audio decoded from ' + file +
+        ' — does it have a soundtrack?'));
+      /* A view, not a copy: the detector only reads length and indices. */
+      resolve({ samples: n === cap ? x : x.subarray(0, n), sr: SR, seconds: n / SR });
     });
   });
 }

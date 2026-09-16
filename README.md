@@ -132,6 +132,31 @@ Social feed: post composer, "moments" horizontal scroller, presence bar ("N on c
   - **Nothing is uploaded** — the file is read and decoded in the browser; there is no server here that could receive a video. Past ~1.2GB a tab can't hold the decode, so it hands over a one-line ffmpeg command to extract just the audio, which shares a clock with the video and cuts identically.
   - Exports the same ffmpeg script and JSON cut list as the reel, from the same generator. See **`docs/auto-cut.md`**.
 
+### Cutting on your own machine — `tools/rally-trim.js`
+
+Both of the above work out the edit **in the browser**, which is why a big file
+takes a while: the tab can only play the recording through at 4×, so an hour and
+a half is twenty-odd minutes. There is no way round that in a page — decoding
+faster needs WebCodecs and an mp4 demuxer, a build-step-shaped dependency this
+site deliberately does not have.
+
+So the fast path is a terminal program. It reads the **burnt-in scoreboard** for
+point endings — every change in the plate is a scored point, already in the
+timeline of the file you have, so a recording whose breaks were trimmed out
+needs no offset at all — and finds each serve by ear from there. One decode of
+the file, spread across your cores, then a single-pass render on whatever
+hardware encoder you have.
+
+```bash
+node tools/rally-trim.js --check                       # is this machine set up?
+node tools/rally-trim.js match.mp4 --board-preview      # did it find the plate?
+node tools/rally-trim.js match.mp4 --proof              # cut it
+```
+
+Needs `ffmpeg` and Node. The reel's cut list is optional and supplies labels
+only. Full write-up, including what it deliberately does not do, in
+**`docs/rally-trim.md`**.
+
 ### 4. Predict
 Forecast / Live & sims / Fixtures subtabs — win-probability model, Monte Carlo match simulation, and a "Rating Galaxy" force-directed canvas visualization (players as nodes sized by rating, rivalries as glowing links).
 
@@ -582,6 +607,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - docs/tournament-stats.sql — the optional `tournaments.counts_stats` column: how to keep one event out of the stats as well as out of the ladder, and why you almost never want to.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
 - docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.
+- docs/rally-trim.md — cutting on your own machine instead of in the tab: reading the burnt-in scoreboard for point endings, finding the serve by ear, and why it is minutes rather than tens of minutes.
 - docs/kit.sql — the Kit's two optional tables (`rackets`, `string_jobs`), why the hours are deliberately NOT stored in either of them, and why cutting a bed out writes a date rather than deleting the row.
 - docs/kit.min.sql — the same migration with the prose stripped, for pasting. Generated from `kit.sql`, not retyped from it; `test/site-config-sql.test.js` holds every `*.min.sql` to its canonical twin statement for statement, so the pair cannot drift.
 - docs/rally-reel.sql — the one column the rally reel needs (`matches.rallies`), the shape of what goes in it, and what happens if you skip it.
