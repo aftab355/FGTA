@@ -92,6 +92,17 @@ function cellRow(prev, cur, grid, base) {
   for (let c = 0; c < AV.AV_CELLS; c++) grid[base + c] = grid[base + c] / per;
 }
 
+/* The tensor already built by the main decode pass, handed to the same three
+   shipped functions `scan` would have used. This is the v2 path: the frames
+   were read once, for the scoreboard, and the motion came off that pass for
+   free rather than costing a second decode. */
+function fromTensor(grid, n, T, shift) {
+  if (!n || n < 8) return null;
+  const roi = AV.avROI(grid, n);
+  const ser = AV.avSeries(grid, n, roi);
+  return { grid, n, T, dt: { shift: shift || new Float64Array(n) }, roi, ser, windows: null };
+}
+
 async function scan(file, windows, opt) {
   opt = Object.assign({}, DEF, opt || {});
   const wins = mergeWindows(windows, opt.pad, opt.duration);
@@ -146,6 +157,40 @@ function makeGate(s, opt) {
   };
 }
 
+/* When did play start in this window?
+
+   Much weaker than hearing the serve, and the reason is worth stating: the
+   dead time between points is NOT still. Players walk back, towel off, bounce
+   the ball. So a plain "motion rose" test fires on somebody strolling to the
+   baseline and opens the clip far too early.
+
+   What separates a rally from the walk back is that BOTH ENDS are busy at
+   once — the same observation avMeasure's B term is built on. During the dead
+   time the server is doing something and the receiver is standing still; from
+   the serve onwards, neither of them is standing still.
+
+   This is a fallback for points the microphone missed, not a replacement for
+   hearing the strike, and the report labels which points leaned on it. */
+function makeRise(s, opt) {
+  if (!s) return null;
+  const o = Object.assign({}, AV.AV_DEF, opt || {});
+  const { T, ser, n } = s;
+  const bar = Math.max(o.bothFrac * ser.ref, ser.noise * 1.5);
+  const need = Math.max(2, Math.round((o.riseHold == null ? 0.6 : o.riseHold) / AV_STEP));
+  return function rise(t0, t1) {
+    let run = 0, first = -1;
+    for (let k = 0; k < n; k++) {
+      if (T[k] < t0) continue;
+      if (T[k] > t1) break;
+      if (ser.L[k] >= bar && ser.R[k] >= bar) {
+        if (run === 0) first = k;
+        if (++run >= need) return { t: T[first], conf: Math.min(1, run / (need * 2)) };
+      } else { run = 0; first = -1; }
+    }
+    return null;
+  };
+}
+
 /* The shipped per-clip verdict, for the report. Inconclusive on a distant or
    locked-off camera, and says so rather than pre-dropping. */
 function verdicts(s, segs, strikes) {
@@ -158,4 +203,5 @@ function verdicts(s, segs, strikes) {
   }
 }
 
-module.exports = { scan, makeGate, verdicts, mergeWindows, cellRow, DEF, AV_W, AV_H, AV_STEP };
+module.exports = { scan, fromTensor, makeGate, makeRise, verdicts, mergeWindows, cellRow,
+                   DEF, AV_W, AV_H, AV_STEP, AV_CELLS: AV.AV_CELLS };

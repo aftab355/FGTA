@@ -9,6 +9,7 @@
    node test/trim.test.js */
 'use strict';
 const align = require('../tools/rally-trim/align.js');
+const boardMod = require('../tools/rally-trim/board.js');
 const serve = require('../tools/rally-trim/serve.js');
 const motion = require('../tools/rally-trim/motion.js');
 const { build } = require('./tensors.js');
@@ -155,6 +156,105 @@ console.log('\nis it your court?');
   ok(a && b && a.ratio > b.ratio * 3, 'with plenty of margin between them',
     a && b && (a.ratio / Math.max(b.ratio, 1e-6)).toFixed(1));
   ok(gate(500, 520) === null, 'unscanned footage gets no opinion, rather than a wrong one');
+}
+
+/* ------------------------------------------------------------ the scoreboard
+
+   Synthetic footage: a court with players walking about, a net line for some
+   honest static edges, and a dark plate with bright glyphs that toggle at
+   known instants. The plate sits directly above a player's patrol, because
+   that is what broke the detector first. */
+console.log('\nreading the scoreboard');
+{
+  const W = 240, H = 135, FPS = 4, SECS = 300, N = SECS * FPS;
+  const BX = 14, BY = 101, BW = 84, BH = 24;
+  const DIG = [[6, 6], [16, 6], [30, 6], [44, 6], [58, 6], [70, 6], [6, 14], [16, 14], [30, 14], [44, 14]];
+  let seed = 7;
+  const R = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+
+  function frame(k, digits, clockOn, fade) {
+    const f = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 120 + 30 * Math.sin(x / 40) + 10 * Math.cos(y / 25) + (R() * 6 - 3);
+      if (Math.abs(y - 70) < 1) v = 200;
+      f[y * W + x] = Math.max(0, Math.min(255, v)) | 0;
+    }
+    for (const [px, py] of [[40 + ((k * 7) % 120), 55], [150 - ((k * 5) % 100), 82]])
+      for (let y = py; y < py + 18; y++) for (let x = px; x < px + 9; x++) if (y < H && x < W) f[y * W + x] = 40;
+    if (fade) return f;                                  // plate not composited yet
+    for (let y = BY; y < BY + BH; y++) for (let x = BX; x < BX + BW; x++) f[y * W + x] = 18;
+    digits.forEach((on, i) => {
+      if (!on) return;
+      const [dx, dy] = DIG[i];
+      for (let y = BY + dy; y < BY + dy + 7; y++) for (let x = BX + dx; x < BX + dx + 7; x++)
+        if (y < BY + BH && x < BX + BW) f[y * W + x] = 250;
+    });
+    if (clockOn) for (let y = BY + 2; y < BY + 6; y++) for (let x = BX + 74; x < BX + 82; x++) f[y * W + x] = 200;
+    return f;
+  }
+
+  function build(opt) {
+    opt = opt || {};
+    const truth = [];
+    for (let t = 9; t < SECS - 8; t += R() * 28 + 8) truth.push(Math.round(t * FPS) / FPS);
+    const digits = DIG.map(() => 1);
+    const frames = [];
+    for (let k = 0; k < N; k++) {
+      const t = k / FPS;
+      if (truth.some(x => Math.abs(x - t) < 1e-9)) { const i = Math.floor(R() * DIG.length); digits[i] = digits[i] ? 0 : 1; }
+      /* a drawn clock ticks once a second, whatever the score is doing */
+      const clockOn = opt.clock ? (Math.floor(t) % 2 === 0) : false;
+      const fade = opt.fade ? (t < 3 || t > SECS - 3) : false;
+      frames.push(frame(k, digits.slice(), clockOn, fade));
+    }
+    return { frames, truth };
+  }
+  const cropTo = (frames, b) => frames.map(f => {
+    const c = new Uint8Array(b.w * b.h);
+    for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) c[y * b.w + x] = f[(b.y + y) * W + b.x + x];
+    return c;
+  });
+  const inGuard = t => t >= 2 && t <= SECS - 2;
+  function check(label, frames, truth, box) {
+    const ch = boardMod.changes(cropTo(frames, box), box.w, box.h, FPS, {});
+    const want = truth.filter(inGuard);
+    const hit = want.filter(t => ch.events.some(e => Math.abs(e.t - t) <= 0.5)).length;
+    const extra = ch.events.filter(e => !want.some(t => Math.abs(e.t - t) <= 0.5)).length;
+    ok(hit === want.length && extra === 0, label,
+      hit + '/' + want.length + ' found, ' + extra + ' spurious');
+    return ch;
+  }
+
+  const plain = build();
+  const tight = { x: BX, y: BY, w: BW, h: BH };
+  check('every score change found on a tight crop, and nothing else', plain.frames, plain.truth, tight);
+
+  /* The box the detector actually returns, which on this footage is loose. */
+  const probe = []; for (let k = 0; k < N; k += 8) probe.push(plain.frames[k]);
+  const det = boardMod.detect(probe, W, H, {});
+  ok(det.box && det.box.w > 0, 'a plate is found at all', det.box && JSON.stringify(det.box));
+  const overlaps = det.box && det.box.x < BX + BW && det.box.x + det.box.w > BX &&
+                   det.box.y < BY + BH && det.box.y + det.box.h > BY;
+  ok(overlaps, 'and it overlaps the real one');
+  /* This is the property that matters. The crop is allowed to be loose — what
+     is not allowed is for the court it drags in to invent points. */
+  check('a LOOSE crop full of moving court still finds exactly the changes',
+    plain.frames, plain.truth, det.box);
+
+  const clocked = build({ clock: true });
+  const c2 = check('a ticking clock in the crop is excluded, not counted as points',
+    clocked.frames, clocked.truth, tight);
+  ok(c2.excluded.length > 0, 'and the clock cell is reported as excluded', c2.excluded.length);
+
+  const faded = build({ fade: true });
+  check('the overlay fading in and out is not two extra points',
+    faded.frames, faded.truth, tight);
+
+  /* Pointed at the court instead of the plate, it must say so. */
+  const wrong = boardMod.changes(cropTo(plain.frames, { x: 40, y: 50, w: 90, h: 40 }), 90, 40, FPS, {});
+  ok(wrong.events.length === 0 && /court/.test(wrong.reason || ''),
+    'aimed at the court, it refuses rather than reporting hundreds of points',
+    wrong.events.length + ' events, reason: ' + (wrong.reason || 'none'));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
