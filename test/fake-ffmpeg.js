@@ -155,12 +155,15 @@ if (probe) {
 }
 
 if (fc) {                                       // the main pass: board + motion
-  const bFile = (() => {
-    const i = argv.indexOf('[bo]');
-    return i >= 0 ? argv[i + 3] : null;         // -map [bo] -f rawvideo <file>
-  })();
+  /* Find the staged board file by what it IS, not by where it sits: the real
+     command line grows flags (-pix_fmt landed between them once already) and
+     a positional guess breaks silently when it does. */
+  const bFile = argv.find(a => /\.raw$/.test(a)) || null;
   const bs = /\[b\]crop=\d+:\d+:\d+:\d+,fps=(\d+),scale=(\d+):(\d+)/.exec(fc);
-  const ms = /\[m\]fps=(\d+),scale=(\d+):(\d+)/.exec(fc);
+  /* Matches both shapes: `[m]fps=...` when the graph splits for the board,
+     and `[0:v]fps=...` when there is no board and motion is the only output.
+     Anchoring on the [mo] label is what tells it from the board's [bo]. */
+  const ms = /fps=(\d+),scale=(\d+):(\d+),format=gray\[mo\]/.exec(fc);
   if (bFile && bs) {
     const parts = [];
     /* the crop is applied first in the real thing; emulate by drawing the

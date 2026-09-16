@@ -379,6 +379,14 @@ async function main() {
   const job = { slug, defaultSrc: path.basename(video), notes,
     segments: cut.map(r => ({ start: r.start, dur: r.dur, label: r.label })) };
 
+  /* The analysis is finished and is sitting on a few hundred megabytes of
+     motion tensor and decoded soundtrack. ffmpeg is about to be asked for a
+     decode and an encode of its own, and on a laptop that is where "Cannot
+     allocate memory" comes from. Let go of it first. */
+  scan = null; aligned.ends = null;
+  if (a) { a.hits = null; a.runs = null; }
+  if (global.gc) global.gc();
+
   if (o.dryRun) { say('dry run — nothing written'); return; }
   const wrote = [];
   wrote.push(emit.write(path.join(outDir, slug + '-tight-cut.sh'), emit.cutScript(job)));
@@ -389,7 +397,12 @@ async function main() {
     const out = path.join(outDir, slug + '-tight.mp4');
     say('\nrendering…');
     const r = await renderMod.render(video, out, job.segments, caps, o, say);
-    if (!r.ok) say('render failed: ' + String(r.err || '').split('\n').slice(-3).join(' '));
+    if (!r.ok) {
+      say('render failed: ' + String(r.err || '').split('\n').slice(-3).join(' '));
+      say('The cut itself is fine — only the encode failed. Run the script instead,');
+      say('which extracts each clip separately and needs far less at once:');
+      say(`  bash ${path.join(outDir, slug + '-tight-cut.sh')} ${JSON.stringify(video)}`);
+    }
     else say(`wrote ${out}   (${r.seconds.toFixed(0)}s)`);
   }
   if (o.proof && cut.length) {

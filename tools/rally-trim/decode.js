@@ -201,12 +201,17 @@ function decodeChunk(file, chunk, board, opt, onGrid) {
     filters.push(`[b]crop=${board.w}:${board.h}:${board.x}:${board.y},fps=${BOARD_FPS},` +
                  `scale=${bw}:${bh},format=gray[bo]`);
     filters.push(`[m]fps=${MOT_FPS},scale=${MOT_W}:${MOT_H},format=gray[mo]`);
-    outs.push('-map', '[bo]', '-f', 'rawvideo', boardFile);
-    outs.push('-map', '[mo]', '-f', 'rawvideo', 'pipe:1');
+    /* -pix_fmt is NOT optional here, even though the filter chain ends in
+       `format=gray`. The rawvideo encoder negotiates its own format and will
+       happily hand back 3 bytes a pixel, at which point every frame gets
+       sliced into three bogus ones — exactly 3x the expected sample count,
+       and a motion tensor made of interleaved colour planes. Say it. */
+    outs.push('-map', '[bo]', '-f', 'rawvideo', '-pix_fmt', 'gray', boardFile);
+    outs.push('-map', '[mo]', '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1');
     board.outW = bw; board.outH = bh;
   } else {
     filters.push(`[0:v]fps=${MOT_FPS},scale=${MOT_W}:${MOT_H},format=gray[mo]`);
-    outs.push('-map', '[mo]', '-f', 'rawvideo', 'pipe:1');
+    outs.push('-map', '[mo]', '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1');
   }
 
   const pre = ['-nostdin', '-loglevel', 'error'];
@@ -238,6 +243,14 @@ function decodeChunk(file, chunk, board, opt, onGrid) {
     p.on('error', e => reject(new Error('could not run ffmpeg: ' + e.message)));
     p.on('close', c => {
       if (c !== 0) return reject(new Error('ffmpeg failed on chunk ' + chunk.i + ':\n' + err.trim()));
+      /* If the frames that came back are not the frames that were asked for,
+         every timestamp downstream is wrong by that ratio. Say so loudly
+         rather than carrying on with a plausible-looking tensor. */
+      const want = (chunk.end - chunk.start) * MOT_FPS;
+      if (want > 20 && (k > want * 1.25 || k < want * 0.75)) {
+        return reject(new Error('chunk ' + chunk.i + ' returned ' + k + ' motion frames, expected about ' +
+          Math.round(want) + ' — ffmpeg is not giving back the format asked for'));
+      }
       resolve({ frames: k, boardFile: board ? boardFile : null, chunk });
     });
   });
