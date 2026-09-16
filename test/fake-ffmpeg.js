@@ -145,10 +145,11 @@ const vf = val('-vf') || '';
 
 if (has('-vn')) { writeAudio(ss, end, emitAndExit); return; }
 
-if (has('-skip_frame')) {                       // the sparse keyframe probe
-  const m = /scale=(\d+):(\d+)/.exec(vf) || [, '240', '135'];
+/* the probe: short windows, densely sampled, `-ss`/`-t` bounded */
+const probe = /fps=1\/(\d+),scale=(\d+):(\d+)/.exec(vf);
+if (probe) {
   const parts = [];
-  rawVideo(+m[1], +m[2], 0.5, 0, DUR, b => parts.push(b));
+  rawVideo(+probe[2], +probe[3], 1 / +probe[1], ss, end, b => parts.push(b));
   emitAndExit(parts);
   return;
 }

@@ -104,20 +104,46 @@ function info(file, opt) {
   };
 }
 
-/* A fast sparse look at the whole file. `-skip_frame nokey` decodes only
-   keyframes, which on ordinary footage is one every couple of seconds — so
-   this reads an hour and a half in seconds rather than minutes. Sparse is
-   fine for the question it answers: what does the picture LOOK like, and
-   where is there a graphic pasted over it. Timing questions need the dense
-   pass below. */
-function probeFrames(file, opt) {
-  opt = opt || {};
+/* A look at the picture, without reading the whole file to get it.
+
+   The first version asked for `-skip_frame nokey` over the entire recording,
+   on the theory that keyframes are sparse. They are not necessarily: an
+   editor's export can use a short GOP or be all-intra, and then this decodes
+   every frame of an eight-gigabyte file and holds all of them — gigabytes of
+   240x135 frames to answer a question that needs a few hundred.
+
+   Sparse SEEKING is the obvious fix and it is wrong, because of what the
+   detector measures. It finds the scoreboard by how OFTEN each pixel changes:
+   a plate updates in a few percent of frames, a player moves in most of them.
+   Sample twenty seconds apart and the scoreline differs between most
+   consecutive pairs too — it stops looking bursty and disqualifies itself.
+
+   So: a handful of short windows, spread across the match, each sampled
+   densely enough to keep that statistic meaningful. Eight windows of 45s at
+   one frame every 2s is ~7% of the file decoded, a couple of hundred frames
+   held, and the same answer. */
+const PROBE_WINDOWS = 8;
+const PROBE_SPAN = 45;      // seconds decoded at each
+const PROBE_STEP = 2;       // one frame every this many seconds
+
+function probeStarts(duration, n, span) {
+  const edge = Math.min(duration * 0.03, 60);
+  const last = Math.max(0, duration - span - edge);
+  const lo = Math.min(edge, last);
+  if (n < 2 || last <= lo) return [lo];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(lo + (last - lo) * i / (n - 1));
+  return out;
+}
+
+function grabProbeWindow(file, start, span, opt) {
   return new Promise((resolve, reject) => {
-    const args = ['-nostdin', '-loglevel', 'error', '-skip_frame', 'nokey',
-      '-i', file, '-an']
-      .concat(passthroughArgs(opt.caps))
-      .concat(['-vf', `scale=${PROBE_W}:${PROBE_H},format=gray`,
-        '-f', 'rawvideo', 'pipe:1']);
+    /* The fps filter fixes the output rate, so no -fps_mode is needed or
+       wanted here — unlike the keyframe route this replaced. */
+    const args = ['-nostdin', '-loglevel', 'error',
+      '-ss', start.toFixed(3), '-accurate_seek', '-i', file, '-t', span.toFixed(3),
+      '-an', '-vf', `fps=1/${PROBE_STEP},scale=${PROBE_W}:${PROBE_H},format=gray`,
+      '-f', 'rawvideo', 'pipe:1'];
     const p = spawn(opt.ffmpeg || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const chunks = []; let total = 0, err = '';
     p.stdout.on('data', b => { chunks.push(b); total += b.length; });
@@ -126,13 +152,29 @@ function probeFrames(file, opt) {
     p.on('close', c => {
       if (c !== 0) return reject(new Error('ffmpeg failed probing frames:\n' + err.trim()));
       const buf = Buffer.concat(chunks, total), per = PROBE_W * PROBE_H;
-      const n = Math.floor(buf.length / per);
-      if (n < 4) return reject(new Error('only ' + n + ' keyframes decoded — is this a video file?'));
-      const frames = [];
-      for (let k = 0; k < n; k++) frames.push(buf.subarray(k * per, (k + 1) * per));
-      resolve({ frames, w: PROBE_W, h: PROBE_H, n });
+      const n = Math.floor(buf.length / per), out = [];
+      for (let k = 0; k < n; k++) out.push(buf.subarray(k * per, (k + 1) * per));
+      resolve(out);
     });
   });
+}
+
+async function probeFrames(file, opt) {
+  opt = opt || {};
+  const duration = opt.duration || 0;
+  const span = Math.max(4, Math.min(opt.probeSpan || PROBE_SPAN, duration || PROBE_SPAN));
+  const starts = duration ? probeStarts(duration, opt.probeWindows || PROBE_WINDOWS, span) : [0];
+  const got = await pool(starts, Math.max(1, opt.jobs || 4),
+    (t, i) => grabProbeWindow(file, t, span, opt).then(f => {
+      if (opt.onProbe) opt.onProbe(i + 1, starts.length);
+      return f;
+    }));
+  const frames = [].concat.apply([], got);
+  if (frames.length < 8) {
+    throw new Error('only ' + frames.length + ' frames could be read from ' + file +
+      ' — is it a video this ffmpeg can decode?');
+  }
+  return { frames, w: PROBE_W, h: PROBE_H, n: frames.length, windows: starts.length, span };
 }
 
 function chunksOf(duration, n, overlap) {
@@ -220,6 +262,6 @@ function rmTmp(dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } 
 
 module.exports = {
   capabilities, info, probeFrames, chunksOf, decodeChunk, pool, mkTmp, rmTmp,
-  majorOf, passthroughArgs,
+  majorOf, passthroughArgs, probeStarts,
   MOT_W, MOT_H, MOT_FPS, BOARD_FPS, BOARD_W, PROBE_W, PROBE_H
 };

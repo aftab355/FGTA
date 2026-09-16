@@ -220,10 +220,21 @@ async function main() {
     } else {
       say('looking for the scoreboard…');
       let pf;
-      try { pf = await decode.probeFrames(video, Object.assign({}, o, { caps })); } catch (e) { fail(e.message); }
+      try {
+        pf = await decode.probeFrames(video, Object.assign({}, o, {
+          caps, duration: info.duration, jobs,
+          onProbe: (i, n) => say(`               sampled ${i}/${n} windows`)
+        }));
+      } catch (e) { fail(e.message); }
       const det = boardMod.detect(pf.frames, pf.w, pf.h, {});
       if (!det.box) {
-        say('               ' + (det.reason || 'not found') + ' — falling back to locating the taps by ear');
+        say('               ' + (det.reason || 'not found'));
+        say('               Check there IS one, and where, with a single frame:');
+        say(`                 ffmpeg -ss ${Math.round(info.duration / 3)} -i ${JSON.stringify(video)} -frames:v 1 -y frame.png && open frame.png`);
+        say('               If you can see a plate in that, pass its box: --board x,y,w,h');
+        say('               If there is no scoreboard on this footage at all, this route');
+        say('               cannot work — give it the reel\'s cut list instead and it will');
+        say('               locate the taps by ear.');
         o.board = false;
       } else {
         box = boardMod.scaleBox(det.box, pf.w, pf.h, info.width, info.height);
