@@ -220,7 +220,7 @@ async function main() {
     } else {
       say('looking for the scoreboard…');
       let pf;
-      try { pf = await decode.probeFrames(video, o); } catch (e) { fail(e.message); }
+      try { pf = await decode.probeFrames(video, Object.assign({}, o, { caps })); } catch (e) { fail(e.message); }
       const det = boardMod.detect(pf.frames, pf.w, pf.h, {});
       if (!det.box) {
         say('               ' + (det.reason || 'not found') + ' — falling back to locating the taps by ear');

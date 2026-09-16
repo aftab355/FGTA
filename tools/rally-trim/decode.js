@@ -50,13 +50,40 @@ function capabilities(opt) {
   /* Ordered by how much they usually help, not alphabetically. */
   const encoders = ['h264_nvenc', 'h264_videotoolbox', 'h264_qsv', 'h264_amf', 'h264_vaapi']
     .filter(has);
+  const version = (/ffmpeg version (\S+)/.exec(v.out) || [, '?'])[1];
   return {
     ok: true,
-    version: (/ffmpeg version (\S+)/.exec(v.out) || [, '?'])[1],
+    version,
+    major: majorOf(version),
     hwaccels: hw.split('\n').map(s => s.trim()).filter(s => s && !/:$/.test(s)),
     encoders,
     cores: os.cpus().length
   };
+}
+
+/* ffmpeg's own version, when it is a release. A git build ("N-109321-g...")
+   has no major number to read, and is by definition recent. */
+function majorOf(version) {
+  const m = /^(\d+)/.exec(String(version || ''));
+  return m ? +m[1] : null;
+}
+
+/* Emit exactly the frames that were decoded, without padding the gaps.
+
+   This matters more than it looks. The probe decodes only keyframes, so its
+   frames are seconds apart; left to pad to a constant rate, ffmpeg repeats
+   each one until the next — at 59.94 fps with a two-second GOP that is about
+   120 copies of every frame, which is both ruinous for memory and quietly
+   wrong, because the busy-fraction the board detector measures is computed
+   across consecutive frames and duplicates read as "nothing moved".
+
+   The flag for it changed name. `-vsync` was deprecated in ffmpeg 5 when
+   `-fps_mode` replaced it, and REMOVED in ffmpeg 9 — where passing it is a
+   hard error, not a warning. So pick by version, and assume a build too new
+   to parse is new enough for the new spelling. */
+function passthroughArgs(caps) {
+  const maj = caps ? caps.major : undefined;
+  return (maj == null || maj >= 5) ? ['-fps_mode', 'passthrough'] : ['-vsync', '0'];
 }
 
 function info(file, opt) {
@@ -87,9 +114,10 @@ function probeFrames(file, opt) {
   opt = opt || {};
   return new Promise((resolve, reject) => {
     const args = ['-nostdin', '-loglevel', 'error', '-skip_frame', 'nokey',
-      '-i', file, '-an', '-vsync', '0',
-      '-vf', `scale=${PROBE_W}:${PROBE_H},format=gray`,
-      '-f', 'rawvideo', 'pipe:1'];
+      '-i', file, '-an']
+      .concat(passthroughArgs(opt.caps))
+      .concat(['-vf', `scale=${PROBE_W}:${PROBE_H},format=gray`,
+        '-f', 'rawvideo', 'pipe:1']);
     const p = spawn(opt.ffmpeg || 'ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const chunks = []; let total = 0, err = '';
     p.stdout.on('data', b => { chunks.push(b); total += b.length; });
@@ -192,5 +220,6 @@ function rmTmp(dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } 
 
 module.exports = {
   capabilities, info, probeFrames, chunksOf, decodeChunk, pool, mkTmp, rmTmp,
+  majorOf, passthroughArgs,
   MOT_W, MOT_H, MOT_FPS, BOARD_FPS, BOARD_W, PROBE_W, PROBE_H
 };

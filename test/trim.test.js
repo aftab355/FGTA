@@ -11,6 +11,7 @@
 const align = require('../tools/rally-trim/align.js');
 const boardMod = require('../tools/rally-trim/board.js');
 const audioMod = require('../tools/rally-trim/audio.js');
+const decodeMod = require('../tools/rally-trim/decode.js');
 const serve = require('../tools/rally-trim/serve.js');
 const motion = require('../tools/rally-trim/motion.js');
 const { build } = require('./tensors.js');
@@ -265,6 +266,26 @@ console.log('\nreading the scoreboard');
    recording. The risk that buys is a float split across two reads: ffmpeg's
    pipe does not hand over whole samples, it hands over bytes. So drive it with
    a stand-in that emits deliberately awkward chunk sizes. */
+/* ---------------------------------------------------------- talking to ffmpeg
+
+   ffmpeg removes options, not just deprecates them. `-vsync` was deprecated in
+   5 when `-fps_mode` replaced it and DELETED in 9, where passing it is a hard
+   error — "Unrecognized option 'vsync'" — and the whole run dies before a
+   frame is read. The keyframe probe cannot go without one of the two, because
+   left to pad to a constant rate ffmpeg repeats each sparse keyframe until the
+   next: at 59.94fps with a two-second GOP that is ~120 copies of every frame. */
+console.log('\ntalking to ffmpeg');
+{
+  const M = decodeMod.majorOf, P = v => decodeMod.passthroughArgs({ major: M(v) }).join(' ');
+  ok(M('9.0.1') === 9 && M('4.4.2') === 4, 'a release version parses', M('9.0.1') + '/' + M('4.4.2'));
+  ok(M('N-109321-g1a2b3c') === null, 'a git build has no major number to read', M('N-109321-g1a2b3c'));
+  ok(P('9.0.1') === '-fps_mode passthrough', 'ffmpeg 9 gets -fps_mode, which is all it accepts', P('9.0.1'));
+  ok(P('5.0') === '-fps_mode passthrough', 'and so does 5, where it was introduced', P('5.0'));
+  ok(P('4.4.2') === '-vsync 0', 'ffmpeg 4 gets -vsync, which is all IT accepts', P('4.4.2'));
+  ok(P('N-109321-g1a2b3c') === '-fps_mode passthrough',
+    'an unparseable build is assumed new enough for the new spelling', P('N-109321-g1a2b3c'));
+}
+
 console.log('\nreading the soundtrack');
 {
   const fs2 = require('fs'), os2 = require('os'), path2 = require('path');
