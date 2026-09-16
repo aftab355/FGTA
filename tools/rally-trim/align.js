@@ -193,4 +193,39 @@ function align(points, runs, options) {
   };
 }
 
-module.exports = { align, runEnds, nearest, score, searchOffset, median, DEF };
+/* The scoreboard route, which needs no alignment at all.
+
+   A board change is a point ending, already in the timeline of the file on
+   disk — so excisions, hand-placed overlays and a video that is not the match
+   all stop mattering. `align()` above exists for footage with no board.
+
+   One correction is applied: the export renders the ref's TAP, and the ref
+   taps `lag` after the ball is actually dead. Same constant the reel uses,
+   from the same tuning. */
+function fromBoard(events, cutPoints, tune, options) {
+  const opt = Object.assign({}, DEF, options || {});
+  const lag = (tune && tune.lag) || 0;
+  const out = events.map((e, i) => {
+    const src = cutPoints && cutPoints[i] ? cutPoints[i] : null;
+    return {
+      n: i + 1,
+      videoEnd: Math.max(0, e.t - lag),
+      boardAt: e.t,
+      matchEnd: src ? src.matchEnd : null,
+      reelStart: src ? src.reelStart : null,
+      reelDur: src ? src.reelDur : null,
+      label: src ? src.label : 'point ' + (i + 1),
+      meta: src ? src.meta : null,
+      aligned: true,
+      residual: null
+    };
+  });
+  const expected = cutPoints ? cutPoints.length : null;
+  return {
+    points: out, splices: [], spread: null, endPad: 0, source: 'board',
+    matched: out.length, expected,
+    mismatch: expected == null ? null : out.length - expected
+  };
+}
+
+module.exports = { fromBoard, align, runEnds, nearest, score, searchOffset, median, DEF };

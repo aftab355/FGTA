@@ -92,7 +92,7 @@ function findServes(aligned, hits, tune, ac, options) {
       matchEnd: p.matchEnd, videoEnd: winEnd,
       aligned: p.aligned, residual: p.residual,
       reelStart: p.reelStart, reelDur: p.reelDur,
-      measured: false, serve: null, strikes: 0, faults: 0,
+      measured: false, via: null, serve: null, strikes: 0, faults: 0,
       courtRatio: null, note: ''
     };
 
@@ -132,20 +132,34 @@ function findServes(aligned, hits, tune, ac, options) {
             rec.courtRatio = m ? m.ratio : null;
           }
           rec.measured = true;
+          rec.via = 'audio';
           rec.serve = serve;
           rec.strikes = flat.length;
         }
       }
     }
 
-    /* Fall back to the reel's own arithmetic, on the aligned timeline, and say
-       so. A guessed start that is not labelled a guess is the thing to avoid. */
+    /* Nobody heard this point. Before falling back to arithmetic, ask the
+       picture when both ends of the court got busy — a weaker signal than a
+       struck ball, but a measurement rather than a constant, and labelled as
+       the weaker one so it can be checked. */
+    if (!rec.measured && opt.rise && winEnd > winStart) {
+      const r = opt.rise(winStart, winEnd);
+      if (r && r.t < winEnd - 0.5) {
+        rec.measured = true; rec.via = 'motion'; rec.serve = r.t; rec.riseConf = r.conf;
+        rec.note = 'heard nothing — start taken from when both ends of the court got busy';
+      }
+    }
+
+    /* Only now fall back to the reel's own arithmetic, and say so. A guessed
+       start that is not labelled a guess is the thing to avoid. */
     let start, cap;
     if (rec.measured) {
       start = rec.serve - tune.lead;
       cap = opt.maxClip;
     } else {
       start = (i > 0 ? pts[i - 1].videoEnd : 0) + tune.dead - tune.lead;
+      rec.via = 'assumed';
       rec.note = 'assumed dead time' + (rec.note ? ' — ' + rec.note : '');
       /* The generous rail exists to stop a MEASURED long rally being
          truncated. There is no measurement here, so the reel's own cap is the

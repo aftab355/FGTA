@@ -138,7 +138,7 @@ function proofScript(job, before, after) {
   ].join('\n') + '\n';
 }
 
-const COLS = ['n', 'start', 'end', 'dur', 'used', 'measured', 'aligned', 'strikes', 'faults',
+const COLS = ['n', 'start', 'end', 'dur', 'used', 'measured', 'via', 'aligned', 'strikes', 'faults',
   'serve', 'videoEnd', 'residual', 'courtRatio', 'conf', 'reelStart', 'reelDur', 'saved', 'label', 'note'];
 
 function report(recs) {
@@ -148,7 +148,7 @@ function report(recs) {
     lines.push([
       r.n, num(r.start), num(r.end), num(r.dur),
       r.dropped ? 'DROPPED' : 'yes',
-      r.measured ? 'yes' : 'NO', r.aligned ? 'yes' : 'NO',
+      r.measured ? 'yes' : 'NO', r.via || '', r.aligned ? 'yes' : 'NO',
       r.strikes, r.faults, num(r.serve), num(r.videoEnd), num(r.residual),
       num(r.courtRatio), num(r.conf), num(r.reelStart), num(r.reelDur), num(r.saved),
       String(r.label || '').replace(/\t/g, ' '),
@@ -163,33 +163,56 @@ function summary(all, aligned, audio) {
   const dropped = all.length - recs.length;
   const kept = recs.reduce((a, r) => a + r.dur, 0);
   const reel = recs.reduce((a, r) => a + (r.reelDur || 0), 0);
-  const measured = recs.filter(r => r.measured).length;
-  const unaligned = recs.filter(r => !r.aligned).length;
+  const via = k => recs.filter(r => r.via === k).length;
+  const board = aligned.source === 'board';
   const L = [];
+
   L.push(`rallies            ${recs.length}`);
-  L.push(`kept               ${clock(kept)}   (reel was ${clock(reel)}, ${clock(reel - kept)} removed)`);
-  L.push(`mean clip          ${(kept / Math.max(1, recs.length)).toFixed(1)}s   (reel ${(reel / Math.max(1, recs.length)).toFixed(1)}s)`);
-  L.push(`starts measured    ${measured} of ${recs.length}${measured < recs.length ? '   (' + (recs.length - measured) + ' fell back to assumed dead time)' : ''}`);
-  L.push(`points aligned     ${recs.length - unaligned} of ${recs.length}${unaligned ? '   (' + unaligned + ' could not be located in the file)' : ''}`);
+  L.push(`kept               ${clock(kept)}` +
+    (reel ? `   (reel was ${clock(reel)}, ${clock(reel - kept)} removed)` : ''));
+  L.push(`mean clip          ${(kept / Math.max(1, recs.length)).toFixed(1)}s` +
+    (reel ? `   (reel ${(reel / Math.max(1, recs.length)).toFixed(1)}s)` : ''));
+
+  /* Where each START came from, which is the number to read: the tool exists
+     to stop these being assumed. */
+  L.push(`starts             ${via('audio')} heard, ${via('motion')} from the picture, ` +
+    `${via('assumed')} assumed`);
   if (dropped) L.push(`dropped            ${dropped}   — see the report; these are NOT in the cut`);
+
   if (audio) {
     L.push(`strikes            ${audio.hits.length}  (${audio.perMin.toFixed(1)}/min — a real singles match runs 15-25)`);
     if (audio.split) L.push(`strike floor       ${audio.split.chosen}${audio.split.applied ? '' : ', not applied'}`);
   }
-  L.push(`alignment spread   ${aligned.spread == null ? 'n/a' : aligned.spread.toFixed(2) + 's'}` +
-    ` median residual${aligned.spread != null && aligned.spread > 1.5 ? '   — loose; check the proof reel carefully' : ''}`);
-  L.push(`ball flight        ${aligned.endPad.toFixed(2)}s assumed between the last strike and the ball being dead`);
-  if (aligned.splices.length) {
-    L.push('');
-    L.push('splices found (time removed from the recording before you got it):');
-    let tot = 0;
-    for (const s of aligned.splices) {
-      tot += s.removed;
-      L.push(`  after rally ${String(s.afterRally).padStart(3)}  ${clock(s.removed)} removed   (tap gap was ${clock(s.gap)})`);
+
+  /* Where the ENDINGS came from. On the board route there is no alignment to
+     report and nothing assumed about ball flight — the plate changed when the
+     ref tapped, in this file's own timeline. */
+  if (board) {
+    L.push(`point endings      read off the scoreboard, in this file's own timeline`);
+    if (aligned.expected != null) {
+      L.push(`                   ${aligned.points.length} changes against the cut list's ${aligned.expected} points` +
+        (aligned.mismatch ? `  — ${Math.abs(aligned.mismatch)} ${aligned.mismatch > 0 ? 'more' : 'fewer'}, so labels may be off` : ', which agree'));
     }
-    L.push(`  total ${clock(tot)}`);
   } else {
-    L.push('splices            none found — the file looks like one continuous take');
+    const unaligned = recs.filter(r => !r.aligned).length;
+    L.push(`point endings      from the taps, located by ear`);
+    L.push(`points located     ${recs.length - unaligned} of ${recs.length}` +
+      (unaligned ? `   (${unaligned} could not be found in the file)` : ''));
+    L.push(`alignment spread   ${aligned.spread == null ? 'n/a' : aligned.spread.toFixed(2) + 's'} median residual` +
+      (aligned.spread != null && aligned.spread > 1.5 ? '   — loose; check the proof reel carefully' : ''));
+    L.push(`ball flight        ${(aligned.endPad || 0).toFixed(2)}s assumed between the last strike and the ball being dead`);
+    if (aligned.splices.length) {
+      L.push('');
+      L.push('splices found (time removed from the recording before you got it):');
+      let tot = 0;
+      for (const sp of aligned.splices) {
+        tot += sp.removed;
+        L.push(`  after rally ${String(sp.afterRally).padStart(3)}  ${clock(sp.removed)} removed   (tap gap was ${clock(sp.gap)})`);
+      }
+      L.push(`  total ${clock(tot)}`);
+    } else {
+      L.push(`splices            none found — the file looks like one continuous take`);
+    }
   }
   return L.join('\n');
 }

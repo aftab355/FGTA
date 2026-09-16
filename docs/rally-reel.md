@@ -140,10 +140,12 @@ OFFSET=-12.5 bash fgta-alice-vs-bob-cut.sh camera-original.mp4
 **Still too much walking about in it?** `dead` is an assumption, and the one
 thing a slider cannot do is vary per point — real between-point time is eight
 seconds after a quick point and thirty after the ball goes to the back fence.
-[rally-trim](rally-trim.md) takes the script this button produces and measures
-each serve by ear instead, keeping the taps for the endings. It also handles a
-recording whose breaks were cut out before you got it, which a single `OFFSET`
-cannot.
+[rally-trim](rally-trim.md) measures each serve by ear instead. If the
+scoreboard is burnt into your footage it reads the endings straight off that,
+in the file's own timeline — so a recording whose breaks were cut out before
+you got it needs no offset at all, which is just as well, because a single
+`OFFSET` cannot express one. The script this button produces is optional there;
+it supplies the labels.
 
 ### `⬇ cut list (JSON)`
 
