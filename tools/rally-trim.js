@@ -238,7 +238,7 @@ async function main() {
         o.board = false;
       } else {
         box = boardMod.scaleBox(det.box, pf.w, pf.h, info.width, info.height);
-        say(`scoreboard     ${box.w}x${box.h} at ${box.x},${box.y}  (from ${pf.n} keyframes, score ${det.score.toFixed(2)})`);
+        say(`scoreboard     ${box.w}x${box.h} at ${box.x},${box.y}  (from ${pf.n} frames over ${pf.windows} windows, score ${det.score.toFixed(2)})`);
         say('               check it with --board-preview if anything below looks wrong');
       }
     }
