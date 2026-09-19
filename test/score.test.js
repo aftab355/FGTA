@@ -12,7 +12,7 @@
    node test/score.test.js   (no dependencies) */
 const {loadScore}=require('./extract.js');
 const {playMatch}=require('./simulate.js');
-const {scFrame, scScore}=loadScore();
+const {scFrame, scScore, scBreakerAt}=loadScore();
 
 let seed=771131;
 const R=()=>((seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff);
@@ -134,6 +134,51 @@ ok(perMatch<4,'and a person has only a few games to correct',
      'a point score is only ever shown where there is one reading',
      S.board.length+' rallies');
   ok(S.board.every(r=>r.point>=1 && r.point<=r.points),'every rally knows its number within the game');
+}
+
+/* a decider played as a 10-point breaker, which is how a one-set-all match
+   actually gets settled here. "10-7" has the shape of a set won ten games to
+   seven, and expanding it into seventeen games of serve-and-ends rotation
+   does not just fail — it fails quietly, and drags the two real sets down
+   with it, because every run after the first is then off by a set's worth of
+   rotation. It has to be recognised and set aside. */
+{
+  ok(scBreakerAt([[6,4],[3,6],[10,7]])===2, 'the last pair, above a set ceiling, is the breaker');
+  ok(scBreakerAt([[6,4],[3,6],[7,5]])===-1, 'a real third set is not');
+  ok(scBreakerAt([[6,4],[3,6],[4,2]])===-1, 'nor is a first-to-3 decider');
+  ok(scBreakerAt([[11,8]])===-1, 'nor a whole match written as one short game');
+
+  /* two real sets off the simulator, then a breaker bolted on the way one is
+     in real life: its rallies are in the recording, its ends alternate in
+     twos, and nothing about it is reconstructible */
+  let M=null;
+  for(let i=0;i<200 && !M;i++){ const c=playMatch(R,0.72,0.62);
+    if(!c.tiebreaks && c.setScores.length===2) M=c; }
+  ok(!!M, 'the simulator produced a straight-sets match to build on');
+
+  const TB=17;
+  const ends=M.ends.slice(), rallies=M.rallies.slice();
+  let last=rallies[rallies.length-1].end, e=1;
+  for(let i=0;i<TB;i++){
+    if(i%2===0) e=-e;                       // inside a breaker the serving end goes in twos
+    ends.push(e);
+    last+=8; rallies.push({start:last, end:last+5});
+  }
+  const line=M.setScores.concat([[10,7]]);
+  const S=scScore(rallies, scFrame(ends), line, {firstServer:'a'});
+
+  ok(S.sets.length===3 && S.sets[2].breaker===true && S.sets[2].games.length===0,
+     'the breaker is reported as the set it stood in for, with no games under it');
+  ok(S.sets[2].gA===10 && S.sets[2].gB===7, 'and with the score that was actually typed');
+  ok(S.games.every(g=>g.set<2),
+     'no game is invented for it — the seventeen-game third set never appears',
+     S.games.length+' games, highest set '+Math.max(...S.games.map(g=>g.set)));
+  ok(S.games.length<=13*2,
+     'so the game count stays inside what two sets can hold', S.games.length);
+  ok(/breaker/.test(S.note||''), 'and the panel is told why, not left to guess', S.note||'(none)');
+  ok(S.ok===false, 'a match with a breaker in it is never "fully worked out"');
+  ok(S.board.every(r=>r.rally<rallies.length-TB),
+     'the burnt-in board stops at the last reconstructed rally rather than guessing through it');
 }
 
 console.log('\n'+pass+' passed, '+fail+' failed');

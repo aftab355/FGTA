@@ -286,6 +286,18 @@ every two points while the ends change every six, so the end alternates in
 twos and the run structure the whole method rests on does not hold. The burst
 is unmistakable and both its neighbours are flagged with it.
 
+That holds for a **10-point breaker played in place of a third set** as well,
+and there it has to be spotted in the typed score rather than in the picture.
+`10-7` has the shape of a set won ten games to seven, and no set finishes above
+seven games, so a last pair above that ceiling can only be a breaker —
+`scBreakerAt()`. Expanding it into a seventeen-game set does not merely fail to
+reconstruct the breaker; every run after the first is then off by a set's worth
+of serve-and-ends rotation, so it takes the two real sets down with it. So the
+breaker is set aside: the sets before it are reconstructed as normal, it is
+reported as the set it stood in for with no games under it, its rallies are
+left out of the games list and out of the burnt-in board, and the panel says
+which pair it did that to.
+
 ### Using it
 
 **Matches → Auto-cut**, on a video, after the picture pass has found the serve
