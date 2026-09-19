@@ -9934,7 +9934,7 @@
           </select></div>
         <div><label for="pgDate">Date played</label><input id="pgDate" type="date"></div>
       </div>
-      <div style="margin-top:10px"><label>Set scores (optional, P1 first)</label><input id="pgSets" placeholder="6-4, 3-6, 7-5" autocomplete="off"></div>
+      <div style="margin-top:10px"><label>Set scores (optional, P1 first)</label><input id="pgSets" placeholder="6-4, 3-6, 10-7" autocomplete="off"></div>
       <button class="btn" onclick="addPastGame()">Add game</button>
     </div>
   </section>
@@ -10024,7 +10024,7 @@
             <option value="0">Player 2 won</option>
             <option value="0.5">Draw</option>
           </select>
-          <input id="wiSets" placeholder="set scores (optional), e.g. 6-4, 3-6, 7-5" autocomplete="off">
+          <input id="wiSets" placeholder="set scores (optional), e.g. 6-4, 3-6, 10-7" autocomplete="off">
         </div>
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn" style="width:auto;margin:0" onclick="addWhatIfGame()">Add hypothetical game</button>
@@ -11687,6 +11687,65 @@ function ratingOf(name, standings){
    winning, and does it consistently enough that nobody notices.
    ============================================================ */
 /* ============================================================
+   READING A SET SCORE THAT IS NOT A SET
+
+   The sets column is free text, and deliberately: the first two
+   sets are always full ones, and whatever settles a one-set-all
+   match is whatever the two of them agreed to on the day — a
+   10-point breaker, a first-to-3 win-by-2, or a third full set.
+
+   Only one of those lies about its own size. "3-1" is small and
+   reads small. "10-7" has the shape of a set won ten games to
+   seven and is the SHORTEST thing anybody plays, so every sum
+   over the sets column reads it about ten times too big unless it
+   is told otherwise: a breaker match becomes the longest ever
+   played, and a 10-2 finish out-dominates a bagel.
+
+   What identifies it is that it is not a legal set score. Nobody
+   wins a set with more than seven games — 6-0 to 6-4, 7-5, 7-6,
+   and that is the whole list — so a pair above that ceiling can
+   only be a breaker written in the sets column. There is nothing
+   else it could be.
+
+   That test alone is not quite enough, because a single pair is
+   not necessarily a decider: a group game played to 11 is a whole
+   match written as one pair ("11-8"), not a breaker bolted onto
+   two real sets. So there are two readings here and they answer
+   different questions:
+
+     setOversized(p)     is this pair too big to be a set at all?
+                         The right question for "how much tennis
+                         was this" — a to-11 group game is short
+                         too, and should read short.
+
+     breakerIndex(pairs) which pair, if any, is a DECIDER played
+                         as a breaker — the last pair of a
+                         multi-set score, above the ceiling. The
+                         right question when a pair has to stand
+                         in for a set: only that shape gets a
+                         games count invented for it.
+   ============================================================ */
+const SET_MAX_GAMES = 7;             // 7-6 is the longest set anyone wins
+
+/* "6-4, 3-6, 10-7" -> [{a:6,b:4},{a:3,b:6},{a:10,b:7}], p1 first.
+   Unreadable pairs drop out rather than arriving as NaN, because every
+   caller below sums or compares what comes back. */
+function setPairs(sets){
+  return String(sets || "").split(",").map(str => {
+    const [a, b] = str.trim().split("-").map(n => parseInt(n, 10));
+    return (isNaN(a) || isNaN(b)) ? null : {a, b};
+  }).filter(Boolean);
+}
+/* a score no set could legally have finished on */
+function setOversized(p){ return p && Math.max(p.a, p.b) > SET_MAX_GAMES; }
+/* index of a decider played as a breaker, or -1 for a match without one */
+function breakerIndex(pairs){
+  if(!pairs || pairs.length < 2) return -1;
+  const last = pairs.length - 1;
+  return setOversized(pairs[last]) ? last : -1;
+}
+
+/* ============================================================
    MARGIN OF VICTORY (from MOV_START onward only)
    A dominant win counts for more — but the bonus is suppressed
    when the winner was already favoured, so blowing out a weaker
@@ -11704,6 +11763,14 @@ const MOV_MAX       = 1.6;           // cap so one game can't swing wildly
    or not. Gated to games on/after BLOWOUT_FLOOR_START only, so it never re-scores history. */
 const BLOWOUT_FLOOR_START = "2026-08-08";
 const BLOWOUT_FLOOR_MULT  = 1.25;
+/* A decider played as a 10-point breaker used to be summed into the game
+   count at face value, which reads a 10-2 finish as a ten-games-to-two set
+   and hands it more dominance than a bagel. From this date it is counted as
+   the one decisive game it stands in for instead. Date-gated for the same
+   reason everything else here is: the table is recomputed from the match
+   rows on every load, so changing how a score is READ moves published
+   ratings unless the change starts on a day. */
+const MOV_BREAKER_START = "2026-09-19";
 
 /* effective K multiplier for a match; 1 = plain Elo, always >= MOV_MIN.
    Dominance is read straight off the score (game differential vs total
@@ -11718,11 +11785,16 @@ function movMultiplier(m, rWinner, rLoser){
   if(o === 0.5) return 1;            // draws have no margin
   if(!m.sets) return 1;              // no set data, no margin info
   const p1Won = o === 1;
+  const pairs = setPairs(m.sets);
+  /* a breaker decider is worth the single game it replaced, not its own
+     point score — see READING A SET SCORE THAT IS NOT A SET */
+  const brk = new Date(m.created_at) >= new Date(MOV_BREAKER_START)
+              ? breakerIndex(pairs) : -1;
   let gw = 0, gl = 0, setsPlayed = 0;
-  m.sets.split(",").forEach(str=>{
-    const [a,b] = str.trim().split("-").map(n=>parseInt(n,10));
-    if(isNaN(a) || isNaN(b)) return;
+  pairs.forEach((p, i) => {
     setsPlayed++;
+    const a = i === brk ? (p.a > p.b ? 1 : 0) : p.a;
+    const b = i === brk ? (p.b > p.a ? 1 : 0) : p.b;
     if(p1Won){ gw += a; gl += b; } else { gw += b; gl += a; }
   });
   if(setsPlayed === 0) return 1;
@@ -11828,11 +11900,12 @@ const DYNK_RUST_CAP = 48;    // rust can lift a settled rating this far and no f
 /* format reliability: games contained in the match vs a straight-sets best-of-3 */
 const DYNK_FULL_GAMES = 12;
 const DYNK_FORMAT_MIN = 0.6;
-/* A set nobody could have won under the tracker's rules (games to 6, win by 2,
-   tiebreak to 7 at 6-6, so 7 games is the most anyone wins) is a 10-point match
-   breaker written in the sets field. It reads as a long set and is the shortest
-   thing anyone plays, so it is worth this many games instead of its own score. */
-const DYNK_TB_MAX_GAMES = 7;
+/* A pair above SET_MAX_GAMES is not a set — it is a breaker, or a short game
+   played to 11, written in the sets field. Either way it reads as a long set
+   and is among the shortest things anyone plays, so it is worth this many
+   games instead of its own score. Position-independent on purpose: a match
+   filed as nothing but "10-7" is short too, and asking here is asking how
+   much tennis the result is evidence of. */
 const DYNK_TB_WORTH     = 6;
 
 /* does this match get a per-player K at all? */
@@ -11847,11 +11920,9 @@ function dynKApplies(m){
 function formatReliability(m){
   if(!m.sets) return 1;                  // no set data recorded — assume a normal match
   let games = 0, sets = 0;
-  m.sets.split(",").forEach(str=>{
-    const [a,b] = str.trim().split("-").map(n=>parseInt(n,10));
-    if(isNaN(a) || isNaN(b)) return;
+  setPairs(m.sets).forEach(p => {
     sets++;
-    games += Math.max(a,b) > DYNK_TB_MAX_GAMES ? DYNK_TB_WORTH : a + b;
+    games += setOversized(p) ? DYNK_TB_WORTH : p.a + p.b;
   });
   if(!sets) return 1;
   return Math.max(DYNK_FORMAT_MIN, Math.min(1, games / DYNK_FULL_GAMES));
@@ -17595,6 +17666,21 @@ async function avBallScan(url, gaps, opt){
    first the server and end of EVERY game follow deterministically. Generate
    that, group it into runs, and you know how many games each observed run has
    to contain — two usually, one or three where the sets say so. */
+/* A decider played as a 10-point breaker, written into the final score the
+   way it is written into the sets column: the last pair of a multi-set score,
+   above the longest score a set can finish on. It is not reconstructible and
+   the docs have always said so — inside one the serve moves every two points
+   and the ends every six, so the runs-of-one-end structure the whole method
+   rests on does not hold. Expanding "10-7" into a seventeen-game set does not
+   just fail, it fails quietly and drags the real sets down with it, so it is
+   identified here and set aside in scScore. */
+const SC_SET_MAX = 7;
+function scBreakerAt(scoreline){
+  if(!Array.isArray(scoreline) || scoreline.length < 2) return -1;
+  const i = scoreline.length - 1, p = scoreline[i];
+  return p && Math.max(p[0], p[1]) > SC_SET_MAX ? i : -1;
+}
+
 function scExpectedGames(scoreline, firstServer, firstEnd){
   const out=[];
   let server=firstServer==='b'?'b':'a';
@@ -17805,11 +17891,22 @@ function scScore(rallies, frame, scoreline, opt){
   const firstServer=o.firstServer==='b'?'b':'a';
   const firstEnd=o.firstEnd==='far'?'far':'near';
 
-  /* 1. what the scoreline says the shape of the match was */
-  const expGames=scExpectedGames(scoreline, firstServer, firstEnd);
+  /* 1. what the scoreline says the shape of the match was.
+     A breaker decider is not part of that shape — see scBreakerAt. */
+  const brk=scBreakerAt(scoreline);
+  const real=brk<0 ? scoreline : scoreline.slice(0, brk);
+  const expGames=scExpectedGames(real, firstServer, firstEnd);
   const expRuns=scExpectedRuns(expGames);
   const notes=[];
-  if(frame.runs.length!==expRuns.length){
+  if(brk>=0){
+    notes.push('the deciding '+scoreline[brk][0]+'-'+scoreline[brk][1]+' breaker is reported, '+
+               'not reconstructed — the serve moves every two points inside one and the ends '+
+               'every six, so its rallies are left out of the games below');
+  }
+  /* with the breaker set aside its rallies are still in the recording, so MORE
+     stretches than the sets describe is expected rather than a problem. Fewer
+     still means something is missing. */
+  if(brk<0 ? frame.runs.length!==expRuns.length : frame.runs.length<expRuns.length){
     notes.push('the scoreline describes '+expRuns.length+' stretches of one end and '+
                frame.runs.length+' were seen — either the final score is wrong, or clips '+
                'are missing, or a rally was split in two');
@@ -17846,7 +17943,7 @@ function scScore(rallies, frame, scoreline, opt){
   /* 3. who won each game, set by set */
   const sets=[];
   let solved=0;
-  scoreline.forEach(([gA,gB],si)=>{
+  real.forEach(([gA,gB],si)=>{
     const mine=games.filter(g=>g.set===si);
     const set={gA,gB,games:mine};
     sets.push(set);
@@ -17860,6 +17957,9 @@ function scScore(rallies, frame, scoreline, opt){
     mine.forEach((g,k)=>{ g.winner=pick.order[k]; g.held=(g.winner===g.server);
                           g.confidence=pick.confidence[k]; solved++; });
   });
+  /* the breaker still belongs in the scoreline the panel prints — it just has
+     no games under it, which is the whole point */
+  if(brk>=0) sets.push({gA:scoreline[brk][0], gB:scoreline[brk][1], games:[], breaker:true});
 
   /* 4. the score standing before every rally */
   const board=[];
@@ -17887,7 +17987,9 @@ function scScore(rallies, frame, scoreline, opt){
 
   const unknown=games.filter(g=>g.unknown).length;
   const rallied=games.reduce((s,g)=>s+(g.points||0),0);
-  if(rallied && rallies.length && rallied!==rallies.length)
+  /* a set-aside breaker owns some of the clips on purpose, so short is only a
+     mismatch when there is no breaker; over is always one */
+  if(rallied && rallies.length && (brk<0 ? rallied!==rallies.length : rallied>rallies.length))
     notes.push(rallies.length+' clips but '+rallied+' points accounted for');
   return {games, sets, board, notes, note:notes[0]||null,
           ok: !unknown && !notes.length,
@@ -22192,11 +22294,11 @@ function computeProfile(name){
   for(const m of games){
     if(!m.sets) continue;
     const iAmP1 = m.p1.toLowerCase()===name.toLowerCase();
-    const parsed = m.sets.split(",").map(s=>s.trim()).filter(Boolean).map(s=>{
-      const [a,b] = s.split("-").map(n=>parseInt(n,10));
-      if(isNaN(a)||isNaN(b)) return null;
-      return iAmP1 ? {mine:a, theirs:b} : {mine:b, theirs:a};
-    }).filter(Boolean);
+    const pairs = setPairs(m.sets);
+    /* which set, if any, was a 10-point breaker rather than a set — it counts
+       as a set won and as a tiebreak, and never as a bagel */
+    const brk = breakerIndex(pairs);
+    const parsed = pairs.map(p => iAmP1 ? {mine:p.a, theirs:p.b} : {mine:p.b, theirs:p.a});
     if(!parsed.length) continue;
     tennis.hasSets = true;
 
@@ -22208,8 +22310,9 @@ function computeProfile(name){
       // bagels: 6-0 sets
       if(s.mine===6 && s.theirs===0) tennis.bagelsFor++;
       if(s.theirs===6 && s.mine===0) tennis.bagelsAgainst++;
-      // tiebreak sets: 7-6 either way
-      if((s.mine===7&&s.theirs===6)||(s.mine===6&&s.theirs===7)){
+      // tiebreaks: a set settled 7-6 either way, or a breaker played as the decider
+      const isTB = (s.mine===7&&s.theirs===6)||(s.mine===6&&s.theirs===7)||i===brk;
+      if(isTB && s.mine!==s.theirs){
         (s.mine>s.theirs) ? tennis.tbW++ : tennis.tbL++;
       }
     });
@@ -22754,7 +22857,7 @@ function openMatch(id){
             </select></div>
           <div><label>Date played</label><input id="emDate" type="date"></div>
         </div>
-        <div style="margin-top:10px"><label>Set scores (P1 first)</label><input id="emSets" placeholder="6-4, 3-6, 7-5" autocomplete="off"></div>
+        <div style="margin-top:10px"><label>Set scores (P1 first)</label><input id="emSets" placeholder="6-4, 3-6, 10-7" autocomplete="off"></div>
         <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
           <button class="btn" style="margin:0;width:auto;flex:1" onclick="saveMatchEdit(${m.id})">Save changes</button>
           <button class="btn ghost" style="margin:0;width:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteMatchPermanently(${m.id})">Delete permanently</button>
@@ -29085,13 +29188,16 @@ function computeLeagueStats(){
   const bagels={};
   for(const m of matches.filter(x=>x.status==="approved")){
     if(!m.sets) continue;
-    m.sets.split(",").map(s=>s.trim()).forEach(s=>{
-      const [x,y]=s.split("-").map(n=>parseInt(n,10));
-      if(isNaN(x)||isNaN(y)) return;
+    const pairs=setPairs(m.sets);
+    const brk=breakerIndex(pairs);
+    pairs.forEach((p,i)=>{
+      const x=p.a, y=p.b;
       totalSets++;
       if(x===6&&y===0){totalBagels++;bagels[m.p1]=(bagels[m.p1]||0)+1;}
       if(y===6&&x===0){totalBagels++;bagels[m.p2]=(bagels[m.p2]||0)+1;}
-      if((x===7&&y===6)||(x===6&&y===7)) totalTB++;
+      /* a breaker played in place of a decider is a tiebreak, and the only
+         reason it was ever missed here is that it does not read 7-6 */
+      if((x===7&&y===6)||(x===6&&y===7)||i===brk) totalTB++;
     });
   }
   return {players:Object.values(P), totalGames, totalDraws, totalSets, totalBagels, totalTB, maxSwing, upset, bagels};
@@ -29165,12 +29271,22 @@ function computeRedemptions(){
   });
   return {redemptions,attempts,rows};
 }
+/* Longest match, by the only measure the sets column supports: how many games
+   were played. A decider played as a 10-point breaker is the trap here — sum
+   it at face value and "10-8" adds eighteen games to the shortest way there
+   is to finish a match, which puts every breaker match at the top of a record
+   that is meant to find marathons. It counts as the LONGEST_BREAKER_GAMES
+   below instead, which is roughly the tennis in one: the same correction
+   kitMatchMinutes makes when it turns a scoreline into minutes. */
+const LONGEST_BREAKER_GAMES = 2;
 function computeLongestMatch(){
   let best=null;
   matches.filter(m=>m.status==="approved"&&m.sets).forEach(m=>{
-    const parts=m.sets.split(",").map(s=>s.trim()).filter(Boolean);
+    const pairs=setPairs(m.sets);
+    if(!pairs.length) return;
+    const brk=breakerIndex(pairs);
     let totalGames=0;
-    parts.forEach(s=>{ const [a,b]=s.split("-").map(n=>parseInt(n,10)); if(!isNaN(a)&&!isNaN(b)) totalGames+=a+b; });
+    pairs.forEach((p,i)=>{ totalGames += i===brk ? LONGEST_BREAKER_GAMES : p.a+p.b; });
     if(!best || totalGames>best.totalGames) best={m,totalGames};
   });
   return best;

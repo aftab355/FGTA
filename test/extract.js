@@ -33,7 +33,7 @@ function loadBall(){
 }
 function loadScore(){
   const code=region('SCORE-CORE')+'\n'+region('SCORE-ASSIGN');
-  const names=['scGameLengths','scRuns','scSplit','scFrame','scExpectedGames',
+  const names=['scGameLengths','scRuns','scSplit','scFrame','scExpectedGames','scBreakerAt',
                'scExpectedRuns','scPartition','scPickSplit','scGameOdds','scHoldOf','scHoldToPoint',
                'scSetOrders','scBestOrder','scScore'];
   return new Function(code+'\nreturn {'+names.join(',')+'};')();
@@ -77,7 +77,9 @@ function loadElo(opts){
   const o = opts || {};
   const code = region('ELO-ENGINE') + '\n' + region('ELO-STANDINGS');
   const names = ['MOV_ENABLED','MOV_START','MOV_MIN','MOV_MAX','BLOWOUT_FLOOR_START',
-                 'BLOWOUT_FLOOR_MULT','movMultiplier','DYNK_ENABLED','DYNK_START','DYNK_STEPS',
+                 'BLOWOUT_FLOOR_MULT','MOV_BREAKER_START','SET_MAX_GAMES','setPairs',
+                 'setOversized','breakerIndex','DYNK_TB_WORTH',
+                 'movMultiplier','DYNK_ENABLED','DYNK_START','DYNK_STEPS',
                  'DYNK_SETTLED_K','DYNK_MIN','DYNK_MAX','DYNK_RUST','DYNK_RUST_CAP',
                  'DYNK_FULL_GAMES','DYNK_FORMAT_MIN','dynKApplies','formatReliability','playerK',
                  'matchKPair','kTracker','lastPlayedMap','playerLiveK','preGameRatings',

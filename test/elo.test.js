@@ -443,5 +443,81 @@ section('the engine does not fall over on the rows it will actually be handed');
      'two spellings of a name are two players — what rename/merge exists to fix', S.length);
 }
 
+section('a decider played as a breaker — the set score that is not a set score');
+{
+  const e = E([]);
+  const AFTER_BRK  = '2026-10-01';   // on/after MOV_BREAKER_START
+  const BEFORE_BRK = '2026-09-01';   // before it
+
+  /* the classifier itself, because everything below leans on it */
+  ok(e.setPairs('6-4, 3-6, 10-7').length === 3, 'three pairs come back out of three sets');
+  ok(e.setPairs('6-, rubbish, 6-4').length === 1,
+     'and an unreadable pair drops out rather than arriving as NaN');
+  ok(e.setOversized({a: 10, b: 7}) && !e.setOversized({a: 7, b: 6}),
+     'no set finishes above ' + e.SET_MAX_GAMES + ' games, so 10-7 is not a set and 7-6 is');
+  ok(e.breakerIndex(e.setPairs('6-4, 3-6, 10-7')) === 2,
+     'the last pair of a three-set score, above the ceiling, is the breaker');
+  ok(e.breakerIndex(e.setPairs('11-8')) === -1,
+     'but a lone pair is a whole match written short — a group game to 11, not a decider');
+  ok(e.breakerIndex(e.setPairs('6-4, 3-6, 6-4')) === -1 &&
+     e.breakerIndex(e.setPairs('6-4, 3-6, 4-2')) === -1,
+     'and a real third set is a real third set, full or first-to-3');
+
+  const at = (sets, date, rW, rL) => e.movMultiplier(
+    {created_at: (date || AFTER_BRK) + 'T12:00:00Z', outcome: 1, sets}, rW || 500, rL || 500);
+
+  /* THE BUG THIS SECTION EXISTS FOR, stated as the comparison that fails
+     without the fix: summed at face value a 10-2 breaker is a ten-games-to-two
+     set, so scraping through a breaker read as MORE dominant than winning the
+     same match by bagelling the third set. It measured 1.377 against 1.354. */
+  ok(at('6-4, 4-6, 10-2') < at('6-4, 4-6, 6-0'),
+     'squeaking a breaker is less dominant than bagelling a real third set',
+     at('6-4, 4-6, 10-2').toFixed(3) + ' vs ' + at('6-4, 4-6, 6-0').toFixed(3));
+  ok(at('6-4, 4-6, 10-2') < at('6-0, 6-0'),
+     'and nothing with a breaker in it out-dominates a double bagel',
+     at('6-4, 4-6, 10-2').toFixed(3) + ' vs ' + at('6-0, 6-0').toFixed(3));
+
+  /* and it should read like the third set it stood in for */
+  const asBreaker = at('6-2, 4-6, 10-7'), asSet = at('6-2, 4-6, 6-4');
+  ok(Math.abs(asBreaker - asSet) < 0.05,
+     'a breaker decider is worth about what a close third set is worth',
+     asBreaker.toFixed(3) + ' vs ' + asSet.toFixed(3));
+  ok(at('6-2, 4-6, 10-7') <= at('6-2, 4-6, 10-2'),
+     'a tighter breaker is never worth more than a one-sided one');
+
+  /* the date gate, same promise the rest of the engine makes: the table is
+     recomputed from the rows on every load, so a change to how a score is
+     READ moves published ratings unless it starts on a day */
+  ok(at('6-4, 4-6, 10-2', BEFORE_BRK) > at('6-4, 4-6, 10-2', AFTER_BRK),
+     'the old face-value reading still stands before MOV_BREAKER_START',
+     e.MOV_BREAKER_START);
+  ok(at('6-4, 6-4', BEFORE_BRK) === at('6-4, 6-4', AFTER_BRK),
+     'and nothing without a breaker in it changes on either side of that date');
+
+  /* the blowout floor divides conceded games by sets played, and a breaker
+     now concedes 0 or 1 — check that cannot fake a near-perfect sweep */
+  ok(at('6-0, 0-6, 10-0', AFTER_BRK, 1600, 400) < e.BLOWOUT_FLOOR_MULT,
+     'a match with a set dropped in it never clears the blowout floor',
+     at('6-0, 0-6, 10-0', AFTER_BRK, 1600, 400).toFixed(3));
+
+  /* format reliability: how much tennis the result is evidence of. Position
+     does not matter here — a match filed as nothing but a breaker is short. */
+  const fmt = sets => e.formatReliability({sets});
+  ok(fmt('10-7') === Math.max(e.DYNK_FORMAT_MIN, e.DYNK_TB_WORTH / e.DYNK_FULL_GAMES),
+     'a match that was nothing but a breaker is worth ' + e.DYNK_TB_WORTH + ' games, not 17',
+     fmt('10-7').toFixed(3));
+  ok(fmt('10-7') < fmt('6-4, 6-4'),
+     'so it carries less signal than a straight-sets win rather than more');
+  ok(fmt('6-4, 3-6, 10-7') === 1 && fmt('6-4, 3-6, 6-4') === 1,
+     'two full sets already saturate the format signal, so the decider cannot change it — '
+     + 'this correction is for the short formats, which is where it bites');
+
+  /* and the whole thing has to survive being replayed into a table */
+  const S = E([game('A', 'B', 1, AFTER_BRK, {sets: '6-2, 4-6, 10-7'})]).computeStandings();
+  ok(S.length === 2 && S.every(p => isFinite(p.rating)),
+     'a breaker match replays into finite ratings',
+     S.map(p => p.name + ':' + p.rating.toFixed(2)).join(' '));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
