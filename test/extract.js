@@ -78,17 +78,13 @@ function loadElo(opts){
   const code = region('ELO-ENGINE') + '\n' + region('ELO-STANDINGS');
   const names = ['MOV_ENABLED','MOV_START','MOV_MIN','MOV_MAX','BLOWOUT_FLOOR_START',
                  'BLOWOUT_FLOOR_MULT','MOV_BREAKER_START','SET_MAX_GAMES','setPairs',
-                 'setOversized','breakerIndex','DYNK_TB_WORTH',
-                 'movMultiplier','DYNK_ENABLED','DYNK_START','DYNK_STEPS',
-                 'DYNK_SETTLED_K','DYNK_MIN','DYNK_MAX','DYNK_RUST','DYNK_RUST_CAP',
-                 'DYNK_FULL_GAMES','DYNK_FORMAT_MIN','dynKApplies','formatReliability','playerK',
-                 'matchKPair','kTracker','lastPlayedMap','playerLiveK','preGameRatings',
-                 'matchKOf','winProb','computeStandings','invalidateStandings'];
+                 'setOversized','breakerIndex',
+                 'movMultiplier','matchKPair','preGameRatings',
+                 'winProb','computeStandings','invalidateStandings'];
   const pre = [
     'const K = ' + (o.K == null ? 32 : o.K) + ';',
     'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
     'const START = ' + (o.start == null ? 500 : o.start) + ';',
-    'let ELO_DRIFT = 0;',
     /* the engine reads a module-level `matches`; the test owns it */
     'let matches = arguments[0].matches;',
     'let tournaments = arguments[0].tournaments || [];',
@@ -97,7 +93,7 @@ function loadElo(opts){
   ].join('\n');
   const api = new Function(pre + '\n' + code +
     '\nreturn {' + names.join(',') +
-    ',setMatches:(m)=>{matches=m; invalidateStandings();}, drift:()=>ELO_DRIFT,' +
+    ',setMatches:(m)=>{matches=m; invalidateStandings();},' +
     ' setDivisor:(d)=>{DIVISOR=d;}, K, START, get DIVISOR(){return DIVISOR;}};')(
       {matches: o.matches || [], tournaments: o.tournaments,
        countsForElo: o.countsForElo,
@@ -110,7 +106,7 @@ function loadElo(opts){
    where the baseline falls out of the replay and where the eligibility floor
    cuts in. FALL_START and FALL_MIN_GAMES are real constants in the region
    (not injected) so a test that widens either one fails loudly, the same
-   protection loadElo gives MOV_START/DYNK_START. */
+   protection loadElo gives MOV_START. */
 function loadFallExhibition(opts){
   const o = opts || {};
   const code = region('ELO-ENGINE') + '\n' + region('FALL-EXHIBITION');

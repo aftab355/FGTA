@@ -4,16 +4,22 @@
    A bug in the feed loses a post and somebody notices within the hour. A bug
    in here quietly rewrites who is winning, does it consistently, and produces
    a table that looks exactly as plausible as the right one. Until now none of
-   it was covered by anything: not the margin multiplier, not the per-player
-   K, not the replay, not the date gates that are the only thing standing
-   between a tuning change and every rating in the league's history moving.
+   it was covered by anything: not the margin multiplier, not the replay, not
+   the date gates that are the only thing standing between a tuning change and
+   every rating in the league's history moving.
 
-   THE MOST IMPORTANT THING HERE is the last section. Two of the rules in this
-   engine — margin of victory and the dynamic K — were introduced with an
-   explicit promise that they would not re-score anything already played, and
-   that promise is enforced entirely by a pair of date string comparisons. A
-   test that only checked today's arithmetic would let somebody widen a gate
-   by one character and silently move a season of ratings.
+   THE MOST IMPORTANT THING HERE is the last section. Margin of victory was
+   introduced with an explicit promise that it would not re-score anything
+   already played, and that promise is enforced entirely by a pair of date
+   string comparisons. A test that only checked today's arithmetic would let
+   somebody widen a gate by one character and silently move a season of
+   ratings.
+
+   K itself is flat and symmetric — every game moves both players by the same
+   K (margin of victory scales it, equally, for both sides), so the rating
+   pool is always exactly players x START. That is checked directly below
+   rather than through a drift figure, because there is no longer anything
+   that could make the two sides differ.
 
    node test/elo.test.js   (no dependencies) */
 const {loadElo} = require('./extract.js');
@@ -34,9 +40,10 @@ const game = (p1, p2, outcome, date, extra) => Object.assign({
 }, extra || {});
 const E = ms => loadElo({matches: ms});
 
-/* the two gates, as dates either side of them */
+/* the margin-of-victory gate, as dates either side of it */
 const BEFORE_MOV  = '2026-07-01', AFTER_MOV  = '2026-08-01';
-const BEFORE_DYNK = '2026-08-01', AFTER_DYNK = '2026-09-01';
+/* sum of ratings a table with n players who've all played must equal */
+const pool = (S, start) => S.reduce((s, p) => s + p.rating, 0) - S.length * (start == null ? 500 : start);
 
 /* ---------------------------------------------------------------- */
 section('the plain Elo underneath everything');
@@ -63,7 +70,7 @@ section('the plain Elo underneath everything');
      a.rating.toFixed(4));
   ok(near(a.rating - e.START, e.START - b.rating),
      'and the loser by exactly as much the other way');
-  ok(near(e.drift(), 0), 'so a flat-K game is strictly zero-sum', e.drift());
+  ok(near(pool(S, e.START), 0), 'so a game is strictly zero-sum', pool(S, e.START));
   ok(a.w === 1 && a.l === 0 && b.l === 1 && a.games === 1, 'the record reads 1-0 / 0-1');
   ok(near(a.peak, a.rating) && near(b.peak, e.START),
      'peak is the best rating ever held, not the current one');
@@ -167,110 +174,25 @@ section('margin of victory — a dominant win is worth more, unless it was expec
      sweep('2026-08-01', 1600, 400).toFixed(3));
 }
 
-section('the per-player K — how much the ladder still has to learn about you');
+section('K is flat and symmetric — every game is zero-sum');
 {
   const e = E([]);
-  const k = (games, daysSince) => e.playerK({games, daysSince});
-  ok(k(0) === 64 && k(4) === 64, 'a newcomer moves fastest');
-  ok(k(60) === e.DYNK_SETTLED_K, 'a settled player moves least', k(60));
-  let mono = true;
-  for(let g = 0; g < 120; g++) if(k(g + 1) > k(g)) mono = false;
-  ok(mono, 'and K never goes back up as somebody plays more games');
-  ok(k(0) === e.DYNK_MAX, 'the fastest step is the stated ceiling');
+  const k = e.matchKPair({created_at: AFTER_MOV + 'T12:00:00Z', outcome: 1, sets: '6-4, 6-4'}, 500, 500);
+  ok(near(k.kA, k.kB), 'both sides of a match always get the same K', JSON.stringify(k));
 
-  ok(k(60, 200) > k(60), 'coming back after half a year lifts a settled K',
-     k(60, 200) + ' vs ' + k(60));
-  ok(k(60, 100) > k(60) && k(60, 100) < k(60, 200), 'three months lifts it less than six');
-  ok(k(60, 10) === k(60), 'and a fortnight off is not a layoff at all');
-  ok(k(0, 400) <= e.DYNK_RUST_CAP,
-     'rust can never lift a K past its cap, however long somebody was away', k(0, 400));
-  ok(k(0, null) === k(0), 'a player who has never played is not rusty, they are new');
-}
-{
-  const e = E([]);
-  const f = sets => e.formatReliability({sets});
-  ok(f('6-4, 6-4') === 1, 'a full best-of-3 is the reference and counts fully');
-  ok(f(null) === 1, 'no scoreline is assumed normal rather than penalised');
-  ok(f('6-4') < 1, 'one set carries less signal than a match');
-  ok(f('6-4') >= e.DYNK_FORMAT_MIN, 'but never less than the floor', f('6-4').toFixed(3));
-  /* the same correction the Kit's hour model makes, for the same reason: a
-     10-8 in the sets column is a match tiebreak, not an 18-game set */
-  ok(f('10-8') < f('7-5'),
-     'a match tiebreak counts as the short thing it is, not the long thing it looks like',
-     f('10-8').toFixed(3) + ' vs ' + f('7-5').toFixed(3));
-  ok(f('6-4, 4-6, 6-4') === 1, 'and three sets is capped at the reference, not rewarded past it');
-}
-
-section('the two sides of a game are allowed to move by different amounts');
-{
-  /* a newcomer against a veteran, after the gate: the whole point of the
-     dynamic K is that placing the newcomer must not drag the veteran around */
+  /* a newcomer against a veteran with fifty games under them: nothing about
+     experience or a layoff changes the size of the step either side takes */
   const veteranHistory = [];
-  for(let i = 0; i < 60; i++)
+  for(let i = 0; i < 50; i++)
     veteranHistory.push(game('Vet', 'Filler' + i, 1, '2026-08-' + String((i % 28) + 1).padStart(2, '0')));
-  const e = E(veteranHistory.concat([game('New', 'Vet', 1, AFTER_DYNK)]));
-  const S = e.computeStandings();
   const before = E(veteranHistory).computeStandings().find(p => p.name === 'Vet').rating;
+  const S = E(veteranHistory.concat([game('New', 'Vet', 1, '2026-09-05')])).computeStandings();
   const vet = S.find(p => p.name === 'Vet'), nu = S.find(p => p.name === 'New');
-  ok(Math.abs(nu.rating - 500) > Math.abs(vet.rating - before),
-     'the newcomer moves further than the veteran they beat',
-     (nu.rating - 500).toFixed(1) + ' vs ' + (vet.rating - before).toFixed(1));
-  ok(Math.abs(e.drift()) > 1e-9,
-     'which means the pool is no longer strictly zero-sum, and the engine says so',
-     e.drift().toFixed(3));
-}
-{
-  const m = game('A', 'B', 1, BEFORE_DYNK);
-  const e = E([m]);
-  ok(near(e.drift(), 0), 'before the gate the two Ks match, so there is no drift at all');
-  const k = e.matchKOf(m.id);
-  ok(k && !k.dynamic && near(k.kA, k.kB), 'and the match reports itself as flat-K',
-     JSON.stringify(k));
-}
-{
-  const m = game('A', 'B', 1, AFTER_DYNK, {tournament_id: 4});
-  const e = E([m]);
-  const k = e.matchKOf(m.id);
-  ok(k && !k.dynamic,
-     'a game filed under an event keeps the flat K it was played under, gate or no gate',
-     JSON.stringify(k));
-}
-{
-  const e = E([]);
-  const pair = (ga, gb) => e.matchKPair({created_at: AFTER_DYNK + 'T12:00:00Z', outcome: 1, sets: '6-4, 6-4'},
-    500, 500, {games: ga, daysSince: null}, {games: gb, daysSince: null});
-  const p = pair(0, 60);
-  ok(p.dynamic && p.kA > p.kB, 'the newcomer plays for a bigger K than the veteran');
-  let inBand = true;
-  [[0,0],[0,99],[99,0],[3,7],[200,200]].forEach(([a, b]) => {
-    const r = pair(a, b);
-    [r.kA, r.kB].forEach(v => { if(v < e.DYNK_MIN - 1e-9 || v > e.DYNK_MAX * e.MOV_MAX + 1e-9) inBand = false; });
-  });
-  ok(inBand, 'and every K stays inside its clamp, before margin scaling widens it');
-}
-
-section('experience is tracked across the replay, not looked up per match');
-{
-  /* the tracker has to read a player's state as it stood BEFORE each match
-     and advance it after, or every game in a history sees the same K */
-  const e = E([]);
-  const t = e.kTracker();
-  const m = (p1, p2, date) => ({p1, p2, outcome: 1, sets: '6-4, 6-4', created_at: date + 'T12:00:00Z'});
-  const first  = t.pair(m('A', 'B', AFTER_DYNK), 500, 500);
-  const second = t.pair(m('A', 'B', AFTER_DYNK), 500, 500);
-  ok(near(first.kA, second.kA) || first.kA >= second.kA,
-     'K does not go up as a player accumulates games inside one replay');
-  const ctx = t.ctx('A', new Date(AFTER_DYNK + 'T12:00:00Z').getTime());
-  ok(ctx.games === 2, 'and the tracker has counted both of them', ctx.games);
-  ok(ctx.daysSince === 0, 'with no layoff between games on the same day');
-}
-{
-  const e = E([]);
-  const t = e.kTracker();
-  t.seed('A', 60, new Date('2026-01-01').getTime());
-  const ctx = t.ctx('A', new Date('2026-09-01').getTime());
-  ok(ctx.games === 60, 'a player can be seeded mid-history — the what-if sandbox does exactly this');
-  ok(ctx.daysSince > 200, 'and their layoff comes out of the seeded date', Math.round(ctx.daysSince));
+  ok(near(Math.abs(nu.rating - 500), Math.abs(vet.rating - before)),
+     'so a newcomer and a fifty-game veteran move by exactly the same amount',
+     (nu.rating - 500).toFixed(4) + ' vs ' + (vet.rating - before).toFixed(4));
+  ok(near(pool(S, e.START), 0), 'and the pool stays at players x START no matter who played',
+     pool(S, e.START));
 }
 
 section('ratings as they stood before a given game');
@@ -284,35 +206,18 @@ section('ratings as they stood before a given game');
      'the ratings before game three are exactly the table after game two');
   ok(near(e.preGameRatings(ms[0].id)['A'], e.START),
      'and before the first game everybody is on the starting rating');
-  ok(e.matchKOf(ms[1].id) !== null, 'a match in the history reports the K it was played for');
-  ok(e.matchKOf(999999) === null, 'and one that is not in it reports nothing rather than guessing');
-}
-
-section('the K a player carries into their next game');
-{
-  const ms = [];
-  for(let i = 0; i < 8; i++) ms.push(game('A', 'B' + i, 1, '2026-08-1' + (i % 10)));
-  const e = E(ms);
-  const S = e.computeStandings();
-  const k = e.playerLiveK('A', S, e.lastPlayedMap());
-  ok(k >= e.DYNK_MIN && k <= e.DYNK_MAX, 'it is a real K inside the clamp', k);
-  ok(e.playerLiveK('A', S) === e.playerLiveK('a', S),
-     'and the name lookup is case-insensitive, like every other name in the app');
-  ok(e.playerLiveK('Nobody', S) === 64,
-     'somebody who has never played gets the newcomer K, not the settled one',
-     e.playerLiveK('Nobody', S));
 }
 
 section('THE DATE GATES — the promise that history is never re-scored');
-/* Both rules were shipped with an explicit undertaking that they would not
-   change a single rating already on record. That undertaking is enforced by
-   two string comparisons and nothing else, so this is the section that has
-   to hold. */
+/* Margin of victory was shipped with an explicit undertaking that it would
+   not change a single rating already on record. That undertaking is
+   enforced by a string comparison and nothing else, so this is the section
+   that has to hold. */
 {
   const e = E([]);
-  ok(e.MOV_START < e.BLOWOUT_FLOOR_START && e.BLOWOUT_FLOOR_START < e.DYNK_START,
-     'the three gates are in the order they were introduced',
-     [e.MOV_START, e.BLOWOUT_FLOOR_START, e.DYNK_START].join(' < '));
+  ok(e.MOV_START < e.BLOWOUT_FLOOR_START,
+     'the two gates are in the order they were introduced',
+     [e.MOV_START, e.BLOWOUT_FLOOR_START].join(' < '));
 
   const one = sets => ({created_at: '', outcome: 1, sets});
   const on  = d => Object.assign(one('6-0, 6-0'), {created_at: d + 'T12:00:00.000Z'});
@@ -320,21 +225,11 @@ section('THE DATE GATES — the promise that history is never re-scored');
      'the day before MOV_START, a bagel is worth a plain win');
   ok(e.movMultiplier(on('2026-07-23'), 500, 500) > 1,
      'and on the day itself it is worth more — the gate is inclusive');
-
-  ok(e.dynKApplies({created_at: '2026-08-28T23:59:59Z'}) === false,
-     'the day before DYNK_START, K is flat');
-  ok(e.dynKApplies({created_at: '2026-08-29T00:00:00Z'}) === true,
-     'and from the instant it starts, it is not');
-  ok(e.dynKApplies({created_at: AFTER_DYNK, tournament_id: 3}) === false,
-     'an event game is outside the rule whichever side of the gate it falls');
-  ok(e.dynKApplies({}) === true,
-     'a hypothetical game with no date at all is a future game, so it gets the live K');
 }
 {
-  /* the end-to-end version: a history entirely before both gates must produce
-     the identical table whether the two rules exist or not, which is what
-     "replaying the history recorded so far produces the ratings it has always
-     produced, to the point" actually claims */
+  /* the end-to-end version: any history must produce ratings reachable by
+     hand with a flat K=32 — there is no gate left for K itself, since it is
+     always flat, so this holds for the whole log, not just a pre-gate slice */
   const hist = [];
   for(let i = 0; i < 24; i++){
     const d = '2026-0' + (1 + (i % 5)) + '-' + String((i % 27) + 1).padStart(2, '0');
@@ -342,10 +237,6 @@ section('THE DATE GATES — the promise that history is never re-scored');
                    {sets: ['6-0, 6-0', '7-6, 7-6', '6-4, 3-6, 6-4'][i % 3]}));
   }
   const real = E(hist).computeStandings();
-  const flat = loadElo({matches: hist}).computeStandings();
-  ok(real.every((p, i) => near(p.rating, flat[i].rating)) ,
-     'a pre-gate season replays identically');
-  /* and every one of those ratings is reachable by hand with a flat K=32 */
   const e = E(hist);
   let byHand = {};
   const ensure = n => (byHand[n] === undefined ? (byHand[n] = e.START) : byHand[n]);
@@ -362,7 +253,7 @@ section('THE DATE GATES — the promise that history is never re-scored');
   ok(real.every(p => near(p.rating, byHand[p.name], 1e-9)),
      'and matches a flat-K replay written out by hand, to the point',
      real.map(p => p.name + ':' + p.rating.toFixed(6)).join(' '));
-  ok(near(E(hist).drift(), 0), 'with no drift, because no two Ks ever differed');
+  ok(near(pool(real, e.START), 0), 'with no drift, because the two Ks never differ');
 }
 
 section('the memo — sixty-four callers, one replay');
@@ -386,7 +277,7 @@ section('the memo — sixty-four callers, one replay');
   const c = e.computeStandings();
   ok(c.every((p, i) => p.name === b[i].name),
      'and a caller that sorts what it was handed does not poison the next call');
-  ok(near(e.drift(), 0), 'the drift comes back with a cache hit, not stale from some other replay');
+  ok(near(pool(b, e.START), 0), 'a cache hit is still a zero-sum table, not stale from some other replay');
 
   /* the invalidation the app actually relies on: a new array */
   e.setMatches(ms.slice(0, 10));
@@ -499,18 +390,6 @@ section('a decider played as a breaker — the set score that is not a set score
   ok(at('6-0, 0-6, 10-0', AFTER_BRK, 1600, 400) < e.BLOWOUT_FLOOR_MULT,
      'a match with a set dropped in it never clears the blowout floor',
      at('6-0, 0-6, 10-0', AFTER_BRK, 1600, 400).toFixed(3));
-
-  /* format reliability: how much tennis the result is evidence of. Position
-     does not matter here — a match filed as nothing but a breaker is short. */
-  const fmt = sets => e.formatReliability({sets});
-  ok(fmt('10-7') === Math.max(e.DYNK_FORMAT_MIN, e.DYNK_TB_WORTH / e.DYNK_FULL_GAMES),
-     'a match that was nothing but a breaker is worth ' + e.DYNK_TB_WORTH + ' games, not 17',
-     fmt('10-7').toFixed(3));
-  ok(fmt('10-7') < fmt('6-4, 6-4'),
-     'so it carries less signal than a straight-sets win rather than more');
-  ok(fmt('6-4, 3-6, 10-7') === 1 && fmt('6-4, 3-6, 6-4') === 1,
-     'two full sets already saturate the format signal, so the decider cannot change it — '
-     + 'this correction is for the short formats, which is where it bites');
 
   /* and the whole thing has to survive being replayed into a table */
   const S = E([game('A', 'B', 1, AFTER_BRK, {sets: '6-2, 4-6, 10-7'})]).computeStandings();

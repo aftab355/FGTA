@@ -1251,7 +1251,7 @@
   .fx-chip{font-family:var(--font-mono);font-size:10px;letter-spacing:.3px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);padding:2px 8px;border-radius:8px}
   .recap{font-size:15px;line-height:1.75;color:var(--ink)}
   .pool-line{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin:-8px 0 10px;letter-spacing:.5px}
-  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)} .pool-drift{color:var(--dim)}
+  .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)}
   .streak-badge{font-size:12px;font-family:var(--font-mono);color:var(--pending);vertical-align:middle}
   .cfti{
     position:fixed;top:-12px;width:9px;height:14px;z-index:200;pointer-events:none;border-radius:3px;
@@ -1369,7 +1369,6 @@
   #attrToggle.on{color:var(--gold);border-color:rgba(255,204,0,.35);background:rgba(255,204,0,.1)}
   .mov-badge{font-family:var(--font-mono);font-size:11px;padding:2px 7px;border-radius:6px;vertical-align:middle}
   .mov-up{color:var(--win);background:rgba(52,199,89,.16)}
-  .mov-down{color:var(--dim);background:var(--panel-2)}
   #installBtn{margin-right:6px;color:var(--accent);border-color:var(--accent-dim);background:var(--accent-dim)}
 
   /* ===== SCROLLABLE WIDE TABLES ===== */
@@ -10862,11 +10861,6 @@ function setDivisor(v){
    two bad months from a negative rating and made every ratings chart run
    against a floor that means nothing. 500 buys that headroom back. */
 const START   = 500;
-/* Rating points the dynamic K has added to (or taken out of) the pool, set on
-   every computeStandings() pass. It stays exactly 0 while both sides of every
-   game share a K — see the DYNAMIC K block — and the Lab's data audit reports
-   it rather than calling an accounted-for drift a failure. */
-let ELO_DRIFT = 0;
 /* ============================================================ */
 
 const configured = SUPABASE_URL.startsWith("http") && !SUPABASE_KEY.startsWith("YOUR_");
@@ -11385,10 +11379,6 @@ const toast = (msg, err=false) => {
    countsForElo() reads a tournament's counts_elo flag, and DIVISOR, because
    the admin can move it live from the divisor preview.
 
-   ELO_DRIFT is part of the answer, not a side effect of computing it, so a
-   cache hit restores it. Leaving it stale would make the Lab's data audit
-   report the drift of whichever replay happened to run last.
-
    What the cache does NOT protect against is a caller mutating what it is
    handed. Nothing does today — the test asserts it — and the array itself is
    copied out so a stray .sort() cannot reorder everybody's cached table. The
@@ -11401,12 +11391,10 @@ function invalidateStandings(){ _standCache = null; }
 function computeStandings(){
   if(_standCache && _standCache.m === matches && _standCache.t === tournaments
      && _standCache.divisor === DIVISOR){
-    ELO_DRIFT = _standCache.drift;
     return _standCache.value.slice();
   }
   const out = _computeStandings();
-  _standCache = {m: matches, t: tournaments, divisor: DIVISOR,
-                 drift: ELO_DRIFT, value: out};
+  _standCache = {m: matches, t: tournaments, divisor: DIVISOR, value: out};
   return out.slice();
 }
 
@@ -11417,21 +11405,15 @@ function _computeStandings(){
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
 
-  const KT = kTracker();
-  let drift = 0;
   for (const m of approved){
     const a = ensure(m.p1), b = ensure(m.p2);
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Eb = 1 - Ea;
     const Sa = Number(m.outcome);        // 1 / 0.5 / 0  (from p1's view)
     const Sb = 1 - Sa;
-    /* one K per side from DYNK_START on; the same number both sides before it,
-       which is what keeps every pre-existing rating exactly where it was */
-    const {kA, kB} = KT.pair(m, a.rating, b.rating);
-    const dA = kA * (Sa - Ea), dB = kB * (Sb - Eb);
-    drift += dA + dB;                    // 0 whenever the two Ks match — see DYNAMIC K
-    a.rating += dA;
-    b.rating += dB;
+    const {kA, kB} = matchKPair(m, a.rating, b.rating);
+    a.rating += kA * (Sa - Ea);
+    b.rating += kB * (Sb - Eb);
     a.games++; b.games++;
     if (Sa === 1){a.w++; b.l++;} else if (Sa === 0){a.l++; b.w++;} else {a.d++; b.d++;}
     // track peak + rating history snapshot after this game
@@ -11440,7 +11422,6 @@ function _computeStandings(){
     a.history.push(a.rating);
     b.history.push(b.rating);
   }
-  ELO_DRIFT = drift;
   return Object.values(P).sort((x,y) => y.rating - x.rating);
 }
 /* ==== ELO-STANDINGS-END ==== */
@@ -11488,17 +11469,11 @@ function renderWhatIf(){
   base.forEach(p=> sim[p.name] = {name:p.name, rating:p.rating, w:p.w, l:p.l, d:p.d, games:p.games});
   const ensure = n => sim[n] || (sim[n] = {name:n, rating:START, w:0, l:0, d:0, games:0});
 
-  /* hypotheticals are future games, so they run on the dynamic K — seeded with
-     everyone's real experience so a newcomer's made-up win swings the way a real
-     one would. Last-played is "now": nobody is rusty in a sandbox. */
-  const KT = kTracker();
-  base.forEach(p=> KT.seed(p.name, p.games, Date.now()));
-
   whatIfGames.forEach(g=>{
     const a = ensure(g.p1), b = ensure(g.p2);
     const Ea = winProb(a.rating, b.rating), Eb = 1-Ea;
     const Sa = g.outcome, Sb = 1-Sa;
-    const {kA, kB} = KT.pair({p1:g.p1, p2:g.p2, outcome:g.outcome, sets:g.sets}, a.rating, b.rating);
+    const {kA, kB} = matchKPair({p1:g.p1, p2:g.p2, outcome:g.outcome, sets:g.sets}, a.rating, b.rating);
     a.rating += kA*(Sa-Ea); b.rating += kB*(Sb-Eb);
     a.games++; b.games++;
     if(Sa===1){a.w++;b.l++;} else if(Sa===0){a.l++;b.w++;} else {a.d++;b.d++;}
@@ -11539,12 +11514,11 @@ function computeRatingTimeline(){
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
 
-  const KT = kTracker();
   for (const m of approved){
     const a = ensure(m.p1), b = ensure(m.p2);
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Sa = Number(m.outcome);
-    const {kA, kB} = KT.pair(m, a.rating, b.rating);
+    const {kA, kB} = matchKPair(m, a.rating, b.rating);
     a.rating += kA * (Sa - Ea);
     b.rating += kB * ((1-Sa) - (1-Ea));
     const t = new Date(m.created_at).getTime();
@@ -11632,13 +11606,12 @@ function computeReignStats(){
   const reigns = []; // completed + trailing reign: {name, start, end}
   let leader = null, reignStart = null;
 
-  const KT = kTracker();
   for (const m of approved){
     const t = new Date(m.created_at).getTime();
     const a = ensure(m.p1), b = ensure(m.p2);
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Sa = Number(m.outcome);
-    const {kA, kB} = KT.pair(m, a.rating, b.rating);
+    const {kA, kB} = matchKPair(m, a.rating, b.rating);
     a.rating += kA * (Sa - Ea);
     b.rating += kB * ((1 - Sa) - (1 - Ea));
     // who leads now?
@@ -11821,196 +11794,20 @@ function movMultiplier(m, rWinner, rLoser){
 }
 
 /* ============================================================
-   DYNAMIC K  (games created on/after DYNK_START, ladder games only)
-
-   K is the size of the step one result is allowed to take, and a
-   single constant has to serve a player with three games and a
-   player with sixty at once — so it is always wrong for one of
-   them. High enough to place a newcomer quickly is high enough to
-   let one off-day knock a settled player down two rungs; low
-   enough to hold the top of the ladder still is low enough that a
-   newcomer spends a dozen mismatched games climbing out of the
-   middle of the table.
-
-   So K stops being one number and becomes a per-player one, sized
-   by how much the ladder actually knows about that player:
-
-     - games played: 64 for the first five, easing down to 20 once
-       a rating has fifty games under it. A newcomer finds their
-       level in a handful of games instead of a season, and does it
-       WITHOUT dragging their opponents around — the opponent moves
-       by their own K, not the newcomer's.
-     - time away: a rating three months old is a guess. 90+ days
-       out lifts that player's K by a quarter, 180+ by a half
-       (never past DYNK_RUST_CAP), so the first games back re-price
-       them instead of defending a stale number.
-     - match format: a full best-of-3 is a stronger signal than one
-       short set or a 10-point breaker. K scales with how many
-       games the match actually contained, floored at
-       DYNK_FORMAT_MIN so a short match still counts for something.
-       A breaker played in place of a set is scored as the short
-       thing it is rather than the long set its score looks like.
-
-   The per-player K is clamped to [DYNK_MIN, DYNK_MAX], and margin of
-   victory (above) then multiplies the match as it always has. The
-   clamp deliberately sits INSIDE the margin multiplier: put it
-   outside and a big upset bonus shoves both sides up against the
-   ceiling, which quietly hands a newcomer and a veteran the same K
-   again in exactly the games where they should differ most.
-
-   WHAT THIS DELIBERATELY DOES NOT TOUCH
-     - Any game created before DYNK_START. Same date gate the
-       margin rules use: replaying the history recorded so far
-       produces the ratings it has always produced, to the point.
-     - Any game filed under an event (m.tournament_id). Those keep
-       the flat K they were played under, so no draw, event page,
-       cup standing or exhibition changes meaning after the fact.
-       They still count toward a player's experience for LATER
-       ladder games, which is only fair — they were still games.
-     - Multi-game Monte Carlo (season sims, forward projections).
-       Those model a settled field and stay on the flat K. The
-       single-game "what would this result do" projections use the
-       live per-player K, because that is what you would play for.
-
-   ZERO-SUM: two different K values mean a game no longer moves the
-   pair by equal and opposite amounts, so the rating pool drifts
-   slightly. That is the price of letting an uncertain rating move
-   faster than a settled one, and it is tracked in ELO_DRIFT and
-   reported in the Lab's data audit rather than hidden.
+   ELO K — flat and symmetric. Every game moves both players by the
+   same K (margin of victory still scales it, equally, for both
+   sides — see movMultiplier above), so a game always transfers
+   points one-for-one and the ladder's rating pool never drifts from
+   players x START.
    ============================================================ */
-const DYNK_ENABLED = true;
-const DYNK_START   = "2026-08-29";   // games on/after this date get a per-player K
 
-/* games played BEFORE this match -> that player's K. First row that matches wins. */
-const DYNK_STEPS = [
-  {under:5,  k:64},   // placement window: a rating can travel 200-300 points in a week
-  {under:10, k:48},
-  {under:20, k:40},
-  {under:30, k:32},   // the old flat K, now just the middle of the curve
-  {under:50, k:24}
-];
-const DYNK_SETTLED_K = 20;   // 50+ games: the ladder knows where they are, stop shoving
-const DYNK_MIN = 12;         // floor on the per-player K, before margin scaling
-const DYNK_MAX = 64;         // ceiling on the per-player K, before margin scaling
-
-/* layoff since that player's last game -> multiplier on their K (first match wins) */
-const DYNK_RUST     = [{days:180, mult:1.5}, {days:90, mult:1.25}];
-const DYNK_RUST_CAP = 48;    // rust can lift a settled rating this far and no further
-
-/* format reliability: games contained in the match vs a straight-sets best-of-3 */
-const DYNK_FULL_GAMES = 12;
-const DYNK_FORMAT_MIN = 0.6;
-/* A pair above SET_MAX_GAMES is not a set — it is a breaker, or a short game
-   played to 11, written in the sets field. Either way it reads as a long set
-   and is among the shortest things anyone plays, so it is worth this many
-   games instead of its own score. Position-independent on purpose: a match
-   filed as nothing but "10-7" is short too, and asking here is asking how
-   much tennis the result is evidence of. */
-const DYNK_TB_WORTH     = 6;
-
-/* does this match get a per-player K at all? */
-function dynKApplies(m){
-  if(!DYNK_ENABLED) return false;
-  if(m.tournament_id) return false;      // events keep the flat K they were played under
-  if(!m.created_at) return true;         // hypothetical (what-if / projection) = a future game
-  return new Date(m.created_at) >= new Date(DYNK_START);
-}
-
-/* how much signal the scoreline carries: DYNK_FORMAT_MIN (a short set) -> 1 (a full match) */
-function formatReliability(m){
-  if(!m.sets) return 1;                  // no set data recorded — assume a normal match
-  let games = 0, sets = 0;
-  setPairs(m.sets).forEach(p => {
-    sets++;
-    games += setOversized(p) ? DYNK_TB_WORTH : p.a + p.b;
-  });
-  if(!sets) return 1;
-  return Math.max(DYNK_FORMAT_MIN, Math.min(1, games / DYNK_FULL_GAMES));
-}
-
-/* one player's K from their own history alone. ctx = {games, daysSince} as they
-   stood immediately BEFORE the match; daysSince null means "never played". */
-function playerK(ctx){
-  const games = (ctx && ctx.games) || 0;
-  let k = DYNK_SETTLED_K;
-  for(const s of DYNK_STEPS){ if(games < s.under){ k = s.k; break; } }
-  const away = ctx ? ctx.daysSince : null;
-  if(away != null){
-    for(const r of DYNK_RUST){
-      if(away >= r.days){ k = Math.min(DYNK_RUST_CAP, k * r.mult); break; }
-    }
-  }
-  return k;
-}
-
-/* the K each side of a match plays for. Identical numbers — the flat K, margin
-   scaled — for anything dynamic K does not apply to, so every pre-DYNK_START
-   game and every event game replays exactly as it did before. */
-function matchKPair(m, rA, rB, ctxA, ctxB){
-  const o    = Number(m.outcome);
-  const mov  = movMultiplier(m, o === 1 ? rA : rB, o === 1 ? rB : rA);
-  const flat = K * mov;
-  if(!dynKApplies(m)) return {kA:flat, kB:flat, dynamic:false};
-  const fmt   = formatReliability(m);
-  const clamp = k => Math.max(DYNK_MIN, Math.min(DYNK_MAX, k));
-  return {
-    kA: clamp(playerK(ctxA) * fmt) * mov,
-    kB: clamp(playerK(ctxB) * fmt) * mov,
-    dynamic: true
-  };
-}
-
-/* Keeps games-played and last-played per name while a replay walks the history
-   forward, so every loop that recomputes ratings gets the same per-player K
-   without each one repeating the bookkeeping. Call .pair() BEFORE applying the
-   result: it reads the state as it stood before the match, then advances it. */
-function kTracker(){
-  const S = {};
-  const get = n => S[n] || (S[n] = {games:0, last:null});
-  return {
-    /* start a player mid-history (the what-if sandbox opens on today's ladder) */
-    seed(name, games, lastPlayed){
-      const s = get(name);
-      s.games = games || 0;
-      s.last  = lastPlayed == null ? null : lastPlayed;
-    },
-    ctx(name, t){
-      const s = get(name);
-      return {games:s.games, daysSince: s.last == null ? null : Math.max(0, (t - s.last)/86400000)};
-    },
-    pair(m, rA, rB){
-      const t = m.created_at ? new Date(m.created_at).getTime() : Date.now();
-      const k = matchKPair(m, rA, rB, this.ctx(m.p1, t), this.ctx(m.p2, t));
-      [m.p1, m.p2].forEach(n=>{ const s = get(n); s.games++; s.last = t; });
-      return k;
-    }
-  };
-}
-
-/* timestamp of each player's most recent approved, Elo-counting game */
-function lastPlayedMap(){
-  const L = {};
-  matches.filter(m => m.status === "approved" && countsForElo(m)).forEach(m=>{
-    const t = new Date(m.created_at).getTime();
-    [m.p1, m.p2].forEach(n=>{ L[n] = Math.max(L[n] || 0, t); });
-  });
-  return L;
-}
-
-/* the K a player carries into their NEXT ladder game, before margin and format
-   scaling — neither exists until the match is played. This is the number the
-   single-game projections quote and the profile shows. */
-function playerLiveK(name, standings, lastMap){
-  if(!DYNK_ENABLED) return K;
-  const S = standings || computeStandings();
-  const key = String(name).toLowerCase();
-  const p = S.find(x => x.name === name) || S.find(x => x.name.toLowerCase() === key);
-  const L = lastMap || lastPlayedMap();
-  const last = L[p ? p.name : name];
-  return Math.max(DYNK_MIN, Math.min(DYNK_MAX, playerK({
-    games: p ? p.games : 0,
-    daysSince: last ? Math.max(0, (Date.now() - last)/86400000) : null
-  })));
+/* the K each side of a match plays for — always equal, so results
+   are zero-sum. Margin of victory (above) scales it symmetrically. */
+function matchKPair(m, rA, rB){
+  const o = Number(m.outcome);
+  const mov = movMultiplier(m, o === 1 ? rA : rB, o === 1 ? rB : rA);
+  const k = K * mov;
+  return {kA: k, kB: k};
 }
 
 /* ratings as they stood immediately BEFORE a given match id */
@@ -12020,41 +11817,17 @@ function preGameRatings(matchId){
   const approved = matches
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-  const KT = kTracker();
   for (const m of approved){
     ensure(m.p1); ensure(m.p2);
     if (m.id === matchId) break;                 // stop before applying this one
     const Ea = 1 / (1 + Math.pow(10, (P[m.p2] - P[m.p1]) / DIVISOR));
     const Sa = Number(m.outcome);
-    const {kA, kB} = KT.pair(m, P[m.p1], P[m.p2]);
+    const {kA, kB} = matchKPair(m, P[m.p1], P[m.p2]);
     const a = P[m.p1], b = P[m.p2];
     P[m.p1] = a + kA * (Sa - Ea);
     P[m.p2] = b + kB * ((1 - Sa) - (1 - Ea));
   }
   return P;
-}
-
-/* the K each side actually played for in a given match — the same replay as
-   preGameRatings(), stopped one step later so the match's own K is returned.
-   Null if the id isn't in the approved, Elo-counting history. */
-function matchKOf(matchId){
-  const P = {};
-  const ensure = n => (P[n] === undefined ? (P[n] = START) : P[n]);
-  const KT = kTracker();
-  const approved = matches
-    .filter(m => m.status === "approved" && countsForElo(m))
-    .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-  for (const m of approved){
-    ensure(m.p1); ensure(m.p2);
-    const {kA, kB, dynamic} = KT.pair(m, P[m.p1], P[m.p2]);
-    if (m.id === matchId) return {kA, kB, dynamic};
-    const Ea = 1 / (1 + Math.pow(10, (P[m.p2] - P[m.p1]) / DIVISOR));
-    const Sa = Number(m.outcome);
-    const a = P[m.p1], b = P[m.p2];
-    P[m.p1] = a + kA * (Sa - Ea);
-    P[m.p2] = b + kB * ((1 - Sa) - (1 - Ea));
-  }
-  return null;
 }
 
 /* win probability of A vs B from Elo expected-score formula */
@@ -12081,7 +11854,7 @@ function winProb(rA, rB){
 
    Deliberately a second, independent loop rather than a branch inside
    _computeStandings() — the one function in this file "everybody argues
-   about" — reusing only the shared primitives (kTracker, countsForElo,
+   about" — reusing only the shared primitives (matchKPair, countsForElo,
    DIVISOR, START) it already reuses elsewhere (computeRatingTimeline,
    computeReignStats, preGameRatings all repeat this same loop shape).
 
@@ -12102,7 +11875,6 @@ function computeFallExhibition(endDateStr){
 
   const P = {};
   const ensure = n => P[n] || (P[n] = {name:n, rating:START, baseline:null, fallGames:0});
-  const KT = kTracker();
 
   for (const m of approved){
     const t = new Date(m.created_at).getTime();
@@ -12116,7 +11888,7 @@ function computeFallExhibition(endDateStr){
 
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Sa = Number(m.outcome);
-    const {kA, kB} = KT.pair(m, a.rating, b.rating);
+    const {kA, kB} = matchKPair(m, a.rating, b.rating);
     a.rating += kA * (Sa - Ea);
     b.rating += kB * ((1 - Sa) - (1 - Ea));
 
@@ -12232,8 +12004,9 @@ window.toggleAttrModel = toggleAttrModel;
    ============================================================ */
 
 /* one Elo update: returns [newA, newB] given ratings and score for A (1/0.5/0).
-   kA/kB are optional — pass each player's live K (playerLiveK) when projecting a
-   real next game; leave them out for sims that model a settled field on flat K. */
+   kA/kB are optional and default to the flat K — nothing in this app passes
+   anything else any more, but callers that only need one player's next
+   rating can still omit the other. */
 function eloUpdate(rA, rB, scoreA, kA, kB){
   const eA = winProb(rA, rB);
   const ka = kA == null ? K : kA;
@@ -21438,11 +21211,9 @@ function runBriefing(){
   const rank={}; standings.forEach((p,i)=>rank[p.name]=i+1);
 
   // what each result does to the ladder
-  const brLast=lastPlayedMap();
-  const brKA=playerLiveK(A.name,standings,brLast), brKB=playerLiveK(B.name,standings,brLast);
   const scenario=(sA)=>{
     const R={}; standings.forEach(p=>R[p.name]=p.rating);
-    const [na,nb]=eloUpdate(R[A.name],R[B.name],sA,brKA,brKB);
+    const [na,nb]=eloUpdate(R[A.name],R[B.name],sA);
     R[A.name]=na; R[B.name]=nb;
     const order=Object.keys(R).sort((x,y)=>R[y]-R[x]);
     return {aRank:order.indexOf(A.name)+1, bRank:order.indexOf(B.name)+1,
@@ -21501,16 +21272,8 @@ function renderAudit(){
   const standings=computeStandings().filter(p=>p.games>0);
   const unreliable=standings.filter(p=>p.games<5);
   const pool=standings.reduce((s,p)=>s+p.rating,0);
-  /* Dynamic K gives the two sides of a game different K values, so the pool no
-     longer has to come out at START x players — ELO_DRIFT is exactly how much
-     that has moved it. Accounted-for drift is healthy; anything beyond it is a
-     real bug, which is what this row is for. */
-  const drift=DYNK_ENABLED?ELO_DRIFT:0;
-  const expected=standings.length*START+drift;
+  const expected=standings.length*START;
   const conserved=Math.abs(pool-expected)<0.01;
-  const driftNote=Math.abs(drift)>=0.05
-    ? `${drift>0?'+':''}${drift.toFixed(1)} from dynamic K`
-    : "zero-sum intact";
   // duplicate detection: same pair, same day, same outcome
   const seen={}, dupes=[];
   approved.forEach(m=>{
@@ -21524,7 +21287,7 @@ function renderAudit(){
     ${note?`<span class="au-note">${note}</span>`:''}</div>`;
   el.innerHTML =
     row("Set scores recorded", setPct+"%", setPct>=80, `${approved.length-withSets} missing`) +
-    row("Elo pool conserved", pool.toFixed(1)+" / "+expected.toFixed(1), conserved, conserved?driftNote:"unexplained drift") +
+    row("Elo pool conserved", pool.toFixed(1)+" / "+expected.toFixed(1), conserved, conserved?"zero-sum intact":"unexplained drift") +
     row("Ratings reliable (5+ games)", `${standings.length-unreliable.length}/${standings.length}`, !unreliable.length,
         unreliable.length?unreliable.map(p=>esc(p.name)).join(", "):"all settled") +
     row("Possible duplicates", dupes.length, dupes.length===0, dupes.length?"same pair, day & result":"none found") +
@@ -21539,13 +21302,9 @@ function runMatchPredict(){
   const rA = predictiveRating(a, standings);
   const rB = predictiveRating(b, standings);
   const pA = ensembleProb(a, b, standings), pB = 1 - pA;
-  /* each side moves by its own K — the projection has to say so, or a newcomer
-     is quoted a swing half the size of the one they'd actually get */
-  const lastMap = lastPlayedMap();
-  const kA = playerLiveK(a, standings, lastMap), kB = playerLiveK(b, standings, lastMap);
-  const [aIfWin]  = eloUpdate(rA, rB, 1, kA, kB);
-  const [aIfLose] = eloUpdate(rA, rB, 0, kA, kB);
-  const [aIfDraw] = eloUpdate(rA, rB, 0.5, kA, kB);
+  const [aIfWin]  = eloUpdate(rA, rB, 1);
+  const [aIfLose] = eloUpdate(rA, rB, 0);
+  const [aIfDraw] = eloUpdate(rA, rB, 0.5);
   const d = (x,base)=>{ const v=Math.round(x-base); return (v>=0?'+':'')+v; };
   out.innerHTML = `
     <div class="pred-odds">
@@ -21556,11 +21315,10 @@ function runMatchPredict(){
     <div class="pred-bar"><span style="width:0%" data-w="${Math.round(pA*100)}"></span></div>
     <table class="pred-table">
       <tr><th>Result for ${esc(a)}</th><th>${esc(a)}</th><th>${esc(b)}</th></tr>
-      <tr><td>Win</td>  <td class="pt-up">${d(aIfWin,rA)}</td>  <td class="pt-down">${d(eloUpdate(rA,rB,1,kA,kB)[1],rB)}</td></tr>
-      <tr><td>Draw</td> <td>${d(aIfDraw,rA)}</td> <td>${d(eloUpdate(rA,rB,0.5,kA,kB)[1],rB)}</td></tr>
-      <tr><td>Loss</td> <td class="pt-down">${d(aIfLose,rA)}</td> <td class="pt-up">${d(eloUpdate(rA,rB,0,kA,kB)[1],rB)}</td></tr>
-    </table>
-    ${DYNK_ENABLED?`<div class="pred-hint" style="margin-top:8px">Each side moves by its own K — <b>${esc(a)}</b> is on K ${Math.round(kA)}, <b>${esc(b)}</b> on K ${Math.round(kB)}. Fewer games (or a long layoff) means a bigger swing. A dominant scoreline adds to it; a short one takes away.</div>`:''}`;
+      <tr><td>Win</td>  <td class="pt-up">${d(aIfWin,rA)}</td>  <td class="pt-down">${d(eloUpdate(rA,rB,1)[1],rB)}</td></tr>
+      <tr><td>Draw</td> <td>${d(aIfDraw,rA)}</td> <td>${d(eloUpdate(rA,rB,0.5)[1],rB)}</td></tr>
+      <tr><td>Loss</td> <td class="pt-down">${d(aIfLose,rA)}</td> <td class="pt-up">${d(eloUpdate(rA,rB,0)[1],rB)}</td></tr>
+    </table>`;
   // animation system: count the headline win% up and fill the odds bar in from 0
   out.querySelectorAll(".po-pct").forEach(el=>{
     const to = parseFloat(el.getAttribute("data-anim-to"));
@@ -21865,17 +21623,13 @@ function render(){
   const leagueSeq = {};
   computeLeagueStats().players.forEach(p=>leagueSeq[p.name]=p.seq);
   $("playerCount").textContent = standings.length;
-  // Elo pool integrity: raw ratings must sum to players × START, PLUS whatever
-  // dynamic K has deliberately moved it by (see DYNAMIC K / ELO_DRIFT above) —
-  // that part is accounted for and healthy, so it must not read as a leak here.
-  // Mirrors the same accounting renderAudit() uses for the Lab's data audit.
+  // Elo pool integrity: raw ratings must sum to players × START — every game
+  // is zero-sum, so anything else here is a real leak, not drift.
   if(standings.length){
     const pool = standings.reduce((s,p)=>s+p.rating,0);
-    const drift = DYNK_ENABLED ? ELO_DRIFT : 0;
-    const expected = standings.length*START + drift;
+    const expected = standings.length*START;
     const ok = Math.abs(pool-expected)<0.01;
-    const driftNote = Math.abs(drift)>=0.05 ? ` <span class="pool-drift">(${drift>0?'+':''}${drift.toFixed(1)} from dynamic K)</span>` : '';
-    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}${driftNote}`;
+    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
   } else $("poolLine").innerHTML='';
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====
@@ -22516,7 +22270,6 @@ function renderProfile(p){
       <div class="stat"><div class="stat-v gold">${Math.round(p.peak)}</div><div class="stat-l">Peak</div></div>
       <div class="stat"><div class="stat-v">${p.winRate}%</div><div class="stat-l">Win rate</div></div>
       <div class="stat"><div class="stat-v">${p.games}</div><div class="stat-l">Games</div></div>
-      ${DYNK_ENABLED?`<div class="stat" title="How far one ladder result can move this rating. It falls as games accumulate and rises again after a long time away."><div class="stat-v">${Math.round(playerLiveK(p.name))}</div><div class="stat-l">K next game</div></div>`:''}
       <div class="stat"><div class="stat-v">${p.reignCurrent>0.005?fmtDays(p.reignCurrent):(p.reignBest>=1?fmtDays(p.reignBest):'—')}</div><div class="stat-l">${p.reignCurrent>0.005?'<span class="crown-ico">👑</span> at #1':'<span class="crown-ico">👑</span> best streak'}</div></div>
       <div class="stat"><div class="stat-v">${p.longestW||'—'}</div><div class="stat-l">Best streak</div></div>
     </div>
@@ -22780,12 +22533,6 @@ function openMatch(id){
       const mult = movMultiplier(m, o===1?rA:rB, o===1?rB:rA);
       if(mult - 1 < 0.02) return '';   // floor is 1.0x now, so only ever show a bonus
       return ` <span class="mov-badge mov-up" title="Dominant win — counted for more">×${mult.toFixed(2)}</span>`;
-    })()}${(()=>{
-      /* what each side's rating was actually risking. Only worth showing once the
-         two numbers can differ — before DYNK_START they were both a flat K. */
-      const k = matchKOf(m.id);
-      if(!k || !k.dynamic) return '';
-      return ` <span class="mov-badge mov-down" title="Effective K — ${esc(m.p1)} ${Math.round(k.kA)}, ${esc(m.p2)} ${Math.round(k.kB)}. Fewer games, a long layoff or a dominant scoreline all raise it.">K ${Math.round(k.kA)} / ${Math.round(k.kB)}</span>`;
     })()}</div>
     ${m.court?`<div class="modal-court">📍 ${esc(m.court)}</div>`:''}
     ${m.notes?`<div class="modal-notes">📝 ${esc(m.notes)}</div>`:''}
@@ -29151,7 +28898,6 @@ function computeLeagueStats(){
   let totalGames=0,totalDraws=0;
   let maxSwing={v:0,who:null}, upset={p:1,winner:null};
 
-  const KT=kTracker();
   for(const m of approved){
     const a=ensure(m.p1),b=ensure(m.p2);
     const Ea=1/(1+Math.pow(10,(b.rating-a.rating)/DIVISOR)),Eb=1-Ea;
@@ -29164,7 +28910,7 @@ function computeLeagueStats(){
     if(Sa===1){bucketA.w++;bucketB.l++;} else if(Sa===0){bucketA.l++;bucketB.w++;} else {bucketA.d++;bucketB.d++;}
     if(Sa===1&&Ea<upset.p) upset={p:Ea,winner:m.p1,loser:m.p2,date:m.created_at};
     if(Sa===0&&Eb<upset.p) upset={p:Eb,winner:m.p2,loser:m.p1,date:m.created_at};
-    const {kA,kB}=KT.pair(m,a.rating,b.rating);
+    const {kA,kB}=matchKPair(m,a.rating,b.rating);
     const dA=kA*(Sa-Ea), dB=kB*(Sb-Eb);
     /* the two sides can move by different amounts now, so the biggest swing in a
        game is the bigger of the two — still credited to whoever's rating rose */
@@ -30801,7 +30547,7 @@ function computeFixtures(){
       const lower = rankOf[A.name]>rankOf[B.name]?A:B;
       const upper = lower===A?B:A;
       // simulate the lower-ranked player winning: do they overtake?
-      const [wL,wU]=eloUpdate(lower.rating,upper.rating,1,playerLiveK(lower.name,standings),playerLiveK(upper.name,standings));
+      const [wL,wU]=eloUpdate(lower.rating,upper.rating,1);
       if(wL>wU) reasons.push(`winner takes #${rankOf[upper.name]}`);
       else reasons.push("direct ladder rivals");
     }
@@ -31402,12 +31148,9 @@ function renderDivisorPanel(){
     </div>
     <div class="pw-legend">Changing this re-scales every prediction and the ladder spread, but never rewrites match history — ratings simply recompute. 0.250 is a coin flip; you want the lowest number here. Admin only.</div>`;
 }
-/* the strip in the top bar. K stopped being one number when dynamic K came in,
-   so it reads as the range a player can actually be on. */
+/* the strip in the top bar. */
 function taglineText(){
-  return DYNK_ENABLED
-    ? `live · K ${DYNK_SETTLED_K}-${DYNK_STEPS[0].k} · start ${START}`
-    : `live · K=${K} · start ${START}`;
+  return `live · K=${K} · start ${START}`;
 }
 function applyDivisor(d){
   if(!isAdmin) return toast("Admin only — unlock to change the divisor",true);
@@ -34018,13 +33761,12 @@ function predictionLog(){
   const ensure=n=>(P[n]===undefined?(P[n]=START):P[n]);
   const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  const KT=kTracker();
   for(const m of approved){
     ensure(m.p1); ensure(m.p2);
     const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
     const Sa=Number(m.outcome);
     log.push({m, p:Ea, actual:Sa, rA:P[m.p1], rB:P[m.p2]});
-    const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+    const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
     const a=P[m.p1], b=P[m.p2];
     P[m.p1]=a+kA*(Sa-Ea);
     P[m.p2]=b+kB*((1-Sa)-(1-Ea));
@@ -34048,7 +33790,6 @@ function predictionLogFull(){
   const approved=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
 
-  const KT=kTracker();
   for(const m of approved){
     ensure(m.p1); ensure(m.p2);
 
@@ -34082,7 +33823,7 @@ function predictionLogFull(){
     log.push({m, p:Ea, pFull, actual:Sa, rA:P[m.p1], rB:P[m.p2]});
 
     // apply the real Elo update — identical math to predictionLog()
-    const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+    const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
     const a=P[m.p1], b=P[m.p2];
     P[m.p1]=a+kA*(Sa-Ea);
     P[m.p2]=b+kB*((1-Sa)-(1-Ea));
@@ -34409,10 +34150,9 @@ function renderLeverage(){
   const rank0={}; standings.forEach((p,i)=>rank0[p.name]=i+1);
   const base={}; standings.forEach(p=>base[p.name]=p.rating);
 
-  const lvLast=lastPlayedMap();
   const shake=(a,b,aWins)=>{
     const R={...base};
-    const [na,nb]=eloUpdate(R[a],R[b],aWins?1:0,playerLiveK(a,standings,lvLast),playerLiveK(b,standings,lvLast));
+    const [na,nb]=eloUpdate(R[a],R[b],aWins?1:0);
     R[a]=na; R[b]=nb;
     const order=Object.keys(R).sort((x,y)=>R[y]-R[x]);
     let disp=0;
@@ -34454,10 +34194,6 @@ function runOptimalPath(){
 
   const names=standings.map(p=>p.name);
   const start={}; standings.forEach(p=>start[p.name]=p.rating);
-  /* every rung here is a game that hasn't been played, so each name moves by its
-     own live K. Held constant across the route — a planner, not a simulator. */
-  const pathLast=lastPlayedMap(), kOf={};
-  names.forEach(n=> kOf[n]=playerLiveK(n,standings,pathLast));
   const BEAM=260, MAX_DEPTH=10;
 
   const rankOf=(R,who)=>names.slice().sort((a,b)=>R[b]-R[a]).indexOf(who)+1;
@@ -34474,7 +34210,7 @@ function runOptimalPath(){
       for(const opp of names){
         if(opp===me.name) continue;
         const R={...st.R};
-        const [nm2,no]=eloUpdate(R[me.name],R[opp],1,kOf[me.name],kOf[opp]);   // I win
+        const [nm2,no]=eloUpdate(R[me.name],R[opp],1);   // I win
         R[me.name]=nm2; R[opp]=no;
         const cand={R,path:[...st.path,opp]};
         if(rankOf(R,me.name)===1){ solution=cand; break; }
@@ -34497,14 +34233,14 @@ function runOptimalPath(){
     const idx=order.indexOf(me.name);
     if(idx===0) break;
     const target=order[idx-1];
-    const [a,b]=eloUpdate(R2[me.name],R2[target],1,kOf[me.name],kOf[target]);
+    const [a,b]=eloUpdate(R2[me.name],R2[target],1);
     R2[me.name]=a; R2[target]=b; naive++;
   }
 
   const R={...start};
   const steps=solution.path.map((opp,i)=>{
     const before=Math.round(R[me.name]);
-    const [a,b]=eloUpdate(R[me.name],R[opp],1,kOf[me.name],kOf[opp]);
+    const [a,b]=eloUpdate(R[me.name],R[opp],1);
     R[me.name]=a; R[opp]=b;
     return {n:i+1,opp,before,after:Math.round(a),rank:rankOf(R,me.name)};
   });
@@ -34536,14 +34272,14 @@ function runButterfly(){
   const replay=(flipId)=>{
     const P={}, series={};
     const ensure=n=>{ if(P[n]===undefined){P[n]=START; series[n]=[START];} };
-    const KT=kTracker();          // fresh per replay — flipping a result changes no one's games count
+    
     approved.forEach((m,idx)=>{
       ensure(m.p1); ensure(m.p2);
       let o=Number(m.outcome);
       if(m.id===flipId) o = o===0.5 ? 1 : (o===1 ? 0 : 1);   // flip the result
       const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
       const fake={...m, outcome:o};
-      const {kA,kB}=KT.pair(fake,P[m.p1],P[m.p2]);
+      const {kA,kB}=matchKPair(fake,P[m.p1],P[m.p2]);
       const a=P[m.p1], b=P[m.p2];
       P[m.p1]=a+kA*(o-Ea);
       P[m.p2]=b+kB*((1-o)-(1-Ea));
@@ -34616,12 +34352,11 @@ function ratingSeries(){
   const ens=n=>{ if(P[n]===undefined){P[n]=START; hist[n]=[{t:null,r:START}];} };
   const approved=matches.filter(m=>m.status==="approved"&&countsForElo(m))
     .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  const KT=kTracker();
   approved.forEach(m=>{
     ens(m.p1); ens(m.p2);
     const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
     const Sa=Number(m.outcome);
-    const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+    const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
     const dA=kA*(Sa-Ea), dB=kB*((1-Sa)-(1-Ea));
     P[m.p1]+=dA; P[m.p2]+=dB;
     hist[m.p1].push({t:m.created_at,r:P[m.p1]});
@@ -34813,12 +34548,11 @@ function titleRaceHistory(){
   const P={}, names=new Set();
   const ens=n=>{ if(P[n]===undefined) P[n]=START; names.add(n); };
   const points=[];   // per game: {t, leader, probByName}
-  const KT=kTracker();
   approved.forEach((m,idx)=>{
     ens(m.p1); ens(m.p2);
     const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
     const Sa=Number(m.outcome);
-    const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+    const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
     P[m.p1]+=kA*(Sa-Ea); P[m.p2]+=kB*((1-Sa)-(1-Ea));
     // softmax over ratings = rough "who's best" belief
     const arr=[...names].map(n=>({n,r:P[n]}));
@@ -34837,13 +34571,12 @@ function milestones(){
   const P={}, peak={}, out=[];
   const ens=n=>{ if(P[n]===undefined){P[n]=START;peak[n]=START;} };
   let leader=null;
-  const KT=kTracker();
   approved.forEach(m=>{
     ens(m.p1); ens(m.p2);
     const before=Object.entries(P).sort((a,b)=>b[1]-a[1])[0];
     const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
     const Sa=Number(m.outcome);
-    const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+    const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
     const rWin = Sa===1?P[m.p2]:P[m.p1];   // opp rating (pre)
     const rMe  = Sa===1?P[m.p1]:P[m.p2];
     P[m.p1]+=kA*(Sa-Ea); P[m.p2]+=kB*((1-Sa)-(1-Ea));
@@ -35099,12 +34832,12 @@ function bootstrapRatings(B){
     idx.sort((x,y)=>x-y);
     const P={};
     const ens=k=>{ if(P[k]===undefined) P[k]=START; };
-    const KT=kTracker();          // each resampled season builds its own experience counts
+    
     idx.forEach(i=>{
       const m=games[i]; ens(m.p1); ens(m.p2);
       const Ea=1/(1+Math.pow(10,(P[m.p2]-P[m.p1])/DIVISOR));
       const Sa=Number(m.outcome);
-      const {kA,kB}=KT.pair(m,P[m.p1],P[m.p2]);
+      const {kA,kB}=matchKPair(m,P[m.p1],P[m.p2]);
       P[m.p1]+=kA*(Sa-Ea); P[m.p2]+=kB*((1-Sa)-(1-Ea));
     });
     names.forEach(nm=>{ if(P[nm]!==undefined) samples[nm].push(P[nm]); });
