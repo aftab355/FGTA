@@ -203,8 +203,8 @@ section('hours from a match — tier 2, the scoreline');
      'a straight-sets win is its game count', g('6-4, 6-3').minutes.toFixed(1));
   ok(g('6-4, 4-6, 7-5').minutes > g('6-4, 6-3').minutes,
      'and three sets is longer than two');
-  /* the same correction the dynamic K makes: 10-8 in the sets column is a
-     match tiebreak, the shortest thing anybody plays, not an 18-game set */
+  /* the same correction the Elo margin model makes: 10-8 in the sets column
+     is a match tiebreak, the shortest thing anybody plays, not an 18-game set */
   ok(g('6-4, 3-6, 10-8').minutes < g('6-4, 3-6, 7-5').minutes,
      'a match tiebreak counts as the short thing it is, not the long thing it looks like',
      g('6-4, 3-6, 10-8').minutes.toFixed(1) + ' vs ' + g('6-4, 3-6, 7-5').minutes.toFixed(1));

@@ -33,9 +33,9 @@ const find = (rows, name) => rows.find(r => r.name === name);
 /* ---------------------------------------------------------------- */
 section('the baseline is exactly the pre-fall replay, nothing more');
 {
-  /* well before MOV_START (2026-07-23) and DYNK_START (2026-08-29), so this
-     is plain flat-K Elo — easy to cross-check against the real engine's own
-     computeStandings() rather than hand-deriving numbers a second time */
+  /* well before MOV_START (2026-07-23), so this is plain flat-K Elo — easy
+     to cross-check against the real engine's own computeStandings() rather
+     than hand-deriving numbers a second time */
   const pre = [
     game('A', 'B', 1, '2026-01-01'),
     game('B', 'A', 1, '2026-01-05'),
