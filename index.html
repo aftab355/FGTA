@@ -4200,6 +4200,28 @@
     .pred-bar.face-bar{height:5px;margin-bottom:7px}
   }
 
+  /* ============================================================
+     MAIN EVENT — the doubles headline card in #mainEvent. Same face-off
+     furniture, but each side is a pair: two overlapping avatars and
+     both names stacked, so a 2v2 reads at a glance.
+     ============================================================ */
+  #mainEvent .bcast{margin-top:18px}
+  .me-tag{color:var(--accent)}
+  .me-pair{display:flex;justify-content:center}
+  .me-pair .avi+.avi{margin-left:-14px}
+  .me-names{display:flex;flex-direction:column;gap:2px;max-width:100%}
+  /* the hero is always dark, whatever the theme — keep its type light */
+  #mainEvent .face-name{color:#f4f1ff;font-size:14px}
+  #mainEvent .face-vs{color:#f4f1ff}
+  .me-format{font-family:var(--font-mono);font-size:11px;letter-spacing:.6px;text-align:center;
+    color:var(--muted);text-transform:uppercase;padding:2px 0 8px}
+  .me-when.is-live{color:var(--danger)}
+  @media(max-width:640px){
+    #mainEvent .bcast{margin-top:12px}
+    .me-pair .avi+.avi{margin-left:-10px}
+    .me-format{font-size:9.5px}
+  }
+
   /* mirrored two-sided attribute comparison — same fill colours/tiers
      as .attr-row/.attr-fill (attrTier()), just growing from a shared
      centre line instead of a single left-anchored track */
@@ -9654,6 +9676,9 @@
 
   <!-- ===== FF CUP MARQUEE — sits above the broadcast hero, i.e. above
        everything else on the landing page, for the length of the event ===== -->
+  <!-- ===== MAIN EVENT — a hand-coded headline fixture (see MAIN_EVENT) ===== -->
+  <div id="mainEvent"></div>
+
   <div class="cup-mount" data-cup-mount="full"></div>
   <div class="live-mount"></div>
 
@@ -21728,6 +21753,7 @@ function render(){
   $("adminToolsSec").style.display = isAdmin ? "block" : "none";
   if($("scheduleMatchSec")) $("scheduleMatchSec").style.display = isAdmin ? "block" : "none";
   if($("draftsSec")) $("draftsSec").style.display = isAdmin ? "block" : "none";
+  renderMainEvent();
   renderUpcomingBroadcast();
   if(isAdmin){ renderDivisorPanel(); renderMutedNames(); renderAuditLog(); renderPlayerRoster(); renderMatchDrafts(); }
   updateDMBadge();
@@ -23984,6 +24010,105 @@ function renderUpcomingBroadcast(){
   primeBars(box);
   updateCountdowns();
 }
+
+/* ---- MAIN EVENT — a hand-coded headline fixture ----
+   scheduled_matches is singles-only (p1/p2), so a doubles headline lives
+   here in code instead. It shows from now until the end of its day (local
+   time), then drops off on its own; set MAIN_EVENT to null to pull it
+   early. Odds come from the pairs ladder when both teams have a doubles
+   rating, otherwise from each pair's average singles power. */
+const MAIN_EVENT = {
+  title : "M4 Doubles Match",
+  day   : "2026-09-25",            // Friday — no start time set yet
+  format: "1 match · best of 5 sets",
+  teamA : ["Kabir","Aakif"],
+  teamB : ["Aftab","M4"]
+};
+function mainEventDay(ev){
+  const [y,mo,d] = ev.day.split("-").map(Number);
+  return new Date(y, mo-1, d);   // local midnight, not UTC
+}
+function mainEventActive(ev, now){
+  if(!ev) return false;
+  const end = mainEventDay(ev); end.setDate(end.getDate()+1);
+  return (now||new Date()) < end;
+}
+function mainEventWhen(ev, now){
+  const today = now||new Date(); today.setHours(0,0,0,0);
+  const days = Math.round((mainEventDay(ev) - today)/86400000);
+  if(days<=0) return "TODAY";
+  if(days===1) return "TOMORROW";
+  return `IN ${days} DAYS`;
+}
+function renderMainEvent(){
+  const box = $("mainEvent");
+  if(!box) return;
+  const ev = MAIN_EVENT;
+  if(!mainEventActive(ev)){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display = "block";
+
+  const standings = computeStandings();
+  /* use the ladder's own spelling of a name when it has one */
+  const canon = n => (standings.find(p=>p.name.toLowerCase()===n.toLowerCase())||{name:n}).name;
+  const A = ev.teamA.map(canon), B = ev.teamB.map(canon);
+
+  /* the pairs ladder only loads on the Doubles tab — fetch it once so the
+     front page can price this off real doubles results when there are any */
+  let dbl = [];
+  try{
+    dbl = computeDoublesStandings();
+    if(!renderMainEvent.fetched){
+      renderMainEvent.fetched = true;
+      loadDoublesMatches().then(()=>{ if(doublesMatches.length) renderMainEvent(); });
+    }
+  }catch(e){ /* doubles store not initialised yet on an early boot render */ }
+  const tA = dbl.find(t=>t.team===teamKey(A[0],A[1])), tB = dbl.find(t=>t.team===teamKey(B[0],B[1]));
+  const pwr = team => team.reduce((s,n)=>s+predictiveRating(n, standings),0)/team.length;
+  const rA = tA&&tB ? tA.rating : pwr(A), rB = tA&&tB ? tB.rating : pwr(B);
+  const pA = 1/(1+Math.pow(10,(rB-rA)/DIVISOR));
+  const basis = tA&&tB ? "doubles rating" : "avg singles power";
+
+  const when = mainEventWhen(ev);
+  const dateTxt = mainEventDay(ev).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  const side = team => `
+    <div class="face-fighter">
+      <div class="me-pair">${team.map(n=>avatar(n,64)).join('')}</div>
+      <div class="me-names">${team.map(n=>`<div class="face-name">${esc(n)}</div>`).join('')}</div>
+    </div>`;
+
+  box.innerHTML = `
+    <div class="bcast bcast-mini bcast-face" onclick="showView('doubles')">
+      <div class="bcast-strip">
+        <span class="bcast-live upcoming"><span class="bcast-dot upcoming"></span><span class="me-tag">MAIN EVENT</span></span>
+        <span class="bcast-title">${esc(ev.title)}</span>
+        <span class="bcast-meta">${esc(dateTxt)}</span>
+      </div>
+      <div class="face-hero">
+        <div class="face-bg"><div class="face-bg-a" style="background:${playerColor(A[0])}"></div><div class="face-bg-b" style="background:${playerColor(B[0])}"></div></div>
+        ${side(A)}
+        <div class="face-center">
+          <div class="face-vs">VS</div>
+          <div class="face-count-big me-when${when==="TODAY"?" is-live":""}">${when}</div>
+        </div>
+        ${side(B)}
+      </div>
+      <div class="face-pad">
+        <div class="me-format">${esc(dateTxt)} · Doubles · ${esc(ev.format)}</div>
+        <div class="brf-odds face-odds">
+          <div class="brf-pct big" data-anim-to="${Math.round(pA*100)}">0%</div>
+          <div class="brf-vs">win odds · ${basis}</div>
+          <div class="brf-pct big dim" data-anim-to="${Math.round((1-pA)*100)}">0%</div>
+        </div>
+        <div class="pred-bar face-bar"><span style="width:0%" data-w="${Math.round(pA*100)}"></span></div>
+      </div>
+    </div>`;
+  box.querySelectorAll(".brf-pct").forEach(el=>{
+    const to = parseFloat(el.getAttribute("data-anim-to"));
+    if(!isNaN(to)) animateNumber(el, to, {suffix:"%", duration:550});
+  });
+  primeBars(box);
+}
+window.renderMainEvent = renderMainEvent;
 
 /* ---- full hype modal ---- */
 function openScheduledMatch(id){
