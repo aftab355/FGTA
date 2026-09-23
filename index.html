@@ -24018,7 +24018,8 @@ function renderUpcomingBroadcast(){
    early. Odds come from the pairs ladder when both teams have a doubles
    rating, otherwise from each pair's average singles power. */
 const MAIN_EVENT = {
-  title : "Doubles Showdown",
+  title : "FR Match",
+  long  : "Fat Rivals Match",
   day   : "2026-09-25",            // Friday — no start time set yet
   format: "1 match · best of 5 sets",
   teamA : ["Kabir","Aakif"],
@@ -24080,7 +24081,7 @@ function renderMainEvent(){
     <div class="bcast bcast-mini bcast-face" onclick="showView('doubles')">
       <div class="bcast-strip">
         <span class="bcast-live upcoming"><span class="bcast-dot upcoming"></span><span class="me-tag">MAIN EVENT</span></span>
-        <span class="bcast-title">${esc(ev.title)}</span>
+        <span class="bcast-title" title="${esc(ev.long)}">${esc(ev.title)}</span>
         <span class="bcast-meta">${esc(dateTxt)}</span>
       </div>
       <div class="face-hero">
@@ -24093,7 +24094,7 @@ function renderMainEvent(){
         ${side(B)}
       </div>
       <div class="face-pad">
-        <div class="me-format">${esc(dateTxt)} · Doubles · ${esc(ev.format)}</div>
+        <div class="me-format">${esc(ev.long)} · ${esc(dateTxt)} · Doubles · ${esc(ev.format)}</div>
         <div class="brf-odds face-odds">
           <div class="brf-pct big" data-anim-to="${Math.round(pA*100)}">0%</div>
           <div class="brf-vs">win odds · ${basis}</div>
