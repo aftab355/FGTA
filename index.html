@@ -4216,10 +4216,29 @@
   .me-format{font-family:var(--font-mono);font-size:11px;letter-spacing:.6px;text-align:center;
     color:var(--muted);text-transform:uppercase;padding:2px 0 8px}
   .me-when.is-live{color:var(--danger)}
+  /* the promo poster is tall (1000×1724), so the card shows a letterbox
+     crop on the four faces and the VS; a tap opens the whole thing */
+  .me-poster{position:relative;display:block;height:300px;overflow:hidden;cursor:zoom-in;
+    background:#12081f;border-bottom:1px solid var(--line-soft)}
+  .me-poster img{width:100%;height:100%;object-fit:cover;object-position:50% 44%;display:block}
+  .me-poster-hint{position:absolute;right:10px;bottom:10px;font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.6px;text-transform:uppercase;color:#f4f1ff;background:rgba(18,8,31,.72);
+    border:1px solid rgba(190,140,255,.45);border-radius:var(--r-pill);padding:4px 10px}
+  .me-poster-full{display:block;width:100%;height:auto;border-radius:var(--r-md)}
+  /* wide screens have room for the whole poster: it takes a column on the
+     left and the face-off sits beside it, rather than a sliver of a crop */
+  @media(min-width:900px){
+    .me-body.has-poster{display:grid;grid-template-columns:300px 1fr}
+    .me-body.has-poster .me-poster{height:auto;border-bottom:0;border-right:1px solid var(--line-soft)}
+    .me-body.has-poster .me-poster img{height:auto;object-fit:contain}
+    .me-body.has-poster .me-side{display:flex;flex-direction:column}
+    .me-body.has-poster .face-hero{flex:1}
+  }
   @media(max-width:640px){
     #mainEvent .bcast{margin-top:12px}
     .me-pair .avi+.avi{margin-left:-10px}
     .me-format{font-size:9.5px}
+    .me-poster{height:220px}
   }
 
   /* mirrored two-sided attribute comparison — same fill colours/tiers
@@ -24023,7 +24042,8 @@ const MAIN_EVENT = {
   day   : "2026-09-25",            // Friday — no start time set yet
   format: "1 match · best of 5 sets",
   teamA : ["Kabir","Aakif"],
-  teamB : ["M4","Aftab"]
+  teamB : ["M4","Aftab"],
+  poster: "img/fr-match-poster.jpg"
 };
 function mainEventDay(ev){
   const [y,mo,d] = ev.day.split("-").map(Number);
@@ -24084,6 +24104,12 @@ function renderMainEvent(){
         <span class="bcast-title" title="${esc(ev.long)}">${esc(ev.title)}</span>
         <span class="bcast-meta">${esc(dateTxt)}</span>
       </div>
+      <div class="me-body${ev.poster?" has-poster":""}">
+      ${ev.poster?`<div class="me-poster" onclick="event.stopPropagation();openMainEventPoster()">
+        <img src="${esc(ev.poster)}" alt="${esc(ev.title)} poster: ${esc(A.join(' & '))} vs ${esc(B.join(' & '))}" loading="lazy" decoding="async">
+        <span class="me-poster-hint">Full poster</span>
+      </div>`:''}
+      <div class="me-side">
       <div class="face-hero">
         <div class="face-bg"><div class="face-bg-a" style="background:${playerColor(A[0])}"></div><div class="face-bg-b" style="background:${playerColor(B[0])}"></div></div>
         ${side(A)}
@@ -24102,6 +24128,8 @@ function renderMainEvent(){
         </div>
         <div class="pred-bar face-bar"><span style="width:0%" data-w="${Math.round(pA*100)}"></span></div>
       </div>
+      </div>
+      </div>
     </div>`;
   box.querySelectorAll(".brf-pct").forEach(el=>{
     const to = parseFloat(el.getAttribute("data-anim-to"));
@@ -24110,6 +24138,15 @@ function renderMainEvent(){
   primeBars(box);
 }
 window.renderMainEvent = renderMainEvent;
+function openMainEventPoster(){
+  const ev = MAIN_EVENT;
+  if(!ev || !ev.poster) return;
+  openMatchId = null; openScheduledMatchId = null;
+  $("modalBody").innerHTML = `
+    <img class="me-poster-full" src="${esc(ev.poster)}" alt="${esc(ev.title)} poster">`;
+  $("modal").classList.add("open");
+}
+window.openMainEventPoster = openMainEventPoster;
 
 /* ---- full hype modal ---- */
 function openScheduledMatch(id){
