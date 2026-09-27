@@ -10577,8 +10577,15 @@
       <div class="panel" id="doublesPendingList"></div>
     </section>
     <section>
-      <div class="sec-label">Doubles standings <span class="pred-tag">Team rating</span></div>
-      <div class="panel" id="doublesStandings"></div>
+      <div class="sec-label">Doubles standings <span class="pred-tag">Player rating</span></div>
+      <div class="panel">
+        <div class="pred-hint">Each player carries their own doubles rating, so it follows them whoever they partner. A win against a stronger pair earns more. Level ratings are split by most wins, then games won minus games lost.</div>
+        <div id="doublesStandings" style="margin-top:12px"></div>
+        <details style="margin-top:14px">
+          <summary class="wi-rec" style="cursor:pointer">Pairings — rating for each exact partnership</summary>
+          <div id="doublesPairs" style="margin-top:10px"></div>
+        </details>
+      </div>
     </section>
     <section>
       <div class="sec-label">Recent doubles matches</div>
@@ -29273,15 +29280,59 @@ function computeDoublesStandings(){
   });
   return Object.values(P).sort((a,b)=>b.rating-a.rating);
 }
+/* Games won/lost by team A in a match, from its set scores ("6-4, 3-6, 10-7").
+   People type sets from either side, so if the side that took more sets is
+   not the recorded winner, the numbers are read as winner-first and flipped. */
+function doublesGames(m){
+  const sets=String(m.sets||"").split(/[,;\s]+/).map(x=>x.match(/^(\d+)-(\d+)$/)).filter(Boolean)
+    .map(x=>[Number(x[1]),Number(x[2])]);
+  if(!sets.length) return null;
+  const aSets=sets.filter(([a,b])=>a>b).length, bSets=sets.filter(([a,b])=>b>a).length;
+  const o=Number(m.outcome), flip=(o===1&&bSets>aSets)||(o===0&&aSets>bSets);
+  const a=sets.reduce((t,[x,y])=>t+(flip?y:x),0), b=sets.reduce((t,[x,y])=>t+(flip?x:y),0);
+  return {a,b};
+}
+/* Individual doubles ladder. Friends rotate partners, so almost every
+   pairing plays once and a pair ladder is all ties. Here each player has a
+   rating; a team's strength is the average of its two players, and both
+   partners move by the same amount after the game. Names match ignoring
+   case, so "Mc" and "MC" are one player. */
+function computeDoublesPlayerStandings(){
+  const P={};
+  const ensure=n=>{ const k=String(n).trim().toLowerCase();
+    return P[k]||(P[k]={name:String(n).trim(),rating:START,w:0,l:0,d:0,gw:0,gl:0}); };
+  doublesMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).forEach(m=>{
+    const A=[ensure(m.p1a),ensure(m.p1b)], B=[ensure(m.p2a),ensure(m.p2b)];
+    const rA=(A[0].rating+A[1].rating)/2, rB=(B[0].rating+B[1].rating)/2;
+    const Sa=Number(m.outcome), Ea=1/(1+Math.pow(10,(rB-rA)/DIVISOR)), d=K*(Sa-Ea);
+    const g=doublesGames(m);
+    A.forEach(p=>{ p.rating+=d; if(Sa===1)p.w++; else if(Sa===0)p.l++; else p.d++; if(g){p.gw+=g.a;p.gl+=g.b;} });
+    B.forEach(p=>{ p.rating-=d; if(Sa===0)p.w++; else if(Sa===1)p.l++; else p.d++; if(g){p.gw+=g.b;p.gl+=g.a;} });
+  });
+  const pct=p=>(p.w+p.d/2)/Math.max(1,p.w+p.l+p.d);
+  return Object.values(P).sort((a,b)=>
+    Math.round(b.rating)-Math.round(a.rating) || b.w-a.w ||
+    (b.gw-b.gl)-(a.gw-a.gl) || pct(b)-pct(a) || a.name.localeCompare(b.name));
+}
 function renderDoubles(){
   loadDoublesMatches().then(()=>{
     const el=$("doublesStandings"); if(!el) return;
-    const rows=computeDoublesStandings();
-    el.innerHTML = rows.length ? rows.map((t,i)=>`<div class="wi-row">
+    const players=computeDoublesPlayerStandings();
+    el.innerHTML = players.length ? players.map((p,i)=>{
+      const gp=p.w+p.l+p.d, pct=Math.round(100*(p.w+p.d/2)/Math.max(1,gp)), gd=p.gw-p.gl;
+      return `<div class="wi-row"${i===0?' style="border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)"':''}>
+      <span class="wi-rank">${i===0?'👑':i+1}</span>
+      <span><span class="wi-name">${esc(p.name)}</span><div class="wi-rec">${pct}% won${p.gw||p.gl?` · games ${gd>0?'+':''}${gd}`:''}</div></span>
+      <span class="pod-sub">${p.w}-${p.l}${p.d?'-'+p.d:''}</span><span></span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:700">${Math.round(p.rating)}</span></div>`;}).join('')
+      : '<div class="c-empty">No approved doubles matches yet.</div>';
+    const pe=$("doublesPairs");
+    if(pe){ const rows=computeDoublesStandings();
+      pe.innerHTML = rows.length ? rows.map((t,i)=>`<div class="wi-row">
       <span class="wi-rank">${i+1}</span><span>${esc(t.team)}</span>
       <span class="pod-sub">${t.w}-${t.l}${t.d?'-'+t.d:''}</span><span></span>
       <span style="font-family:'JetBrains Mono',monospace;font-weight:700">${Math.round(t.rating)}</span></div>`).join('')
-      : '<div class="c-empty">No approved doubles matches yet.</div>';
+      : '<div class="c-empty">No pairings yet.</div>'; }
     renderDoublesQueue();
   });
   const names=computeStandings().map(p=>p.name);
