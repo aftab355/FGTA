@@ -398,5 +398,81 @@ section('a decider played as a breaker — the set score that is not a set score
      S.map(p => p.name + ':' + p.rating.toFixed(2)).join(' '));
 }
 
+section('the ducking tax — sitting on a rating costs something');
+{
+  const DAY = 86400000;
+  const e0 = () => E([]);
+  const T0 = Date.parse(e0().TAX_START);           // the first check
+  /* a date `days` from the first check; game() puts it at noon UTC */
+  const at = days => new Date(T0 + days * DAY).toISOString().slice(0, 10);
+  const EN = (ms, now) => loadElo({matches: ms, now});
+
+  /* A beats B twice, well before the first check, then nobody plays */
+  const old = [game('A', 'B', 1, at(-60)), game('A', 'B', 1, at(-50))];
+  const before = EN(old, T0 - 1).computeStandings();
+  const after  = EN(old, T0 + DAY).computeStandings();
+  const r = (S, n) => S.find(p => p.name === n);
+
+  ok(EN(old, T0 - 1).taxChecks(T0 - 1).length === 0,
+     'no check exists before TAX_START, whatever the history');
+  ok(near(r(before, 'A').rating - r(after, 'A').rating, e0().TAX_POINTS),
+     'the first check takes TAX_POINTS from an idle player above START',
+     (r(before, 'A').rating - r(after, 'A').rating).toFixed(2));
+  ok(near(r(before, 'B').rating, r(after, 'B').rating),
+     'and nothing from one already below START — they are not sitting on anything');
+  ok(near(r(after, 'A').taxed, e0().TAX_POINTS) && r(after, 'A').lastTax.t === T0,
+     'the row says what it paid and when');
+  ok(r(after, 'A').history.length === 3,
+     'history stays one entry per game — the tax is not a game');
+
+  /* a long way out, it grinds down to START and stops there */
+  const far = EN(old, T0 + 400 * DAY).computeStandings();
+  ok(near(r(far, 'A').rating, e0().START),
+     'it never takes a rating below START', r(far, 'A').rating.toFixed(2));
+  ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed, 0), 0),
+     'the pool is players x START less exactly what was taxed',
+     pool(far, 500).toFixed(2));
+
+  /* the window: TAX_MIN_GAMES inside it clears you, one fewer does not */
+  const busy = old.concat([game('A', 'C', 1, at(-20)), game('A', 'C', 1, at(-10))]);
+  ok(r(EN(busy, T0 + DAY).computeStandings(), 'A').taxed === 0,
+     'enough games in the window: no tax');
+  const one = old.concat([game('A', 'C', 1, at(-10))]);
+  ok(r(EN(one, T0 + DAY).computeStandings(), 'A').taxed > 0,
+     'one short of it: taxed');
+
+  /* the newcomer: first game inside the window, so not a full window in yet */
+  const fresh = [game('N', 'B', 1, at(-5))];
+  ok(r(EN(fresh, T0 + DAY).computeStandings(), 'N').taxed === 0,
+     'nobody pays before they have been in the league a full window');
+
+  /* a game on the exact instant of a check counts towards it */
+  const onTheDot = old.concat([game('A', 'D', 1, at(-3)),
+                               game('A', 'D', 1, at(0), {created_at: new Date(T0).toISOString()})]);
+  ok(r(EN(onTheDot, T0 + 1).computeStandings(), 'A').taxed === 0,
+     'a game at the same instant as a check runs before it');
+
+  /* the ratings before a game include any tax charged before it */
+  const later = old.concat([game('A', 'B', 0, at(2))]);
+  const L = EN(later, T0 + 3 * DAY);
+  ok(near(L.preGameRatings(later[2].id)['A'], r(before, 'A').rating - e0().TAX_POINTS),
+     "a game's before-rating is after the tax, so before + change = the table");
+
+  /* the memo is keyed on checks passed, so a page left open across one
+     does not keep serving the untaxed table */
+  const M = EN(old, T0 - 1);
+  const a1 = r(M.computeStandings(), 'A').rating;
+  M.setNow(T0 + 1);
+  const a2 = r(M.computeStandings(), 'A').rating;
+  ok(near(a1 - a2, e0().TAX_POINTS), 'crossing a check invalidates the cached table', (a1 - a2).toFixed(2));
+
+  /* the warning: who owes at the next check if nobody plays */
+  const O = EN(old, T0 - DAY);
+  ok(O.taxOwingNext(T0 - DAY).at === T0 && O.taxOwingNext(T0 - DAY).names.includes('A'),
+     'the outlook names the next check and who would owe at it');
+  ok(O.nextTaxCheck(T0) === T0 + e0().TAX_EVERY_DAYS * DAY,
+     'and a check that has just happened is not the next one');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

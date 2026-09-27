@@ -80,11 +80,19 @@ function loadElo(opts){
                  'BLOWOUT_FLOOR_MULT','MOV_BREAKER_START','SET_MAX_GAMES','setPairs',
                  'setOversized','breakerIndex',
                  'movMultiplier','matchKPair','preGameRatings',
-                 'winProb','computeStandings','invalidateStandings'];
+                 'winProb','computeStandings','invalidateStandings',
+                 'TAX_ENABLED','TAX_START','TAX_EVERY_DAYS','TAX_WINDOW_DAYS','TAX_MIN_GAMES',
+                 'TAX_POINTS','taxChecks','owesTax','taxCharge','nextTaxCheck','taxOwingNext'];
   const pre = [
     'const K = ' + (o.K == null ? 32 : o.K) + ';',
     'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
     'const START = ' + (o.start == null ? 500 : o.start) + ';',
+    /* the engine's clock, which only the ducking tax reads. Pinned, and by
+       default to a day before the tax's first check, so every test that is
+       not about the tax replays exactly as it did before there was one —
+       whatever day the suite happens to be run on. */
+    'let ELO_NOW = ' + (o.now == null ? "Date.parse('2026-09-27T12:00:00Z')" : Number(o.now)) + ';',
+    'const eloNow = () => ELO_NOW;',
     /* the engine reads a module-level `matches`; the test owns it */
     'let matches = arguments[0].matches;',
     'let tournaments = arguments[0].tournaments || [];',
@@ -94,7 +102,8 @@ function loadElo(opts){
   const api = new Function(pre + '\n' + code +
     '\nreturn {' + names.join(',') +
     ',setMatches:(m)=>{matches=m; invalidateStandings();},' +
-    ' setDivisor:(d)=>{DIVISOR=d;}, K, START, get DIVISOR(){return DIVISOR;}};')(
+    ' setDivisor:(d)=>{DIVISOR=d;}, setNow:(t)=>{ELO_NOW=t;},' +
+    ' K, START, get DIVISOR(){return DIVISOR;}};')(
       {matches: o.matches || [], tournaments: o.tournaments,
        countsForElo: o.countsForElo,
        countsForAnalysis: o.countsForAnalysis});
