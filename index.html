@@ -1253,6 +1253,8 @@
   .pool-line{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin:-8px 0 10px;letter-spacing:.5px}
   .pool-ok{color:var(--accent)} .pool-bad{color:var(--danger)}
   .streak-badge{font-size:12px;font-family:var(--font-mono);color:var(--pending);vertical-align:middle}
+  .tax-badge{font-family:var(--font-mono);font-size:11px;color:var(--dim);white-space:nowrap}
+  .tax-badge.tax-due{color:var(--pending)}
   .cfti{
     position:fixed;top:-12px;width:9px;height:14px;z-index:200;pointer-events:none;border-radius:3px;
     animation:cfall 1.7s cubic-bezier(.2,.6,.4,1) forwards;
@@ -10924,6 +10926,9 @@ function setDivisor(v){
    two bad months from a negative rating and made every ratings chart run
    against a floor that means nothing. 500 buys that headroom back. */
 const START   = 500;
+/* the engine's clock. Only the ducking tax reads it — a game's effect never
+   depends on when you look — and test/extract.js injects a fixed one. */
+function eloNow(){ return Date.now(); }
 /* ============================================================ */
 
 const configured = SUPABASE_URL.startsWith("http") && !SUPABASE_KEY.startsWith("YOUR_");
@@ -11452,23 +11457,31 @@ let _standCache = null;
 function invalidateStandings(){ _standCache = null; }
 
 function computeStandings(){
+  /* the tax makes the table depend on the date as well as the rows — but
+     only in weekly steps, so the number of checks passed is a complete key
+     for it, and between checks this is still a pointer comparison */
+  const now = eloNow(), checks = taxChecks(now).length;
   if(_standCache && _standCache.m === matches && _standCache.t === tournaments
-     && _standCache.divisor === DIVISOR){
+     && _standCache.divisor === DIVISOR && _standCache.checks === checks){
     return _standCache.value.slice();
   }
-  const out = _computeStandings();
-  _standCache = {m: matches, t: tournaments, divisor: DIVISOR, value: out};
+  const out = _computeStandings(now);
+  _standCache = {m: matches, t: tournaments, divisor: DIVISOR, checks, value: out};
   return out.slice();
 }
 
-function _computeStandings(){
-  const P = {}; // name -> {rating, w, l, d, games}
-  const ensure = n => P[n] || (P[n] = {name:n, rating:START, w:0, l:0, d:0, games:0, peak:START, history:[START]});
+function _computeStandings(now){
+  /* name -> {rating, w, l, d, games, ...}. `history` is one entry per GAME
+     (callers index it that way), so a tax shows in `rating` and `taxed`,
+     not as a point of its own; `lastTax` is the latest check that charged. */
+  const P = {};
+  const ensure = n => P[n] || (P[n] = {name:n, rating:START, w:0, l:0, d:0, games:0, peak:START, history:[START],
+                                       taxed:0, lastTax:null});
   const approved = matches
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
 
-  for (const m of approved){
+  eloEvents(approved, now, m => {
     const a = ensure(m.p1), b = ensure(m.p2);
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Eb = 1 - Ea;
@@ -11484,7 +11497,12 @@ function _computeStandings(){
     b.peak = Math.max(b.peak, b.rating);
     a.history.push(a.rating);
     b.history.push(b.rating);
-  }
+  }, (t, owing) => {
+    owing.forEach(n => {
+      const p = P[n], c = taxCharge(p.rating);
+      if(c > 0){ p.rating -= c; p.taxed += c; p.lastTax = {t, points:c}; }
+    });
+  });
   return Object.values(P).sort((x,y) => y.rating - x.rating);
 }
 /* ==== ELO-STANDINGS-END ==== */
@@ -11577,17 +11595,23 @@ function computeRatingTimeline(){
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
 
-  for (const m of approved){
+  eloEvents(approved, eloNow(), (m, t) => {
     const a = ensure(m.p1), b = ensure(m.p2);
     const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
     const Sa = Number(m.outcome);
     const {kA, kB} = matchKPair(m, a.rating, b.rating);
     a.rating += kA * (Sa - Ea);
     b.rating += kB * ((1-Sa) - (1-Ea));
-    const t = new Date(m.created_at).getTime();
     a.timeline.push({date:t, rating:a.rating});
     b.timeline.push({date:t, rating:b.rating});
-  }
+  }, (t, owing) => {
+    /* a tax is a point on the timeline too, so a player who sat out the
+       fortnight shows up as a faller by exactly what it cost them */
+    owing.forEach(n => {
+      const p = P[n], c = taxCharge(p.rating);
+      if(c > 0){ p.rating -= c; p.timeline.push({date:t, rating:p.rating}); }
+    });
+  });
   return P; // name -> {name, rating (current), timeline:[{date,rating},...] chronological}
 }
 
@@ -11669,15 +11693,7 @@ function computeReignStats(){
   const reigns = []; // completed + trailing reign: {name, start, end}
   let leader = null, reignStart = null;
 
-  for (const m of approved){
-    const t = new Date(m.created_at).getTime();
-    const a = ensure(m.p1), b = ensure(m.p2);
-    const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
-    const Sa = Number(m.outcome);
-    const {kA, kB} = matchKPair(m, a.rating, b.rating);
-    a.rating += kA * (Sa - Ea);
-    b.rating += kB * ((1 - Sa) - (1 - Ea));
-    // who leads now?
+  const lead = t => {
     const top = Object.values(P).sort((x,y)=>y.rating-x.rating)[0];
     const newLeader = top ? top.name : null;
     if (leader === null){
@@ -11687,7 +11703,21 @@ function computeReignStats(){
       leader = newLeader; reignStart = t;
     }
     // else: same leader continues — reign keeps extending, no new span
-  }
+  };
+  eloEvents(approved, eloNow(), (m, t) => {
+    const a = ensure(m.p1), b = ensure(m.p2);
+    const Ea = 1 / (1 + Math.pow(10, (b.rating - a.rating) / DIVISOR));
+    const Sa = Number(m.outcome);
+    const {kA, kB} = matchKPair(m, a.rating, b.rating);
+    a.rating += kA * (Sa - Ea);
+    b.rating += kB * ((1 - Sa) - (1 - Ea));
+    lead(t);
+  }, (t, owing) => {
+    // a leader who stops playing can be taxed off the top without a game
+    let hit = false;
+    owing.forEach(n => { const c = taxCharge(P[n].rating); if(c > 0){ P[n].rating -= c; hit = true; } });
+    if(hit) lead(t);
+  });
   if (leader && reignStart !== null) reigns.push({name:leader, start:reignStart, end:Date.now()});
 
   const stats = {};
@@ -11873,23 +11903,140 @@ function matchKPair(m, rA, rB){
   return {kA: k, kB: k};
 }
 
-/* ratings as they stood immediately BEFORE a given match id */
+/* ============================================================
+   THE DUCKING TAX — the one thing in this engine that is not a game
+
+   A rating only moves when you play, so once you are near the top
+   the safest thing you can do with it is nothing. With five players
+   and two dozen games that is not hypothetical: a handful of wins
+   can hold a podium place for months against people playing twice
+   as often.
+
+   So: once a week, anybody who has played fewer than TAX_MIN_GAMES
+   ladder games in the last TAX_WINDOW_DAYS pays TAX_POINTS. Three
+   limits keep it a nudge rather than a second rating system:
+
+     - it never takes anybody below START. Sitting on a rating is
+       only worth doing when it is above average, so that is the
+       only rating it touches — a player below 500 who is not
+       playing is not protecting anything.
+     - nobody pays until their first game is a full window old, so
+       someone who has just joined cannot owe for games they have
+       not had a chance to play.
+     - the first check is TAX_START and nothing before it is ever
+       charged, the same promise MOV_START makes: turning this on
+       does not rewrite a single rating that was already published.
+
+   The points are removed, not handed to anyone, so the pool is no
+   longer exactly players x START — it is that minus every point
+   taxed, and the standings carry a `taxed` total so that sum can
+   still be checked exactly.
+
+   The checks are real events on the same timeline as the games, so
+   every replay that walks this through eloEvents() sees a tax in
+   the same place, and a check landing on the same instant as a game
+   runs after it: the game counts towards the window it is in.
+   ============================================================ */
+const TAX_ENABLED     = true;
+const TAX_START       = "2026-10-05";  // first weekly check (UTC midnight); nothing earlier is charged
+const TAX_EVERY_DAYS  = 7;
+const TAX_WINDOW_DAYS = 30;
+const TAX_MIN_GAMES   = 2;             // fewer than this in the window, and you pay
+const TAX_POINTS      = 8;
+const ELO_DAY_MS      = 86400000;
+
+/* the check instants that have happened by `now`, oldest first */
+function taxChecks(now){
+  if(!TAX_ENABLED) return [];
+  const out = [], step = TAX_EVERY_DAYS * ELO_DAY_MS;
+  for(let t = new Date(TAX_START).getTime(); t <= now; t += step) out.push(t);
+  return out;
+}
+
+/* does a player with these game times (oldest first) owe at check `t`? */
+function owesTax(times, t){
+  if(!times || !times.length) return false;
+  const from = t - TAX_WINDOW_DAYS * ELO_DAY_MS;
+  if(times[0] > from) return false;            // not in the league a full window yet
+  let n = 0;
+  for(let i = times.length - 1; i >= 0 && times[i] > from; i--) n++;
+  return n < TAX_MIN_GAMES;
+}
+
+/* what a check takes from a rating: TAX_POINTS, but never below START */
+function taxCharge(rating){
+  return Math.max(0, Math.min(TAX_POINTS, rating - START));
+}
+
+/* walk the approved games (already sorted oldest first) and every tax
+   check up to `now` in one timeline. onGame(m, t) for each game;
+   onCheck(t, names) for each check, with the players who owe at it.
+   A check at the same instant as a game runs after it. */
+function eloEvents(approved, now, onGame, onCheck){
+  const checks = taxChecks(now), played = {};
+  let i = 0;
+  const check = () => {
+    const t = checks[i++];
+    onCheck(t, Object.keys(played).filter(n => owesTax(played[n], t)));
+  };
+  for(const m of approved){
+    const t = new Date(m.created_at).getTime();
+    while(i < checks.length && checks[i] < t) check();
+    onGame(m, t);
+    (played[m.p1] || (played[m.p1] = [])).push(t);
+    (played[m.p2] || (played[m.p2] = [])).push(t);
+  }
+  while(i < checks.length) check();
+}
+
+/* the first check after `now`, or null with the tax off */
+function nextTaxCheck(now){
+  if(!TAX_ENABLED) return null;
+  const first = new Date(TAX_START).getTime(), step = TAX_EVERY_DAYS * ELO_DAY_MS;
+  if(now < first) return first;
+  return first + (Math.floor((now - first) / step) + 1) * step;
+}
+
+/* who would owe at the next check if nobody plays before it. It says
+   nothing about whether it would cost them anything — a rating at or
+   below START pays 0 — which is the caller's to check against the table. */
+function taxOwingNext(now){
+  const t = nextTaxCheck(now);
+  if(t === null) return {at:null, names:[]};
+  const played = {};
+  matches
+    .filter(m => m.status === "approved" && countsForElo(m))
+    .map(m => ({m, t:new Date(m.created_at).getTime()}))
+    .filter(x => x.t <= now)
+    .sort((a,b) => a.t - b.t)
+    .forEach(({m, t}) => [m.p1, m.p2].forEach(n => (played[n] || (played[n] = [])).push(t)));
+  return {at:t, names:Object.keys(played).filter(n => owesTax(played[n], t))};
+}
+
+/* ratings as they stood immediately BEFORE a given match id — including
+   any tax charged before it, so a game's before-and-after adds up to the
+   table */
 function preGameRatings(matchId){
   const P = {};
   const ensure = n => (P[n] === undefined ? (P[n] = START) : P[n]);
   const approved = matches
     .filter(m => m.status === "approved" && countsForElo(m))
     .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-  for (const m of approved){
+  let done = false;
+  eloEvents(approved, eloNow(), m => {
+    if(done) return;
     ensure(m.p1); ensure(m.p2);
-    if (m.id === matchId) break;                 // stop before applying this one
+    if (m.id === matchId){ done = true; return; }  // stop before applying this one
     const Ea = 1 / (1 + Math.pow(10, (P[m.p2] - P[m.p1]) / DIVISOR));
     const Sa = Number(m.outcome);
     const {kA, kB} = matchKPair(m, P[m.p1], P[m.p2]);
     const a = P[m.p1], b = P[m.p2];
     P[m.p1] = a + kA * (Sa - Ea);
     P[m.p2] = b + kB * ((1 - Sa) - (1 - Ea));
-  }
+  }, (t, owing) => {
+    if(done) return;
+    owing.forEach(n => { P[n] -= taxCharge(P[n]); });
+  });
   return P;
 }
 
@@ -21234,6 +21381,12 @@ function renderHealth(){
   if(!H.totalGames){ $("healthSec").style.display="none"; return; }
   const items=[];
   if(H.pending) items.push({icon:"⏳",tone:"warn",text:`<b>${H.pending}</b> game${H.pending>1?'s':''} waiting for approval`,act:"Unlock admin to clear the queue"});
+  /* the ducking tax's next check — only for ratings it would actually cost */
+  const taxNext = taxOwingNext(eloNow()), rated = {};
+  computeStandings().forEach(p=>rated[p.name]=p.rating);
+  taxNext.names.filter(n=>rated[n]>START).forEach(n=>items.push({icon:"⏳",tone:"warn",
+    text:`<b>${esc(n)}</b> owes the ducking tax on ${new Date(taxNext.at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`,
+    act:`Needs ${TAX_MIN_GAMES} ladder games in the ${TAX_WINDOW_DAYS} days before it, or pays up to ${TAX_POINTS} pts`}));
   H.inactive.slice(0,3).forEach(x=>items.push({icon:"💤",tone:"warn",
     text:`<b>${esc(x.name)}</b> hasn't played in ${x.days>900?'ages':Math.round(x.days)+' days'}`,act:"Get them a match"}));
   H.short.slice(0,2).forEach(p=>items.push({icon:"⚖️",tone:"info",
@@ -21335,7 +21488,7 @@ function renderAudit(){
   const standings=computeStandings().filter(p=>p.games>0);
   const unreliable=standings.filter(p=>p.games<5);
   const pool=standings.reduce((s,p)=>s+p.rating,0);
-  const expected=standings.length*START;
+  const expected=standings.length*START - standings.reduce((s,p)=>s+(p.taxed||0),0);  // less the ducking tax
   const conserved=Math.abs(pool-expected)<0.01;
   // duplicate detection: same pair, same day, same outcome
   const seen={}, dupes=[];
@@ -21686,13 +21839,15 @@ function render(){
   const leagueSeq = {};
   computeLeagueStats().players.forEach(p=>leagueSeq[p.name]=p.seq);
   $("playerCount").textContent = standings.length;
-  // Elo pool integrity: raw ratings must sum to players × START — every game
-  // is zero-sum, so anything else here is a real leak, not drift.
+  // Elo pool integrity: raw ratings must sum to players × START less every
+  // point the ducking tax removed — every game is zero-sum, so anything else
+  // here is a real leak, not drift.
   if(standings.length){
     const pool = standings.reduce((s,p)=>s+p.rating,0);
-    const expected = standings.length*START;
+    const taxed = standings.reduce((s,p)=>s+(p.taxed||0),0);
+    const expected = standings.length*START - taxed;
     const ok = Math.abs(pool-expected)<0.01;
-    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
+    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)}${taxed?` <span title="removed by the ducking tax">(−${Math.round(taxed)} taxed)</span>`:''} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
   } else $("poolLine").innerHTML='';
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====
@@ -21731,6 +21886,17 @@ function render(){
       bcastMeta.textContent = `${leader.name} leads · +${gap} clear · ${standings.reduce((s,p)=>s+p.games,0)/2|0} matches played`;
     }
 
+    // ---- ducking tax: what each row has paid, and who is on the clock ----
+    const taxNext = taxOwingNext(eloNow());
+    const taxDay = taxNext.at ? new Date(taxNext.at).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}) : '';
+    const taxBadge = p => {
+      const due = taxNext.names.includes(p.name) && p.rating > START;
+      const bits = [];
+      if(p.taxed >= 0.5) bits.push(`<span class="tax-badge" title="Ducking tax: ${Math.round(p.taxed)} points taken for playing fewer than ${TAX_MIN_GAMES} games in ${TAX_WINDOW_DAYS} days">💤−${Math.round(p.taxed)}</span>`);
+      if(due) bits.push(`<span class="tax-badge tax-due" title="Fewer than ${TAX_MIN_GAMES} games in the last ${TAX_WINDOW_DAYS} days — play before ${taxDay} or lose up to ${TAX_POINTS} points">⏳ play by ${taxDay}</span>`);
+      return bits.length ? ' · ' + bits.join(' ') : '';
+    };
+
     // ---- stadium leaderboard rows (broadcast style) ----
     const maxR = Math.max(...standings.map(p=>p.rating));
     const minR = Math.min(...standings.map(p=>p.rating), START);
@@ -21763,7 +21929,7 @@ function render(){
         <div class="brow-av">${avatar(p.name,38)}</div>
         <div class="brow-id">
           <div class="brow-name">${esc(p.name)}${streak}</div>
-          <div class="brow-sub">${p.games}G · ${p.w}-${p.l}-${p.d}${crown} ${dots}</div>
+          <div class="brow-sub">${p.games}G · ${p.w}-${p.l}-${p.d}${crown}${taxBadge(p)} ${dots}</div>
         </div>
         <div class="brow-bar"><span class="brow-fill" style="width:${barPct}%;background:${playerColor(p.name)}"></span></div>
         <div class="brow-rating"><span class="brow-num" data-anim-to="${Math.round(p.rating)}">0</span>${tick}<span class="brow-peak">pk ${Math.round(p.peak)}</span></div>
