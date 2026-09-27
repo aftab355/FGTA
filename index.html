@@ -19368,11 +19368,53 @@ window.ptDiag=ptDiag;
 /* Uncaught errors are the ones that matter most and the ones nobody ever sees
    on a phone — there is no console to open at a tennis court. */
 window.addEventListener('error', e=>{
-  try{ ptLogDiag('error', (e.message||'script error')+' @ '+((e.filename||'').split('/').pop()||'?')+':'+(e.lineno||0)); }catch(_){}
+  try{
+    const src=((e.filename||'').split('/').pop()||'?')+':'+(e.lineno||0);
+    ptLogDiag('error', (e.message||'script error')+' @ '+src);
+    reportClientError('error', e.message||'script error', src);
+  }catch(_){}
 });
 window.addEventListener('unhandledrejection', e=>{
-  try{ ptLogDiag('error', 'unhandled promise: '+((e.reason&&(e.reason.message||e.reason))||'unknown')); }catch(_){}
+  try{
+    const msg=String((e.reason&&(e.reason.message||e.reason))||'unknown');
+    ptLogDiag('error', 'unhandled promise: '+msg);
+    reportClientError('rejection', msg, null);
+  }catch(_){}
 });
+/* ...and the same errors, sent somewhere somebody can read them without
+   holding the phone they happened on (docs/client-errors.sql). Batched a few
+   seconds so a loop that throws on every frame is one row with a count, not
+   a thousand; ten distinct errors a page load at most; and one refusal —
+   table not created, policy missing — switches it off for the visit, the
+   same posture as every other optional table here. Browser-extension and
+   cross-origin "Script error." noise carries no information and is dropped. */
+const CLIENT_ERR_MAX=10;
+let clientErrOff=false, clientErrSeen=new Map(), clientErrTimer=null;
+function reportClientError(kind,msg,source){
+  if(clientErrOff) return;
+  msg=String(msg||'').slice(0,300);
+  if(!msg || /^script error\.?$/i.test(msg)) return;
+  if(source && /^(chrome|moz|safari)-extension:/.test(source)) return;
+  const key=kind+'|'+msg+'|'+(source||'');
+  const hit=clientErrSeen.get(key);
+  if(hit){ if(!hit.sent) hit.count=Math.min(hit.count+1,1000); return; }
+  if(clientErrSeen.size>=CLIENT_ERR_MAX) return;
+  clientErrSeen.set(key,{kind,message:msg,source:source?String(source).slice(0,200):null,count:1,sent:false});
+  if(!clientErrTimer) clientErrTimer=setTimeout(flushClientErrors,4000);
+}
+async function flushClientErrors(){
+  clientErrTimer=null;
+  if(clientErrOff || typeof sb==='undefined' || !sb) return;
+  const page=(location.pathname+location.hash).slice(0,200);
+  const ua=navigator.userAgent.slice(0,160);
+  const pending=[...clientErrSeen.values()].filter(r=>!r.sent);
+  if(!pending.length) return;
+  pending.forEach(r=>{ r.sent=true; });
+  try{
+    const {error}=await sb.from('client_errors').insert(pending.map(r=>({kind:r.kind,message:r.message,source:r.source,count:r.count,page,ua})));
+    if(error){ clientErrOff=true; ptLogDiag('info','error reporting off: '+(error.message||error.code||'refused')); }
+  }catch(_){ clientErrOff=true; }
+}
 function ptHealthSummary(){
   const errs=ptDiag.filter(d=>d.kind==='error').length;
   const fixes=ptDiag.filter(d=>d.kind==='fix').length;
@@ -40352,6 +40394,59 @@ if("serviceWorker" in navigator){
     navigator.serviceWorker.register("sw.js").catch(()=>{});
   });
 }
+
+/* ---------- quiet self-update ----------
+   A deploy only reaches somebody when they reload, and an installed app on a
+   phone can go days without one — it gets backgrounded, not closed. So every
+   few minutes, and whenever the app comes back to the foreground, ask the
+   host for index.html's fingerprint (ETag / Last-Modified; a HEAD, no body).
+   If it changed, the new version is picked up the next time the page is out
+   of sight, so nobody watches it reload under their thumb.
+
+   It holds off while there's anything a reload could cost somebody: a match
+   being tracked, a stream being hosted or watched, or text typed into a box
+   and not yet sent. The tracker keeps its own draft in localStorage, but a
+   surprise reload mid-point is still not something to do to a ref.
+
+   HEAD isn't a GET, so sw.js lets it through to the network untouched. */
+(function(){
+  const CHECK_MS=10*60*1000;
+  let seen=null, pending=false, lastCheck=0;
+  async function fingerprint(){
+    try{
+      const r=await fetch("index.html",{method:"HEAD",cache:"no-store"});
+      return r.ok ? (r.headers.get("etag")||r.headers.get("last-modified")) : null;
+    }catch(_){ return null; }
+  }
+  function busy(){
+    try{
+      if(typeof PT!=="undefined" && PT && !PT.winner && !PT.draw) return true;
+      if(typeof PTStream!=="undefined" && PTStream) return true;
+      for(const el of document.querySelectorAll("textarea, input[type=text]:not([readonly]), input:not([type])")){
+        if(el.value && el.value.trim() && el.offsetParent!==null) return true;
+      }
+    }catch(_){ return true; }
+    return false;
+  }
+  function applyIfSafe(){
+    if(pending && document.visibilityState==="hidden" && !busy()) location.reload();
+  }
+  async function check(){
+    if(pending || Date.now()-lastCheck<60*1000) return applyIfSafe();
+    lastCheck=Date.now();
+    const fp=await fingerprint();
+    if(!fp) return;
+    if(seen===null){ seen=fp; return; }
+    if(fp!==seen){
+      pending=true;
+      try{ ptLogDiag("info","new version deployed — will load next time the app is in the background"); }catch(_){}
+      try{ const reg=await navigator.serviceWorker?.getRegistration(); reg && reg.update(); }catch(_){}
+    }
+    applyIfSafe();
+  }
+  window.addEventListener("load", ()=>{ check(); setInterval(check, CHECK_MS); });
+  document.addEventListener("visibilitychange", check);
+})();
 
 let deferredInstall = null;
 

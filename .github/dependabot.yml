@@ -1,0 +1,9 @@
+# Keeps the workflow actions (checkout, pages, setup-node) current. Each bump
+# arrives as a pull request, runs the test suite, and waits for a merge —
+# nothing is updated on the live site without one.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
