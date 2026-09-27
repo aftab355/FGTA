@@ -10568,9 +10568,17 @@
         <button class="btn" style="margin-top:14px" onclick="submitDoublesMatch()">Submit doubles match</button>
       </div>
     </section>
+    <section id="doublesPendingSec" data-print="hide" style="display:none">
+      <div class="sec-label">Doubles approval queue <span class="pred-tag" id="doublesPendCount">0</span></div>
+      <div class="panel" id="doublesPendingList"></div>
+    </section>
     <section>
       <div class="sec-label">Doubles standings <span class="pred-tag">Team rating</span></div>
       <div class="panel" id="doublesStandings"></div>
+    </section>
+    <section>
+      <div class="sec-label">Recent doubles matches</div>
+      <div class="panel" id="doublesRecent"></div>
     </section>
     <section data-print="hide">
       <div class="sec-label">Best pairing suggester</div>
@@ -29270,6 +29278,7 @@ function renderDoubles(){
       <span class="pod-sub">${t.w}-${t.l}${t.d?'-'+t.d:''}</span><span></span>
       <span style="font-family:'JetBrains Mono',monospace;font-weight:700">${Math.round(t.rating)}</span></div>`).join('')
       : '<div class="c-empty">No approved doubles matches yet.</div>';
+    renderDoublesQueue();
   });
   const names=computeStandings().map(p=>p.name);
   const opts=sel=>names.map(n=>`<option value="${esc(n)}" ${n===sel?'selected':''}>${esc(n)}</option>`).join('');
@@ -29277,6 +29286,78 @@ function renderDoubles(){
     $("synA").innerHTML=opts(a); $("synB").innerHTML=opts(b); renderSynergy(); }
 }
 window.renderDoubles=renderDoubles;
+/* Doubles results are inserted as status:"pending" like singles, and the
+   standings only count approved rows — so the admin needs a queue here to
+   move them, and everyone else needs to see that a submitted game landed. */
+function doublesResult(m){
+  const a=`${esc(m.p1a)} & ${esc(m.p1b)}`, b=`${esc(m.p2a)} & ${esc(m.p2b)}`, o=Number(m.outcome);
+  const core = o===1 ? `<b>${a}</b> beat ${b}` : o===0 ? `<b>${b}</b> beat ${a}` : `${a} drew ${b}`;
+  return core + (m.sets ? ` <span class="pod-sub">(${esc(m.sets)})</span>` : "");
+}
+function renderDoublesQueue(){
+  const sec=$("doublesPendingSec"), list=$("doublesPendingList");
+  const pending=doublesMatches.filter(m=>m.status==="pending")
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(sec) sec.style.display = isAdmin ? "block" : "none";
+  if($("doublesPendCount")) $("doublesPendCount").textContent = pending.length;
+  if(list && isAdmin){
+    list.innerHTML = pending.length
+      ? pending.map(m=>`<div class="pend">
+          <div><div class="pend-info">${doublesResult(m)}</div><div class="pend-meta">${when(m.created_at)}</div></div>
+          <div class="pend-actions">
+            <button class="mini yes" onclick="setDoublesStatus(${m.id},'approved')">Approve</button>
+            <button class="mini no" onclick="setDoublesStatus(${m.id},'rejected')">Reject</button>
+            <button class="mini no" onclick="deleteDoublesMatch(${m.id})">Delete</button>
+          </div></div>`).join("")
+      : '<div class="empty" style="border:1px solid var(--line);border-radius:10px">Queue is empty.</div>';
+  }
+  const recent=$("doublesRecent");
+  if(recent){
+    const rows=doublesMatches.filter(m=>m.status!=="rejected")
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,12);
+    recent.innerHTML = rows.length
+      ? rows.map(m=>`<div class="pend"><div><div class="pend-info">${doublesResult(m)}</div>
+          <div class="pend-meta">${when(m.created_at)}${m.status==="pending"?" · awaiting admin approval":""}</div></div></div>`).join("")
+      : '<div class="c-empty">No doubles matches reported yet.</div>';
+  }
+}
+async function setDoublesStatus(id,status){
+  if(!isAdmin) return;
+  if(!requireRealId(id)) return;
+  const m=doublesMatches.find(x=>String(x.id)===String(id));
+  const desc=m ? `${m.p1a} & ${m.p1b} vs ${m.p2a} & ${m.p2b}` : "this doubles game";
+  if(!confirm(`${status==="approved"?"Approve":"Reject"} ${desc}?`)) return;
+  const ok=await optWrite({
+    key    : "doubles-status:"+id,
+    store  : "doubles_matches",
+    mutate : optPatch(x=>String(x.id)===String(id), {status}),
+    write  : ()=>sb.from("doubles_matches").update({status}).eq("id",id),
+    paint  : ()=>renderDoubles(),
+    ok     : status==="approved" ? "Doubles game approved ✓" : "Doubles game rejected",
+    fail   : "Couldn't change that doubles game's status.",
+    refresh: false
+  });
+  if(ok) logAdminAction("doubles_"+status,{id, teamA:m&&teamKey(m.p1a,m.p1b), teamB:m&&teamKey(m.p2a,m.p2b)});
+}
+window.setDoublesStatus=setDoublesStatus;
+async function deleteDoublesMatch(id){
+  if(!isAdmin) return;
+  if(!requireRealId(id)) return;
+  const m=doublesMatches.find(x=>String(x.id)===String(id));
+  const desc=m ? `${m.p1a} & ${m.p1b} vs ${m.p2a} & ${m.p2b}` : "this doubles game";
+  if(!confirm(`Permanently delete ${desc}? This cannot be undone.`)) return;
+  const ok=await optWrite({
+    store  : "doubles_matches",
+    mutate : optDrop(x=>String(x.id)===String(id)),
+    write  : ()=>sb.from("doubles_matches").delete().eq("id",id),
+    paint  : ()=>renderDoubles(),
+    ok     : "Doubles game deleted",
+    fail   : "Couldn't delete that doubles game.",
+    refresh: false
+  });
+  if(ok) logAdminAction("delete_doubles",{id});
+}
+window.deleteDoublesMatch=deleteDoublesMatch;
 function renderSynergy(){
   const el=$("synergyBox"); if(!el) return;
   const a=$("synA").value, b=$("synB").value;
