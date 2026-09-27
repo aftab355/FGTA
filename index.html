@@ -24102,7 +24102,7 @@ function renderMainEvent(){
       loadDoublesMatches().then(()=>{ if(doublesMatches.length) renderMainEvent(); });
     }
   }catch(e){ /* doubles store not initialised yet on an early boot render */ }
-  const tA = dbl.find(t=>t.team===teamKey(A[0],A[1])), tB = dbl.find(t=>t.team===teamKey(B[0],B[1]));
+  const tA = dbl.find(t=>t.key===pairId(A[0],A[1])), tB = dbl.find(t=>t.key===pairId(B[0],B[1]));
   const pwr = team => team.reduce((s,n)=>s+predictiveRating(n, standings),0)/team.length;
   const rA = tA&&tB ? tA.rating : pwr(A), rB = tA&&tB ? tB.rating : pwr(B);
   const pA = 1/(1+Math.pow(10,(rB-rA)/DIVISOR));
@@ -29246,6 +29246,22 @@ async function loadDoublesMatches(){
   }catch(e){}
 }
 function teamKey(a,b){ return [a,b].sort((x,y)=>x.localeCompare(y)).join(" & "); }
+/* Doubles names are typed freehand, so "Mc" and "MC" are the same person.
+   Everything doubles keys on the lowercased name and shows whichever
+   spelling has been used most. */
+const dblId = n => String(n||"").trim().toLowerCase();
+function pairId(a,b){ return teamKey(dblId(a),dblId(b)); }
+function doublesNameMap(){
+  const seen={};
+  doublesMatches.forEach(m=>[m.p1a,m.p1b,m.p2a,m.p2b].forEach(n=>{
+    const t=String(n||"").trim(); if(!t) return;
+    const c=seen[dblId(t)]||(seen[dblId(t)]={});
+    c[t]=(c[t]||0)+1;
+  }));
+  const out={};
+  Object.keys(seen).forEach(k=>{ out[k]=Object.entries(seen[k]).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0][0]; });
+  return out;
+}
 async function submitDoublesMatch(){
   const a1=$("dbA1").value.trim(), a2=$("dbA2").value.trim(), b1=$("dbB1").value.trim(), b2=$("dbB2").value.trim();
   const outcome=$("dbOut").value, sets=$("dbSets").value.trim();
@@ -29269,11 +29285,10 @@ async function submitDoublesMatch(){
 }
 window.submitDoublesMatch=submitDoublesMatch;
 function computeDoublesStandings(){
-  const P={};
-  const ensure=k=>P[k]||(P[k]={team:k,rating:START,w:0,l:0,d:0});
+  const P={}, names=doublesNameMap(), show=n=>names[dblId(n)]||String(n).trim();
+  const ensure=(a,b)=>{ const k=pairId(a,b); return P[k]||(P[k]={key:k,team:teamKey(show(a),show(b)),rating:START,w:0,l:0,d:0}); };
   doublesMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).forEach(m=>{
-    const kA=teamKey(m.p1a,m.p1b), kB=teamKey(m.p2a,m.p2b);
-    const A=ensure(kA), B=ensure(kB);
+    const A=ensure(m.p1a,m.p1b), B=ensure(m.p2a,m.p2b);
     const Ea=1/(1+Math.pow(10,(B.rating-A.rating)/DIVISOR)), Sa=Number(m.outcome);
     A.rating+=K*(Sa-Ea); B.rating+=K*((1-Sa)-(1-Ea));
     if(Sa===1){A.w++;B.l++;} else if(Sa===0){A.l++;B.w++;} else {A.d++;B.d++;}
@@ -29298,9 +29313,9 @@ function doublesGames(m){
    partners move by the same amount after the game. Names match ignoring
    case, so "Mc" and "MC" are one player. */
 function computeDoublesPlayerStandings(){
-  const P={};
-  const ensure=n=>{ const k=String(n).trim().toLowerCase();
-    return P[k]||(P[k]={name:String(n).trim(),rating:START,w:0,l:0,d:0,gw:0,gl:0}); };
+  const P={}, names=doublesNameMap();
+  const ensure=n=>{ const k=dblId(n);
+    return P[k]||(P[k]={name:names[k]||String(n).trim(),rating:START,w:0,l:0,d:0,gw:0,gl:0}); };
   doublesMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).forEach(m=>{
     const A=[ensure(m.p1a),ensure(m.p1b)], B=[ensure(m.p2a),ensure(m.p2b)];
     const rA=(A[0].rating+A[1].rating)/2, rB=(B[0].rating+B[1].rating)/2;
