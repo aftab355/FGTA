@@ -56,7 +56,7 @@ function loadKit(){
   const code=region('KIT-CORE');
   const names=['KIT_STRINGS','KIT_MAT','KIT_FLOOR','KIT_BEDIN_DAYS','KIT_BANDS',
                'KIT_RESTRING_AT','KIT_HORIZON','KIT_RATE_DEFAULT','KIT_MIN_PER_GAME',
-               'KIT_MATCH_FALLBACK_MIN','kitTensionClockHours','kitRemaining','kitTension',
+               'KIT_MATCH_FALLBACK_MIN','KIT_DOUBLES_SHARE','kitTensionClockHours','kitRemaining','kitTension',
                'kitTerms','kitPlayability','kitBinding','kitBand','kitHoursUntil',
                'kitMatchMinutes','kitPracticeMinutes','kitHoursFor','kitWeeklyRate','kitAssess',
                'KIT_WX_REF_C','KIT_WX_LB_PER_C','KIT_WX_MAX_LB','KIT_WX_SENS',

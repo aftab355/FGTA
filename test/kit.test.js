@@ -22,7 +22,7 @@
 const {loadKit} = require('./extract.js');
 const K = loadKit();
 const {KIT_STRINGS, KIT_FLOOR, KIT_RESTRING_AT, KIT_MIN_PER_GAME,
-       KIT_MATCH_FALLBACK_MIN, KIT_RATE_DEFAULT,
+       KIT_MATCH_FALLBACK_MIN, KIT_RATE_DEFAULT, KIT_DOUBLES_SHARE,
        kitTensionClockHours, kitRemaining, kitTension, kitTerms, kitPlayability,
        kitBinding, kitBand, kitHoursUntil, kitMatchMinutes, kitPracticeMinutes,
        kitHoursFor, kitWeeklyRate, kitAssess} = K;
@@ -276,6 +276,35 @@ const DATA = {
   const withPending = DATA.matches.filter(m => m.status === 'pending').length;
   ok(withPending === 1 && all.matches === 3,
      'a match still waiting for approval is not on anybody\'s strings yet');
+}
+
+section('doubles is on the strings too, at a share of a singles hour');
+{
+  const D = {
+    matches: [],
+    doubles: [
+      {status:'approved', p1a:'aftab ', p1b:'Dev', p2a:'Rowan', p2b:'Mc', created_at:iso(3), sets:'6-4, 6-4'},
+      {status:'approved', p1a:'Rowan', p1b:'Mc', p2a:'Dev', p2b:'AFTAB', created_at:iso(20)},
+      {status:'pending',  p1a:'Aftab', p1b:'Dev', p2a:'Rowan', p2b:'Mc', created_at:iso(1), sets:'6-0, 6-0'},
+      {status:'approved', p1a:'Dev', p1b:'Rowan', p2a:'Mc', p2b:'Zed', created_at:iso(2), sets:'6-0, 6-0'}
+    ],
+    practice: []
+  };
+  const h = kitHoursFor('Aftab', null, null, D);
+  ok(h.doubles === 2, 'every approved doubles match they were in counts, on either team', h.doubles);
+  ok(h.matches === 0, 'and is not counted as a singles match as well');
+  const full = (20 * KIT_MIN_PER_GAME + KIT_MATCH_FALLBACK_MIN) / 60;
+  ok(near(h.hours, full * KIT_DOUBLES_SHARE, 1e-9),
+     'charged at the doubles share of what the same match would be in singles', h.hours.toFixed(3));
+  ok(KIT_DOUBLES_SHARE > 0 && KIT_DOUBLES_SHARE < 1, 'a share, not a multiplier or nothing');
+  ok(near(h.sources.doubles, h.hours, 1e-9), 'and the provenance says it came from doubles');
+  ok(kitHoursFor('Aftab', Date.now() - 10 * DAY, null, D).doubles === 1,
+     'a window excludes doubles outside it, the same as singles');
+  ok(kitHoursFor('Aftab', null, null, {matches: DATA.matches, practice: DATA.practice}).sources.doubles === 0,
+     'a deployment with no doubles table is just zero doubles hours');
+  const both = kitHoursFor('Aftab', null, null, Object.assign({}, DATA, {doubles: D.doubles}));
+  ok(near(both.hours, kitHoursFor('Aftab', null, null, DATA).hours + h.hours, 1e-9),
+     'singles, doubles and practice add up rather than replacing each other');
 }
 
 section('the weekly rate — what turns hours left into a date');

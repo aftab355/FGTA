@@ -2002,6 +2002,7 @@
   .kp-tracked  {background:var(--accent)}
   .kp-practice {background:var(--court)}
   .kp-scoreline{background:var(--pending)}
+  .kp-doubles  {background:var(--gold)}
   .kp-assumed  {background:var(--line)}
   .kit-prov-l{font-family:var(--font-mono);font-size:9.5px;color:var(--dim);margin-top:5px;line-height:1.5}
 
@@ -30267,6 +30268,18 @@ const KIT_MATCH_MIN_MIN = 4;
 const KIT_MIN_PER_GAME = 5.2;
 /* what an approved match with no scoreline at all is worth */
 const KIT_MATCH_FALLBACK_MIN = 62;
+/* DOUBLES IS TENNIS TOO, BUT NOT AS MUCH OF IT PER HOUR.
+
+   A doubles match lasts about as long per game as singles, so the clock and
+   the scoreline read it the same way. What differs is how much of that time
+   is spent hitting: four people share the rallies, you serve every fourth
+   game rather than every other, and a lot of points are two or three shots
+   at the net. Strings wear with impacts, not with minutes on court, so a
+   doubles hour is charged as a fraction of a singles one. The fraction is a
+   rule of thumb like every other constant here — somewhere between "half the
+   balls" and "the volleys are hard ones" — and it is one number in one place
+   so it can be argued with. */
+const KIT_DOUBLES_SHARE = 0.6;
 
 function kitMatchMinutes(m){
   /* tier 1 — the ref's own clock */
@@ -30328,9 +30341,9 @@ function kitHoursFor(name, from, to, data){
   const d = data || {};
   const ms = t => (t == null ? null : new Date(t).getTime());
   const a = ms(from), b = ms(to) == null ? Date.now() : ms(to);
-  const want = String(name || "").toLowerCase();
-  const out = {hours: 0, matches: 0, sessions: 0,
-               sources: {tracked: 0, scoreline: 0, assumed: 0, practice: 0}};
+  const want = String(name || "").trim().toLowerCase();
+  const out = {hours: 0, matches: 0, doubles: 0, sessions: 0,
+               sources: {tracked: 0, scoreline: 0, assumed: 0, practice: 0, doubles: 0}};
   if(!want) return out;
 
   (d.matches || []).forEach(m => {
@@ -30343,6 +30356,21 @@ function kitHoursFor(name, from, to, data){
     out.hours += minutes / 60;
     out.sources[source] += minutes / 60;
     out.matches++;
+  });
+
+  /* Doubles lives in its own table with four name columns, typed freehand —
+     so the match is on the case- and space-insensitive name, the same way
+     the doubles ladder keys it. One tier for all of it: which reader the
+     minutes came from matters less here than the share applied on top. */
+  (d.doubles || []).forEach(m => {
+    if(!m || m.status !== "approved") return;
+    if(![m.p1a, m.p1b, m.p2a, m.p2b].some(n => String(n || "").trim().toLowerCase() === want)) return;
+    const t = ms(m.created_at);
+    if(t == null || (a != null && t < a) || t > b) return;
+    const h = kitMatchMinutes(m).minutes * KIT_DOUBLES_SHARE / 60;
+    out.hours += h;
+    out.sources.doubles += h;
+    out.doubles++;
   });
 
   (d.practice || []).forEach(p => {
@@ -30471,7 +30499,7 @@ function kitCurrentOwner(){
   return owners[0] || "";
 }
 /* the two collections the model reads its hours out of */
-function kitData(){ return {matches, practice: practiceLog}; }
+function kitData(){ return {matches, doubles: doublesMatches, practice: practiceLog}; }
 
 /* Today's temperature, if the page has one. The ambient background already
    fetches Toronto's weather for its particle layer and caches it for twenty
@@ -30550,6 +30578,12 @@ function renderKit(){
   const box = $("kitBody");
   if(!box) return;
   if(kitTempC == null) kitLoadWeather();      // fire and forget; it re-renders if it lands
+  /* the doubles table only loads on the Doubles tab — fetch it once so the
+     hours include the doubles already on record */
+  if(!renderKit.dblFetched){
+    renderKit.dblFetched = true;
+    loadDoublesMatches().then(() => { if(activeView === "kit" && doublesMatches.length) renderKit(); });
+  }
   const owner = kitCurrentOwner();
   const owners = kitOwners();
 
@@ -30707,13 +30741,19 @@ function kitProvenanceHTML(a){
     ["tracked",   s.tracked,   "timed by a ref"],
     ["practice",  s.practice,  "logged sessions"],
     ["scoreline", s.scoreline, "from scorelines"],
+    ["doubles",   s.doubles || 0, "doubles"],
     ["assumed",   s.assumed,   "assumed"]
   ].filter(([, v]) => v > 0.01);
+  const u = a.used, games = [];
+  if(u.matches)  games.push(u.matches + " singles");
+  if(u.doubles)  games.push(u.doubles + " doubles");
+  if(u.sessions) games.push(u.sessions + " session" + (u.sessions === 1 ? "" : "s"));
   const measured = (s.tracked + s.practice) / total;
   return '<div class="kit-prov">'
     + '<div class="kit-prov-bar">' + parts.map(([k, v]) =>
         '<span class="kp-' + k + '" style="width:' + (v / total * 100).toFixed(1) + '%"></span>').join("")
     + '</div><div class="kit-prov-l">'
+    + (games.length ? esc(games.join(" · ")) + ' — ' : '')
     + parts.map(([, v, l]) => v.toFixed(1) + 'h ' + l).join(' · ')
     + (measured > 0.6 ? '' : ' — mostly estimated, so read the number as a shape not a measurement')
     + '</div></div>';

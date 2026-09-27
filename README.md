@@ -282,9 +282,11 @@ This app does not have to guess at the hours. **It has been recording them all a
 | **practice** | the casual-session form already asks for minutes **per player** | exact, as reported |
 | **assumed** | an approved match with nothing else written down | a flat hour |
 
+**Doubles counts too.** Approved rows in `doubles_matches` where the player is on either team are read the same way (ref's clock, then scoreline, then a flat hour), then charged at `KIT_DOUBLES_SHARE` (0.6) of a singles hour: a doubles game lasts about as long, but four people share the rallies, you serve every fourth game, and many points are two or three shots at the net. Strings wear with impacts, not minutes on court. The 0.6 is a rule of thumb like every other constant here. Doubles only loads on the Doubles tab otherwise, so the Kit fetches it once when it opens.
+
 A ref who forgets to press stop leaves an eight-hour match on record, so a tracked reading outside `[4, 240]` minutes falls back to its scoreline rather than putting an afternoon on somebody's strings. A match tiebreak written in the sets column (`10-8`) is scored as the short thing it is, not the fifteen-game set it looks like — the same correction the dynamic K makes, for the same reason.
 
-**Every card shows the split**, as a bar and in words ("4.2h timed by a ref · 2.8h logged sessions · 1.6h from scorelines"), and says so plainly when most of its own total was estimated. The hours are the only part of this screen that is real; the reader is entitled to know how real.
+**Every card shows the split**, as a bar and in words ("6 singles · 2 doubles · 3 sessions — 4.2h timed by a ref · 2.8h logged sessions · 1.6h from scorelines · 1.1h doubles"), and says so plainly when most of its own total was estimated. The hours are the only part of this screen that is real; the reader is entitled to know how real.
 
 #### The decay curve
 `kitRemaining()` is a two-clock model per material (`KIT_STRINGS`: poly, multifilament, synthetic gut, natural gut, hybrid, kevlar):
