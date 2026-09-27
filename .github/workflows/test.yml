@@ -1,0 +1,23 @@
+# The Node-only test suite (test/run.js): the Elo engine, scoring rules and
+# migrations. Runs on every pull request, and the Pages deploy calls it and
+# refuses to ship if it fails — see static.yml.
+name: Tests
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node test/run.js
