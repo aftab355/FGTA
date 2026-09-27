@@ -1395,6 +1395,10 @@
     input,select{padding:13px 14px;font-size:16px}  /* 16px stops iOS zoom-on-focus */
     .row{padding:14px 14px}
     .pend{padding:14px}
+    /* three buttons beside the result leave the text column ~0px wide on a
+       phone, so the doubles queue puts its actions on their own row */
+    .pend.pend-stack{grid-template-columns:1fr;gap:10px}
+    .pend.pend-stack .pend-actions{justify-content:flex-start}
     .modal{padding:12px}
     .modal-card{padding:22px 18px;max-height:88vh;overflow-y:auto}
     .prof-stats{grid-template-columns:repeat(2,1fr)!important}
@@ -29302,7 +29306,7 @@ function renderDoublesQueue(){
   if($("doublesPendCount")) $("doublesPendCount").textContent = pending.length;
   if(list && isAdmin){
     list.innerHTML = pending.length
-      ? pending.map(m=>`<div class="pend">
+      ? pending.map(m=>`<div class="pend pend-stack">
           <div><div class="pend-info">${doublesResult(m)}</div><div class="pend-meta">${when(m.created_at)}</div></div>
           <div class="pend-actions">
             <button class="mini yes" onclick="setDoublesStatus(${m.id},'approved')">Approve</button>
