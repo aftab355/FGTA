@@ -10361,7 +10361,7 @@
     <section>
       <div class="sec-label">Workload <span class="pred-tag">ACWR</span></div>
       <div class="panel">
-        <div class="pred-hint">Sports-science acute:chronic workload ratio — matches in the last 7 days ÷ the last 28 days' weekly average. Above 1.5 is the injury/burnout risk zone; under 0.8 means barely playing. It flags who's grinding too much or too little, not just who's winning.</div>
+        <div class="pred-hint">Sports-science acute:chronic workload ratio — matches in the last 7 days ÷ the last 28 days' weekly average. Approved doubles games count too — it's time on court, not results. Above 1.5 is the injury/burnout risk zone; under 0.8 means barely playing. It flags who's grinding too much or too little, not just who's winning.</div>
         <div id="workloadBox" style="margin-top:14px"></div>
       </div>
     </section>
@@ -29647,8 +29647,24 @@ function renderSynergy(){
   const balance = 1-Math.min(1,Math.abs(A.rating-B.rating)/300); // closer levels = better on-court balance
   const complement = (drA&&drB) ? Math.min(1,(drA.dr+drB.dr)/3) : 0.5; // both contributing on return, not just one carrying
   const synergy = Math.round((balance*0.6+complement*0.4)*100);
+  /* what the pair has actually done together in approved doubles — shown as
+     fact beside the estimate, not blended in, since one or two games together
+     is too few to move a score */
+  const ka=dblId(a), kb=dblId(b), rec={w:0,l:0,d:0};
+  doublesMatches.filter(m=>m.status==="approved").forEach(m=>{
+    const tA=[dblId(m.p1a),dblId(m.p1b)], tB=[dblId(m.p2a),dblId(m.p2b)];
+    const on=t=>t.includes(ka)&&t.includes(kb);
+    const side = on(tA) ? 1 : on(tB) ? 0 : null;
+    if(side===null) return;
+    const o=Number(m.outcome);
+    if(o===0.5) rec.d++; else if(o===side) rec.w++; else rec.l++;
+  });
+  const n=rec.w+rec.l+rec.d;
+  const together = n
+    ? `<div class="pw-legend">Together in doubles: <b>${rec.w}-${rec.l}${rec.d?`-${rec.d}`:''}</b> across ${n} approved game${n>1?'s':''}.</div>`
+    : `<div class="pw-legend">They haven't played an approved doubles game together yet.</div>`;
   el.innerHTML = `<div class="pt-final">Synergy score: <span style="color:var(--accent)">${synergy}%</span></div>
-    <div class="pw-legend">Blends rating balance (closer levels pair better) with return-point contribution from both players, where point data exists. A rough starting point, not a promise.</div>`;
+    <div class="pw-legend">Blends rating balance (closer levels pair better) with return-point contribution from both players, where point data exists. A rough starting point, not a promise.</div>${together}`;
 }
 window.renderSynergy=renderSynergy;
 
@@ -35758,17 +35774,35 @@ function computeGlicko2(){
   return Object.values(P).filter(p=>p.games>0).sort((a,b)=>b.r-a.r);
 }
 
-/* acute:chronic workload ratio — matches/day over the last 7 days vs the last 28 */
+/* acute:chronic workload ratio — matches/day over the last 7 days vs the last 28.
+   Workload is time on court, not results, so approved doubles count too: a
+   doubles game is as much a match in the legs as a singles one. Doubles names
+   are freehand, so one only counts when it matches a ladder name ignoring
+   case — a typo or a doubles-only guest adds nothing rather than a ghost row.
+   A name typed twice in one game still counts that game once. */
 function computeWorkload(){
   const now=Date.now();
-  const byPlayer={};
+  const byPlayer={}, dblByPlayer={};
   matches.filter(m=>m.status==="approved").forEach(m=>{
     const t=new Date(m.created_at).getTime();
     [m.p1,m.p2].forEach(n=>(byPlayer[n]=byPlayer[n]||[]).push(t));
   });
+  const ladder={};
+  Object.keys(byPlayer).forEach(n=>{ ladder[dblId(n)]=n; });
+  let dbl=[];
+  try{ dbl=doublesMatches; }catch(e){ /* doubles store not initialised yet on an early boot render */ }
+  dbl.filter(m=>m.status==="approved").forEach(m=>{
+    const t=new Date(m.created_at).getTime();
+    if(!isFinite(t)) return;
+    new Set([m.p1a,m.p1b,m.p2a,m.p2b].map(dblId)).forEach(k=>{
+      const n=ladder[k]; if(!n) return;
+      byPlayer[n].push(t); (dblByPlayer[n]=dblByPlayer[n]||[]).push(t);
+    });
+  });
   return Object.entries(byPlayer).map(([name,dates])=>{
     const m7=dates.filter(t=>now-t<=7*86400000).length;
     const m28=dates.filter(t=>now-t<=28*86400000).length;
+    const d28=(dblByPlayer[name]||[]).filter(t=>now-t<=28*86400000).length;
     const acute=m7/7, chronic=m28/28;
     const acwr = chronic>0 ? acute/chronic : (acute>0?Infinity:0);
     let zone="no recent data", zoneClass="";
@@ -35777,7 +35811,7 @@ function computeWorkload(){
       else if(acwr<0.8){ zone="low volume"; zoneClass="dim"; }
       else { zone="sweet spot"; zoneClass="good"; }
     }
-    return {name, m7, m28, acwr, zone, zoneClass};
+    return {name, m7, m28, d28, acwr, zone, zoneClass};
   }).filter(p=>p.m28>0).sort((a,b)=>b.acwr-a.acwr);
 }
 
@@ -35870,7 +35904,7 @@ function renderWorkload(){
     <div class="wi-row">
       <span class="wi-rank">${avatar(p.name,26)}</span>
       <span>${esc(p.name)}</span>
-      <span class="pod-sub">${p.m7} in 7d · ${p.m28} in 28d</span>
+      <span class="pod-sub">${p.m7} in 7d · ${p.m28} in 28d${p.d28?` <span title="Approved doubles games in the last 28 days, already inside the counts">(${p.d28} dbl)</span>`:''}</span>
       <span style="color:${zoneColor[p.zoneClass]};font-size:11px;font-family:'JetBrains Mono',monospace;text-transform:uppercase">${p.zone}</span>
       <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${zoneColor[p.zoneClass]}">${isFinite(p.acwr)?p.acwr.toFixed(2):'∞'}</span>
     </div>`).join('');
@@ -35895,6 +35929,11 @@ function renderAnalyticsRatings(){
   renderWorkload();
   renderCompare();
   initGalaxy();
+  /* doubles only load on their own tab; fetch once so workload counts them */
+  if(!renderAnalyticsRatings.dblFetched){
+    renderAnalyticsRatings.dblFetched=true;
+    loadDoublesMatches().then(()=>{ if(doublesMatches.length){ renderWorkload(); renderCompare(); } });
+  }
 }
 window.renderAnalyticsRatings = renderAnalyticsRatings;
 
