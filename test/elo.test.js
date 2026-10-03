@@ -478,8 +478,8 @@ section('the ducking tax — sitting on a rating costs something');
 section("director's rulings — points moved by hand");
 {
   const e0 = () => E([]);
-  ok(e0().ELO_ADJUSTMENTS.every(a => Object.values(a.points).reduce((x, y) => x + y, 0) === 0),
-     'every ruling on the books sums to zero');
+  ok(e0().ELO_ADJUSTMENTS.every(a => Object.values(a.points).reduce((x, y) => x + y, 0) === (a.mint || 0)),
+     'every ruling on the books sums to exactly what it declares minted');
   ok(e0().ELO_ADJUSTMENTS.every(a => !isNaN(Date.parse(a.at)) && a.reason),
      'and every one has a real instant and a reason');
 
@@ -494,7 +494,7 @@ section("director's rulings — points moved by hand");
   const pre = EN(before, T - 1).computeStandings(), post = EN(before, T + 1).computeStandings();
   names.forEach(n => ok(near(r(post, n).rating - r(pre, n).rating, ruling.points[n]),
     `${n} moves by exactly ${ruling.points[n]} at the ruling`, (r(post, n).rating - r(pre, n).rating).toFixed(3)));
-  ok(near(pool(post), pool(pre)), 'and the pool is untouched');
+  ok(near(pool(post) - pool(pre), ruling.mint || 0), 'and the pool moves only by what was minted');
   ok(post.length === pre.length, 'a differently-cased name lands on the existing player, not a new row');
   ok(r(post, names[2]).adjusted === ruling.points[names[2]] && r(post, names[2]).rulings.length === 1,
      'the row carries what the ruling did to it');

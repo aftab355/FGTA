@@ -11995,10 +11995,12 @@ function taxCharge(rating){
    device — the same promise every other rule in this engine makes.
 
    Rules for an entry:
-     - `points` must sum to zero. A ruling moves points between
-       players; it never mints or burns them, so the pool check on
-       the ladder still holds exactly (it adds `adjusted` back in
-       anyway, so a mistake shows as a figure, not as a leak).
+     - `points` must sum to `mint` (0 when it is left out). A ruling
+       normally just moves points between players; `mint` is the
+       director putting new points into the pool from the "central
+       bank" (negative burns them). The ladder's pool check adds every
+       ruling's net back in and shows it, so minted points read as a
+       stated figure rather than a leak.
      - `at` is a fixed UTC instant. Games before it are rated
        without it, games after it are rated from the adjusted
        numbers — exactly as if the points had changed hands then.
@@ -12009,7 +12011,8 @@ function taxCharge(rating){
 const ELO_ADJUSTMENTS = [
   { at: "2026-10-03T03:00:00Z",
     reason: "Director's ruling on the Aakif v M4 30-point wager (3-game match, outcome agreed by 4 members)",
-    points: { "Faiz": -25, "Aakif": -5, "M4": +30 } }
+    mint: 5,   // 5 of M4's 30 come from the central bank
+    points: { "Faiz": -15, "Aakif": -10, "M4": +30 } }
 ];
 
 /* the rulings that have taken effect by `now`, oldest first */
@@ -21956,10 +21959,10 @@ function render(){
   if(standings.length){
     const pool = standings.reduce((s,p)=>s+p.rating,0);
     const taxed = standings.reduce((s,p)=>s+(p.taxed||0),0);
-    const ruled = standings.reduce((s,p)=>s+(p.adjusted||0),0);  // director's rulings — zero when they balance
+    const ruled = standings.reduce((s,p)=>s+(p.adjusted||0),0);  // director's rulings — nonzero only by what was minted
     const expected = standings.length*START - taxed + ruled;
     const ok = Math.abs(pool-expected)<0.01;
-    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)}${taxed?` <span title="removed by the ducking tax">(−${Math.round(taxed)} taxed)</span>`:''} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
+    $("poolLine").innerHTML = `Elo pool: ${pool.toFixed(1)} / ${expected.toFixed(1)}${taxed?` <span title="removed by the ducking tax">(−${Math.round(taxed)} taxed)</span>`:''}${Math.abs(ruled)>=0.5?` <span title="put in or taken out by director's rulings">(${ruled>0?'+':'−'}${Math.abs(Math.round(ruled))} minted)</span>`:''} ${ok?'<span class="pool-ok">conserved ✓</span>':'<span class="pool-bad">leak: '+(pool-expected).toFixed(1)+'</span>'}`;
   } else $("poolLine").innerHTML='';
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====
