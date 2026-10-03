@@ -32,7 +32,7 @@ The app previously ran a dynamic, per-player K (bigger for newcomers, smaller fo
 
 A rating only moves when you play, so near the top the safest thing to do with one is nothing. With five players and a couple of dozen games a season, a handful of wins could hold a podium place for months against people playing twice as often.
 
-So once a week (Mondays, 00:00 UTC, first check **2026-10-05**), anybody with **fewer than 2 ladder games in the last 30 days** loses **8 points**. That is `TAX_MIN_GAMES`, `TAX_WINDOW_DAYS` and `TAX_POINTS` in the Elo engine. Three limits keep it a nudge rather than a second rating system:
+So once a week (Mondays, 00:00 UTC, first check **2026-10-05**), anybody with **fewer than 2 ladder games in the last 30 days** loses **3.5% of their rating** (about 20 points at 565). It is a rate rather than a fixed number of points, so the higher the rating being sat on, the more it costs; it was a flat 8 points before the first check ever ran. That is `TAX_MIN_GAMES`, `TAX_WINDOW_DAYS` and `TAX_RATE` in the Elo engine. Three limits keep it a nudge rather than a second rating system:
 
 - **It never takes a rating below 500 (`START`).** Sitting on a rating is only worth doing when it is above average, so that is the only rating it touches. A player below 500 who isn't playing isn't protecting anything, and taxing them would just be kicking the bottom of the table.
 - **Newcomers are exempt** until their first game is a full 30 days old.

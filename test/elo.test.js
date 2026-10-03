@@ -415,12 +415,14 @@ section('the ducking tax — sitting on a rating costs something');
 
   ok(EN(old, T0 - 1).taxChecks(T0 - 1).length === 0,
      'no check exists before TAX_START, whatever the history');
-  ok(near(r(before, 'A').rating - r(after, 'A').rating, e0().TAX_POINTS),
-     'the first check takes TAX_POINTS from an idle player above START',
+  const due = r(before, 'A').rating * e0().TAX_RATE;
+  ok(due < r(before, 'A').rating - e0().START, '(the fixture sits far enough above START for the full rate)');
+  ok(near(r(before, 'A').rating - r(after, 'A').rating, due),
+     'the first check takes TAX_RATE of the rating from an idle player above START',
      (r(before, 'A').rating - r(after, 'A').rating).toFixed(2));
   ok(near(r(before, 'B').rating, r(after, 'B').rating),
      'and nothing from one already below START — they are not sitting on anything');
-  ok(near(r(after, 'A').taxed, e0().TAX_POINTS) && r(after, 'A').lastTax.t === T0,
+  ok(near(r(after, 'A').taxed, due) && r(after, 'A').lastTax.t === T0,
      'the row says what it paid and when');
   ok(r(after, 'A').history.length === 3,
      'history stays one entry per game — the tax is not a game');
@@ -458,10 +460,15 @@ section('the ducking tax — sitting on a rating costs something');
   ok(r(EN(onTheDot, T0 + 1).computeStandings(), 'A').taxed === 0,
      'a game at the same instant as a check runs before it');
 
+  /* the charge is a rate, clipped at START */
+  ok(near(e0().taxCharge(600), 600 * e0().TAX_RATE), 'well above START the charge is the rate of the rating');
+  ok(near(e0().taxCharge(505), 5) && e0().taxCharge(500) === 0 && e0().taxCharge(450) === 0,
+     'near START it stops at START, and at or below it there is nothing to take');
+
   /* the ratings before a game include any tax charged before it */
   const later = old.concat([game('A', 'B', 0, at(2))]);
   const L = EN(later, T0 + 3 * DAY);
-  ok(near(L.preGameRatings(later[2].id)['A'], r(before, 'A').rating - e0().TAX_POINTS),
+  ok(near(L.preGameRatings(later[2].id)['A'], r(before, 'A').rating - due),
      "a game's before-rating is after the tax, so before + change = the table");
 
   /* the memo is keyed on checks passed, so a page left open across one
@@ -470,7 +477,7 @@ section('the ducking tax — sitting on a rating costs something');
   const a1 = r(M.computeStandings(), 'A').rating;
   M.setNow(T0 + 1);
   const a2 = r(M.computeStandings(), 'A').rating;
-  ok(near(a1 - a2, e0().TAX_POINTS), 'crossing a check invalidates the cached table', (a1 - a2).toFixed(2));
+  ok(near(a1 - a2, a1 * e0().TAX_RATE), 'crossing a check invalidates the cached table', (a1 - a2).toFixed(2));
 
   /* the warning: who owes at the next check if nobody plays */
   const O = EN(old, T0 - DAY);

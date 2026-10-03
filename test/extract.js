@@ -82,7 +82,7 @@ function loadElo(opts){
                  'movMultiplier','matchKPair','preGameRatings',
                  'winProb','computeStandings','invalidateStandings',
                  'TAX_ENABLED','TAX_START','TAX_EVERY_DAYS','TAX_WINDOW_DAYS','TAX_MIN_GAMES',
-                 'TAX_POINTS','taxChecks','owesTax','taxCharge','nextTaxCheck','taxOwingNext',
+                 'TAX_RATE','taxChecks','owesTax','taxCharge','nextTaxCheck','taxOwingNext',
                  'centralBank'];
   const pre = [
     'const K = ' + (o.K == null ? 32 : o.K) + ';',
