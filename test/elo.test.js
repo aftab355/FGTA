@@ -429,8 +429,8 @@ section('the ducking tax — sitting on a rating costs something');
   const far = EN(old, T0 + 400 * DAY).computeStandings();
   ok(near(r(far, 'A').rating, e0().START),
      'it never takes a rating below START', r(far, 'A').rating.toFixed(2));
-  ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed, 0), 0),
-     'the pool is players x START less exactly what was taxed',
+  ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed - p.adjusted, 0), 0),
+     "the pool is players x START less exactly what was taxed (plus any ruling's mint)",
      pool(far, 500).toFixed(2));
 
   /* the window: TAX_MIN_GAMES inside it clears you, one fewer does not */
