@@ -10001,6 +10001,11 @@
       <div class="match-filter">
         <input id="matchSearch" placeholder="filter by player name…" autocomplete="off" oninput="renderAllMatchesD()">
         <div class="mf-controls">
+          <select id="mfType" aria-label="Filter the archive by format" onchange="renderAllMatches()">
+            <option value="">Singles &amp; doubles</option>
+            <option value="singles">Singles only</option>
+            <option value="doubles">Doubles only</option>
+          </select>
           <select id="mfResult" aria-label="Filter the archive by result" onchange="renderAllMatches()">
             <option value="">All results</option>
             <option value="decisive">Wins only</option>
@@ -22639,23 +22644,43 @@ function renderProfile(p){
 }
 window.renderProfile = renderProfile;
 
+/* Doubles live in their own table with their own loader, which normally only
+   runs on the Doubles tab. The archive asks for it once so a visit straight to
+   Matches still lists every doubles result, then repaints when it lands. */
+let archiveDoublesRequested = false;
 function renderAllMatches(){
   const listEl = $("allMatchesList");
   if(!listEl) return;
+  /* doublesMatches is declared further down this script, so an early boot
+     render can reach here before it exists — same guard as renderMainEvent */
+  let dblRows = [];
+  try{
+    dblRows = doublesMatches;
+    if(!archiveDoublesRequested){
+      archiveDoublesRequested = true;
+      loadDoublesMatches().then(()=>{ if(doublesMatches.length && activeView==="matches") renderAllMatches(); });
+    }
+  }catch(e){ /* doubles store not initialised yet */ }
   const q = ($("matchSearch")?.value || "").trim().toLowerCase();
+  const fType = $("mfType")?.value || "";
   const fRes = $("mfResult")?.value || "";
   const fSets = $("mfSets")?.value || "";
   const fVibe = $("mfVibe")?.value || "";
   const fSort = $("mfSort")?.value || "new";
-  let all = matches.filter(m=>m.status==="approved");
+  const singles = matches.filter(m=>m.status==="approved");
+  const doubles = dblRows.filter(m=>m.status==="approved").map(m=>Object.assign({}, m, {_dbl:true}));
+  const pool = fType==="singles" ? singles : fType==="doubles" ? doubles : singles.concat(doubles);
+  const namesOf = m => m._dbl ? [m.p1a,m.p1b,m.p2a,m.p2b] : [m.p1,m.p2];
+  let all = pool;
   const totalApproved = all.length;
-  if(q) all = all.filter(m => m.p1.toLowerCase().includes(q) || m.p2.toLowerCase().includes(q));
+  if(q) all = all.filter(m => namesOf(m).some(n => String(n||"").toLowerCase().includes(q)));
   if(fRes==="decisive") all = all.filter(m=>Number(m.outcome)!==0.5);
   if(fRes==="draw")     all = all.filter(m=>Number(m.outcome)===0.5);
   if(fSets==="has")     all = all.filter(m=>!!m.sets);
   if(fSets==="missing") all = all.filter(m=>!m.sets);
-  if(fVibe)             all = all.filter(m=>m.vibe===fVibe);
-  const cCountOf = m => comments.filter(c=>c.match_id===m.id).length;
+  if(fVibe)             all = all.filter(m=>m.vibe===fVibe);   // doubles carry no vibe
+  // doubles have no comment thread, so they count as 0 under "most discussed"
+  const cCountOf = m => m._dbl ? 0 : comments.filter(c=>c.match_id===m.id).length;
   if(fSort==="talk") all = all.slice().sort((a,b)=>cCountOf(b)-cCountOf(a) || new Date(b.created_at)-new Date(a.created_at));
   else if(fSort==="old") all = all.slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   else all = all.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -22665,7 +22690,7 @@ function renderAllMatches(){
   const sm=$("mfSummary");
   if(sm){
     const filtered = all.length!==totalApproved;
-    const missing = matches.filter(m=>m.status==="approved"&&!m.sets).length;
+    const missing = pool.filter(m=>!m.sets).length;
     sm.innerHTML = filtered
       ? `Showing <b>${all.length}</b> of ${totalApproved} games${missing&&fSets!=="missing"?` · <span class="mf-flag" onclick="jumpMissingSets()">${missing} missing set scores</span>`:''}`
       : (missing?`<span class="mf-flag" onclick="jumpMissingSets()">${missing} game${missing>1?'s':''} missing set scores — tap to filter</span>`:`All ${totalApproved} games have set scores ✓`);
@@ -22682,6 +22707,7 @@ function renderAllMatches(){
     const d = new Date(m.created_at);
     const month = d.toLocaleDateString(undefined,{month:'long',year:'numeric'});
     if(month!==lastMonth){ html += `<div class="month-sep">${month}</div>`; lastMonth = month; }
+    if(m._dbl){ html += `<div class="match-wrap">${doublesScorecard(m)}</div>`; continue; }
     const cCount = comments.filter(c=>c.match_id===m.id).length;
     const tourn = m.tournament_id ? tournaments.find(t=>t.id===m.tournament_id) : null;
     const pin = pinnedComment(m.id);
@@ -22770,6 +22796,38 @@ function scorecard(m, opts){
     </div>`;
 }
 window.scorecard = scorecard;
+
+/* The same card for a doubles result. Each side is a pair, sets are stored
+   team-A-first like singles, and there is no match overlay or comment thread
+   for doubles — so the card opens the Doubles tab instead. */
+function doublesScorecard(m){
+  const o = Number(m.outcome);
+  const cols = matchSetColumns(m);
+  const meta = when(m.created_at) + (cols.n > 1 ? ` · ${cols.n} sets` : "");
+  const side = (a, b, scores, won) => `
+      <div class="msc-side${won ? " win" : ""}">
+        <span class="msc-name">${esc(a)} &amp; ${esc(b)}</span>
+        <span class="msc-scores">${scores.map(c=>
+          `<i class="${c.won ? "won" : ""}">${esc(String(c.v))}</i>`).join("")}</span>
+        ${won ? '<span class="msc-tick" aria-label="winner">&#10003;</span>' : '<span></span>'}
+      </div>`;
+  return `<div class="msc" onclick="showView('doubles')">
+      <div class="msc-head">
+        <div class="msc-event">The Ladder</div>
+        <div class="msc-stage">${o === 0.5 ? "Drawn" : "Result"}</div>
+        <div class="msc-where">Doubles</div>
+        <div class="msc-when">${meta}</div>
+      </div>
+      ${side(m.p1a, m.p1b, cols.a, o === 1)}
+      ${side(m.p2a, m.p2b, cols.b, o === 0)}
+      <div class="msc-foot">
+        <span class="msc-tags">
+          ${m.sets ? '' : '<span class="sets-tag">no set scores</span>'}
+        </span>
+        <span class="msc-link">Doubles ladder &#8594;</span>
+      </div>
+    </div>`;
+}
 
 function jumpMissingSets(){
   const s=$("mfSets"); if(!s) return;
