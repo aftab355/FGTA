@@ -22646,23 +22646,9 @@ function renderProfile(p){
 }
 window.renderProfile = renderProfile;
 
-/* Doubles live in their own table with their own loader, which normally only
-   runs on the Doubles tab. The archive asks for it once so a visit straight to
-   Matches still lists every doubles result, then repaints when it lands. */
-let archiveDoublesRequested = false;
 function renderAllMatches(){
   const listEl = $("allMatchesList");
   if(!listEl) return;
-  /* doublesMatches is declared further down this script, so an early boot
-     render can reach here before it exists — same guard as renderMainEvent */
-  let dblRows = [];
-  try{
-    dblRows = doublesMatches;
-    if(!archiveDoublesRequested){
-      archiveDoublesRequested = true;
-      loadDoublesMatches().then(()=>{ if(doublesMatches.length && activeView==="matches") renderAllMatches(); });
-    }
-  }catch(e){ /* doubles store not initialised yet */ }
   const q = ($("matchSearch")?.value || "").trim().toLowerCase();
   const fType = $("mfType")?.value || "";
   const fRes = $("mfResult")?.value || "";
@@ -22670,7 +22656,7 @@ function renderAllMatches(){
   const fVibe = $("mfVibe")?.value || "";
   const fSort = $("mfSort")?.value || "new";
   const singles = matches.filter(m=>m.status==="approved");
-  const doubles = dblRows.filter(m=>m.status==="approved").map(m=>Object.assign({}, m, {_dbl:true}));
+  const doubles = approvedDoubles(repaintArchiveForDoubles).map(m=>Object.assign({}, m, {_dbl:true}));
   const pool = fType==="singles" ? singles : fType==="doubles" ? doubles : singles.concat(doubles);
   const namesOf = m => m._dbl ? [m.p1a,m.p1b,m.p2a,m.p2b] : [m.p1,m.p2];
   let all = pool;
@@ -29527,6 +29513,32 @@ async function loadDoublesMatches(){
     if(!error && data){ doublesMatches=data; optAdoptServerState(["doubles_matches"]); }
   }catch(e){}
 }
+/* Doubles results outside the Doubles tab. The table's loader otherwise only
+   runs on that tab, so the first surface to ask (Home, the archive) starts one
+   fetch, and every surface that asked before it lands is repainted once it
+   does. `var`, not `let`: these are reached from renders that can run before
+   this line, and the try covers doublesMatches itself being in that zone. */
+var dblBoot=null;
+function approvedDoubles(repaint){
+  let rows;
+  try{ rows=doublesMatches.filter(m=>m.status==="approved"); }catch(e){ return []; }
+  if(!dblBoot){
+    dblBoot={done:false, waiters:new Set()};
+    loadDoublesMatches().then(()=>{
+      dblBoot.done=true;
+      if(doublesMatches.length) dblBoot.waiters.forEach(f=>{ try{ f(); }catch(e){} });
+      dblBoot.waiters.clear();
+    });
+  }
+  if(repaint && !dblBoot.done) dblBoot.waiters.add(repaint);
+  return rows;
+}
+function repaintArchiveForDoubles(){ if(activeView==="matches") renderAllMatches(); }
+function repaintFeedForDoubles(){ if(activeView==="feed") renderFeedSoon(); }
+function doublesLine(m){
+  const a=`${m.p1a} & ${m.p1b}`, b=`${m.p2a} & ${m.p2b}`, o=Number(m.outcome);
+  return o===1 ? `${a} beat ${b}` : o===0 ? `${b} beat ${a}` : `${a} drew ${b}`;
+}
 function teamKey(a,b){ return [a,b].sort((x,y)=>x.localeCompare(y)).join(" & "); }
 /* Doubles names are typed freehand, so "Mc" and "MC" are the same person.
    Everything doubles keys on the lowercased name and shows whichever
@@ -29559,6 +29571,7 @@ async function submitDoublesMatch(){
     write  : ()=>sb.from("doubles_matches").insert(row),
     paint  : ()=>renderDoubles(),
     ok     : "Doubles match submitted ✓",
+    after  : ()=>{ try{ broadcastTicker(`👥 ${a1} & ${a2} vs ${b1} & ${b2} reported`); }catch(e){} },
     fail   : "Doubles needs its own `doubles_matches` table — ask your admin to create it.",
     refresh: false
   });
@@ -31689,6 +31702,7 @@ function buildTimeline(){
   polls.forEach(p=>items.push({kind:"poll",t:new Date(p.created_at),data:p}));
   challenges.forEach(c=>items.push({kind:"challenge",t:new Date(c.created_at),data:c}));
   matches.filter(m=>m.status==="approved").forEach(m=>items.push({kind:"result",t:new Date(m.created_at),data:m}));
+  approvedDoubles(repaintFeedForDoubles).forEach(m=>items.push({kind:"dresult",t:new Date(m.created_at),data:m}));
   comments.forEach(c=>{
     const m=matches.find(x=>x.id===c.match_id);
     if(m && m.status==="approved") items.push({kind:"comment",t:new Date(c.created_at),data:c,match:m});
@@ -32078,12 +32092,25 @@ function markDMsSeen(){ try{ localStorage.setItem("fgta_dm_seen",Date.now()); }c
 function weeklyRecap(){
   const WEEK=7*86400000, now=Date.now();
   const recent=matches.filter(m=>m.status==="approved"&&countsForAnalysis(m)&&now-new Date(m.created_at).getTime()<=WEEK);
-  if(!recent.length) return null;
+  const recentDbl=approvedDoubles().filter(m=>now-new Date(m.created_at).getTime()<=WEEK);
+  if(!recent.length && !recentDbl.length) return null;
   const L=computeLeagueStats();
   const pw=playerOfWeek();
   const lines=[];
-  lines.push(`🎾 ${recent.length} game${recent.length>1?'s':''} played this week.`);
-  if(pw) lines.push(`🏅 Player of the week: ${pw.name}.`);
+  if(recent.length) lines.push(`🎾 ${recent.length} game${recent.length>1?'s':''} played this week.`);
+  if(recentDbl.length){
+    /* whoever won most doubles games this week, partners counted separately */
+    const wins={};
+    recentDbl.forEach(m=>{ const o=Number(m.outcome); if(o===0.5) return;
+      (o===1?[m.p1a,m.p1b]:[m.p2a,m.p2b]).forEach(n=>{ const k=String(n).trim(); wins[k]=(wins[k]||0)+1; }); });
+    /* partners share every win, so the lead is nearly always a tie — name
+       everyone on it rather than whoever sorts first alphabetically */
+    const most=Math.max(0,...Object.values(wins));
+    const leaders=Object.keys(wins).filter(n=>wins[n]===most).sort((a,b)=>a.localeCompare(b));
+    const who=leaders.length>1 ? leaders.slice(0,-1).join(", ")+" & "+leaders[leaders.length-1] : leaders[0];
+    lines.push(`👥 ${recentDbl.length} doubles game${recentDbl.length>1?'s':''}`
+      +(most?` — most wins: ${who} (${most}${leaders.length>1?' each':''}).`:'.'));
+  }  if(pw) lines.push(`🏅 Player of the week: ${pw.name}.`);
   // biggest upset this week
   let up={p:1,winner:null};
   predictionLog().forEach(x=>{
@@ -33198,11 +33225,16 @@ function buildTicker(){
   if(hot) items.push(`🔥 ${hot.name} on a ${hot.streak}-game streak`);
   posts.slice(-3).reverse().forEach(p=>items.push(`💬 ${p.author}: ${(p.body||'').slice(0,40)}`));
   challenges.filter(c=>c.status==="open").slice(-2).forEach(c=>items.push(`⚔ ${c.challenger} called out ${c.opponent}`));
-  matches.filter(m=>m.status==="approved").slice(-3).reverse().forEach(m=>{
+  /* the three latest results across singles and doubles, newest first */
+  const singleLine=m=>{
     const o=Number(m.outcome);
     const w=o===1?m.p1:o===0?m.p2:null;
-    items.push(w?`🎾 ${w} beat ${o===1?m.p2:m.p1}`:`🎾 ${m.p1} drew ${m.p2}`);
-  });
+    return w?`🎾 ${w} beat ${o===1?m.p2:m.p1}`:`🎾 ${m.p1} drew ${m.p2}`;
+  };
+  matches.filter(m=>m.status==="approved").map(m=>({t:m.created_at,txt:singleLine(m)}))
+    .concat(approvedDoubles(repaintFeedForDoubles).map(m=>({t:m.created_at,txt:"👥 "+doublesLine(m)})))
+    .sort((a,b)=>new Date(b.t)-new Date(a.t)).slice(0,3)
+    .forEach(r=>items.push(r.txt));
   if(polls.length) items.push(`🗳 ${polls[polls.length-1].question}`);
   return items;
 }
@@ -33583,6 +33615,23 @@ function renderFeed(){
           <button onclick="event.stopPropagation();startQuote('match',${m.id})" title="Quote">❝</button>
         </div>
         ${reactionBar("match",m.id)}
+      </article>`;
+    }
+    if(it.kind==="dresult"){
+      /* no overlay, comments or reactions exist for a doubles game, so the
+         card is the result itself and tapping it goes to the Doubles tab */
+      const m=it.data, o=Number(m.outcome);
+      const pair=(a,b,won)=>`<span class="fv-name ${won?'fv-win':''}">${esc(a)} &amp; ${esc(b)}</span>`;
+      const lead=o===0?m.p2a:m.p1a;
+      return `<article class="fcard fcard-result" style="--ac:${playerColor(lead)}" onclick="showView('doubles')">
+        <div class="fc-tag">DOUBLES RESULT</div>
+        <div class="fc-versus">
+          ${pair(m.p1a,m.p1b,o===1)}
+          <span class="fv-mid">vs</span>
+          ${pair(m.p2a,m.p2b,o===0)}
+        </div>
+        <div class="fc-line">${doublesResult(m)}</div>
+        <div class="fc-time">${when(m.created_at)}</div>
       </article>`;
     }
     const c=it.data, m=it.match;
@@ -34225,6 +34274,8 @@ function computeNews(){
   const after=t=>new Date(t).getTime()>since;
   matches.filter(m=>m.status==="approved"&&after(m.created_at))
     .forEach(m=>news.push({icon:"🎾",txt:"New result: "+m.p1+" vs "+m.p2}));
+  approvedDoubles(repaintFeedForDoubles).filter(m=>after(m.created_at))
+    .forEach(m=>news.push({icon:"👥",txt:"New doubles result: "+m.p1a+" & "+m.p1b+" vs "+m.p2a+" & "+m.p2b}));
   posts.filter(p=>after(p.created_at)&&(p.author||"").toLowerCase()!==me)
     .forEach(p=>news.push({icon:"💬",txt:p.author+" posted"}));
   if(me){
