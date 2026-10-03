@@ -42,6 +42,12 @@ The points are removed, not handed to anyone, so every game is still zero-sum bu
 
 The checks are events on the same timeline as the games (`eloEvents()`), so the table, the before-game ratings, risers & fallers and days-at-#1 all see a tax at the same moment. A game played at the same instant as a check counts towards it. The ladder row shows `💤−N` for what a player has paid and `⏳ play by <date>` when they would owe at the next check, and the health panel lists the same players. `history` stays one entry per game, so rating charts show games, not taxes.
 
+#### Director's rulings — points moved by hand
+
+Some disputes get settled off the court. `ELO_ADJUSTMENTS` in the Elo engine is a dated list of rulings, each `{at, reason, points}`, replayed on the same timeline as games and tax checks (`eloEvents()`), so the table, before-game ratings, risers & fallers and days-at-#1 all see a ruling at the same instant. `points` must sum to zero (the test suite enforces this), so the pool stays exactly where it was; the ladder row shows `⚖️±N` with the reason on hover. Games before `at` are rated without the ruling, games after it are rated from the adjusted numbers. Like the tax, a ruling is not an entry in `history`. The Fall Exhibition leaderboard, which already ignores the tax, ignores rulings as well.
+
+- **2026-10-03** — Aakif v M4 30-point wager on a 3-game match, outcome agreed by four members: Faiz −25, Aakif −5, M4 +30.
+
 #### The decider is not always a set — reading 10-7 in the sets column
 
 The sets column is free text and the format is not fixed. The first two sets are always full ones; what settles a one-set-all match is whatever the two players agreed to on the day — a **10-point breaker**, a **first-to-3 win-by-2**, or a **third full set**. All three get typed straight into *Set scores*, so a real scoreline in the archive reads `6-2, 4-6, 10-7`, and nothing rejects it or needs to.

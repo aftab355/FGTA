@@ -474,5 +474,47 @@ section('the ducking tax — sitting on a rating costs something');
      'and a check that has just happened is not the next one');
 }
 
+/* ---------------------------------------------------------------- */
+section("director's rulings — points moved by hand");
+{
+  const e0 = () => E([]);
+  ok(e0().ELO_ADJUSTMENTS.every(a => Object.values(a.points).reduce((x, y) => x + y, 0) === 0),
+     'every ruling on the books sums to zero');
+  ok(e0().ELO_ADJUSTMENTS.every(a => !isNaN(Date.parse(a.at)) && a.reason),
+     'and every one has a real instant and a reason');
+
+  const ruling = e0().ELO_ADJUSTMENTS[0], T = Date.parse(ruling.at);
+  const names = Object.keys(ruling.points);
+  /* everyone named has played before the ruling, in mixed case */
+  const before = [game(names[0], names[1], 1, '2026-09-20'),
+                  game(names[2].toLowerCase(), names[0], 0, '2026-09-21')];
+  const EN = (ms, now) => loadElo({matches: ms, now});
+  const r = (S, n) => S.find(p => p.name.toLowerCase() === n.toLowerCase());
+
+  const pre = EN(before, T - 1).computeStandings(), post = EN(before, T + 1).computeStandings();
+  names.forEach(n => ok(near(r(post, n).rating - r(pre, n).rating, ruling.points[n]),
+    `${n} moves by exactly ${ruling.points[n]} at the ruling`, (r(post, n).rating - r(pre, n).rating).toFixed(3)));
+  ok(near(pool(post), pool(pre)), 'and the pool is untouched');
+  ok(post.length === pre.length, 'a differently-cased name lands on the existing player, not a new row');
+  ok(r(post, names[2]).adjusted === ruling.points[names[2]] && r(post, names[2]).rulings.length === 1,
+     'the row carries what the ruling did to it');
+  ok(r(post, names[0]).history.length === r(pre, names[0]).history.length,
+     'history stays one entry per game');
+
+  /* a game after the ruling is rated from the adjusted numbers */
+  const after = before.concat([game(names[0], names[2], 1, '2026-10-04')]);
+  const A = EN(after, T + 2 * 86400000);
+  const pg = A.preGameRatings(after[2].id);
+  ok(near(pg[names[0]], r(post, names[0]).rating), "the next game's before-rating includes the ruling");
+
+  /* the cached table notices the ruling taking effect */
+  const M = EN(before, T - 1);
+  const m1 = r(M.computeStandings(), names[2]).rating;
+  M.setNow(T + 1);
+  ok(near(r(M.computeStandings(), names[2]).rating - m1, ruling.points[names[2]]),
+     'crossing a ruling invalidates the cached table');
+
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
