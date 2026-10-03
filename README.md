@@ -46,7 +46,7 @@ The checks are events on the same timeline as the games (`eloEvents()`), so the 
 
 Some disputes get settled off the court. `ELO_ADJUSTMENTS` in the Elo engine is a dated list of rulings, each `{at, reason, points}`, replayed on the same timeline as games and tax checks (`eloEvents()`), so the table, before-game ratings, risers & fallers and days-at-#1 all see a ruling at the same instant. `points` must sum to the ruling's declared `mint` (zero unless the director puts points in from the "central bank"; the test suite enforces this), and the ladder's pool line shows anything minted; the ladder row shows `⚖️±N` with the reason on hover. Games before `at` are rated without the ruling, games after it are rated from the adjusted numbers. Like the tax, a ruling is not an entry in `history`. The Fall Exhibition leaderboard, which already ignores the tax, ignores rulings as well.
 
-- **2026-10-03** — Aakif v M4 30-point wager on a 3-game match, outcome agreed by four members: Faiz −15, Aakif −10, M4 +30, with 5 minted.
+- **2026-10-03** — Aakif v M4 30-point wager on a 3-game match, outcome agreed by four members: Aakif −10, M4 +30, with 20 minted. Faiz pays nothing directly; the bank fronts that share, and Faiz's ducking tax at the 2026-10-05 check (up to 8, only if owed) is burned as usual, which takes it back out of the pool.
 
 #### The decider is not always a set — reading 10-7 in the sets column
 

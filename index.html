@@ -12011,8 +12011,10 @@ function taxCharge(rating){
 const ELO_ADJUSTMENTS = [
   { at: "2026-10-03T03:00:00Z",
     reason: "Director's ruling on the Aakif v M4 30-point wager (3-game match, outcome agreed by 4 members)",
-    mint: 5,   // 5 of M4's 30 come from the central bank
-    points: { "Faiz": -15, "Aakif": -10, "M4": +30 } }
+    /* the bank fronts Faiz's share now; Faiz's ducking tax at the
+       2026-10-05 check (if owed) is burned as usual, which repays it */
+    mint: 20,
+    points: { "Aakif": -10, "M4": +30 } }
 ];
 
 /* the rulings that have taken effect by `now`, oldest first */

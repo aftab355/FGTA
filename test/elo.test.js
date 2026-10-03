@@ -485,9 +485,12 @@ section("director's rulings — points moved by hand");
 
   const ruling = e0().ELO_ADJUSTMENTS[0], T = Date.parse(ruling.at);
   const names = Object.keys(ruling.points);
-  /* everyone named has played before the ruling, in mixed case */
-  const before = [game(names[0], names[1], 1, '2026-09-20'),
-                  game(names[2].toLowerCase(), names[0], 0, '2026-09-21')];
+  /* everyone named has played before the ruling, and the last one is
+     written in lower case in the games, to prove names match loosely */
+  const last = names.length - 1;
+  const spell = i => i === last ? names[i].toLowerCase() : names[i];
+  const before = names.map((n, i) => game(spell(i), spell((i + 1) % names.length), i % 2,
+                                          '2026-09-' + (10 + i)));
   const EN = (ms, now) => loadElo({matches: ms, now});
   const r = (S, n) => S.find(p => p.name.toLowerCase() === n.toLowerCase());
 
@@ -496,22 +499,22 @@ section("director's rulings — points moved by hand");
     `${n} moves by exactly ${ruling.points[n]} at the ruling`, (r(post, n).rating - r(pre, n).rating).toFixed(3)));
   ok(near(pool(post) - pool(pre), ruling.mint || 0), 'and the pool moves only by what was minted');
   ok(post.length === pre.length, 'a differently-cased name lands on the existing player, not a new row');
-  ok(r(post, names[2]).adjusted === ruling.points[names[2]] && r(post, names[2]).rulings.length === 1,
+  ok(r(post, names[last]).adjusted === ruling.points[names[last]] && r(post, names[last]).rulings.length === 1,
      'the row carries what the ruling did to it');
   ok(r(post, names[0]).history.length === r(pre, names[0]).history.length,
      'history stays one entry per game');
 
   /* a game after the ruling is rated from the adjusted numbers */
-  const after = before.concat([game(names[0], names[2], 1, '2026-10-04')]);
+  const after = before.concat([game(names[0], names[last].toLowerCase(), 1, '2026-10-04')]);
   const A = EN(after, T + 2 * 86400000);
   const pg = A.preGameRatings(after[2].id);
   ok(near(pg[names[0]], r(post, names[0]).rating), "the next game's before-rating includes the ruling");
 
   /* the cached table notices the ruling taking effect */
   const M = EN(before, T - 1);
-  const m1 = r(M.computeStandings(), names[2]).rating;
+  const m1 = r(M.computeStandings(), names[last]).rating;
   M.setNow(T + 1);
-  ok(near(r(M.computeStandings(), names[2]).rating - m1, ruling.points[names[2]]),
+  ok(near(r(M.computeStandings(), names[last]).rating - m1, ruling.points[names[last]]),
      'crossing a ruling invalidates the cached table');
 
 }
