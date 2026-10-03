@@ -38,15 +38,9 @@ So once a week (Mondays, 00:00 UTC, first check **2026-10-05**), anybody with **
 - **Newcomers are exempt** until their first game is a full 30 days old.
 - **Nothing before 2026-10-05 is charged**, the same promise `MOV_START` makes: switching it on did not rewrite a single published rating. The week before the first check is the warning.
 
-The points are removed, not handed to anyone, so every game is still zero-sum but the pool now sits below `players x START` by exactly the total taxed. Each standings row carries `taxed`, and both pool checks subtract it.
+The points are not handed to another player: they are deposited in the **central bank** (`centralBank()`, read off each row's `taxLog`). Every game is still zero-sum, the players' pool sits below `players x START` by exactly the bank's balance, and players + bank is always exactly `players x START`, which is what both pool checks verify. The ladder's pool line shows the bank's balance (🏦). The bank only collects; nothing pays out of it.
 
 The checks are events on the same timeline as the games (`eloEvents()`), so the table, the before-game ratings, risers & fallers and days-at-#1 all see a tax at the same moment. A game played at the same instant as a check counts towards it. The ladder row shows `💤−N` for what a player has paid and `⏳ play by <date>` when they would owe at the next check, and the health panel lists the same players. `history` stays one entry per game, so rating charts show games, not taxes.
-
-#### Director's rulings — points moved by hand
-
-Some disputes get settled off the court. `ELO_ADJUSTMENTS` in the Elo engine is a dated list of rulings, each `{at, reason, points}`, replayed on the same timeline as games and tax checks (`eloEvents()`), so the table, before-game ratings, risers & fallers and days-at-#1 all see a ruling at the same instant. `points` must sum to the ruling's declared `mint` (zero unless the director puts points in from the "central bank"; the test suite enforces this), and the ladder's pool line shows anything minted; the ladder row shows `⚖️±N` with the reason on hover. Games before `at` are rated without the ruling, games after it are rated from the adjusted numbers. Like the tax, a ruling is not an entry in `history`. The Fall Exhibition leaderboard, which already ignores the tax, ignores rulings as well.
-
-- **2026-10-03** — Aakif v M4 30-point wager on a 3-game match, outcome agreed by four members: Aakif −10, M4 +30, with 20 minted. Faiz pays nothing directly; the bank fronts that share, and Faiz's ducking tax at the 2026-10-05 check (up to 8, only if owed) is burned as usual, which takes it back out of the pool.
 
 #### The decider is not always a set — reading 10-7 in the sets column
 

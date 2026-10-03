@@ -429,9 +429,15 @@ section('the ducking tax — sitting on a rating costs something');
   const far = EN(old, T0 + 400 * DAY).computeStandings();
   ok(near(r(far, 'A').rating, e0().START),
      'it never takes a rating below START', r(far, 'A').rating.toFixed(2));
-  ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed - p.adjusted, 0), 0),
-     "the pool is players x START less exactly what was taxed (plus any ruling's mint)",
+  ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed, 0), 0),
+     'the pool is players x START less exactly what was taxed',
      pool(far, 500).toFixed(2));
+  const bank = EN(old, T0 + 400 * DAY).centralBank(far);
+  ok(near(pool(far, 500) + bank.balance, 0),
+     'every point taxed is in the central bank, so players + bank is conserved',
+     bank.balance.toFixed(2));
+  ok(bank.deposits.length > 0 && bank.deposits.every((d, i, a) => d.points > 0 && (!i || a[i-1].t <= d.t)),
+     'and its ledger is one positive deposit per charge, oldest first');
 
   /* the window: TAX_MIN_GAMES inside it clears you, one fewer does not */
   const busy = old.concat([game('A', 'C', 1, at(-20)), game('A', 'C', 1, at(-10))]);
@@ -472,51 +478,6 @@ section('the ducking tax — sitting on a rating costs something');
      'the outlook names the next check and who would owe at it');
   ok(O.nextTaxCheck(T0) === T0 + e0().TAX_EVERY_DAYS * DAY,
      'and a check that has just happened is not the next one');
-}
-
-/* ---------------------------------------------------------------- */
-section("director's rulings — points moved by hand");
-{
-  const e0 = () => E([]);
-  ok(e0().ELO_ADJUSTMENTS.every(a => Object.values(a.points).reduce((x, y) => x + y, 0) === (a.mint || 0)),
-     'every ruling on the books sums to exactly what it declares minted');
-  ok(e0().ELO_ADJUSTMENTS.every(a => !isNaN(Date.parse(a.at)) && a.reason),
-     'and every one has a real instant and a reason');
-
-  const ruling = e0().ELO_ADJUSTMENTS[0], T = Date.parse(ruling.at);
-  const names = Object.keys(ruling.points);
-  /* everyone named has played before the ruling, and the last one is
-     written in lower case in the games, to prove names match loosely */
-  const last = names.length - 1;
-  const spell = i => i === last ? names[i].toLowerCase() : names[i];
-  const before = names.map((n, i) => game(spell(i), spell((i + 1) % names.length), i % 2,
-                                          '2026-09-' + (10 + i)));
-  const EN = (ms, now) => loadElo({matches: ms, now});
-  const r = (S, n) => S.find(p => p.name.toLowerCase() === n.toLowerCase());
-
-  const pre = EN(before, T - 1).computeStandings(), post = EN(before, T + 1).computeStandings();
-  names.forEach(n => ok(near(r(post, n).rating - r(pre, n).rating, ruling.points[n]),
-    `${n} moves by exactly ${ruling.points[n]} at the ruling`, (r(post, n).rating - r(pre, n).rating).toFixed(3)));
-  ok(near(pool(post) - pool(pre), ruling.mint || 0), 'and the pool moves only by what was minted');
-  ok(post.length === pre.length, 'a differently-cased name lands on the existing player, not a new row');
-  ok(r(post, names[last]).adjusted === ruling.points[names[last]] && r(post, names[last]).rulings.length === 1,
-     'the row carries what the ruling did to it');
-  ok(r(post, names[0]).history.length === r(pre, names[0]).history.length,
-     'history stays one entry per game');
-
-  /* a game after the ruling is rated from the adjusted numbers */
-  const after = before.concat([game(names[0], names[last].toLowerCase(), 1, '2026-10-04')]);
-  const A = EN(after, T + 2 * 86400000);
-  const pg = A.preGameRatings(after[2].id);
-  ok(near(pg[names[0]], r(post, names[0]).rating), "the next game's before-rating includes the ruling");
-
-  /* the cached table notices the ruling taking effect */
-  const M = EN(before, T - 1);
-  const m1 = r(M.computeStandings(), names[last]).rating;
-  M.setNow(T + 1);
-  ok(near(r(M.computeStandings(), names[last]).rating - m1, ruling.points[names[last]]),
-     'crossing a ruling invalidates the cached table');
-
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

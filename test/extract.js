@@ -83,7 +83,7 @@ function loadElo(opts){
                  'winProb','computeStandings','invalidateStandings',
                  'TAX_ENABLED','TAX_START','TAX_EVERY_DAYS','TAX_WINDOW_DAYS','TAX_MIN_GAMES',
                  'TAX_POINTS','taxChecks','owesTax','taxCharge','nextTaxCheck','taxOwingNext',
-                 'ELO_ADJUSTMENTS','eloAdjustments'];
+                 'centralBank'];
   const pre = [
     'const K = ' + (o.K == null ? 32 : o.K) + ';',
     'let DIVISOR = ' + (o.divisor == null ? 400 : o.divisor) + ';',
