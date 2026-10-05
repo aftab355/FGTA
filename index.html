@@ -11463,7 +11463,7 @@ function invalidateStandings(){ _standCache = null; }
 
 function computeStandings(){
   /* the tax makes the table depend on the date as well as the rows — but
-     only in weekly steps, so the number of checks passed is a complete key
+     only in fortnightly steps, so the number of checks passed is a complete key
      for it, and between checks this is still a pointer comparison */
   const now = eloNow(), checks = taxChecks(now).length;
   if(_standCache && _standCache.m === matches && _standCache.t === tournaments
@@ -11918,7 +11918,7 @@ function matchKPair(m, rA, rB){
    can hold a podium place for months against people playing twice
    as often.
 
-   So: once a week, anybody who has played fewer than TAX_MIN_GAMES
+   So: every two weeks, anybody who has played fewer than TAX_MIN_GAMES
    ladder games in the last TAX_WINDOW_DAYS pays TAX_RATE of their
    rating — a rate, not a fixed number of points, so the higher the
    rating being sat on, the more sitting on it costs. Three
@@ -11946,8 +11946,8 @@ function matchKPair(m, rA, rB){
    runs after it: the game counts towards the window it is in.
    ============================================================ */
 const TAX_ENABLED     = true;
-const TAX_START       = "2026-10-05";  // first weekly check (UTC midnight); nothing earlier is charged
-const TAX_EVERY_DAYS  = 7;
+const TAX_START       = "2026-10-12";  // first check (UTC midnight); nothing earlier is charged. Pushed back a week from 2026-10-05
+const TAX_EVERY_DAYS  = 14;            // every other Monday; it was weekly before the first check ran
 const TAX_WINDOW_DAYS = 30;
 const TAX_MIN_GAMES   = 2;             // fewer than this in the window, and you pay
 const TAX_RATE        = 0.035;         // share of the rating taken (3.5%); it was a flat 8 points
