@@ -420,17 +420,18 @@ section('the ducking tax — sitting on a rating costs something');
   ok(near(r(before, 'A').rating - r(after, 'A').rating, due),
      'the first check takes TAX_RATE of the rating from an idle player above START',
      (r(before, 'A').rating - r(after, 'A').rating).toFixed(2));
-  ok(near(r(before, 'B').rating, r(after, 'B').rating),
-     'and nothing from one already below START — they are not sitting on anything');
+  ok(r(before, 'B').rating < e0().START &&
+     near(r(before, 'B').rating - r(after, 'B').rating, r(before, 'B').rating * e0().TAX_RATE),
+     'and the same rate from an idle player below START — there is no floor');
   ok(near(r(after, 'A').taxed, due) && r(after, 'A').lastTax.t === T0,
      'the row says what it paid and when');
   ok(r(after, 'A').history.length === 3,
      'history stays one entry per game — the tax is not a game');
 
-  /* a long way out, it grinds down to START and stops there */
+  /* a long way out, it keeps going past START: there is no floor */
   const far = EN(old, T0 + 400 * DAY).computeStandings();
-  ok(near(r(far, 'A').rating, e0().START),
-     'it never takes a rating below START', r(far, 'A').rating.toFixed(2));
+  ok(r(far, 'A').rating < e0().START && r(far, 'A').rating > 0,
+     'it takes a rating below START, and never below zero', r(far, 'A').rating.toFixed(2));
   ok(near(pool(far, 500) + far.reduce((s, p) => s + p.taxed, 0), 0),
      'the pool is players x START less exactly what was taxed',
      pool(far, 500).toFixed(2));
@@ -460,10 +461,10 @@ section('the ducking tax — sitting on a rating costs something');
   ok(r(EN(onTheDot, T0 + 1).computeStandings(), 'A').taxed === 0,
      'a game at the same instant as a check runs before it');
 
-  /* the charge is a rate, clipped at START */
-  ok(near(e0().taxCharge(600), 600 * e0().TAX_RATE), 'well above START the charge is the rate of the rating');
-  ok(near(e0().taxCharge(505), 5) && e0().taxCharge(500) === 0 && e0().taxCharge(450) === 0,
-     'near START it stops at START, and at or below it there is nothing to take');
+  /* the charge is the rate of the rating, at any rating */
+  ok(near(e0().taxCharge(600), 600 * e0().TAX_RATE), 'above START the charge is the rate of the rating');
+  ok(near(e0().taxCharge(505), 505 * e0().TAX_RATE) && near(e0().taxCharge(450), 450 * e0().TAX_RATE),
+     'near and below START it is still the full rate: there is no floor');
 
   /* the ratings before a game include any tax charged before it */
   const later = old.concat([game('A', 'B', 0, at(2))]);

@@ -11921,13 +11921,11 @@ function matchKPair(m, rA, rB){
    So: every two weeks, anybody who has played fewer than TAX_MIN_GAMES
    ladder games in the last TAX_WINDOW_DAYS pays TAX_RATE of their
    rating — a rate, not a fixed number of points, so the higher the
-   rating being sat on, the more sitting on it costs. Three
+   rating being sat on, the more sitting on it costs. It applies at
+   every rating, below START too: it used to stop at START, and that
+   floor was taken out so that nobody is exempt from playing. Two
    limits keep it a nudge rather than a second rating system:
 
-     - it never takes anybody below START. Sitting on a rating is
-       only worth doing when it is above average, so that is the
-       only rating it touches — a player below 500 who is not
-       playing is not protecting anything.
      - nobody pays until their first game is a full window old, so
        someone who has just joined cannot owe for games they have
        not had a chance to play.
@@ -11971,9 +11969,9 @@ function owesTax(times, t){
   return n < TAX_MIN_GAMES;
 }
 
-/* what a check takes from a rating: TAX_RATE of it, but never below START */
+/* what a check takes from a rating: TAX_RATE of it, at any rating */
 function taxCharge(rating){
-  return Math.max(0, Math.min(rating * TAX_RATE, rating - START));
+  return Math.max(0, rating * TAX_RATE);
 }
 
 /* THE CENTRAL BANK — where the tax goes. A charge is not destroyed, it
@@ -12018,9 +12016,7 @@ function nextTaxCheck(now){
   return first + (Math.floor((now - first) / step) + 1) * step;
 }
 
-/* who would owe at the next check if nobody plays before it. It says
-   nothing about whether it would cost them anything — a rating at or
-   below START pays 0 — which is the caller's to check against the table. */
+/* who would owe at the next check if nobody plays before it */
 function taxOwingNext(now){
   const t = nextTaxCheck(now);
   if(t === null) return {at:null, names:[]};
@@ -21444,10 +21440,10 @@ function renderHealth(){
   if(!H.totalGames){ $("healthSec").style.display="none"; return; }
   const items=[];
   if(H.pending) items.push({icon:"⏳",tone:"warn",text:`<b>${H.pending}</b> game${H.pending>1?'s':''} waiting for approval`,act:"Unlock admin to clear the queue"});
-  /* the ducking tax's next check — only for ratings it would actually cost */
+  /* the ducking tax's next check */
   const taxNext = taxOwingNext(eloNow()), rated = {};
   computeStandings().forEach(p=>rated[p.name]=p.rating);
-  taxNext.names.filter(n=>rated[n]>START).forEach(n=>items.push({icon:"⏳",tone:"warn",
+  taxNext.names.filter(n=>rated[n]!==undefined).forEach(n=>items.push({icon:"⏳",tone:"warn",
     text:`<b>${esc(n)}</b> owes the ducking tax on ${new Date(taxNext.at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`,
     act:`Needs ${TAX_MIN_GAMES} ladder games in the ${TAX_WINDOW_DAYS} days before it, or pays about ${Math.round(taxCharge(rated[n]))} pts (${TAX_RATE*100}% of rating)`}));
   H.inactive.slice(0,3).forEach(x=>items.push({icon:"💤",tone:"warn",
@@ -21953,7 +21949,7 @@ function render(){
     const taxNext = taxOwingNext(eloNow());
     const taxDay = taxNext.at ? new Date(taxNext.at).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}) : '';
     const taxBadge = p => {
-      const due = taxNext.names.includes(p.name) && p.rating > START;
+      const due = taxNext.names.includes(p.name);
       const bits = [];
       if(p.taxed >= 0.5) bits.push(`<span class="tax-badge" title="Ducking tax: ${Math.round(p.taxed)} points paid to the central bank for playing fewer than ${TAX_MIN_GAMES} games in ${TAX_WINDOW_DAYS} days">💤−${Math.round(p.taxed)}</span>`);
       if(due) bits.push(`<span class="tax-badge tax-due" title="Fewer than ${TAX_MIN_GAMES} games in the last ${TAX_WINDOW_DAYS} days — play before ${taxDay} or lose about ${Math.round(taxCharge(p.rating))} points (${TAX_RATE*100}% of rating)">⏳ play by ${taxDay}</span>`);
