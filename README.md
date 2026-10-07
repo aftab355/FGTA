@@ -66,6 +66,18 @@ With that, a breaker decider is counted as **the one decisive game it stood in f
 
 **What the point tracker still cannot do.** Live point-by-point scoring is hard-wired to the classic format — games to 6, win by 2, tiebreak to 7 at 6-6, in all three sets — so a match whose decider is a 10-point breaker can be *filed* (type the score into the submit form, as above) but not *reffed* through the tracker. There is no format picker. Adding one is not a display change: the serve rotates every two points inside a breaker rather than every game, the ends change every six, and the overlay, the scoreboard export and the reconstruction all read that rotation.
 
+#### The TS Race — the points table that takes over in 2027
+
+From the **2027 Spring/Summer season (May 1 – Sep 6, 2027)** the headline ranking is a points race, not the Elo rating. Elo answers "who is best?" with a number a favourite can only lose by playing down — a 600 risks 24 points to win 8 against the bottom of the table, which is exactly why people stopped playing down. The race answers "who had the best season?", and nothing in it can cost anybody anything. It lives in the `RACE-ENGINE` region of `index.html`, next to the Fall Exhibition, and like it stores nothing: every number is a replay of the match log.
+
+- **A 1v1 win** scores `30 × opponent strength × margin`, rounded — usually 35–45. Strength runs ×0.6 (the weakest player) to ×1.6 (the strongest) and is read off a **hidden Elo over every game, cup games included**, the moment before the match; it ranks nothing. Margin is the same game-differential dominance the ladder's margin multiplier reads (a breaker decider is one game), ×1.0 for a scrape to ×1.6 for a double bagel, without the ladder's favourite damping — the strength factor already makes beating a weak player cheap.
+- **A loss scores 0**, never less. A draw is half a plain win.
+- **Beating the same person again within 28 days** is worth ×0.6, then ×0.36, never below ×0.35. The most valuable next game is usually somebody you haven't beaten lately — usually somebody below you.
+- **Events score only the title and the final**, by tier: **TS 250** round robin 250 / 165, **TS 300** bracket 300 / 200, **TS 500** FF Cup 500 / 330 (the runner-up gets the ATP's 0.66 of the title). Event games earn nothing per win. A 3-player field pays 75%, fewer than 3 nothing. An event counts once it is completed with a champion, and is dated by its last game. The tier comes from the format and the name (an event called *FF Cup* is TS 500) unless the optional `tournaments.tier` column says otherwise — see [`docs/race.sql`](docs/race.sql).
+- **Why strength and not upset size.** Once losses cost nothing, scaling a win by Elo's `(1 − expected)` makes everybody's expected points per game `E(1 − E)`, which peaks for evenly matched players: the best and the worst player earn the same per game and the middle earns the most. Scaling by the opponent's own strength keeps expected points per game rising with skill. `test/race.test.js` holds that line, along with the decay, the tiers, the field rule and the season window.
+
+The table sits at the top of the Ladder tab. **Until May 1, 2027 it is a labelled, unofficial preview** — this year's games under the new rules — and the podium and Elo table are untouched. **From May 1** the podium and the broadcast strip read race points, and the Elo table below is relabelled *Strength rating (Elo)*. The Elo engine, its ducking tax and everything that reads it (forecasts, draws, the models) are unchanged; whether to stop the tax when the race starts is still open.
+
 ### 2. Home / Feed
 Social feed: post composer, "moments" horizontal scroller, presence bar ("N on court" + stacked avatars when others are active), live activity ticker, "on this day" callback box, comments.
 
@@ -632,6 +644,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
 - docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
+- docs/race.sql — the optional `tournaments.tier` column, for an event whose format gives the wrong TS Race tier.
 - docs/tournament-stats.sql — the optional `tournaments.counts_stats` column: how to keep one event out of the stats as well as out of the ladder, and why you almost never want to.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
 - docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.

@@ -15,7 +15,7 @@ const {spawnSync} = require('child_process');
 const path = require('path');
 
 const SUITE = [
-  'elo', 'score', 'score-frame', 'robin-plus', 'fall-exhibition', 'recap',
+  'elo', 'score', 'score-frame', 'robin-plus', 'fall-exhibition', 'race', 'recap',
   'title-badges', 'outbox', 'kit', 'palette', 'floor', 'models', 'park-busy',
   'trim', 'vision-core', 'site-config-sql', 'client-errors-sql',
 ];

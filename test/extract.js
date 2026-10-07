@@ -134,6 +134,22 @@ function loadFallExhibition(opts){
       {matches: o.matches || [], countsForElo: o.countsForElo});
 }
 
+/* The TS Race. Like the Fall Exhibition it rides on the Elo engine's
+   primitives (setPairs, breakerIndex, START, DIVISOR) and reads nothing
+   global: matches, tournaments and the counts filter are arguments. */
+function loadRace(opts){
+  const o = opts || {};
+  const code = region('ELO-ENGINE') + '\n' + region('RACE-ENGINE');
+  const names = ['RACE_SEASON','RACE_PREVIEW','RACE_WIN_BASE','RACE_TIERS','RACE_REPEAT_DAYS',
+                 'raceTier','raceStrengths','raceStrengthMult','raceDominance','raceEventResult',
+                 'raceFieldMult','computeRace','raceActiveSeason','raceLive'];
+  const pre = [
+    'const K = 32;', 'let DIVISOR = 400;', 'const START = 500;',
+    'let matches = [];', 'const countsForElo = () => true;'
+  ].join('\n');
+  return new Function(pre + '\n' + code + '\nreturn {' + names.join(',') + '};')();
+}
+
 /* The outbox. The classifier is the interesting part — everything else in
    the queue hangs off whether a failure is read as "refused" or "never
    arrived" — and it is pure, so the test hands it errors rather than a
@@ -283,4 +299,4 @@ function loadTitleBadges(o){
     });
 }
 
-module.exports={region,loadTitleBadges,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadFallExhibition,loadOutbox,loadModels,APP};
+module.exports={region,loadTitleBadges,loadCore,loadScore,loadBall,loadAudio,loadParkBusy,loadRobinPlus,loadEloScope,loadPalette,loadKit,loadElo,loadFallExhibition,loadRace,loadOutbox,loadModels,APP};
