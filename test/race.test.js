@@ -172,6 +172,21 @@ section('everyone starts on 0, records carry over');
   ok(find(later, 'A').w === 1 && find(later, 'A').career.w === 2, 'season record and all-time record are kept apart');
 }
 
+section('the FF Cup is off the W-L record');
+{
+  const cup = {id: 1, name: 'FF Cup', format: 'robin2', status: 'completed', champion: 'A'};
+  const rr  = {id: 2, name: 'Oct RR', format: 'roundrobin', status: 'active'};
+  const ms = [
+    game('A', 'B', 1, '2027-05-02'),
+    game('A', 'B', 1, '2027-05-03', {tournament_id: 1}),
+    game('B', 'A', 1, '2027-05-04', {tournament_id: 2})
+  ];
+  const a = find(race(ms, [cup, rr]), 'A');
+  ok(a.w === 1 && a.l === 1, 'season record: the ladder win and the round-robin loss, not the cup win', a.w + '-' + a.l);
+  ok(a.career.w === 1 && a.career.l === 1, 'and the same all-time');
+  ok(R.raceIsFFCup(cup) && !R.raceIsFFCup(rr), 'the cup is told apart by name');
+}
+
 section('the card: who you have played');
 {
   const out = race([game('A', 'B', 1, '2027-05-02'), game('A', 'C', 0, '2027-05-03'), game('B', 'C', 1, '2027-05-04'), game('D', 'C', 1, '2027-05-05')]);

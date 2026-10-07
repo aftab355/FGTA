@@ -12231,11 +12231,12 @@ const raceApproved = (ms, counts) => ms
    otherwise the format decides — a straight bracket is TS 300, a round
    robin TS 250 — and the FF Cup is TS 500 by name, so the one event
    that needs no setup gets none. */
+function raceIsFFCup(t){ return !!t && /\bff\s*cup\b/i.test(t.name || ""); }
 function raceTier(t){
   if(!t) return null;
   const n = Number(t.tier);
   if(RACE_TIERS[n]) return n;
-  if(/\bff\s*cup\b/i.test(t.name || "")) return 500;
+  if(raceIsFFCup(t)) return 500;
   if(t.format === "roundrobin") return 250;
   return 300;    // knockout, hybrid, any other Robin+
 }
@@ -12328,16 +12329,20 @@ function computeRace(season, ms, ts, counts){
                                    career:{w:0, l:0, d:0}});
   const winsLog = [];   // ladder wins this season, for the repeat decay
 
+  const cupIds = new Set((ts || []).filter(raceIsFFCup).map(t => t.id));
   for(const m of raceApproved(ms, counts)){
     const t = new Date(m.created_at).getTime();
-    /* the record is all-time — points reset each season, results don't */
+    /* the record is all-time — points reset each season, results don't —
+       and it is the record of everything but the FF Cup, whose games are
+       paid for by its title, not counted as wins and losses */
+    const onRecord = !cupIds.has(m.tournament_id);
     const ca = row(m.p1).career, cb = row(m.p2).career, oc = Number(m.outcome);
-    if(oc === 0.5){ ca.d++; cb.d++; } else if(oc === 1){ ca.w++; cb.l++; } else { ca.l++; cb.w++; }
+    if(onRecord){ if(oc === 0.5){ ca.d++; cb.d++; } else if(oc === 1){ ca.w++; cb.l++; } else { ca.l++; cb.w++; } }
     if(!inSeason(t)) continue;
     const a = row(m.p1), b = row(m.p2), o = Number(m.outcome);
     a.games++; b.games++;
     a.opponents.add(m.p2); b.opponents.add(m.p1);
-    if(o === 0.5){ a.d++; b.d++; } else if(o === 1){ a.w++; b.l++; } else { a.l++; b.w++; }
+    if(onRecord){ if(o === 0.5){ a.d++; b.d++; } else if(o === 1){ a.w++; b.l++; } else { a.l++; b.w++; } }
     if(m.tournament_id) continue;          // event games score through the event
 
     const pre = str.before[m.id];

@@ -141,7 +141,7 @@ function loadRace(opts){
   const o = opts || {};
   const code = region('ELO-ENGINE') + '\n' + region('RACE-ENGINE');
   const names = ['RACE_SEASON','RACE_PREVIEW','RACE_WIN_BASE','RACE_TIERS','RACE_REPEAT_DAYS',
-                 'raceTier','raceStrengths','raceStrengthMult','raceDominance','raceEventResult',
+                 'raceIsFFCup','raceTier','raceStrengths','raceStrengthMult','raceDominance','raceEventResult',
                  'raceFieldMult','computeRace','raceActiveSeason','raceLive'];
   const pre = [
     'const K = 32;', 'let DIVISOR = 400;', 'const START = 500;',
