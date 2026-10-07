@@ -12158,7 +12158,9 @@ function computeFallExhibition(endDateStr){
 
 /* ==== RACE-ENGINE-START ====
    THE TS RACE — the points system that replaces the Elo ladder as the
-   headline ranking from the 2027 Spring/Summer season.
+   headline ranking. Seasons run a year, Oct 7 to Oct 6; the first opened
+   on 2026-10-07 with everybody on 0 points. Records are not reset: each
+   row carries the player's all-time W-L-D beside the season's.
 
    Elo answers "who is best?", and answers it with a rating that a
    favourite can only lose by playing down: a 600 risking 24 points to
@@ -12194,10 +12196,10 @@ function computeFallExhibition(endDateStr){
    of a replay of the match log, so a corrected result reflows into the
    race exactly as it does into the ladder.
    ============================================================ */
-const RACE_SEASON  = {key:"2027-ss", name:"2027 Spring/Summer", start:"2027-05-01", end:"2027-09-06"};
-/* what the table shows until RACE_SEASON opens: this year's games run
+const RACE_SEASON  = {key:"2026-27", name:"FGTA 2026\u201327", start:"2026-10-07", end:"2027-10-06"};
+/* what the table would show before RACE_SEASON opens: earlier games run
    through the same rules, labelled unofficial. Never the headline. */
-const RACE_PREVIEW = {key:"2026-preview", name:"2026 replay", start:"2026-01-01", end:"2026-12-31", preview:true};
+const RACE_PREVIEW = {key:"2026-preview", name:"2026 replay", start:"2026-01-01", end:"2026-10-06", preview:true};
 
 const RACE_WIN_BASE     = 30;    // a win over an average opponent, before margin
 const RACE_STR_SCALE    = 250;   // +250 hidden rating doubles what a win over them is worth...
@@ -12322,11 +12324,15 @@ function computeRace(season, ms, ts, counts){
   const str = raceStrengths(ms, counts);
   const P = {};
   const row = n => P[n] || (P[n] = {name:n, points:0, ladderPts:0, eventPts:0,
-                                   w:0, l:0, d:0, games:0, opponents:new Set(), log:[]});
+                                   w:0, l:0, d:0, games:0, opponents:new Set(), log:[],
+                                   career:{w:0, l:0, d:0}});
   const winsLog = [];   // ladder wins this season, for the repeat decay
 
   for(const m of raceApproved(ms, counts)){
     const t = new Date(m.created_at).getTime();
+    /* the record is all-time — points reset each season, results don't */
+    const ca = row(m.p1).career, cb = row(m.p2).career, oc = Number(m.outcome);
+    if(oc === 0.5){ ca.d++; cb.d++; } else if(oc === 1){ ca.w++; cb.l++; } else { ca.l++; cb.w++; }
     if(!inSeason(t)) continue;
     const a = row(m.p1), b = row(m.p2), o = Number(m.outcome);
     a.games++; b.games++;
@@ -12377,7 +12383,9 @@ function computeRace(season, ms, ts, counts){
   });
   const roster = rows.filter(p => p.games > 0).map(p => p.name);
   rows.forEach(p => { p.card = p.opponents.size; p.cardOf = Math.max(0, roster.length - 1); p.opponents = [...p.opponents]; });
-  rows.sort((x,y) => y.points - x.points || y.eventPts - x.eventPts || y.w - x.w || x.name.localeCompare(y.name));
+  rows.sort((x,y) => y.points - x.points || y.eventPts - x.eventPts || y.w - x.w ||
+                     y.career.w - x.career.w || x.name.localeCompare(y.name));
+  /* everybody who has ever played is on the table, on 0 until they score */
   return {season:s, rows, startMs:t0, endMs:t1};
 }
 
@@ -22159,6 +22167,8 @@ function render(){
   } else $("poolLine").innerHTML='';
 
   // ===== TS RACE — headline from RACE_SEASON.start, preview before it =====
+  /* the podium is the race's once somebody has scored; on a fresh season
+     (everyone on 0) the Elo podium holds it rather than three zeroes */
   const raceOn = raceLive();
   const raceRows = renderRace();
   if($("eloLabel")) $("eloLabel").textContent = raceOn ? "Strength rating (Elo)" : "Full standings";
@@ -22176,7 +22186,7 @@ function render(){
     if(podium){
       /* once the race season is live the podium is the race's: points,
          not rating, on the same three plinths */
-      const top = (raceOn && raceRows.length
+      const top = (raceOn && raceRows.length && raceRows[0].points > 0
         ? raceRows.map(r=>({name:r.name, rating:r.points, w:r.w, l:r.l, d:r.d}))
         : standings).slice(0,3);
       const order = top.length>=3 ? [1,0,2] : top.length===2 ? [1,0] : [0];
@@ -22197,7 +22207,9 @@ function render(){
         </div>`;
       }).join('');
     }
-    if(bcastMeta && raceOn && raceRows.length){
+    if(bcastMeta && raceOn && raceRows.length && !raceRows[0].points){
+      bcastMeta.textContent = `TS Race ${RACE_SEASON.name} is open · everyone on 0 · first win leads`;
+    } else if(bcastMeta && raceOn && raceRows.length){
       const gap = raceRows.length>1 ? raceRows[0].points-raceRows[1].points : 0;
       bcastMeta.textContent = `${raceRows[0].name} leads the TS Race · +${gap} pts clear`;
     } else if(bcastMeta){
@@ -29574,13 +29586,13 @@ function renderRace(){
   if(!box) return [];
   const season = raceActiveSeason();
   const out = computeRace(season, matches, tournaments, countsForAnalysis);
-  const rows = out.rows.filter(r => r.games > 0 || r.points > 0);
+  const rows = out.rows;
 
   $("raceTitle").textContent = "TS Race — " + season.name;
   $("raceTag").textContent = season.preview ? "preview" : (Date.now() > out.endMs ? "final" : "live");
   $("raceLine").innerHTML = season.preview
     ? `Unofficial: this year's games under the new rules. The real race runs ${raceDate(RACE_SEASON.start)} – ${raceDate(RACE_SEASON.end)}.`
-    : `${raceDate(season.start)} – ${raceDate(season.end)} · wins earn points, losses never cost any`;
+    : `${raceDate(season.start)} – ${raceDate(season.end)} · everyone started on 0 · wins earn points, losses never cost any`;
 
   const rules = $("raceRules");
   if(rules){
@@ -29608,14 +29620,14 @@ function renderRace(){
     .map(x=>`<span class="sets-tag" title="${esc(x.event)} · ${RACE_TIERS[x.tier].label} · ${x.field}-player field">${x.place==="champion"?"🏆":"🥈"} ${esc(x.event)} +${x.pts}</span>`).join(' ');
   box.innerHTML = `
     <table class="sim-table race-table">
-      <tr><th>#</th><th>Player</th><th>Pts</th><th>1v1</th><th>Events</th><th>W-L-D</th><th title="how many of the other players they have played this season">Card</th></tr>
+      <tr><th>#</th><th>Player</th><th>Pts</th><th>1v1</th><th>Events</th><th title="this season, and all-time underneath">W-L-D</th><th title="how many of the other players they have played this season">Card</th></tr>
       ${rows.map((r,i)=>`<tr>
-        <td class="pw-dim">${i+1}</td>
+        <td class="pw-dim">${r.points ? i+1 : '\u2013'}</td>
         <td class="st-name"><a href="#" onclick="openProfile('${esc(r.name).replace(/'/g,"\\'")}');return false">${esc(r.name)}</a>${titles(r)?'<br>'+titles(r):''}</td>
         <td class="st-t3"><b>${r.points.toLocaleString()}</b></td>
         <td class="st-t3">${r.ladderPts}</td>
         <td class="st-t3">${r.eventPts}</td>
-        <td class="st-t3">${r.w}-${r.l}-${r.d}</td>
+        <td class="st-t3">${r.w}-${r.l}-${r.d}<br><span class="pw-dim" style="font-size:10px" title="all-time record">all ${r.career.w}-${r.career.l}-${r.career.d}</span></td>
         <td class="st-t3">${r.card}/${r.cardOf}</td>
       </tr>`).join('')}
     </table>`;
@@ -34297,6 +34309,19 @@ const BADGE_DEFS = [
 
 /* ==== TITLE-BADGES-START ==== */
 
+/* Season honours: who finished a season on top. An event title is
+   recorded by crowning a champion; a season has no row to crown, so
+   its #1 is written here, once, when the season closes. */
+const SEASON_HONOURS = [
+  {key:"fgta-2026", player:"Kabir", name:"#1 \u2014 FGTA 2026",
+   desc:"Finished the 2026 season top of the Elo ladder \u00b7 Oct 2026"}
+];
+function seasonHonours(name){
+  const who = (name||"").toLowerCase();
+  return SEASON_HONOURS.filter(h => h.player.toLowerCase() === who).slice().reverse()
+    .map(h => ({k:"season:" + h.key, icon:"\ud83e\udd47", cls:"tr-title", name:h.name, desc:h.desc}));
+}
+
 /* Every event this player has won, newest first.
 
    These are deliberately NOT in BADGE_DEFS: there is one per title rather
@@ -34332,7 +34357,7 @@ function computeBadges(name){
   /* Resolved before the guards below, on purpose: the cup is an exhibition,
      so a champion whose only games were cup games has no ladder standing —
      and a title they actually won must not depend on having one. */
-  const titles = titleBadges(name);
+  const titles = seasonHonours(name).concat(titleBadges(name));   // a season #1 leads, then event titles
   const prof = computeProfile(name);
   if(!prof) return titles;
   const standings = computeStandings().filter(p=>p.games>0);

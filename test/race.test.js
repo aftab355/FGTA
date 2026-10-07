@@ -139,7 +139,7 @@ section('the season window');
 {
   const ms = [game('A', 'B', 1, '2027-04-30'), game('A', 'B', 1, '2027-09-07'), game('C', 'B', 1, '2027-05-01')];
   const out = race(ms);
-  ok(find(out, 'A') === undefined, 'games before May 1 and after Sep 6 do not exist to the season');
+  ok(find(out, 'A').points === 0 && find(out, 'A').games === 0, 'games before the start and after the end score nothing and count no season games');
   ok(find(out, 'C').points > 0, 'May 1 itself counts');
   ok(find(out, 'B').games === 1, 'and does not count games outside it');
 
@@ -153,10 +153,23 @@ section('the season window');
   const late = race([
     game('A', 'B', 1, '2027-09-01', {tournament_id: 9}), game('C', 'D', 1, '2027-09-02', {tournament_id: 9}),
     game('A', 'C', 1, '2027-09-10', {tournament_id: 9})], [cup]);
-  ok(!find(late, 'A') || find(late, 'A').points === 0, 'an event is dated by its last game: a final after the window is out');
+  ok(find(late, 'A').points === 0, 'an event is dated by its last game: a final after the window is out');
 
-  ok(R.raceActiveSeason(Date.parse('2027-04-30T12:00:00')) === R.RACE_PREVIEW, 'before May 1 2027 the table is the preview');
-  ok(R.raceLive(Date.parse('2027-05-01T12:00:00')), 'from May 1 2027 it is the real season');
+  ok(R.raceActiveSeason(Date.parse('2026-10-06T12:00:00')) === R.RACE_PREVIEW, 'before Oct 7 2026 the table is the preview');
+  ok(R.raceLive(Date.parse('2026-10-07T00:00:01')), 'from Oct 7 2026 it is the real season');
+  ok(R.RACE_SEASON.start === '2026-10-07' && R.RACE_SEASON.end === '2027-10-06', 'the season is a year, Oct 7 to Oct 6');
+}
+
+section('everyone starts on 0, records carry over');
+{
+  const ms = [game('A', 'B', 1, '2027-04-01'), game('B', 'A', 0.5, '2027-04-02'), game('C', 'A', 1, '2027-04-03')];
+  const out = race(ms);
+  ok(out.rows.length === 3 && out.rows.every(r => r.points === 0 && r.games === 0),
+     'every player who has ever played is listed, on 0, before they play this season');
+  const a = find(out, 'A');
+  ok(a.career.w === 1 && a.career.l === 1 && a.career.d === 1, 'with their all-time W-L-D', JSON.stringify(a.career));
+  const later = race(ms.concat([game('A', 'C', 1, '2027-05-02')]));
+  ok(find(later, 'A').w === 1 && find(later, 'A').career.w === 2, 'season record and all-time record are kept apart');
 }
 
 section('the card: who you have played');
