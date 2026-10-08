@@ -194,5 +194,32 @@ section('the card: who you have played');
   ok(find(out, 'C').card === 3, 'C has played everyone');
 }
 
+section('only the best RACE_RR_BEST round robins count');
+{
+  /* ten 4-player round robins, all won by A, runner-up B; then a cup B wins */
+  const ms = [], ts = [];
+  for(let i = 0; i < 10; i++){
+    const id = 500 + i, d = '2027-05-' + String(3 + i * 2).padStart(2, '0');
+    ts.push({id, name: 'RR ' + i, format: 'roundrobin', status: 'completed', champion: 'A'});
+    ms.push(game('A', 'B', 1, d, {tournament_id: id}), game('A', 'C', 1, d, {tournament_id: id}),
+            game('A', 'D', 1, d, {tournament_id: id}), game('B', 'C', 1, d, {tournament_id: id}),
+            game('B', 'D', 1, d, {tournament_id: id}), game('C', 'D', 1, d, {tournament_id: id}));
+  }
+  const out = race(ms, ts);
+  const A = find(out, 'A'), B = find(out, 'B');
+  ok(R.RACE_RR_BEST === 8, 'the cap is 8');
+  ok(A.eventPts === 8 * 250, 'ten titles, eight count', A.eventPts);
+  ok(A.log.filter(x => x.dropped).length === 2, 'the other two stay in the log, marked dropped');
+  ok(B.eventPts === 8 * 165, 'the cap applies to runner-up results too', B.eventPts);
+  ok(A.points === A.ladderPts + A.eventPts, 'points add up after the cap');
+
+  const cup = {id: 900, name: 'FF Cup', format: 'robin2', status: 'completed', champion: 'B'};
+  const cg = [game('B', 'A', 1, '2027-08-20', {tournament_id: 900, round: 'final'}),
+              game('C', 'D', 1, '2027-08-18', {tournament_id: 900})];
+  const out2 = race(ms.concat(cg), ts.concat([cup]));
+  ok(find(out2, 'B').eventPts === 8 * 165 + 500 && find(out2, 'A').eventPts === 8 * 250 + 330,
+     'the cup sits outside the cap', find(out2, 'B').eventPts + ' / ' + find(out2, 'A').eventPts);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
