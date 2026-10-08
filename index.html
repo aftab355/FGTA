@@ -9917,12 +9917,12 @@
   <!-- TS RACE — the points table (see RACE-ENGINE). The headline ranking
        from 2026-10-07; an unofficial replay before it. renderRace() fills it. -->
   <section id="raceSec">
-    <div class="sec-label">The TS Race <span class="race-state" id="raceTag"></span></div>
+    <div class="sec-label">FGTA Leaderboard <span class="race-state" id="raceTag"></span></div>
     <div class="race-card">
       <header class="race-head">
         <div>
           <div class="race-kicker" id="raceKicker">Season</div>
-          <h2 class="race-title" id="raceTitle">TS Race</h2>
+          <h2 class="race-title" id="raceTitle">FGTA Leaderboard</h2>
           <p class="race-sub" id="raceLine"></p>
         </div>
         <button type="button" class="race-rules-btn" id="raceRulesBtn" onclick="toggleRaceRules()" aria-expanded="false" aria-controls="raceRules">How points work <span class="race-chev" aria-hidden="true"></span></button>
@@ -22408,10 +22408,10 @@ function render(){
       }).join('');
     }
     if(bcastMeta && raceOn && raceRows.length && !raceRows[0].points){
-      bcastMeta.textContent = `TS Race ${RACE_SEASON.name} is open · everyone on 0 · first win leads`;
+      bcastMeta.textContent = `The ${RACE_SEASON.name.replace(/^FGTA /,"")} FGTA leaderboard is open · everyone on 0 · first win leads`;
     } else if(bcastMeta && raceOn && raceRows.length){
       const gap = raceRows.length>1 ? raceRows[0].points-raceRows[1].points : 0;
-      bcastMeta.textContent = `${raceRows[0].name} leads the TS Race · +${gap} pts clear`;
+      bcastMeta.textContent = `${raceRows[0].name} leads the FGTA leaderboard · +${gap} pts clear`;
     } else if(bcastMeta){
       const leader = standings[0];
       const gap = standings.length>1 ? Math.round(standings[0].rating-standings[1].rating) : 0;

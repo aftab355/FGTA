@@ -30,7 +30,7 @@ The app previously ran a dynamic, per-player K (bigger for newcomers, smaller fo
 
 #### The ducking tax — sitting on a rating costs something
 
-> **Switched off from 2026-10-07, before its first charge.** The TS Race (below) is the headline ranking now; losing costs nothing in it, so there is nothing to sit on, and Elo is only the strength reading underneath. `TAX_ENABLED` is `false`, so no check has ever charged anybody. The mechanism below is kept, and still tested, in case it is wanted back.
+> **Switched off from 2026-10-07, before its first charge.** The FGTA leaderboard (below) is the headline ranking now; losing costs nothing in it, so there is nothing to sit on, and Elo is only the strength reading underneath. `TAX_ENABLED` is `false`, so no check has ever charged anybody. The mechanism below is kept, and still tested, in case it is wanted back.
 
 A rating only moves when you play, so near the top the safest thing to do with one is nothing. With five players and a couple of dozen games a season, a handful of wins could hold a podium place for months against people playing twice as often.
 
@@ -68,9 +68,9 @@ With that, a breaker decider is counted as **the one decisive game it stood in f
 
 **What the point tracker still cannot do.** Live point-by-point scoring is hard-wired to the classic format — games to 6, win by 2, tiebreak to 7 at 6-6, in all three sets — so a match whose decider is a 10-point breaker can be *filed* (type the score into the submit form, as above) but not *reffed* through the tracker. There is no format picker. Adding one is not a display change: the serve rotates every two points inside a breaker rather than every game, the ends change every six, and the overlay, the scoreboard export and the reconstruction all read that rotation.
 
-#### The TS Race — the headline ranking from October 2026
+#### The FGTA leaderboard — the headline ranking from October 2026
 
-From **Oct 7, 2026** the headline ranking is a points race, not the Elo rating. A season runs a year — the first is **FGTA 2026–27, Oct 7, 2026 to Oct 6, 2027** — and **everybody starts it on 0 points**. Records are not reset: every row shows the season's W-L-D with the player's all-time record under it — both counting every game **except the FF Cup**, whose games are paid for by its title rather than counted as wins and losses — and every player who has ever played is on the table from day one, unranked (–) until they score. Elo answers "who is best?" with a number a favourite can only lose by playing down — a 600 risks 24 points to win 8 against the bottom of the table, which is exactly why people stopped playing down. The race answers "who had the best season?", and nothing in it can cost anybody anything. It lives in the `RACE-ENGINE` region of `index.html`, next to the Fall Exhibition, and like it stores nothing: every number is a replay of the match log.
+From **Oct 7, 2026** the headline ranking is the **FGTA leaderboard**, a points race, not the Elo rating. A season runs a year — the first is **FGTA 2026–27, Oct 7, 2026 to Oct 6, 2027** — and **everybody starts it on 0 points**. Records are not reset: every row shows the season's W-L-D with the player's all-time record under it — both counting every game **except the FF Cup**, whose games are paid for by its title rather than counted as wins and losses — and every player who has ever played is on the table from day one, unranked (–) until they score. Elo answers "who is best?" with a number a favourite can only lose by playing down — a 600 risks 24 points to win 8 against the bottom of the table, which is exactly why people stopped playing down. The race answers "who had the best season?", and nothing in it can cost anybody anything. It lives in the `RACE-ENGINE` region of `index.html`, next to the Fall Exhibition, and like it stores nothing: every number is a replay of the match log.
 
 - **A 1v1 win** scores `30 × opponent strength × margin`, rounded — usually 35–45. Strength runs ×0.6 (the weakest player) to ×1.6 (the strongest) and is read off a **hidden Elo over every game, cup games included**, the moment before the match; it ranks nothing. Margin is the same game-differential dominance the ladder's margin multiplier reads (a breaker decider is one game), ×1.0 for a scrape to ×1.6 for a double bagel, without the ladder's favourite damping — the strength factor already makes beating a weak player cheap.
 - **A loss scores 0**, never less. A draw is half a plain win.
@@ -650,7 +650,7 @@ No custom illustrations or photography — avatars are generated from initials (
 - docs/youtube-live.md — how to set streaming up, once for the league and once per match, plus how the video is kept.
 - docs/streams.sql — optional `stream_log` table: the league's own record of every broadcast, so old matches stay listed after YouTube's listing moves on.
 - docs/robin-plus.sql — the one column the Robin+ tournament format needs (`tournaments.bracket`), plus what happens if you skip it.
-- docs/race.sql — the optional `tournaments.tier` column, for an event whose format gives the wrong TS Race tier.
+- docs/race.sql — the optional `tournaments.tier` column, for an event whose format gives the wrong tier.
 - docs/tournament-stats.sql — the optional `tournaments.counts_stats` column: how to keep one event out of the stats as well as out of the ladder, and why you almost never want to.
 - docs/rally-reel.md — cutting a match down to just the rallies: how the taps become an edit, how the sync works, and what the three exports are for.
 - docs/auto-cut.md — the same cut for footage nobody reffed: how the ball-strike detection works, what it measured, and the one thing it can't do.
