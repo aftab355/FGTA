@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<!-- Skin: "fall" (the Fall Exhibition). See "FALL EXHIBITION SKIN" and
-     "FF CUP" in the stylesheet; both are scoped to :root[data-skin], so
+<!-- Skin: "court" (Match Day). See "COURT SKIN", "FALL EXHIBITION SKIN"
+     and "FF CUP" in the stylesheet; all are scoped to :root[data-skin], so
      this one attribute is the whole switch. Keep this comment short —
      the charset meta below must land in the first 1024 bytes. -->
-<html lang="en" data-skin="fall">
+<html lang="en" data-skin="court">
 <head>
 <!-- charset first: the encoding declaration has to land inside the first
      1024 bytes of the document, and anything placed above it (there used to
@@ -13,10 +13,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- matches --chrome, the colour of the fixed top/bottom bars, so the phone's
      own status bar reads as the top of the same frame rather than a black band
-     above it. Follows the palette: change --chrome, change this. #3A2010 is the
-     fall skin's roasted brown; the championship theme's own chrome is #0B3B26,
-     which is what this should go back to when data-skin comes off <html>. -->
-<meta name="theme-color" content="#3A2010">
+     above it. Follows the palette: change --chrome, change this. #0C3324 is
+     the court skin's green (Match Day); the fall skin's was #3A2010 and the
+     championship theme's own (no data-skin) is #0B3B26. -->
+<meta name="theme-color" content="#0C3324">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -9442,6 +9442,179 @@
     :root[data-skin="fall"] .fall-leaves i:nth-child(2n){display:none}
   }
 
+
+  /* ================================================================
+     COURT SKIN — "MATCH DAY"
+
+     The look the FGTA leaderboard set, carried across the whole site.
+     The leaderboard is a dark broadcast scoreboard; the pages under it
+     are the court around it: light, court-side paper so a table you
+     read for ten minutes stays easy on the eyes, framed by the same
+     deep court green, with ball yellow for whatever is on, and a
+     condensed sports face for every heading, tab and button.
+
+     What keeps it from going flat is that no two sections are dressed
+     the same: the section marks and the rule across the top of each
+     card walk a five-colour rotation — court green, ball, clay, sky,
+     violet — so a long page reads as a run of different panels, not
+     one beige card repeated. Players keep their own colours everywhere
+     (CHART_SERIES.court), the same ones the leaderboard uses.
+
+     Same contract as the fall and cup skins: every rule is scoped to
+     :root[data-skin="court"], so the look comes off with the attribute.
+     The Admin Studio's saved colours (site_config.theme) outrank any
+     skin — "Reset all tokens" in the Studio clears them.
+
+     Text tokens are measured against the darkest paper they land on
+     (--panel-2 #E4ECDE): ink 15.1, muted 8.9, dim 5.3, accent 5.0,
+     danger 5.3, gold 4.8.
+     ================================================================ */
+  :root[data-skin="court"],
+  :root[data-skin="court"] body,
+  :root[data-skin="court"] body[data-heat],
+  :root[data-skin="court"] body[data-wx]{
+    color-scheme:light;
+    --bg:#EEF3EA; --panel:#FFFFFF; --panel-2:#E4ECDE;
+    --line:rgba(12,51,36,.17); --line-soft:rgba(12,51,36,.085);
+    --ink:#0B2117; --muted:#2C4739; --dim:#4A6355;
+    --accent:#08744A; --accent-dim:#DCEFE3; --accent-glow:rgba(8,116,74,.22);
+    --on-accent:#FFFFFF;
+    --chrome:#0C3324;
+    --on-chrome:#F4F7EE; --on-chrome-dim:rgba(244,247,238,.66);
+    --chrome-line:rgba(244,247,238,.14);
+    --ball:#566500; --ball-glow:rgba(170,200,20,.30);
+    --court:#0B6E44; --court-dim:#DCEFE3;
+    --gold:#7F5C00; --silver:#56636A; --bronze:#8F4C1A;
+    --medal-gold:#F2C849; --medal-silver:#D6DCDF; --medal-bronze:#D7955A;
+    --on-medal:#2B1D00;
+    --danger:#B4232A; --pending:#7F5C00; --win:#08744A;
+    --wx-ink:60,92,76;
+    --shadow:0 18px 38px -26px rgba(12,51,36,.5);
+    --r-sm:6px; --r-md:10px; --r-lg:14px;
+    --highlight-rim:#FFFFFF;
+    --highlight-ambient:#EAF7B8;
+    --shadow-tinted:#93AA9C;
+    --surface-sunken:#E6EDE0;
+    --accent-pop:#E2662F;
+    --accent-split-a:#6D3FD1;
+    --accent-split-b:#0A84B8;
+    --surface-bevel-light:#FFFFFF;
+    --surface-bevel-shadow:#C9D6C4;
+    --glow-mesh:#D8F04A;
+    --font-display:'Barlow Condensed','Inter',sans-serif;
+    /* the five-colour walk; fills only, never type */
+    --cs-1:#0E8A55; --cs-2:#C6DD2C; --cs-3:#E2662F; --cs-4:#1E8FD0; --cs-5:#7A4CE0;
+    --cs-ball:#D8F04A;
+  }
+  :root[data-skin="court"]{background:#EEF3EA}
+  :root[data-skin="court"] ::selection{background:var(--cs-ball);color:#0B2117}
+
+  /* -- the ground: court-side light, a faint glow of ball yellow ---- */
+  :root[data-skin="court"] body{
+    background:
+      radial-gradient(70vmax 40vmax at 100% -10%, rgba(216,240,74,.16), transparent 60%),
+      radial-gradient(60vmax 40vmax at -10% 110%, rgba(14,138,85,.10), transparent 60%)!important;
+    background-attachment:fixed!important;
+  }
+
+  /* -- the frame ------------------------------------------------- */
+  :root[data-skin="court"] .tb-title{font-weight:800;font-style:italic;font-size:26px;letter-spacing:.04em}
+  :root[data-skin="court"] .tb-tab{font-family:var(--font-display);font-weight:700;font-size:15.5px;letter-spacing:.06em;text-transform:uppercase}
+  :root[data-skin="court"] .tb-tab.on{background:var(--cs-ball);color:#0B2117;box-shadow:none!important}
+  :root[data-skin="court"] .tb-tab.on::after{display:none}
+  :root[data-skin="court"] .bb-lbl{font-family:var(--font-display);font-size:11.5px;font-weight:700;letter-spacing:.08em}
+  :root[data-skin="court"] .bb-tab.on{border-top-color:var(--cs-ball);color:var(--cs-ball);background:rgba(216,240,74,.08)}
+  :root[data-skin="court"] .tb-ico{border-radius:10px}
+
+  /* -- section labels: a heading, not a whisper ------------------- */
+  :root[data-skin="court"] .sec-label{
+    font-family:var(--font-display);font-style:italic;font-weight:800;font-size:23px;
+    letter-spacing:.015em;color:var(--ink);gap:12px;margin-bottom:16px;line-height:1.05;
+  }
+  @media (max-width:560px){ :root[data-skin="court"] .sec-label{font-size:21px;gap:10px} }
+  :root[data-skin="court"] .sec-label::before{
+    width:9px;height:20px;border-radius:2px;margin-right:0;top:0;transform:skewX(-14deg);
+    background:var(--sl,var(--cs-1));
+  }
+  :root[data-skin="court"] .sec-label::after{height:2px;background:var(--line-soft)!important}
+  :root[data-skin="court"] section:nth-of-type(5n+1){--sl:var(--cs-1);--pr:linear-gradient(90deg,var(--cs-1),var(--cs-2))}
+  :root[data-skin="court"] section:nth-of-type(5n+2){--sl:var(--cs-3);--pr:linear-gradient(90deg,var(--cs-3),#F2B33D)}
+  :root[data-skin="court"] section:nth-of-type(5n+3){--sl:var(--cs-4);--pr:linear-gradient(90deg,var(--cs-4),#4CD3C2)}
+  :root[data-skin="court"] section:nth-of-type(5n+4){--sl:var(--cs-5);--pr:linear-gradient(90deg,var(--cs-5),#E05BAA)}
+  :root[data-skin="court"] section:nth-of-type(5n+5){--sl:#9FB51C;--pr:linear-gradient(90deg,var(--cs-2),var(--cs-1))}
+
+  /* the little tags that ride on a label: solid, bright, condensed */
+  :root[data-skin="court"] .tag,
+  :root[data-skin="court"] .pred-tag{
+    font-family:var(--font-display);font-style:normal;font-weight:800;font-size:12.5px;letter-spacing:.1em;
+    border:none;border-radius:4px;padding:3px 8px;background:var(--cs-ball);color:#0B2117;
+  }
+  :root[data-skin="court"] .count-pill{
+    font-family:var(--font-display);font-style:normal;font-weight:800;font-size:14px;
+    background:var(--chrome);color:var(--cs-ball);border:none;padding:2px 10px;
+  }
+  :root[data-skin="court"] .see-all{
+    font-family:var(--font-display);font-style:normal;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;
+  }
+
+  /* -- cards: white, lifted, a coloured rule that changes by section - */
+  :root[data-skin="court"] .panel{
+    border:1px solid var(--line-soft)!important;border-radius:var(--r-lg);
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, var(--shadow)!important;
+  }
+  :root[data-skin="court"] .panel::before{height:4px;background:var(--pr,linear-gradient(90deg,var(--cs-1),var(--cs-2)))}
+  :root[data-skin="court"] .panel:hover{transform:translateY(-2px)}
+  :root[data-skin="court"] .board{border-radius:var(--r-lg);border-color:var(--line-soft)}
+  :root[data-skin="court"] .pend{border-radius:12px}
+
+  /* -- prose is prose: the monospace stays on numbers and labels ---- */
+  :root[data-skin="court"] .pred-hint,
+  :root[data-skin="court"] .hint,
+  :root[data-skin="court"] .chart-hint,
+  :root[data-skin="court"] .cn-meta,
+  :root[data-skin="court"] .ct-fact,
+  :root[data-skin="court"] .ct-note,
+  :root[data-skin="court"] .pw-legend,
+  :root[data-skin="court"] .pt-target-note,
+  :root[data-skin="court"] .pool-line{
+    font-family:var(--font-body);letter-spacing:0;font-size:13.5px;line-height:1.55;
+  }
+
+  /* -- controls ------------------------------------------------------ */
+  :root[data-skin="court"] .subtab{
+    font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.07em;text-transform:uppercase;
+    border-radius:8px;background:var(--panel);border:1.5px solid var(--line);color:var(--muted);
+  }
+  :root[data-skin="court"] .subtab.on{
+    background:var(--chrome)!important;color:var(--cs-ball)!important;border-color:var(--chrome)!important;
+    box-shadow:0 8px 18px -10px rgba(12,51,36,.6)!important;
+  }
+  :root[data-skin="court"] .btn{
+    font-family:var(--font-display);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;
+    overflow-wrap:normal;word-break:normal;hyphens:none;
+    border-radius:12px;padding:13px 15px;
+    background:linear-gradient(180deg,#0C8A57,#08744A);
+  }
+  :root[data-skin="court"] .btn.ghost{background:var(--panel);color:var(--ink);border:1.5px solid var(--line)}
+  :root[data-skin="court"] .mini{
+    font-family:var(--font-display);font-weight:700;font-size:14.5px;letter-spacing:.06em;text-transform:uppercase;
+    border-radius:8px;
+  }
+  :root[data-skin="court"] .mini.yes{background:var(--accent);color:#fff}
+  :root[data-skin="court"] input:not([type="checkbox"]):not([type="radio"]),
+  :root[data-skin="court"] select,
+  :root[data-skin="court"] textarea{border-radius:10px;border-width:1.5px}
+  :root[data-skin="court"] input:focus,
+  :root[data-skin="court"] select:focus,
+  :root[data-skin="court"] textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(216,240,74,.45)!important}
+
+  /* -- the people: every avatar a solid disc in the player's colour -- */
+  :root[data-skin="court"] .avi:not(.avi-blank){
+    background:linear-gradient(150deg,color-mix(in srgb,var(--ac) 72%,#fff),var(--ac))!important;
+    color:#fff!important;border:none!important;font-family:var(--font-display);font-weight:800;letter-spacing:.03em;
+  }
+  :root[data-skin="court"] .race-av .avi{background:linear-gradient(150deg,var(--pc-hi),var(--pc))!important}
+  :root[data-skin="court"] .prof-id h1{font-style:italic;font-weight:800;text-transform:uppercase;font-size:42px;letter-spacing:.01em;line-height:1}
 </style>
 
 <!-- ===== ADMIN STUDIO — PRE-PAINT BOOTSTRAP =====================
@@ -23757,7 +23930,15 @@ const CHART_SERIES = {
      three. It walks the wheel (rust, ochre, olive, pine, lake, indigo,
      aster, wine) rather than staying inside the season's warms, since eight
      shades of orange are eight series nobody can tell apart. */
-  fall:  ["#A33A12","#7D5714","#4C6B1B","#1D5138","#1F6070","#3C4A8C","#7A4A6E","#94202B"]
+  fall:  ["#A33A12","#7D5714","#4C6B1B","#1D5138","#1F6070","#3C4A8C","#7A4A6E","#94202B"],
+  /* Match Day: full colour — avatar discs and chart lines on white, not
+     type, on a skin built to look like a broadcast. NINE, not eight:
+     playerColor() hashes a name modulo the set's length, and with eight
+     Aftab and Aakif land on the same slot (they do for 6, 10 and 12 too);
+     with nine all five of the current roster get their own colour. Each
+     clears 4.5:1 against white for the white initials laid on it.
+     Slot by player today: 0 Faiz, 1 Aakif, 2 M4, 6 Aftab, 8 Kabir. */
+  court: ["#1D63C9","#C2410C","#B5195F","#0A7480","#8A5A00","#B42318","#6B38CF","#4D7C0F","#08744A"]
 };
 const CHART_COLORS = CHART_SERIES[document.documentElement.dataset.skin]
   || ["#2A6E4F","#B3541E","#1F5FA8","#A32A5A","#6B4FA8","#0E7070","#8A6A1E","#A03A2F"];
@@ -23772,7 +23953,7 @@ function drawChart(standings){
     legend.innerHTML = ''; return;
   }
   const colorOf = {};
-  standings.forEach((p,i)=>colorOf[p.name]=CHART_COLORS[i%CHART_COLORS.length]);
+  standings.forEach(p=>colorOf[p.name]=playerColor(p.name));   // the same colour as their avatar
 
   // legend chips
   legend.innerHTML = players.map(p=>{
@@ -43553,6 +43734,7 @@ const SITE = (function(){
         <select class="sp-in" data-act="skin">
           <option value="null" ${cfg().skin == null ? "selected" : ""}>Leave as coded</option>
           <option value="" ${cfg().skin === "" ? "selected" : ""}>Off — standard theme</option>
+          <option value="court" ${cfg().skin === "court" ? "selected" : ""}>Match Day (court)</option>
           <option value="fall" ${cfg().skin === "fall" ? "selected" : ""}>Fall Exhibition</option>
           <option value="ffcup" ${cfg().skin === "ffcup" ? "selected" : ""}>FF Cup</option>
         </select>
