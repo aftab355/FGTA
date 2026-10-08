@@ -35,7 +35,7 @@
      label, and the single biggest reason the page reads as a championship
      rather than an app. JetBrains Mono stays on the numbers, where tabular
      figures matter more than the voice of the typeface. -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
 <!-- The supabase-js loader moved down to just above the app's boot code
      near the end of the body — it used to sit here in the head, unused
      until then, and being a synchronous external script it blocked the
@@ -1173,174 +1173,213 @@
   .sim-meta{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin-bottom:10px}
   .sim-table{width:100%;border-collapse:collapse}
   /* TS Race: the 1v1/Events split is detail; on a phone the total, record and card are the table */
-  /* ===== THE TS RACE =================================================
-     The headline table, set like the standings page of a printed
-     programme: a serif masthead, the season as a measured rule, then
-     one ruled line per player — rank, name, record, points — with the
-     detail (every point and where it came from) folded underneath. Only
-     tokens, so the fall skin and any Studio palette carry it. */
-  .race-state{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.14em;
-    color:var(--accent);display:inline-flex;align-items:center;gap:6px}
-  .race-state::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;
-    box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
-  .race-state.live::before{animation:race-pulse 2.4s ease-in-out infinite}
-  .race-state.preview,.race-state.final{color:var(--dim)}
-  @keyframes race-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,currentColor 0%,transparent)}}
-  @media (prefers-reduced-motion:reduce){.race-state.live::before{animation:none}}
+  /* ===== THE FGTA LEADERBOARD ========================================
+     The first thing on the site, so it is built like a broadcast
+     scoreboard rather than another card on the page: a deep court-green
+     slab with the court's own lines drawn faintly into it, ball yellow
+     for whatever is live, every player in their own colour, and a
+     condensed sports face for names and numbers. The slab carries its
+     own palette (--lb-*) rather than the skin's tokens: it is dark on
+     every skin, the way a scoreboard is dark in any weather. */
+  #raceSec{margin-top:0}
+  .race-card{
+    --lb-bg:#0C3324; --lb-bg2:#072318; --lb-ink:#F4F7EE; --lb-dim:rgba(244,247,238,.62);
+    --lb-faint:rgba(244,247,238,.38); --lb-line:rgba(244,247,238,.12); --lb-slab:rgba(255,255,255,.045);
+    --lb-ball:#D8F04A; --lb-clay:#E8743B; --lb-gold:#F2C849; --lb-silver:#D6DCDF; --lb-bronze:#D7955A;
+    --lb-cond:'Barlow Condensed','Inter',sans-serif;
+    position:relative;isolation:isolate;overflow:hidden;color:var(--lb-ink);
+    border-radius:16px;
+    background:
+      radial-gradient(120% 70% at 100% 0%, rgba(216,240,74,.13), transparent 55%),
+      radial-gradient(90% 60% at 0% 100%, rgba(232,116,59,.12), transparent 60%),
+      linear-gradient(165deg,var(--lb-bg),var(--lb-bg2));
+    box-shadow:0 24px 50px -28px rgba(7,35,24,.75), inset 0 0 0 1px rgba(255,255,255,.06);
+  }
+  /* the court, half-size, top-right: baseline, service line, centre line */
+  .race-card::before{content:'';position:absolute;z-index:-1;top:-40px;right:-60px;width:420px;height:300px;
+    border:2px solid rgba(255,255,255,.07);border-radius:2px;pointer-events:none;
+    background:
+      linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)) 50% 0/2px 62% no-repeat,
+      linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)) 0 62%/100% 2px no-repeat,
+      linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)) 14% 0/2px 100% no-repeat,
+      linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)) 86% 0/2px 100% no-repeat;
+    transform:rotate(-8deg)}
 
-  .race-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
-    box-shadow:var(--shadow);overflow:hidden}
-  .race-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
-    padding:26px 28px 0}
-  .race-kicker{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
-  .race-title{font-family:var(--font-display);font-weight:600;font-size:30px;line-height:1.1;
-    letter-spacing:-.005em;margin:6px 0 0;color:var(--ink)}
-  .race-sub{margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--muted);max-width:46ch}
+  .race-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:24px 26px 0}
+  .race-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .race-state{display:inline-flex;align-items:center;gap:7px;font:800 12px/1 var(--lb-cond);letter-spacing:.14em;
+    text-transform:uppercase;color:#14240A;background:var(--lb-ball);padding:5px 10px 5px 8px;border-radius:4px}
+  .race-state::before{content:'';width:7px;height:7px;border-radius:50%;background:#C4271B}
+  .race-state.live::before{animation:race-pulse 1.6s ease-in-out infinite}
+  .race-state.preview,.race-state.final{background:rgba(255,255,255,.14);color:var(--lb-ink)}
+  .race-state.preview::before,.race-state.final::before{background:var(--lb-dim)}
+  @keyframes race-pulse{50%{opacity:.25}}
+  @media (prefers-reduced-motion:reduce){.race-state.live::before{animation:none}}
+  .race-kicker{font:700 13px/1 var(--lb-cond);letter-spacing:.16em;text-transform:uppercase;color:var(--lb-dim)}
+  .race-title{margin:14px 0 0;font:italic 800 54px/.88 var(--lb-cond);letter-spacing:-.01em;text-transform:uppercase}
+  .race-title span{display:block;color:var(--lb-ball)}
+  .race-sub{margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--lb-dim);max-width:44ch}
+  .race-sub b{color:var(--lb-ink);font-weight:600}
   .race-rules-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
-    font:500 13px/1 var(--font-body);color:var(--ink);background:var(--panel);
-    border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;
-    transition:border-color .15s ease,background .15s ease}
-  .race-rules-btn:hover{border-color:var(--accent);color:var(--accent)}
-  .race-rules-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  .race-chev{width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+    font:700 14px/1 var(--lb-cond);letter-spacing:.08em;text-transform:uppercase;color:var(--lb-ink);
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:6px;padding:10px 13px;
+    transition:background .15s ease,border-color .15s ease,color .15s ease}
+  .race-rules-btn:hover{background:rgba(216,240,74,.12);border-color:var(--lb-ball);color:var(--lb-ball)}
+  .race-rules-btn:focus-visible{outline:2px solid var(--lb-ball);outline-offset:2px}
+  .race-chev{width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;
     transform:translateY(-2px) rotate(45deg);transition:transform .2s ease}
   .race-rules-btn[aria-expanded="true"] .race-chev{transform:translateY(1px) rotate(-135deg)}
 
-  /* the season as a ruler: where we are between the two dates */
-  .race-clock{padding:20px 28px 22px}
-  .race-track{position:relative;height:3px;border-radius:3px;background:var(--line-soft)}
-  .race-track i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}
-  .race-track b{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;
-    background:var(--panel);border:2px solid var(--accent)}
-  .race-ends{display:flex;justify-content:space-between;gap:12px;margin-top:10px;
-    font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
-  .race-ends strong{color:var(--ink);font-weight:600}
+  /* the season as a rally: ball-yellow fill, a ball for today */
+  .race-clock{padding:22px 26px 20px}
+  .race-track{position:relative;height:6px;border-radius:6px;background:rgba(255,255,255,.1)}
+  .race-track i{position:absolute;inset:0 auto 0 0;border-radius:6px;min-width:6px;
+    background:linear-gradient(90deg,rgba(216,240,74,.35),var(--lb-ball))}
+  .race-track b{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%,#F6FF9C 0 14%,#D8F04A 40%,#9DB51C 100%);
+    box-shadow:0 0 0 3px rgba(216,240,74,.22),0 3px 8px rgba(0,0,0,.4)}
+  .race-track b::after{content:'';position:absolute;inset:2px;border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.75);border-color:rgba(255,255,255,.75) transparent rgba(255,255,255,.75) transparent;transform:rotate(30deg)}
+  .race-ends{display:flex;justify-content:space-between;gap:12px;margin-top:12px;
+    font:600 13px/1 var(--lb-cond);letter-spacing:.1em;text-transform:uppercase;color:var(--lb-faint)}
+  .race-ends strong{color:var(--lb-ink);font-weight:800}
 
-  /* ---- the rules, folded ---- */
-  .race-rules{border-top:1px solid var(--line-soft);background:var(--panel-2);padding:24px 28px 26px}
+  /* ---- the rules ---- */
+  .race-rules{padding:4px 26px 24px}
   .race-rules[hidden]{display:none}
-  .rr-h{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
-  .rr-h:not(:first-child){margin-top:24px}
-  .rr-eq{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
-  .rr-term{flex:1 1 120px;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:12px 14px}
-  .rr-term b{display:block;font-family:var(--font-display);font-size:22px;font-weight:600;color:var(--ink);
-    font-variant-numeric:lining-nums tabular-nums}
-  .rr-term span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
-  .rr-x{align-self:center;color:var(--dim);font-size:15px}
+  .rr-h{font:800 14px/1 var(--lb-cond);letter-spacing:.16em;text-transform:uppercase;color:var(--lb-ball);margin:18px 0 12px}
+  .rr-eq{display:flex;align-items:stretch;gap:8px}
+  .rr-term{flex:1 1 0;background:var(--lb-slab);border-radius:10px;padding:13px 14px;border-top:3px solid var(--c,var(--lb-ball))}
+  .rr-term b{display:block;font:italic 800 30px/1 var(--lb-cond);color:var(--lb-ink)}
+  .rr-term span{display:block;font-size:12.5px;color:var(--lb-dim);margin-top:5px;line-height:1.35}
+  .rr-x{align-self:center;font:800 20px/1 var(--lb-cond);color:var(--lb-faint)}
   .rr-notes{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:7px}
-  .rr-notes li{position:relative;padding-left:16px;font-size:13.5px;line-height:1.45;color:var(--muted)}
-  .rr-notes li::before{content:'';position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--line)}
-  .rr-notes strong{color:var(--ink);font-weight:600}
+  .rr-notes li{position:relative;padding-left:16px;font-size:13.5px;line-height:1.45;color:var(--lb-dim)}
+  .rr-notes li::before{content:'';position:absolute;left:1px;top:.5em;width:6px;height:6px;border-radius:50%;background:var(--lb-ball)}
+  .rr-notes strong{color:var(--lb-ink);font-weight:600}
   .rr-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .rr-tier{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:14px 16px 13px;position:relative}
-  .rr-tier.major{border-color:color-mix(in srgb,var(--medal-gold) 70%,var(--line));
-    background:linear-gradient(170deg,color-mix(in srgb,var(--medal-gold) 12%,var(--panel)),var(--panel) 60%)}
-  .rr-tier-l{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--dim)}
-  .rr-tier.major .rr-tier-l{color:var(--gold)}
-  .rr-tier-w{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--ink);margin-top:4px}
-  .rr-tier-n{display:flex;align-items:baseline;gap:6px;margin-top:10px;font-variant-numeric:lining-nums tabular-nums}
-  .rr-tier-n b{font-family:var(--font-display);font-size:28px;font-weight:600;line-height:1;color:var(--ink)}
-  .rr-tier-n span{font-size:12px;color:var(--dim)}
-  .rr-tier-r{font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+  .rr-tier{border-radius:12px;padding:14px 16px;color:#fff;position:relative;overflow:hidden;
+    background:linear-gradient(150deg,#2F8F5B,#1B6B40)}
+  .rr-tier.t500{background:linear-gradient(150deg,#EC7E45,#C2501F)}
+  .rr-tier.major{color:#2B1D00;background:linear-gradient(150deg,#FBE08A,#E9B730 55%,#C8901A)}
+  .rr-tier-l{font:800 13px/1 var(--lb-cond);letter-spacing:.14em;opacity:.85}
+  .rr-tier-w{font:700 17px/1.1 var(--lb-cond);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+  .rr-tier-n{display:flex;align-items:baseline;gap:6px;margin-top:12px}
+  .rr-tier-n b{font:italic 800 40px/1 var(--lb-cond)}
+  .rr-tier-n span{font:700 13px/1 var(--lb-cond);letter-spacing:.1em;text-transform:uppercase;opacity:.8}
+  .rr-tier-r{font-size:12.5px;margin-top:4px;opacity:.85}
 
-  /* ---- the table ---- */
-  .race-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-soft)}
-  .race-row{border-bottom:1px solid var(--line-soft);position:relative}
-  .race-row:last-child{border-bottom:none}
-  .race-line{display:grid;grid-template-columns:34px 40px minmax(0,1fr) auto 92px;align-items:center;gap:14px;
-    padding:15px 28px;cursor:pointer;transition:background .15s ease}
-  .race-line:hover{background:color-mix(in srgb,var(--panel-2) 70%,transparent)}
-  .race-line:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-  .race-row.lead .race-line{background:linear-gradient(90deg,color-mix(in srgb,var(--medal-gold) 13%,transparent),transparent 72%)}
-  .race-row.lead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--medal-gold)}
-  .race-rank{font-family:var(--font-display);font-size:22px;font-weight:600;color:var(--dim);text-align:center;
-    font-variant-numeric:lining-nums tabular-nums}
-  .race-rank.g1{color:var(--gold)} .race-rank.g2{color:var(--silver)} .race-rank.g3{color:var(--bronze)}
-  .race-rank.nil{font-size:18px;color:var(--line)}
+  /* ---- the table: one slab per player, in their colour ---- */
+  .race-list{list-style:none;margin:0;padding:0 14px 14px;display:grid;gap:6px}
+  .race-row{position:relative;border-radius:10px;background:var(--lb-slab);overflow:hidden;
+    --pc-hi:color-mix(in srgb,var(--pc) 55%,#fff)}
+  .race-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pc-hi)}
+  .race-line{display:grid;grid-template-columns:44px 46px minmax(0,1fr) auto 96px;align-items:center;gap:14px;
+    padding:13px 16px 13px 18px;cursor:pointer;transition:background .15s ease}
+  .race-line:hover{background:rgba(255,255,255,.04)}
+  .race-line:focus-visible{outline:2px solid var(--lb-ball);outline-offset:-2px;border-radius:10px}
+  .race-row.lead{background:linear-gradient(100deg,rgba(242,200,73,.22),rgba(242,200,73,.04) 60%);
+    box-shadow:inset 0 0 0 1px rgba(242,200,73,.35)}
+  .race-row.lead::before{background:var(--lb-gold)}
+  .race-rank{font:italic 800 34px/1 var(--lb-cond);color:var(--lb-faint);text-align:center}
+  .race-rank.g1{color:var(--lb-gold)} .race-rank.g2{color:var(--lb-silver)} .race-rank.g3{color:var(--lb-bronze)}
+  .race-rank.nil{color:rgba(255,255,255,.22)}
   .race-av{display:flex}
+  .race-av .avi{width:46px!important;height:46px!important;font:800 17px/1 var(--lb-cond)!important;letter-spacing:.04em;
+    color:#fff;border:none;background:linear-gradient(150deg,var(--pc-hi),var(--pc));box-shadow:0 0 0 2px rgba(255,255,255,.12)}
+  .race-row.lead .race-av .avi{box-shadow:0 0 0 2px var(--lb-gold)}
   .race-who{min-width:0}
-  .race-name{font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);text-decoration:none;
-    line-height:1.2;background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;
-    transition:background-size .2s ease,color .15s ease}
-  .race-name:hover{color:var(--accent);background-size:100% 1px}
-  .race-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;
-    font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
-  .race-meta strong{color:var(--muted);font-weight:600}
-  .race-meta .sep{width:3px;height:3px;border-radius:50%;background:var(--line)}
-  .race-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-  .race-chip{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--ink);
-    padding:3px 9px 3px 4px;border-radius:var(--r-pill);border:1px solid var(--line-soft);background:var(--panel)}
-  .race-chip i{width:15px;height:15px;border-radius:50%;flex-shrink:0;
-    background:radial-gradient(circle at 35% 30%,#fff8 0 18%,transparent 40%),var(--medal-gold);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-  .race-chip.silver i{background:radial-gradient(circle at 35% 30%,#fff9 0 18%,transparent 40%),var(--medal-silver)}
-  .race-chip em{font-style:normal;font-weight:500;color:var(--dim);font-variant-numeric:tabular-nums}
-  .race-chip.dropped{opacity:.55}
+  .race-name{font:800 24px/1 var(--lb-cond);letter-spacing:.02em;text-transform:uppercase;color:var(--lb-ink);text-decoration:none}
+  .race-name:hover{color:var(--lb-ball)}
+  .race-meta{display:flex;flex-wrap:wrap;align-items:center;gap:3px 12px;margin-top:6px;font-size:12.5px;color:var(--lb-dim);
+    font-variant-numeric:tabular-nums}
+  .race-meta strong{color:var(--lb-ink);font-weight:700}
+  .race-meta .sep{display:none}
+  .race-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .race-chip{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;font:700 13px/1 var(--lb-cond);letter-spacing:.05em;
+    text-transform:uppercase;color:#2B1D00;padding:4px 9px 4px 5px;border-radius:5px;background:linear-gradient(150deg,#FBE08A,#E9B730)}
+  .race-chip.silver{background:linear-gradient(150deg,#F1F4F5,#BFC6CA);color:#1E2427}
+  .race-chip i{width:14px;height:14px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.55);box-shadow:inset 0 0 0 2px rgba(0,0,0,.18)}
+  .race-chip em{font-style:normal;opacity:.75}
+  .race-chip.dropped{opacity:.45}
 
-  /* who they have played this season: one dot per rival */
-  .race-faced{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .race-faced{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
   .race-dots{display:flex;gap:4px}
-  .race-dots i{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--line)}
-  .race-dots i.on{background:var(--accent);border-color:var(--accent)}
-  .race-faced span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .race-dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.13)}
+  .race-dots i.on{background:var(--lb-ball);box-shadow:0 0 6px rgba(216,240,74,.5)}
+  .race-faced span{font:700 11px/1 var(--lb-cond);letter-spacing:.12em;text-transform:uppercase;color:var(--lb-faint)}
 
-  .race-pts{text-align:right;font-variant-numeric:lining-nums tabular-nums}
-  .race-pts b{display:block;font-family:var(--font-display);font-size:26px;font-weight:600;line-height:1;color:var(--ink)}
-  .race-pts b.zero{color:var(--dim)}
-  .race-pts span{display:block;font-size:11px;color:var(--dim);margin-top:4px;white-space:nowrap}
-  .race-share{position:absolute;left:0;bottom:-1px;height:2px;background:var(--accent);opacity:.55;
-    transition:width .5s cubic-bezier(.2,.7,.2,1)}
-  .race-row.lead .race-share{background:var(--medal-gold);opacity:1}
+  .race-pts{text-align:right;font-variant-numeric:tabular-nums}
+  .race-pts b{display:block;font:italic 800 40px/.9 var(--lb-cond);color:var(--lb-ink)}
+  .race-pts b.zero{color:rgba(255,255,255,.3)}
+  .race-pts span{display:block;font:700 12px/1 var(--lb-cond);letter-spacing:.12em;text-transform:uppercase;color:var(--lb-ball);margin-top:5px;white-space:nowrap}
+  .race-pts span.split{color:var(--lb-faint);letter-spacing:.06em}
+  .race-pts .race-unit{display:none}
+  .race-share{position:absolute;left:0;bottom:0;height:3px;background:var(--pc-hi);opacity:.8;
+    transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .race-row.lead .race-share{background:var(--lb-gold);opacity:1}
 
-  /* the fold: where every point came from, and what the next win is worth */
-  .race-more{display:none;padding:2px 28px 22px 116px}
+  /* the fold */
+  .race-more{display:none;padding:4px 18px 18px 18px;border-top:1px solid var(--lb-line);background:rgba(0,0,0,.14)}
   .race-row.open .race-more{display:block}
-  .race-row.open .race-line{background:color-mix(in srgb,var(--panel-2) 70%,transparent)}
-  .race-more-h{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px}
-  .race-log{list-style:none;margin:0;padding:0;border-left:1px solid var(--line-soft)}
-  .race-log li{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:12px;align-items:baseline;
-    padding:7px 0 7px 14px;font-size:13.5px;color:var(--ink)}
-  .race-log time{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
-  .race-log small{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
-  .race-log .p{font-family:var(--font-display);font-weight:600;font-size:15px;font-variant-numeric:lining-nums tabular-nums}
-  .race-log .dropped{color:var(--dim)} .race-log .dropped .p{text-decoration:line-through}
-  .race-none{font-size:13.5px;color:var(--muted);margin:0}
-  .race-next{display:flex;flex-wrap:wrap;gap:8px}
-  .race-next span{display:inline-flex;align-items:baseline;gap:7px;padding:6px 11px;border-radius:var(--r-md);
-    background:var(--panel-2);font-size:13px;color:var(--ink)}
-  .race-next b{font-family:var(--font-display);font-weight:600;font-variant-numeric:lining-nums tabular-nums}
-  .race-next em{font-style:normal;font-size:11.5px;color:var(--dim)}
-  .race-empty{padding:30px 28px;text-align:center;color:var(--muted);font-size:14px}
+  .race-more-h{font:800 13px/1 var(--lb-cond);letter-spacing:.16em;text-transform:uppercase;color:var(--lb-ball);margin:16px 0 10px}
+  .race-next{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .race-next > span{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.06);
+    border-left:3px solid var(--oc,var(--lb-ball));font:800 16px/1 var(--lb-cond);text-transform:uppercase;letter-spacing:.04em}
+  .race-next small{display:flex;gap:10px;font:600 12.5px/1 var(--font-body);text-transform:none;letter-spacing:0;color:var(--lb-dim)}
+  .race-next small b{font:italic 800 20px/1 var(--lb-cond);color:var(--lb-ink);margin-right:3px}
+  .race-log{list-style:none;margin:0;padding:0}
+  .race-log li{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:12px;align-items:baseline;
+    padding:9px 0;border-bottom:1px solid var(--lb-line);font-size:14px;color:var(--lb-ink)}
+  .race-log li:last-child{border-bottom:none}
+  .race-log time{font:700 13px/1 var(--lb-cond);letter-spacing:.08em;text-transform:uppercase;color:var(--lb-faint)}
+  .race-log small{display:block;font-size:12px;color:var(--lb-dim);margin-top:3px}
+  .race-log .sc{color:var(--lb-dim);font-variant-numeric:tabular-nums}
+  .race-log .p{font:italic 800 22px/1 var(--lb-cond);color:var(--lb-ball)}
+  .race-log .dropped{color:var(--lb-faint)} .race-log .dropped .p{text-decoration:line-through;color:var(--lb-faint)}
+  .race-none{font-size:14px;color:var(--lb-dim);margin:0}
+  .race-empty{padding:26px;text-align:center;color:var(--lb-dim);font-size:14px}
 
-  @media (max-width:640px){
-    .race-head{padding:20px 18px 0;flex-direction:column;gap:14px}
-    .race-title{font-size:25px}
-    .race-sub{font-size:13.5px}
-    .race-clock{padding:16px 18px 18px}
-    .race-rules{padding:20px 18px 22px}
-    .rr-tiers{grid-template-columns:1fr}
-    .rr-tier{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:12px}
-    .rr-tier-n{grid-row:1/3;grid-column:2;margin:0}
-    .rr-tier-r{grid-column:1}
-    .race-line{grid-template-columns:24px 34px minmax(0,1fr) auto;gap:11px;padding:14px 18px}
-    .race-av .avi{width:34px!important;height:34px!important;font-size:13px!important}
-    .race-rank{font-size:19px}
-    .race-name{font-size:17px}
-    .race-faced{display:none}
-    .race-meta{font-size:12px;gap:2px 10px}
-    .race-meta .sep{display:none}
-    .race-meta .on-phone{display:inline}
-    .race-pts span.split{display:none}
-    .rr-eq{display:grid;gap:8px}
-    .rr-x{display:none}
-    .rr-x + .rr-term b::before{content:'\00d7\2009';color:var(--dim);font-weight:400}
-    .race-pts b{font-size:23px}
-    .race-more{padding:0 18px 18px 18px}
-    .race-log li{grid-template-columns:46px minmax(0,1fr) auto;gap:10px}
+  /* wide screens: the masthead on the left, the table on the right */
+  @media (min-width:1000px){
+    .race-card{display:grid;grid-template-columns:minmax(320px,400px) minmax(0,1fr);grid-template-rows:auto 1fr auto;align-items:start}
+    .race-head{grid-column:1;grid-row:1;flex-direction:column;gap:18px;padding:30px 30px 0}
+    .race-title{font-size:64px}
+    .race-clock{grid-column:1;grid-row:2;padding:26px 30px 30px}
+    .race-list{grid-column:2;grid-row:1/3;padding:18px 18px 18px 0}
+    .race-rules{grid-column:1/-1;grid-row:3;border-top:1px solid var(--lb-line);padding:6px 30px 28px}
   }
   .race-meta .on-phone{display:none}
-  .race-pts .race-unit{display:none}
-  @media (max-width:640px){ .race-pts .race-unit{display:block} }
+  @media (max-width:640px){
+    .race-card{border-radius:14px}
+    .race-card::before{width:300px;height:220px;right:-90px}
+    .race-head{padding:20px 18px 0;flex-direction:column;gap:16px}
+    .race-title{font-size:44px}
+    .race-sub{font-size:13.5px}
+    .race-rules-btn{padding:9px 10px;font-size:13px}
+    .race-clock{padding:18px 18px 18px}
+    .race-rules{padding:0 18px 20px}
+    .rr-eq{flex-direction:column}
+    .rr-x{display:none}
+    .rr-x + .rr-term b::before{content:'\00d7\2009';color:var(--lb-faint)}
+    .rr-tiers{grid-template-columns:1fr}
+    .rr-tier{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:12px}
+    .rr-tier-n{grid-row:1/4;grid-column:2;margin:0}
+    .race-list{padding:0 10px 10px;gap:5px}
+    .race-line{grid-template-columns:30px 38px minmax(0,1fr) auto;gap:11px;padding:12px 12px 12px 14px}
+    .race-rank{font-size:28px}
+    .race-av .avi{width:38px!important;height:38px!important;font-size:14px!important}
+    .race-name{font-size:21px}
+    .race-meta{font-size:12px;gap:2px 10px}
+    .race-meta .on-phone{display:inline}
+    .race-faced{display:none}
+    .race-pts b{font-size:34px}
+    .race-pts span.split{display:none}
+    .race-pts .race-unit{display:block}
+    .race-more{padding:2px 14px 16px}
+    .race-next{grid-template-columns:1fr 1fr}
+    .race-log li{grid-template-columns:48px minmax(0,1fr) auto;gap:10px}
+  }
   .sim-table th{text-align:left;color:var(--dim);font-family:var(--font-mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:7px 8px;border-bottom:1px solid var(--line)}
   .sim-table td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
   .st-name{font-weight:500}
@@ -9868,6 +9907,25 @@
 
   <div id="view-ladder" style="display:none">
 
+  <!-- ===== THE FGTA LEADERBOARD — the first thing on the site (RACE-ENGINE
+       scores it, renderRace() draws it). While the season is live it
+       replaces the broadcast hero below. ===== -->
+  <section id="raceSec">
+    <div class="race-card">
+      <header class="race-head">
+        <div>
+          <div class="race-top"><span class="race-state" id="raceTag"></span><span class="race-kicker" id="raceKicker">Season</span></div>
+          <h2 class="race-title" id="raceTitle">FGTA <span>Leaderboard</span></h2>
+          <p class="race-sub" id="raceLine"></p>
+        </div>
+        <button type="button" class="race-rules-btn" id="raceRulesBtn" onclick="toggleRaceRules()" aria-expanded="false" aria-controls="raceRules">How points work <span class="race-chev" aria-hidden="true"></span></button>
+      </header>
+      <div class="race-clock" id="raceClock"></div>
+      <div class="race-rules" id="raceRules" hidden></div>
+      <ol class="race-list" id="raceBoard"></ol>
+    </div>
+  </section>
+
   <!-- ===== FF CUP MARQUEE — sits above the broadcast hero, i.e. above
        everything else on the landing page, for the length of the event ===== -->
   <!-- ===== MAIN EVENT — a hand-coded headline fixture (see MAIN_EVENT) ===== -->
@@ -9913,25 +9971,6 @@
 
   <!-- === MAIN COLUMN === -->
   <div class="col-main">
-
-  <!-- TS RACE — the points table (see RACE-ENGINE). The headline ranking
-       from 2026-10-07; an unofficial replay before it. renderRace() fills it. -->
-  <section id="raceSec">
-    <div class="sec-label">FGTA Leaderboard <span class="race-state" id="raceTag"></span></div>
-    <div class="race-card">
-      <header class="race-head">
-        <div>
-          <div class="race-kicker" id="raceKicker">Season</div>
-          <h2 class="race-title" id="raceTitle">FGTA Leaderboard</h2>
-          <p class="race-sub" id="raceLine"></p>
-        </div>
-        <button type="button" class="race-rules-btn" id="raceRulesBtn" onclick="toggleRaceRules()" aria-expanded="false" aria-controls="raceRules">How points work <span class="race-chev" aria-hidden="true"></span></button>
-      </header>
-      <div class="race-clock" id="raceClock"></div>
-      <div class="race-rules" id="raceRules" hidden></div>
-      <ol class="race-list" id="raceBoard"></ol>
-    </div>
-  </section>
 
   <!-- LEADERBOARD -->
   <section>
@@ -22377,6 +22416,9 @@ function render(){
   const raceOn = raceLive();
   const raceRows = renderRace();
   if($("eloLabel")) $("eloLabel").textContent = raceOn ? "Strength rating (Elo)" : "Full standings";
+  /* the leaderboard is the headline while its season is live, so the
+     broadcast hero's podium would only say the same thing twice */
+  if($("bcastHero")) $("bcastHero").style.display = raceOn ? "none" : "";
 
   // ===== BROADCAST HERO + STADIUM LEADERBOARD =====
   const board = $("board");
@@ -29807,11 +29849,11 @@ function raceRulesHtml(){
   return `
     <h3 class="rr-h">A 1v1 win</h3>
     <div class="rr-eq">
-      <div class="rr-term"><b>${RACE_WIN_BASE}</b><span>points for any win</span></div>
+      <div class="rr-term" style="--c:#D8F04A"><b>${RACE_WIN_BASE}</b><span>points for any win</span></div>
       <div class="rr-x">×</div>
-      <div class="rr-term"><b>${RACE_STR_MIN}–${RACE_STR_MAX}</b><span>who you beat — the stronger they are, the more it's worth</span></div>
+      <div class="rr-term" style="--c:#E8743B"><b>${RACE_STR_MIN}–${RACE_STR_MAX}</b><span>who you beat — the stronger they are, the more it's worth</span></div>
       <div class="rr-x">×</div>
-      <div class="rr-term"><b>1.0–${(1+RACE_MARGIN_MAX).toFixed(1)}</b><span>how easily — a scrape to a double bagel</span></div>
+      <div class="rr-term" style="--c:#8FD3FF"><b>1.0–${(1+RACE_MARGIN_MAX).toFixed(1)}</b><span>how easily — a scrape to a double bagel</span></div>
     </div>
     <ul class="rr-notes">
       <li><strong>A loss is 0.</strong> Nobody's total ever goes down, so there's nothing to protect by not playing.</li>
@@ -29820,7 +29862,7 @@ function raceRulesHtml(){
     </ul>
     <h3 class="rr-h">Titles</h3>
     <div class="rr-tiers">
-      ${T.map(([k,t]) => `<div class="rr-tier${+k === 800 ? ' major' : ''}">
+      ${T.map(([k,t]) => `<div class="rr-tier${+k === 800 ? ' major' : +k === 500 ? ' t500' : ''}">
         <div class="rr-tier-l">${t.label}</div>
         <div class="rr-tier-w">${esc(t.what.charAt(0).toUpperCase() + t.what.slice(1))}</div>
         <div class="rr-tier-n"><b>${t.win}</b><span>winner</span></div>
@@ -29863,7 +29905,7 @@ function raceLogHtml(r){
     const bits = [`opponent ×${x.strength.toFixed(2)}`, `margin ×${x.margin.toFixed(2)}`];
     if(x.decay < 1) bits.push(`repeat ×${x.decay.toFixed(2)}`);
     return `<li><time>${raceDay(x.at)}</time>
-      <div>Beat ${esc(x.opp)} <span style="color:var(--dim)">${esc(raceScore(m, r.name))}</span><small>${bits.join(" · ")}</small></div>
+      <div>Beat ${esc(x.opp)} <span class="sc">${esc(raceScore(m, r.name))}</span><small>${bits.join(" · ")}</small></div>
       <span class="p">+${x.pts}</span></li>`;
   }).join("")}</ol>`;
 }
@@ -29881,15 +29923,14 @@ function renderRace(){
   const tag = $("raceTag");
   tag.className = "race-state " + (season.preview ? "preview" : done ? "final" : "live");
   tag.textContent = season.preview ? "Preview" : done ? "Final" : "Live";
-  $("raceKicker").textContent = season.preview ? "Unofficial replay" : "Season";
-  $("raceTitle").textContent = season.name;
+  $("raceKicker").textContent = season.preview ? "Unofficial replay" : "Season " + season.name.replace(/^FGTA\s*/, "");
   $("raceLine").innerHTML = season.preview
     ? `This year's games under the new rules. The real race runs ${raceDate(RACE_SEASON.start)} – ${raceDate(RACE_SEASON.end)}.`
     : !lead
       ? `Everyone starts on 0. Wins add points, losses never take any away — the first win takes the lead.`
       : rows[1] && rows[1].points === lead.points
-        ? `${esc(lead.name)} and ${esc(rows[1].name)} are level at the top on ${lead.points.toLocaleString()}.`
-        : `${esc(lead.name)} leads by ${(lead.points - (rows[1] ? rows[1].points : 0)).toLocaleString()} points. Wins add points; losses never take any away.`;
+        ? `<b>${esc(lead.name)}</b> and <b>${esc(rows[1].name)}</b> are level at the top on ${lead.points.toLocaleString()}.`
+        : `<b>${esc(lead.name)}</b> leads by <b>${(lead.points - (rows[1] ? rows[1].points : 0)).toLocaleString()}</b>. Wins add points; losses never take any away.`;
 
   const span = out.endMs - out.startMs, frac = Math.min(1, Math.max(0, (now - out.startMs) / span));
   const dayN = Math.min(Math.ceil(span/864e5), Math.max(1, Math.floor((now - out.startMs)/864e5) + 1));
@@ -29897,7 +29938,7 @@ function renderRace(){
   $("raceClock").innerHTML = `
     <div class="race-track" role="img" aria-label="Day ${dayN} of ${Math.ceil(span/864e5)}"><i style="width:${(frac*100).toFixed(2)}%"></i><b style="left:${(frac*100).toFixed(2)}%"></b></div>
     <div class="race-ends"><span>${raceDate(season.start)}</span>
-      <span>${done ? "Season complete" : `<strong>Day ${dayN}</strong> · ${left} days left`}</span>
+      <span>${done ? "Season complete" : `<strong>Day ${dayN}</strong> · ${left} to go`}</span>
       <span>${raceDate(season.end)}</span></div>`;
 
   const rules = $("raceRules"), btn = $("raceRulesBtn");
@@ -29920,7 +29961,7 @@ function renderRace(){
       `<span class="race-chip${x.place === "champion" ? "" : " silver"}${x.dropped ? " dropped" : ""}" title="${esc(x.event)} · ${RACE_TIERS[x.tier].label}${x.dropped ? ' · not in best '+RACE_RR_BEST : ''}"><i></i>${esc(x.event)} <em>+${x.pts}</em></span>`).join("");
     const dots = Array.from({length:r.cardOf}, (_, k) => `<i class="${k < r.card ? "on" : ""}"></i>`).join("");
     const next = raceNextWins(r, rows, str).slice(0, 4);
-    return `<li class="race-row${lead && r.points === top ? " lead" : ""}${open ? " open" : ""}" data-n="${esc(r.name)}">
+    return `<li class="race-row${lead && r.points === top ? " lead" : ""}${open ? " open" : ""}" data-n="${esc(r.name)}" style="--pc:${playerColor(r.name)}">
       <div class="race-line" role="button" tabindex="0" aria-expanded="${open}" onclick="toggleRaceRow(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRaceRow(this)}">
         <span class="race-rank${scored ? (rank <= 3 ? " g" + rank : "") : " nil"}">${scored ? rank : "–"}</span>
         <span class="race-av">${avatar(r.name, 40)}</span>
@@ -29938,8 +29979,8 @@ function renderRace(){
       </div>
       ${top ? `<span class="race-share" style="width:${(r.points/top*100).toFixed(1)}%"></span>` : ""}
       <div class="race-more">
-        ${!season.preview && !done && next.length ? `<div class="race-more-h">A win next is worth</div>
-          <div class="race-next">${next.map(n => `<span>${esc(n.name)} <b>${n.lo}–${n.hi}</b></span>`).join("")}</div>` : ""}
+        ${!season.preview && !done && next.length ? `<div class="race-more-h">Points for beating</div>
+          <div class="race-next">${next.map(n => `<span style="--oc:color-mix(in srgb,${playerColor(n.name)} 55%,#fff)">${esc(n.name)}<small><span><b>${n.lo}</b>close</span><span><b>${n.hi}</b>blowout</span></small></span>`).join("")}</div>` : ""}
         <div class="race-more-h">Points this season</div>
         ${raceLogHtml(r)}
       </div>
