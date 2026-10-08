@@ -12392,12 +12392,14 @@ const RACE_REPEAT_DECAY = 0.6;
 const RACE_REPEAT_FLOOR = 0.35;
 const RACE_HIDDEN_K     = 32;
 
-/* tier -> [champion, runner-up]. The runner-up is 0.66 of the title,
-   the ATP's own ratio. */
+/* tier -> [champion, runner-up]. The runner-up gets 40% of the title:
+   the ATP pays a finalist about 65%, but in a 4-player field that is
+   most of a title for one win, so losing a final pays well under
+   half of winning it. */
 const RACE_TIERS = {
-  250: {label:"TS 250", what:"round robin",       win:250, final:165},
-  300: {label:"TS 300", what:"bracket tournament", win:300, final:200},
-  500: {label:"TS 500", what:"the FF Cup",         win:500, final:330}
+  250: {label:"TS 250", what:"round robin",       win:250, final:100},
+  300: {label:"TS 300", what:"bracket tournament", win:300, final:120},
+  500: {label:"TS 500", what:"the FF Cup",         win:500, final:200}
 };
 const RACE_MIN_FIELD  = 3;      // fewer entrants than this and an event is a ladder match with a name
 const RACE_FULL_FIELD = 4;      // a 3-player field pays RACE_SMALL_FIELD of its tier

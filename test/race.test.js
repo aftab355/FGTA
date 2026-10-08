@@ -109,7 +109,7 @@ section('events: only the title and the final score, by tier');
   ];
   const out = race(ms, [cup]);
   ok(find(out, 'A').points === 500, 'the champion gets the tier, and nothing per event win', find(out, 'A').points);
-  ok(find(out, 'C').points === 330, 'the finalist gets the runner-up share', find(out, 'C').points);
+  ok(find(out, 'C').points === 200, 'the finalist gets the runner-up share', find(out, 'C').points);
   ok(find(out, 'B').points === 0 && find(out, 'D').points === 0, 'losing a group or semi game scores nothing');
 
   const live = race(ms, [Object.assign({}, cup, {status: 'active'})]);
@@ -125,7 +125,7 @@ section('events: only the title and the final score, by tier');
     game('C', 'D', 1, '2027-06-03', {tournament_id: 2})
   ];
   const r2 = race(rrGames, [rr]);
-  ok(find(r2, 'B').points === 250 && find(r2, 'A').points === 165, 'round robin: 250 to the winner, 165 to second',
+  ok(find(r2, 'B').points === 250 && find(r2, 'A').points === 100, 'round robin: 250 to the winner, 100 to second',
      find(r2, 'B').points + ' / ' + find(r2, 'A').points);
 
   /* a three-player field pays 75%, two pays nothing */
@@ -210,14 +210,14 @@ section('only the best RACE_RR_BEST round robins count');
   ok(R.RACE_RR_BEST === 8, 'the cap is 8');
   ok(A.eventPts === 8 * 250, 'ten titles, eight count', A.eventPts);
   ok(A.log.filter(x => x.dropped).length === 2, 'the other two stay in the log, marked dropped');
-  ok(B.eventPts === 8 * 165, 'the cap applies to runner-up results too', B.eventPts);
+  ok(B.eventPts === 8 * 100, 'the cap applies to runner-up results too', B.eventPts);
   ok(A.points === A.ladderPts + A.eventPts, 'points add up after the cap');
 
   const cup = {id: 900, name: 'FF Cup', format: 'robin2', status: 'completed', champion: 'B'};
   const cg = [game('B', 'A', 1, '2027-08-20', {tournament_id: 900, round: 'final'}),
               game('C', 'D', 1, '2027-08-18', {tournament_id: 900})];
   const out2 = race(ms.concat(cg), ts.concat([cup]));
-  ok(find(out2, 'B').eventPts === 8 * 165 + 500 && find(out2, 'A').eventPts === 8 * 250 + 330,
+  ok(find(out2, 'B').eventPts === 8 * 100 + 500 && find(out2, 'A').eventPts === 8 * 250 + 200,
      'the cup sits outside the cap', find(out2, 'B').eventPts + ' / ' + find(out2, 'A').eventPts);
 }
 
