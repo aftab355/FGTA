@@ -12382,7 +12382,8 @@ const RACE_SEASON  = {key:"2026-27", name:"FGTA 2026\u201327", start:"2026-10-07
    through the same rules, labelled unofficial. Never the headline. */
 const RACE_PREVIEW = {key:"2026-preview", name:"2026 replay", start:"2026-01-01", end:"2026-10-06", preview:true};
 
-const RACE_WIN_BASE     = 30;    // a win over an average opponent, before margin
+const RACE_WIN_BASE     = 50;    // a win over an average opponent, before margin. It was 30; a
+                                 // two-digit win felt like nothing, so everything scaled by 5/3
 const RACE_STR_SCALE    = 250;   // +250 hidden rating doubles what a win over them is worth...
 const RACE_STR_MIN      = 0.6;   // ...within these bounds, so playing down always
 const RACE_STR_MAX      = 1.6;   //    still pays and one opponent can't be worth everything
@@ -12392,12 +12393,16 @@ const RACE_REPEAT_DECAY = 0.6;
 const RACE_REPEAT_FLOOR = 0.35;
 const RACE_HIDDEN_K     = 32;
 
-/* tier -> [champion, runner-up]. The runner-up is 0.66 of the title,
-   the ATP's own ratio. */
+/* tier -> [champion, runner-up]. The runner-up gets 40% of the title:
+   the ATP pays a finalist about 65%, but in a 4-player field that is
+   most of a title for one win, so losing a final pays well under
+   half of winning it. The tiers were 250 / 300 / 500 while a win was
+   30; they scaled with it, so a round robin is still worth about six
+   good wins and the cup two round robins. */
 const RACE_TIERS = {
-  250: {label:"TS 250", what:"round robin",       win:250, final:165},
-  300: {label:"TS 300", what:"bracket tournament", win:300, final:200},
-  500: {label:"TS 500", what:"the FF Cup",         win:500, final:330}
+  400: {label:"TS 400", what:"round robin",       win:400, final:160},
+  500: {label:"TS 500", what:"bracket tournament", win:500, final:200},
+  800: {label:"TS 800", what:"the FF Cup",         win:800, final:320}
 };
 const RACE_MIN_FIELD  = 3;      // fewer entrants than this and an event is a ladder match with a name
 const RACE_FULL_FIELD = 4;      // a 3-player field pays RACE_SMALL_FIELD of its tier
@@ -12415,17 +12420,17 @@ const raceApproved = (ms, counts) => ms
   .sort((a,b) => new Date(a.created_at) - new Date(b.created_at) || (a.id||0) - (b.id||0));
 
 /* which tier an event is. An explicit `tier` column wins (docs/race.sql);
-   otherwise the format decides — a straight bracket is TS 300, a round
-   robin TS 250 — and the FF Cup is TS 500 by name, so the one event
+   otherwise the format decides — a straight bracket is TS 500, a round
+   robin TS 400 — and the FF Cup is TS 800 by name, so the one event
    that needs no setup gets none. */
 function raceIsFFCup(t){ return !!t && /\bff\s*cup\b/i.test(t.name || ""); }
 function raceTier(t){
   if(!t) return null;
   const n = Number(t.tier);
   if(RACE_TIERS[n]) return n;
-  if(raceIsFFCup(t)) return 500;
-  if(t.format === "roundrobin") return 250;
-  return 300;    // knockout, hybrid, any other Robin+
+  if(raceIsFFCup(t)) return 800;
+  if(t.format === "roundrobin") return 400;
+  return 500;    // knockout, hybrid, any other Robin+
 }
 
 /* hidden strength: plain Elo over every game that happened, events
@@ -12571,7 +12576,7 @@ function computeRace(season, ms, ts, counts){
   /* the best-of cap: past RACE_RR_BEST round-robin results, the smallest
      stay in the log, marked dropped, and stop counting */
   for(const p of Object.values(P)){
-    const rr = p.log.filter(x => x.kind === "event" && x.tier === 250)
+    const rr = p.log.filter(x => x.kind === "event" && x.tier === 400)
                     .sort((x,y) => y.pts - x.pts || x.at - y.at);
     rr.slice(RACE_RR_BEST).forEach(x => { x.dropped = true; p.eventPts -= x.pts; });
   }
@@ -29810,12 +29815,12 @@ function raceRulesHtml(){
     </div>
     <ul class="rr-notes">
       <li><strong>A loss is 0.</strong> Nobody's total ever goes down, so there's nothing to protect by not playing.</li>
-      <li>A typical win is 35–45. A draw is worth half.</li>
+      <li>A typical win is 60–75. A draw is worth half.</li>
       <li>Beat the same person again within ${RACE_REPEAT_DAYS} days and it's worth ×${RACE_REPEAT_DECAY}, then ×${(RACE_REPEAT_DECAY*RACE_REPEAT_DECAY).toFixed(2)} — so the best next game is usually someone you haven't played lately.</li>
     </ul>
     <h3 class="rr-h">Titles</h3>
     <div class="rr-tiers">
-      ${T.map(([k,t]) => `<div class="rr-tier${+k === 500 ? ' major' : ''}">
+      ${T.map(([k,t]) => `<div class="rr-tier${+k === 800 ? ' major' : ''}">
         <div class="rr-tier-l">${t.label}</div>
         <div class="rr-tier-w">${esc(t.what.charAt(0).toUpperCase() + t.what.slice(1))}</div>
         <div class="rr-tier-n"><b>${t.win}</b><span>winner</span></div>

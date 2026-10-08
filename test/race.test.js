@@ -100,16 +100,16 @@ section('events: only the title and the final score, by tier');
   const cup = {id: 1, name: 'FF Cup', format: 'robin2', status: 'completed', champion: 'A'};
   const rr  = {id: 2, name: 'June RR', format: 'roundrobin', status: 'completed', champion: 'B'};
   const ko  = {id: 3, name: 'Summer Open', format: 'knockout', status: 'completed', champion: 'C'};
-  ok(R.raceTier(cup) === 500 && R.raceTier(rr) === 250 && R.raceTier(ko) === 300, 'FF Cup 500, round robin 250, bracket 300');
-  ok(R.raceTier(Object.assign({}, ko, {tier: 500})) === 500, 'an explicit tier column overrides the format');
+  ok(R.raceTier(cup) === 800 && R.raceTier(rr) === 400 && R.raceTier(ko) === 500, 'FF Cup 800, round robin 400, bracket 500');
+  ok(R.raceTier(Object.assign({}, ko, {tier: 800})) === 800, 'an explicit tier column overrides the format');
 
   const ms = [
     game('A', 'B', 1, '2027-08-10', {tournament_id: 1}), game('C', 'D', 1, '2027-08-11', {tournament_id: 1}),
     game('A', 'C', 1, '2027-08-20', {tournament_id: 1, round: 'final'})
   ];
   const out = race(ms, [cup]);
-  ok(find(out, 'A').points === 500, 'the champion gets the tier, and nothing per event win', find(out, 'A').points);
-  ok(find(out, 'C').points === 330, 'the finalist gets the runner-up share', find(out, 'C').points);
+  ok(find(out, 'A').points === 800, 'the champion gets the tier, and nothing per event win', find(out, 'A').points);
+  ok(find(out, 'C').points === 320, 'the finalist gets the runner-up share', find(out, 'C').points);
   ok(find(out, 'B').points === 0 && find(out, 'D').points === 0, 'losing a group or semi game scores nothing');
 
   const live = race(ms, [Object.assign({}, cup, {status: 'active'})]);
@@ -125,12 +125,12 @@ section('events: only the title and the final score, by tier');
     game('C', 'D', 1, '2027-06-03', {tournament_id: 2})
   ];
   const r2 = race(rrGames, [rr]);
-  ok(find(r2, 'B').points === 250 && find(r2, 'A').points === 165, 'round robin: 250 to the winner, 165 to second',
+  ok(find(r2, 'B').points === 400 && find(r2, 'A').points === 160, 'round robin: 400 to the winner, 160 to second',
      find(r2, 'B').points + ' / ' + find(r2, 'A').points);
 
   /* a three-player field pays 75%, two pays nothing */
   const three = race(rrGames.filter(m => m.p1 !== 'D' && m.p2 !== 'D'), [rr]);
-  ok(find(three, 'B').points === Math.round(250 * 0.75), 'a 3-player field pays 75%', find(three, 'B').points);
+  ok(find(three, 'B').points === Math.round(400 * 0.75), 'a 3-player field pays 75%', find(three, 'B').points);
   const two = race([game('B', 'A', 1, '2027-06-01', {tournament_id: 2})], [rr]);
   ok(find(two, 'B').points === 0, 'a 2-player "event" scores nothing');
 }
@@ -208,16 +208,16 @@ section('only the best RACE_RR_BEST round robins count');
   const out = race(ms, ts);
   const A = find(out, 'A'), B = find(out, 'B');
   ok(R.RACE_RR_BEST === 8, 'the cap is 8');
-  ok(A.eventPts === 8 * 250, 'ten titles, eight count', A.eventPts);
+  ok(A.eventPts === 8 * 400, 'ten titles, eight count', A.eventPts);
   ok(A.log.filter(x => x.dropped).length === 2, 'the other two stay in the log, marked dropped');
-  ok(B.eventPts === 8 * 165, 'the cap applies to runner-up results too', B.eventPts);
+  ok(B.eventPts === 8 * 160, 'the cap applies to runner-up results too', B.eventPts);
   ok(A.points === A.ladderPts + A.eventPts, 'points add up after the cap');
 
   const cup = {id: 900, name: 'FF Cup', format: 'robin2', status: 'completed', champion: 'B'};
   const cg = [game('B', 'A', 1, '2027-08-20', {tournament_id: 900, round: 'final'}),
               game('C', 'D', 1, '2027-08-18', {tournament_id: 900})];
   const out2 = race(ms.concat(cg), ts.concat([cup]));
-  ok(find(out2, 'B').eventPts === 8 * 165 + 500 && find(out2, 'A').eventPts === 8 * 250 + 330,
+  ok(find(out2, 'B').eventPts === 8 * 160 + 800 && find(out2, 'A').eventPts === 8 * 400 + 320,
      'the cup sits outside the cap', find(out2, 'B').eventPts + ' / ' + find(out2, 'A').eventPts);
 }
 
