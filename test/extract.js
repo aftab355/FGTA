@@ -75,7 +75,10 @@ function loadKit(){
    computes. */
 function loadElo(opts){
   const o = opts || {};
-  const code = region('ELO-ENGINE') + '\n' + region('ELO-STANDINGS');
+  let code = region('ELO-ENGINE') + '\n' + region('ELO-STANDINGS');
+  /* the ducking tax ships switched off; {tax:true} turns the mechanism
+     back on so its own tests keep holding it to its rules */
+  if(o.tax) code = code.replace(/const TAX_ENABLED\s*=\s*false;/, 'const TAX_ENABLED = true;');
   const names = ['MOV_ENABLED','MOV_START','MOV_MIN','MOV_MAX','BLOWOUT_FLOOR_START',
                  'BLOWOUT_FLOOR_MULT','MOV_BREAKER_START','SET_MAX_GAMES','setPairs',
                  'setOversized','breakerIndex',
@@ -142,7 +145,7 @@ function loadRace(opts){
   const code = region('ELO-ENGINE') + '\n' + region('RACE-ENGINE');
   const names = ['RACE_SEASON','RACE_PREVIEW','RACE_WIN_BASE','RACE_TIERS','RACE_REPEAT_DAYS',
                  'raceIsFFCup','raceTier','raceStrengths','raceStrengthMult','raceDominance','raceEventResult',
-                 'raceFieldMult','computeRace','raceActiveSeason','raceLive'];
+                 'raceFieldMult','computeRace','raceActiveSeason','raceLive','RACE_RR_BEST'];
   const pre = [
     'const K = 32;', 'let DIVISOR = 400;', 'const START = 500;',
     'let matches = [];', 'const countsForElo = () => true;'

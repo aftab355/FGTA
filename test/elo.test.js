@@ -401,11 +401,18 @@ section('a decider played as a breaker — the set score that is not a set score
 section('the ducking tax — sitting on a rating costs something');
 {
   const DAY = 86400000;
-  const e0 = () => E([]);
+  /* the tax ships off now the TS Race is the headline: nothing is charged */
+  {
+    const off = loadElo({matches: [game('A', 'B', 1, '2026-08-01')], now: Date.parse('2027-06-01T00:00:00Z')});
+    ok(off.TAX_ENABLED === false && off.taxChecks(Date.parse('2027-06-01T00:00:00Z')).length === 0 &&
+       off.centralBank(off.computeStandings()).balance === 0,
+       'the shipped engine charges no ducking tax');
+  }
+  const e0 = () => loadElo({tax: true});
   const T0 = Date.parse(e0().TAX_START);           // the first check
   /* a date `days` from the first check; game() puts it at noon UTC */
   const at = days => new Date(T0 + days * DAY).toISOString().slice(0, 10);
-  const EN = (ms, now) => loadElo({matches: ms, now});
+  const EN = (ms, now) => loadElo({matches: ms, now, tax: true});
 
   /* A beats B twice, well before the first check, then nobody plays */
   const old = [game('A', 'B', 1, at(-60)), game('A', 'B', 1, at(-50))];

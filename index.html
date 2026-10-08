@@ -1173,8 +1173,174 @@
   .sim-meta{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin-bottom:10px}
   .sim-table{width:100%;border-collapse:collapse}
   /* TS Race: the 1v1/Events split is detail; on a phone the total, record and card are the table */
-  .race-table td:nth-child(6){white-space:nowrap}
-  @media (max-width:560px){ .race-table th:nth-child(4),.race-table td:nth-child(4),.race-table th:nth-child(5),.race-table td:nth-child(5){display:none} }
+  /* ===== THE TS RACE =================================================
+     The headline table, set like the standings page of a printed
+     programme: a serif masthead, the season as a measured rule, then
+     one ruled line per player — rank, name, record, points — with the
+     detail (every point and where it came from) folded underneath. Only
+     tokens, so the fall skin and any Studio palette carry it. */
+  .race-state{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.14em;
+    color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+  .race-state::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;
+    box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+  .race-state.live::before{animation:race-pulse 2.4s ease-in-out infinite}
+  .race-state.preview,.race-state.final{color:var(--dim)}
+  @keyframes race-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,currentColor 0%,transparent)}}
+  @media (prefers-reduced-motion:reduce){.race-state.live::before{animation:none}}
+
+  .race-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:var(--shadow);overflow:hidden}
+  .race-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+    padding:26px 28px 0}
+  .race-kicker{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  .race-title{font-family:var(--font-display);font-weight:600;font-size:30px;line-height:1.1;
+    letter-spacing:-.005em;margin:6px 0 0;color:var(--ink)}
+  .race-sub{margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--muted);max-width:46ch}
+  .race-rules-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    font:500 13px/1 var(--font-body);color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;
+    transition:border-color .15s ease,background .15s ease}
+  .race-rules-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .race-rules-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .race-chev{width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+    transform:translateY(-2px) rotate(45deg);transition:transform .2s ease}
+  .race-rules-btn[aria-expanded="true"] .race-chev{transform:translateY(1px) rotate(-135deg)}
+
+  /* the season as a ruler: where we are between the two dates */
+  .race-clock{padding:20px 28px 22px}
+  .race-track{position:relative;height:3px;border-radius:3px;background:var(--line-soft)}
+  .race-track i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}
+  .race-track b{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--accent)}
+  .race-ends{display:flex;justify-content:space-between;gap:12px;margin-top:10px;
+    font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .race-ends strong{color:var(--ink);font-weight:600}
+
+  /* ---- the rules, folded ---- */
+  .race-rules{border-top:1px solid var(--line-soft);background:var(--panel-2);padding:24px 28px 26px}
+  .race-rules[hidden]{display:none}
+  .rr-h{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+  .rr-h:not(:first-child){margin-top:24px}
+  .rr-eq{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .rr-term{flex:1 1 120px;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:12px 14px}
+  .rr-term b{display:block;font-family:var(--font-display);font-size:22px;font-weight:600;color:var(--ink);
+    font-variant-numeric:lining-nums tabular-nums}
+  .rr-term span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .rr-x{align-self:center;color:var(--dim);font-size:15px}
+  .rr-notes{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:7px}
+  .rr-notes li{position:relative;padding-left:16px;font-size:13.5px;line-height:1.45;color:var(--muted)}
+  .rr-notes li::before{content:'';position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--line)}
+  .rr-notes strong{color:var(--ink);font-weight:600}
+  .rr-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .rr-tier{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:14px 16px 13px;position:relative}
+  .rr-tier.major{border-color:color-mix(in srgb,var(--medal-gold) 70%,var(--line));
+    background:linear-gradient(170deg,color-mix(in srgb,var(--medal-gold) 12%,var(--panel)),var(--panel) 60%)}
+  .rr-tier-l{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--dim)}
+  .rr-tier.major .rr-tier-l{color:var(--gold)}
+  .rr-tier-w{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--ink);margin-top:4px}
+  .rr-tier-n{display:flex;align-items:baseline;gap:6px;margin-top:10px;font-variant-numeric:lining-nums tabular-nums}
+  .rr-tier-n b{font-family:var(--font-display);font-size:28px;font-weight:600;line-height:1;color:var(--ink)}
+  .rr-tier-n span{font-size:12px;color:var(--dim)}
+  .rr-tier-r{font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+
+  /* ---- the table ---- */
+  .race-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-soft)}
+  .race-row{border-bottom:1px solid var(--line-soft);position:relative}
+  .race-row:last-child{border-bottom:none}
+  .race-line{display:grid;grid-template-columns:34px 40px minmax(0,1fr) auto 92px;align-items:center;gap:14px;
+    padding:15px 28px;cursor:pointer;transition:background .15s ease}
+  .race-line:hover{background:color-mix(in srgb,var(--panel-2) 70%,transparent)}
+  .race-line:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .race-row.lead .race-line{background:linear-gradient(90deg,color-mix(in srgb,var(--medal-gold) 13%,transparent),transparent 72%)}
+  .race-row.lead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--medal-gold)}
+  .race-rank{font-family:var(--font-display);font-size:22px;font-weight:600;color:var(--dim);text-align:center;
+    font-variant-numeric:lining-nums tabular-nums}
+  .race-rank.g1{color:var(--gold)} .race-rank.g2{color:var(--silver)} .race-rank.g3{color:var(--bronze)}
+  .race-rank.nil{font-size:18px;color:var(--line)}
+  .race-av{display:flex}
+  .race-who{min-width:0}
+  .race-name{font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);text-decoration:none;
+    line-height:1.2;background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;
+    transition:background-size .2s ease,color .15s ease}
+  .race-name:hover{color:var(--accent);background-size:100% 1px}
+  .race-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;
+    font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .race-meta strong{color:var(--muted);font-weight:600}
+  .race-meta .sep{width:3px;height:3px;border-radius:50%;background:var(--line)}
+  .race-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .race-chip{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--ink);
+    padding:3px 9px 3px 4px;border-radius:var(--r-pill);border:1px solid var(--line-soft);background:var(--panel)}
+  .race-chip i{width:15px;height:15px;border-radius:50%;flex-shrink:0;
+    background:radial-gradient(circle at 35% 30%,#fff8 0 18%,transparent 40%),var(--medal-gold);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+  .race-chip.silver i{background:radial-gradient(circle at 35% 30%,#fff9 0 18%,transparent 40%),var(--medal-silver)}
+  .race-chip em{font-style:normal;font-weight:500;color:var(--dim);font-variant-numeric:tabular-nums}
+  .race-chip.dropped{opacity:.55}
+
+  /* who they have played this season: one dot per rival */
+  .race-faced{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .race-dots{display:flex;gap:4px}
+  .race-dots i{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--line)}
+  .race-dots i.on{background:var(--accent);border-color:var(--accent)}
+  .race-faced span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+
+  .race-pts{text-align:right;font-variant-numeric:lining-nums tabular-nums}
+  .race-pts b{display:block;font-family:var(--font-display);font-size:26px;font-weight:600;line-height:1;color:var(--ink)}
+  .race-pts b.zero{color:var(--dim)}
+  .race-pts span{display:block;font-size:11px;color:var(--dim);margin-top:4px;white-space:nowrap}
+  .race-share{position:absolute;left:0;bottom:-1px;height:2px;background:var(--accent);opacity:.55;
+    transition:width .5s cubic-bezier(.2,.7,.2,1)}
+  .race-row.lead .race-share{background:var(--medal-gold);opacity:1}
+
+  /* the fold: where every point came from, and what the next win is worth */
+  .race-more{display:none;padding:2px 28px 22px 116px}
+  .race-row.open .race-more{display:block}
+  .race-row.open .race-line{background:color-mix(in srgb,var(--panel-2) 70%,transparent)}
+  .race-more-h{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:14px 0 8px}
+  .race-log{list-style:none;margin:0;padding:0;border-left:1px solid var(--line-soft)}
+  .race-log li{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:12px;align-items:baseline;
+    padding:7px 0 7px 14px;font-size:13.5px;color:var(--ink)}
+  .race-log time{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .race-log small{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
+  .race-log .p{font-family:var(--font-display);font-weight:600;font-size:15px;font-variant-numeric:lining-nums tabular-nums}
+  .race-log .dropped{color:var(--dim)} .race-log .dropped .p{text-decoration:line-through}
+  .race-none{font-size:13.5px;color:var(--muted);margin:0}
+  .race-next{display:flex;flex-wrap:wrap;gap:8px}
+  .race-next span{display:inline-flex;align-items:baseline;gap:7px;padding:6px 11px;border-radius:var(--r-md);
+    background:var(--panel-2);font-size:13px;color:var(--ink)}
+  .race-next b{font-family:var(--font-display);font-weight:600;font-variant-numeric:lining-nums tabular-nums}
+  .race-next em{font-style:normal;font-size:11.5px;color:var(--dim)}
+  .race-empty{padding:30px 28px;text-align:center;color:var(--muted);font-size:14px}
+
+  @media (max-width:640px){
+    .race-head{padding:20px 18px 0;flex-direction:column;gap:14px}
+    .race-title{font-size:25px}
+    .race-sub{font-size:13.5px}
+    .race-clock{padding:16px 18px 18px}
+    .race-rules{padding:20px 18px 22px}
+    .rr-tiers{grid-template-columns:1fr}
+    .rr-tier{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:12px}
+    .rr-tier-n{grid-row:1/3;grid-column:2;margin:0}
+    .rr-tier-r{grid-column:1}
+    .race-line{grid-template-columns:24px 34px minmax(0,1fr) auto;gap:11px;padding:14px 18px}
+    .race-av .avi{width:34px!important;height:34px!important;font-size:13px!important}
+    .race-rank{font-size:19px}
+    .race-name{font-size:17px}
+    .race-faced{display:none}
+    .race-meta{font-size:12px;gap:2px 10px}
+    .race-meta .sep{display:none}
+    .race-meta .on-phone{display:inline}
+    .race-pts span.split{display:none}
+    .rr-eq{display:grid;gap:8px}
+    .rr-x{display:none}
+    .rr-x + .rr-term b::before{content:'\00d7\2009';color:var(--dim);font-weight:400}
+    .race-pts b{font-size:23px}
+    .race-more{padding:0 18px 18px 18px}
+    .race-log li{grid-template-columns:46px minmax(0,1fr) auto;gap:10px}
+  }
+  .race-meta .on-phone{display:none}
+  .race-pts .race-unit{display:none}
+  @media (max-width:640px){ .race-pts .race-unit{display:block} }
   .sim-table th{text-align:left;color:var(--dim);font-family:var(--font-mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:7px 8px;border-bottom:1px solid var(--line)}
   .sim-table td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
   .st-name{font-weight:500}
@@ -9749,12 +9915,22 @@
   <div class="col-main">
 
   <!-- TS RACE — the points table (see RACE-ENGINE). The headline ranking
-       from the 2027 Spring/Summer season; an unofficial replay before it. -->
+       from 2026-10-07; an unofficial replay before it. renderRace() fills it. -->
   <section id="raceSec">
-    <div class="sec-label"><span id="raceTitle">TS Race</span> <span class="tag p" id="raceTag"></span> <button class="see-all" onclick="toggleRaceRules()">how points work</button></div>
-    <div class="pool-line" id="raceLine"></div>
-    <div id="raceRules" style="display:none"></div>
-    <div class="panel" id="raceBoard"></div>
+    <div class="sec-label">The TS Race <span class="race-state" id="raceTag"></span></div>
+    <div class="race-card">
+      <header class="race-head">
+        <div>
+          <div class="race-kicker" id="raceKicker">Season</div>
+          <h2 class="race-title" id="raceTitle">TS Race</h2>
+          <p class="race-sub" id="raceLine"></p>
+        </div>
+        <button type="button" class="race-rules-btn" id="raceRulesBtn" onclick="toggleRaceRules()" aria-expanded="false" aria-controls="raceRules">How points work <span class="race-chev" aria-hidden="true"></span></button>
+      </header>
+      <div class="race-clock" id="raceClock"></div>
+      <div class="race-rules" id="raceRules" hidden></div>
+      <ol class="race-list" id="raceBoard"></ol>
+    </div>
   </section>
 
   <!-- LEADERBOARD -->
@@ -11957,7 +12133,12 @@ function matchKPair(m, rA, rB){
    the same place, and a check landing on the same instant as a game
    runs after it: the game counts towards the window it is in.
    ============================================================ */
-const TAX_ENABLED     = true;
+/* Off from 2026-10-07: the TS Race (RACE-ENGINE) is the headline now, and
+   a race where losing costs nothing has nothing to sit on. Elo is only
+   the strength reading underneath, so taxing it would punish a number
+   nobody is ranked by. Flip back to true to bring it back; the first
+   check would still be TAX_START. */
+const TAX_ENABLED     = false;
 const TAX_START       = "2026-10-12";  // first check (UTC midnight); nothing earlier is charged. Pushed back a week from 2026-10-05
 const TAX_EVERY_DAYS  = 14;            // every other Monday; it was weekly before the first check ran
 const TAX_WINDOW_DAYS = 30;
@@ -12221,6 +12402,12 @@ const RACE_TIERS = {
 const RACE_MIN_FIELD  = 3;      // fewer entrants than this and an event is a ladder match with a name
 const RACE_FULL_FIELD = 4;      // a 3-player field pays RACE_SMALL_FIELD of its tier
 const RACE_SMALL_FIELD = 0.75;
+/* a year holds ~26 fortnightly round robins. Counting them all would make
+   the FF Cup (one event) about 5% of a season and reward turning up over
+   winning, so only a player's best RACE_RR_BEST round-robin results
+   count — the ATP's own cap on its smaller events. Brackets and the cup
+   always count. */
+const RACE_RR_BEST    = 8;
 
 const raceMs = (d, endOfDay) => new Date(d + (endOfDay ? "T23:59:59.999" : "T00:00:00")).getTime();
 const raceApproved = (ms, counts) => ms
@@ -12379,6 +12566,14 @@ function computeRace(season, ms, ts, counts){
     };
     award(r.champion, tier.win, "champion");
     award(r.runnerUp, tier.final, "runner-up");
+  }
+
+  /* the best-of cap: past RACE_RR_BEST round-robin results, the smallest
+     stay in the log, marked dropped, and stop counting */
+  for(const p of Object.values(P)){
+    const rr = p.log.filter(x => x.kind === "event" && x.tier === 250)
+                    .sort((x,y) => y.pts - x.pts || x.at - y.at);
+    rr.slice(RACE_RR_BEST).forEach(x => { x.dropped = true; p.eventPts -= x.pts; });
   }
 
   const rows = Object.values(P).map(p => {
@@ -29578,64 +29773,173 @@ window.saveFallEndDate = saveFallEndDate;
    here decides a number.
    ============================================================ */
 let raceRulesOpen = false;
+const raceOpenRows = new Set();
 function toggleRaceRules(){ raceRulesOpen = !raceRulesOpen; renderRace(); }
 window.toggleRaceRules = toggleRaceRules;
+function toggleRaceRow(el){
+  const n = el && el.closest(".race-row") && el.closest(".race-row").dataset.n;
+  if(!n) return;
+  raceOpenRows.has(n) ? raceOpenRows.delete(n) : raceOpenRows.add(n);
+  renderRace();
+}
+window.toggleRaceRow = toggleRaceRow;
 
 function raceDate(d){
   return new Date(d+"T00:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 }
+const raceDay = t => new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric"});
 
-/* draws the table; returns the rows so render() can hand the podium to them */
+/* a match's score read from one player's side: "6–2 6–1" */
+function raceScore(m, me){
+  if(!m) return "";
+  const mine = String(m.p1).toLowerCase() === String(me).toLowerCase();
+  return setPairs(m.sets).map(p => mine ? `${p.a}–${p.b}` : `${p.b}–${p.a}`).join(" ");
+}
+
+/* the rules, as a page you read rather than a paragraph */
+function raceRulesHtml(){
+  const T = Object.entries(RACE_TIERS);
+  return `
+    <h3 class="rr-h">A 1v1 win</h3>
+    <div class="rr-eq">
+      <div class="rr-term"><b>${RACE_WIN_BASE}</b><span>points for any win</span></div>
+      <div class="rr-x">×</div>
+      <div class="rr-term"><b>${RACE_STR_MIN}–${RACE_STR_MAX}</b><span>who you beat — the stronger they are, the more it's worth</span></div>
+      <div class="rr-x">×</div>
+      <div class="rr-term"><b>1.0–${(1+RACE_MARGIN_MAX).toFixed(1)}</b><span>how easily — a scrape to a double bagel</span></div>
+    </div>
+    <ul class="rr-notes">
+      <li><strong>A loss is 0.</strong> Nobody's total ever goes down, so there's nothing to protect by not playing.</li>
+      <li>A typical win is 35–45. A draw is worth half.</li>
+      <li>Beat the same person again within ${RACE_REPEAT_DAYS} days and it's worth ×${RACE_REPEAT_DECAY}, then ×${(RACE_REPEAT_DECAY*RACE_REPEAT_DECAY).toFixed(2)} — so the best next game is usually someone you haven't played lately.</li>
+    </ul>
+    <h3 class="rr-h">Titles</h3>
+    <div class="rr-tiers">
+      ${T.map(([k,t]) => `<div class="rr-tier${+k === 500 ? ' major' : ''}">
+        <div class="rr-tier-l">${t.label}</div>
+        <div class="rr-tier-w">${esc(t.what.charAt(0).toUpperCase() + t.what.slice(1))}</div>
+        <div class="rr-tier-n"><b>${t.win}</b><span>winner</span></div>
+        <div class="rr-tier-r">${t.final} runner-up</div>
+      </div>`).join("")}
+    </div>
+    <ul class="rr-notes">
+      <li>Only the title and the final score. Games inside an event earn nothing on their own.</li>
+      <li><strong>Only your best ${RACE_RR_BEST} round robins count</strong> — turning up to every one can't outscore winning the big ones.</li>
+      <li>A 3-player field pays ${Math.round(RACE_SMALL_FIELD*100)}%. Fewer than 3 pays nothing.</li>
+      <li>"Who you beat" comes from a hidden strength rating over every game. It ranks nobody.</li>
+    </ul>`;
+}
+
+/* what a win over each rival is worth to `r` right now: hidden strength,
+   repeat decay from this season's log, scrape to blowout */
+function raceNextWins(r, rows, str){
+  const now = Date.now();
+  return rows.filter(o => o.name !== r.name).map(o => {
+    const k = r.log.filter(x => x.kind === "win" && x.opp === o.name && now - x.at < RACE_REPEAT_DAYS*864e5).length;
+    const v = RACE_WIN_BASE * raceStrengthMult(str[o.name] == null ? START : str[o.name])
+            * Math.max(RACE_REPEAT_FLOOR, Math.pow(RACE_REPEAT_DECAY, k));
+    return {name:o.name, lo:Math.round(v), hi:Math.round(v*(1+RACE_MARGIN_MAX))};
+  }).sort((a,b) => b.lo - a.lo);
+}
+
+function raceLogHtml(r){
+  if(!r.log.length) return `<p class="race-none">No points yet this season.</p>`;
+  return `<ol class="race-log">${r.log.slice().reverse().map(x => {
+    if(x.kind === "event"){
+      const what = x.place === "champion" ? "Won" : "Runner-up,";
+      const why = x.dropped ? `outside the best ${RACE_RR_BEST} round robins` :
+                  `${RACE_TIERS[x.tier].label} · ${x.field}-player field`;
+      return `<li class="${x.dropped ? 'dropped' : ''}"><time>${raceDay(x.at)}</time>
+        <div>${what} ${esc(x.event)}<small>${why}</small></div><span class="p">+${x.pts}</span></li>`;
+    }
+    const m = matches.find(g => g.id === x.matchId);
+    if(x.kind === "draw") return `<li><time>${raceDay(x.at)}</time>
+      <div>Drew with ${esc(x.opp)}<small>${esc(raceScore(m, r.name))}</small></div><span class="p">+${x.pts}</span></li>`;
+    const bits = [`opponent ×${x.strength.toFixed(2)}`, `margin ×${x.margin.toFixed(2)}`];
+    if(x.decay < 1) bits.push(`repeat ×${x.decay.toFixed(2)}`);
+    return `<li><time>${raceDay(x.at)}</time>
+      <div>Beat ${esc(x.opp)} <span style="color:var(--dim)">${esc(raceScore(m, r.name))}</span><small>${bits.join(" · ")}</small></div>
+      <span class="p">+${x.pts}</span></li>`;
+  }).join("")}</ol>`;
+}
+
+/* draws the race; returns the rows so render() can hand the podium to them */
 function renderRace(){
   const box = $("raceBoard");
   if(!box) return [];
   const season = raceActiveSeason();
   const out = computeRace(season, matches, tournaments, countsForAnalysis);
-  const rows = out.rows;
+  const rows = out.rows, now = Date.now();
+  const lead = rows[0] && rows[0].points > 0 ? rows[0] : null;
+  const done = now > out.endMs;
 
-  $("raceTitle").textContent = "TS Race — " + season.name;
-  $("raceTag").textContent = season.preview ? "preview" : (Date.now() > out.endMs ? "final" : "live");
+  const tag = $("raceTag");
+  tag.className = "race-state " + (season.preview ? "preview" : done ? "final" : "live");
+  tag.textContent = season.preview ? "Preview" : done ? "Final" : "Live";
+  $("raceKicker").textContent = season.preview ? "Unofficial replay" : "Season";
+  $("raceTitle").textContent = season.name;
   $("raceLine").innerHTML = season.preview
-    ? `Unofficial: this year's games under the new rules. The real race runs ${raceDate(RACE_SEASON.start)} – ${raceDate(RACE_SEASON.end)}.`
-    : `${raceDate(season.start)} – ${raceDate(season.end)} · everyone started on 0 · wins earn points, losses never cost any`;
+    ? `This year's games under the new rules. The real race runs ${raceDate(RACE_SEASON.start)} – ${raceDate(RACE_SEASON.end)}.`
+    : !lead
+      ? `Everyone starts on 0. Wins add points, losses never take any away — the first win takes the lead.`
+      : rows[1] && rows[1].points === lead.points
+        ? `${esc(lead.name)} and ${esc(rows[1].name)} are level at the top on ${lead.points.toLocaleString()}.`
+        : `${esc(lead.name)} leads by ${(lead.points - (rows[1] ? rows[1].points : 0)).toLocaleString()} points. Wins add points; losses never take any away.`;
 
-  const rules = $("raceRules");
-  if(rules){
-    rules.style.display = raceRulesOpen ? "block" : "none";
-    if(raceRulesOpen) rules.innerHTML = `
-      <div class="panel" style="margin-bottom:14px">
-        <div class="pred-hint"><b>Every 1v1 win</b> scores ${RACE_WIN_BASE} × who you beat × how easily, rounded — usually 35–45.
-          Beating the strongest player is worth up to ×1.6, the weakest ×0.6; a double bagel ×1.6, a scrape ×1.0.
-          Beating the same person again within ${RACE_REPEAT_DAYS} days is worth ×0.6, then ×0.36 (never below ×0.35).
-          A draw is half. <b>A loss is 0 — you can never go backwards.</b></div>
-        <table class="sim-table" style="margin-top:10px">
-          <tr><th>Tier</th><th>Event</th><th>Winner</th><th>Runner-up</th></tr>
-          ${Object.entries(RACE_TIERS).map(([k,t])=>`<tr><td class="st-name">${t.label}</td><td class="st-t3">${esc(t.what)}</td><td class="st-t3">${t.win}</td><td class="st-t3">${t.final}</td></tr>`).join('')}
-        </table>
-        <div class="pred-hint" style="margin-top:10px">Event games don't score on their own — only the title and the final. A 3-player field pays 75%; fewer than 3 pays nothing.
-          Opponent strength comes from a hidden rating over every game, cup games included; it ranks nothing.</div>
-      </div>`;
-  }
+  const span = out.endMs - out.startMs, frac = Math.min(1, Math.max(0, (now - out.startMs) / span));
+  const dayN = Math.min(Math.ceil(span/864e5), Math.max(1, Math.floor((now - out.startMs)/864e5) + 1));
+  const left = Math.max(0, Math.ceil((out.endMs - now)/864e5));
+  $("raceClock").innerHTML = `
+    <div class="race-track" role="img" aria-label="Day ${dayN} of ${Math.ceil(span/864e5)}"><i style="width:${(frac*100).toFixed(2)}%"></i><b style="left:${(frac*100).toFixed(2)}%"></b></div>
+    <div class="race-ends"><span>${raceDate(season.start)}</span>
+      <span>${done ? "Season complete" : `<strong>Day ${dayN}</strong> · ${left} days left`}</span>
+      <span>${raceDate(season.end)}</span></div>`;
+
+  const rules = $("raceRules"), btn = $("raceRulesBtn");
+  rules.hidden = !raceRulesOpen;
+  btn.setAttribute("aria-expanded", raceRulesOpen ? "true" : "false");
+  if(raceRulesOpen) rules.innerHTML = raceRulesHtml();
 
   if(!rows.length){
-    box.innerHTML = `<div class="empty">${season.preview ? 'No games to replay yet.' : 'The season has opened — the first win puts a name on the board.'}</div>`;
+    box.innerHTML = `<li class="race-empty">${season.preview ? "No games to replay yet." : "The first win puts a name on the board."}</li>`;
     return rows;
   }
-  const titles = r => r.log.filter(x=>x.kind==="event")
-    .map(x=>`<span class="sets-tag" title="${esc(x.event)} · ${RACE_TIERS[x.tier].label} · ${x.field}-player field">${x.place==="champion"?"🏆":"🥈"} ${esc(x.event)} +${x.pts}</span>`).join(' ');
-  box.innerHTML = `
-    <table class="sim-table race-table">
-      <tr><th>#</th><th>Player</th><th>Pts</th><th>1v1</th><th>Events</th><th title="this season, and all-time underneath">W-L-D</th><th title="how many of the other players they have played this season">Card</th></tr>
-      ${rows.map((r,i)=>`<tr>
-        <td class="pw-dim">${r.points ? i+1 : '\u2013'}</td>
-        <td class="st-name"><a href="#" onclick="openProfile('${esc(r.name).replace(/'/g,"\\'")}');return false">${esc(r.name)}</a>${titles(r)?'<br>'+titles(r):''}</td>
-        <td class="st-t3"><b>${r.points.toLocaleString()}</b></td>
-        <td class="st-t3">${r.ladderPts}</td>
-        <td class="st-t3">${r.eventPts}</td>
-        <td class="st-t3">${r.w}-${r.l}-${r.d}<br><span class="pw-dim" style="font-size:10px" title="all-time record">all ${r.career.w}-${r.career.l}-${r.career.d}</span></td>
-        <td class="st-t3">${r.card}/${r.cardOf}</td>
-      </tr>`).join('')}
-    </table>`;
+  const str = raceStrengths(matches, countsForAnalysis).now;
+  const top = lead ? lead.points : 0;
+  let rank = 0, prev = null;
+  box.innerHTML = rows.map((r, i) => {
+    if(r.points !== prev){ rank = i + 1; prev = r.points; }
+    const scored = r.points > 0;
+    const open = raceOpenRows.has(r.name);
+    const chips = r.log.filter(x => x.kind === "event").map(x =>
+      `<span class="race-chip${x.place === "champion" ? "" : " silver"}${x.dropped ? " dropped" : ""}" title="${esc(x.event)} · ${RACE_TIERS[x.tier].label}${x.dropped ? ' · not in best '+RACE_RR_BEST : ''}"><i></i>${esc(x.event)} <em>+${x.pts}</em></span>`).join("");
+    const dots = Array.from({length:r.cardOf}, (_, k) => `<i class="${k < r.card ? "on" : ""}"></i>`).join("");
+    const next = raceNextWins(r, rows, str).slice(0, 4);
+    return `<li class="race-row${lead && r.points === top ? " lead" : ""}${open ? " open" : ""}" data-n="${esc(r.name)}">
+      <div class="race-line" role="button" tabindex="0" aria-expanded="${open}" onclick="toggleRaceRow(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRaceRow(this)}">
+        <span class="race-rank${scored ? (rank <= 3 ? " g" + rank : "") : " nil"}">${scored ? rank : "–"}</span>
+        <span class="race-av">${avatar(r.name, 40)}</span>
+        <span class="race-who">
+          <a class="race-name" href="#" data-n="${esc(r.name)}" onclick="event.stopPropagation();openProfile(this.dataset.n);return false">${esc(r.name)}</a>
+          <span class="race-meta">
+            <span><strong>${r.w}–${r.l}${r.d ? "–" + r.d : ""}</strong> this season</span><span class="sep"></span>
+            <span>${r.career.w}–${r.career.l}${r.career.d ? "–" + r.career.d : ""} all-time</span>
+            ${r.cardOf ? `<span class="sep on-phone"></span><span class="on-phone">faced ${r.card}/${r.cardOf}</span>` : ""}
+          </span>
+          ${chips ? `<span class="race-chips">${chips}</span>` : ""}
+        </span>
+        ${r.cardOf ? `<span class="race-faced" title="played ${r.card} of the ${r.cardOf} others this season"><span class="race-dots">${dots}</span><span>faced ${r.card}/${r.cardOf}</span></span>` : `<span class="race-faced"></span>`}
+        <span class="race-pts"><b class="${scored ? "" : "zero"}">${r.points.toLocaleString()}</b>${scored ? `<span class="split">${r.ladderPts} 1v1 · ${r.eventPts} titles</span><span class="race-unit">pts</span>` : `<span>pts</span>`}</span>
+      </div>
+      ${top ? `<span class="race-share" style="width:${(r.points/top*100).toFixed(1)}%"></span>` : ""}
+      <div class="race-more">
+        ${!season.preview && !done && next.length ? `<div class="race-more-h">A win next is worth</div>
+          <div class="race-next">${next.map(n => `<span>${esc(n.name)} <b>${n.lo}–${n.hi}</b></span>`).join("")}</div>` : ""}
+        <div class="race-more-h">Points this season</div>
+        ${raceLogHtml(r)}
+      </div>
+    </li>`;
+  }).join("");
   return rows;
 }
 window.renderRace = renderRace;
