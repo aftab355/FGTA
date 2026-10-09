@@ -12183,6 +12183,8 @@ function _computeStandings(now){
       if(c > 0){ p.rating -= c; p.taxed += c; p.lastTax = {t, points:c}; p.taxLog.push({t, points:c}); }
     });
   });
+  /* PRANK: Kabir pinned to -1000. Delete this line to undo. */
+  if(P.Kabir) P.Kabir.rating = -1000;
   return Object.values(P).sort((x,y) => y.rating - x.rating);
 }
 /* ==== ELO-STANDINGS-END ==== */
