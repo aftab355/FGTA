@@ -1274,6 +1274,14 @@
   .race-row{position:relative;border-radius:10px;background:var(--lb-slab);overflow:hidden;
     --pc-hi:color-mix(in srgb,var(--pc) 55%,#fff)}
   .race-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pc-hi)}
+  /* injured: yellow wash over the whole row, with a hazard-tape tag */
+  .inj-overlay{position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;
+    background:repeating-linear-gradient(-45deg,rgba(250,204,21,.20) 0 14px,rgba(250,204,21,.10) 14px 28px);
+    box-shadow:inset 0 0 0 2px rgba(250,204,21,.75);display:flex;align-items:flex-start;justify-content:center}
+  .inj-tag{padding:2px 9px 3px;border-radius:0 0 5px 5px;background:#facc15;color:#1a1400;
+    font:800 9.5px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;
+    box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap}
+  .race-row.injured .race-line,.brow.injured > :not(.inj-overlay){opacity:.72}
   .race-line{display:grid;grid-template-columns:44px 46px minmax(0,1fr) auto 96px;align-items:center;gap:14px;
     padding:13px 16px 13px 18px;cursor:pointer;transition:background .15s ease}
   .race-line:hover{background:rgba(255,255,255,.04)}
@@ -11739,6 +11747,18 @@ function buzz(ms){ try{ navigator.vibrate && navigator.vibrate(ms||12); }catch(e
 
 
 /* ---------- identity: stable colour + avatar per player ---------- */
+/* Players sidelined for a stretch. The row stays on the board (their points
+   and rating are untouched) but wears a yellow "injured" sash until `until`
+   (exclusive). Delete an entry, or let the date pass, to clear it. */
+const INJURED = { Aftab: { until: "2027-01-01", label: "Injured · out for 2026" } };
+function injuryOf(name){
+  const x = INJURED[name];
+  return x && Date.now() < new Date(x.until + "T00:00:00").getTime() ? x : null;
+}
+function injuryOverlay(name){
+  const x = injuryOf(name);
+  return x ? `<span class="inj-overlay" aria-label="${esc(x.label)}"><span class="inj-tag">🩹 ${esc(x.label)}</span></span>` : "";
+}
 function playerColor(name){
   const s=(name||"").trim().toLowerCase();
   let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
@@ -12183,8 +12203,6 @@ function _computeStandings(now){
       if(c > 0){ p.rating -= c; p.taxed += c; p.lastTax = {t, points:c}; p.taxLog.push({t, points:c}); }
     });
   });
-  /* PRANK: Kabir pinned to -1000. Delete this line to undo. */
-  if(P.Kabir) P.Kabir.rating = -1000;
   return Object.values(P).sort((x,y) => y.rating - x.rating);
 }
 /* ==== ELO-STANDINGS-END ==== */
@@ -22952,7 +22970,8 @@ function render(){
         if(rs.best>=1) return ` · <span class="crown-ico">👑</span>best ${fmtDays(rs.best)}`; // held it before, not currently on top
         return '';
       })();
-      return `<div class="brow ${g}" onclick="openProfile('${esc(p.name).replace(/'/g,"\\'")}')">
+      return `<div class="brow ${g}${injuryOf(p.name)?" injured":""}" onclick="openProfile('${esc(p.name).replace(/'/g,"\\'")}')">
+        ${injuryOverlay(p.name)}
         <div class="brow-rank">${i+1}</div>
         <div class="brow-av">${avatar(p.name,38)}</div>
         <div class="brow-id">
@@ -30526,7 +30545,8 @@ function renderRace(){
       `<span class="race-chip${x.place === "champion" ? "" : " silver"}${x.dropped ? " dropped" : ""}" title="${esc(x.event)} · ${RACE_TIERS[x.tier].label}${x.dropped ? ' · not in best '+RACE_RR_BEST : ''}"><i></i>${esc(x.event)} <em>+${x.pts}</em></span>`).join("");
     const dots = Array.from({length:r.cardOf}, (_, k) => `<i class="${k < r.card ? "on" : ""}"></i>`).join("");
     const next = raceNextWins(r, rows, str).slice(0, 4);
-    return `<li class="race-row${lead && r.points === top ? " lead" : ""}${open ? " open" : ""}" data-n="${esc(r.name)}" style="--pc:${playerColor(r.name)}">
+    return `<li class="race-row${lead && r.points === top ? " lead" : ""}${open ? " open" : ""}${injuryOf(r.name) ? " injured" : ""}" data-n="${esc(r.name)}" style="--pc:${playerColor(r.name)}">
+      ${injuryOverlay(r.name)}
       <div class="race-line" role="button" tabindex="0" aria-expanded="${open}" onclick="toggleRaceRow(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRaceRow(this)}">
         <span class="race-rank${scored ? (rank <= 3 ? " g" + rank : "") : " nil"}">${scored ? rank : "–"}</span>
         <span class="race-av">${avatar(r.name, 40)}</span>
