@@ -11750,7 +11750,10 @@ function buzz(ms){ try{ navigator.vibrate && navigator.vibrate(ms||12); }catch(e
 /* Players sidelined for a stretch. The row stays on the board (their points
    and rating are untouched) but wears a yellow "injured" sash until `until`
    (exclusive). Delete an entry, or let the date pass, to clear it. */
-const INJURED = { Aftab: { until: "2027-01-01", label: "Injured · out for 2026" } };
+const INJURED = {
+  Aftab: { until: "2027-01-01", label: "Injured · out for 2026" },
+  M4:    { until: "2027-01-01", label: "Injured · out for 2026" },
+};
 function injuryOf(name){
   const x = INJURED[name];
   return x && Date.now() < new Date(x.until + "T00:00:00").getTime() ? x : null;
