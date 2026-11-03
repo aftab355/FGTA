@@ -502,6 +502,45 @@ sheet, not a stack of cards**:
 ### Spacing
 No formal scale — panels use 14–20px internal padding, sections stack with margin-top: 40px (26px on mobile), grids use 8–14px gaps. Recreate with whatever spacing scale the target design system already has, snapping to the nearest step.
 
+## The Void — FGTA 2026 is over (Nov 3, 2026 → spring 2027)
+
+The 2026 season is closed. Until spring the whole site is **the void**: every game of the season being pulled into a black hole, and a way to watch it happen.
+
+**One switch.** `data-season="void"` on `<html>`. Everything below is scoped to it, in two sentinel-delimited blocks of `index.html` — `SEASON-VOID-CSS` (a `<style>` just before `<body>`) and `SEASON-VOID` (a `<script>` just before `</body>`) — plus three markup stubs after `<body>` (`#voidSky`, `#voidDebris`, `#seasonVoid`). It sits on top of the Match Day skin's night session rather than replacing it, so it inherits a dark theme every view was already built for.
+
+**What the site does while it is on:**
+
+- **Night, always, re-lit.** The pre-paint script resolves the theme to night regardless of the viewer's choice (the day/night button is hidden), and the night palette moves from floodlit green to deep space lit by an accretion disk — amber `#FFB35C` accent on violet-black. Text tokens measured on the lightest ground (`--panel-2 #171428`): ink 14.6, muted 8.9, dim 5.6, accent 9.6. The tennis ball stays a tennis ball.
+- **The hole.** A fixed black hole sits behind the app (`#voidSky`: a conic accretion disk turning once every 90s, a lensed arc over the top, the photon ring, the shadow, and the near half of the disk passing in front of it). Panels are glass, so it shows in every gap. Over it, a 30fps canvas (`#voidDebris`) carries **the season's actual results** — initials and scores, read off the match log — spiralling in, stretching as they fall, and respawning at the rim. No blur filters; it pauses when the tab is hidden or the film is open, and is not drawn at all under reduced motion.
+- **The pull.** Every card on the site is drawn toward the horizon as it scrolls away — it shrinks, turns and fades — on scroll-driven animations of the *individual* transform properties (`scale` / `rotate` / `translate`), which compose with the cursor-tilt script's inline `transform` instead of fighting it. Browsers without `animation-timeline` simply don't get it.
+- **"FGTA 2026 is over"** at the top of every view (full on Ladder, Home and Events; a slim bar elsewhere) with the season's counts and a way into the film, and a **2026 · The void** chip in the top bar.
+- **Things that would otherwise keep running into a winter nobody plays in:** the leaderboard's state chip reads *Winter break* and its clock *Frozen for winter* (the race engine itself is untouched — see below); the Fall Exhibition's end date is clamped to `SEASON_CLOSED` in code (`seasonClamp()`), so it shows final standings rather than "27 days left" — the `fall_exhibition` row itself is not changed; and the report form says the season is closed but **still works**, because an admin files corrections through it.
+
+**Into the void — the film.** A full-screen retrospective (`#seasonVoid`) that opens once per browser session after the load screen (not on a deep link, and never with `?novoid` in the URL), and from the banner or the chip at any time. Scroll, and the season falls in one game at a time: each result is a fragment of light orbiting the hole, and it goes over the horizon at the point in the scroll where its own card is. At the end the hole collapses and a tennis ball comes up where it was, over a countdown to the first day of spring.
+
+Ten chapters, all built at open time from the live data through the app's own engines — `setPairs`/`breakerIndex` for scores, `matchKPair` for an Elo replay that recovers each game's pre-match odds, `computeStandings` for the frozen table, `rpSnapshot` for the cup, `computeFallExhibition` for the fall board — so correcting a result corrects the film:
+
+1. **Opening** — the date range, the counts.
+2. **Opening serve** — everything before the eventual #1's first game.
+3. **Enter Kabir** — from the #1's debut to the start of the fall (named after whoever is #1, not hard-coded).
+4. **The FF Cup** — in its own neon: the bracket with the champion at its centre, the final as a hero card with the set-by-set and the broadcast link, the group table straight off `rpSnapshot`, then every cup game.
+5. **Fall Exhibition** — in maple: the final fall board, then every fall game.
+6. **Two on two** — every doubles game as a constellation (partners joined, the winning pair lit), and every partnership's record.
+7. **The table, frozen** — the Elo ladder at the close with each player's whole year as a sparkline, and the honours (season #1 from `SEASON_HONOURS`, cup champion, Fall Exhibition, iron man, upset of the year).
+8. **Overheard** — lines from the feed.
+9. **The ledger** — games, sets, games inside them, bagels, breakers, three-setters, players, results filed vs approved.
+10. **Spring** — the collapse, the ball, the countdown.
+
+**Every game gets the form its game earned**, decided from the scoreline, not assigned: a straight-sets win is a **polaroid** of the winner (or an engraved **scoreboard plate**); a blowout is a **newspaper clipping**; a match that went three is a **film strip**, one frame per set; a decider played to ten is a **breaker counter**; a draw is a **ticket torn in two**. Tags are derived too — debuts, first wins, streaks, bagels, comebacks, tiebreak sets, and upsets with the odds the ladder gave them going in. A result whose sets contradict its outcome (semi1 is one) is read as written winner-first rather than shown as a winner who lost every set.
+
+**The only hand-written content is `STORY` and `HEARD`** at the top of the script: quotes people actually posted, copied as posted and keyed by match id. They sit next to scores; they never are the score. The crude ones stayed in the feed.
+
+**Reopening in spring:**
+
+1. Take `data-season="void"` off `<html>`. That alone restores the Match Day skin, the day/night choice, the leaderboard clock, the report form and the Fall Exhibition's stored end date.
+2. Delete the `SEASON-VOID-CSS` and `SEASON-VOID` blocks, the three stubs after `<body>`, `SEASON_CLOSED`/`seasonClamp()` (next to `FALL_END_DEFAULT`), the `seasonClamp(...)` wrapper in the `fall_exhibition` loader, the two `SeasonVoid.onData()` calls in `load()` / `restoreOfflineCache()`, and the void line in the pre-paint theme script.
+3. Decide what the leaderboard season is. `RACE_SEASON` still says **2026–27, Oct 7 2026 → Oct 6 2027**, and the void only relabels it. If the new season starts in spring, move `RACE_SEASON.start` (and `end`) there — otherwise October's games and the winter count toward it.
+
 ## Admin Studio — changing the site without changing the code
 
 Everything above describes what the site is *coded* to look like. An admin can change most of it from inside the site: ☰ → **✎ Edit site**, then click something and change it. **Publish** pushes the result to everyone over realtime. Full guide: **[docs/admin-studio.md](docs/admin-studio.md)**; setup is one migration, [docs/site-config.sql](docs/site-config.sql).
