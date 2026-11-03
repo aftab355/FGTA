@@ -3,7 +3,7 @@
      and "FF CUP" in the stylesheet; all are scoped to :root[data-skin], so
      this one attribute is the whole switch. Keep this comment short —
      the charset meta below must land in the first 1024 bytes. -->
-<html lang="en" data-skin="court">
+<html lang="en" data-skin="court" data-season="void">
 <head>
 <!-- charset first: the encoding declaration has to land inside the first
      1024 bytes of the document, and anything placed above it (there used to
@@ -9935,7 +9935,8 @@
   var root = document.documentElement, KEY = "fgta_theme";
   var mq = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
   function pref(){ try{ var v = localStorage.getItem(KEY); return v==="day"||v==="night" ? v : "auto"; }catch(e){ return "auto"; } }
-  function resolve(p){ return p==="night" || (p==="auto" && mq && mq.matches) ? "night" : "day"; }
+  /* the off-season void is a night with no day in it — see SEASON VOID */
+  function resolve(p){ if(root.getAttribute("data-season")==="void") return "night"; return p==="night" || (p==="auto" && mq && mq.matches) ? "night" : "day"; }
   function paint(animate){
     var p = pref(), t = resolve(p);
     if(animate){ root.classList.add("theme-swap"); setTimeout(function(){ root.classList.remove("theme-swap"); }, 450); }
@@ -9943,7 +9944,7 @@
     root.setAttribute("data-theme-pref", p);
     /* the phone's status bar joins the frame: --chrome in each theme */
     var m = document.querySelector('meta[name="theme-color"]');
-    if(m && root.getAttribute("data-skin")==="court") m.setAttribute("content", t==="night" ? "#05130C" : "#0C3324");
+    if(m && root.getAttribute("data-skin")==="court") m.setAttribute("content", root.getAttribute("data-season")==="void" ? "#030208" : t==="night" ? "#05130C" : "#0C3324");
     try{ document.dispatchEvent(new CustomEvent("fgta:theme", {detail:{theme:t, pref:p}})); }catch(e){}
     return t;
   }
@@ -9965,8 +9966,565 @@
 })();
 </script>
 
+<style id="seasonVoidCSS">
+/* ==== SEASON-VOID-CSS-START ====================================
+   THE VOID — FGTA 2026 is over.
+
+   The whole site is switched by ONE attribute: data-season="void" on
+   <html>. Every rule in this block is scoped to it, so taking the
+   attribute off (the spring reopening) puts the Match Day skin back
+   exactly as it was, with nothing else to undo. It sits ON TOP of the
+   court skin's night session rather than replacing it: night is the
+   readable dark base the whole app already paints from, and this block
+   moves its temperature from floodlit green to deep space and adds
+   the hole.
+
+   Three layers:
+     1. the palette — night, re-lit by an accretion disk (amber on
+        violet-black). Measured on --panel-2 (#171428): ink 14.6,
+        muted 8.9, dim 5.6, accent 9.6, gold 11.5, danger 6.3, win 10.1.
+     2. the sky — a fixed black hole (#voidSky) behind the app and a
+        canvas of the season's own results (#voidDebris) spiralling
+        into it. Transform/opacity only; the canvas is 30fps, pauses
+        when hidden and is never drawn under reduced motion.
+     3. the pull — every card on the site is drawn toward the horizon
+        as it scrolls away, on scroll-driven animations of the
+        INDIVIDUAL transform properties (scale / rotate / translate),
+        so they compose with the cursor-tilt script's inline transform
+        instead of fighting it.
+
+   The retrospective itself (#seasonVoid) is the "Into the void" film
+   further down, built from the live match log.
+   ============================================================== */
+:root[data-season="void"][data-skin][data-theme],
+:root[data-season="void"][data-skin][data-theme] body,
+:root[data-season="void"][data-skin][data-theme] body[data-heat],
+:root[data-season="void"][data-skin][data-theme] body[data-wx]{
+  color-scheme:dark;
+  --bg:#07060D!important; --panel:#0F0D1A!important; --panel-2:#171428!important;
+  --line:rgba(225,215,255,.14)!important; --line-soft:rgba(225,215,255,.07)!important;
+  --ink:#EFEBF7!important; --muted:#BEB6D3!important; --dim:#958CB0!important;
+  --accent:#FFB35C!important; --accent-dim:rgba(255,179,92,.13)!important; --accent-glow:rgba(255,179,92,.30)!important;
+  --on-accent:#1B0E00!important;
+  --chrome:#040309!important;
+  --on-chrome:#F2EEF9!important; --on-chrome-dim:rgba(242,238,249,.62)!important;
+  --chrome-line:rgba(242,238,249,.10)!important;
+  --ball:#D8F04A!important; --ball-glow:rgba(216,240,74,.30)!important;
+  --court:#AFA2FF!important; --court-dim:rgba(175,162,255,.14)!important;
+  --gold:#FFD47E!important; --silver:#D3D0E0!important; --bronze:#E9A574!important;
+  --danger:#FF7D8C!important; --pending:#FFD47E!important; --win:#7EE2B2!important;
+  --wx-ink:200,190,225!important;
+  --shadow:0 24px 50px -28px rgba(0,0,0,.95)!important;
+  --highlight-rim:rgba(255,255,255,.06)!important;
+  --highlight-ambient:#1D1733!important;
+  --shadow-tinted:#000000!important;
+  --surface-sunken:#0A0814!important;
+  --accent-pop:#FF6B3D!important;
+  --accent-split-a:#AFA2FF!important;
+  --accent-split-b:#7FD6FF!important;
+  --surface-bevel-light:#221C3A!important;
+  --surface-bevel-shadow:#010103!important;
+  --glow-mesh:#FFB35C!important;
+  --cs-1:#FFB35C!important; --cs-2:#D8F04A!important; --cs-3:#FF6B3D!important; --cs-4:#7FD6FF!important; --cs-5:#AFA2FF!important;
+  --v-void:#030208; --v-amber:#FFB35C; --v-flare:#FF6B3D; --v-violet:#AFA2FF; --v-ice:#9FE7FF;
+  --v-cup:#3DFF6E; --v-maple:#E8823A; --v-ball:#D8F04A;
+}
+/* the sky is painted on <html>; <body> has to stay transparent or it
+   covers the fixed layers behind it (they sit at negative z-index, which
+   paints after the root's background but before an in-flow body's) */
+:root[data-season="void"]{background:#030208!important}
+/* specific enough to beat the night session's own !important body paint */
+:root[data-season="void"][data-skin][data-theme] body,
+:root[data-season="void"][data-skin][data-theme] body[data-heat],
+:root[data-season="void"][data-skin][data-theme] body[data-wx]{background:transparent!important}
+:root[data-season="void"] #hudGrid,
+:root[data-season="void"] #wxfx,
+:root[data-season="void"] .fall-leaves,
+:root[data-season="void"] .ff-fire,
+:root[data-season="void"] .ff-crt{display:none!important}
+/* night is forced while the void is on (see the pre-paint script) — a day
+   button that does nothing is worse than no button */
+:root[data-season="void"] #themeBtn{display:none!important}
+
+/* the scoreboard keeps its own palette on every skin — in the void it is
+   a slab of night with the disk's light on its rim */
+:root[data-season="void"] .race-card{
+  --lb-bg:#120E22; --lb-bg2:#07050F; --lb-line:rgba(242,238,249,.12);
+  --lb-gold:#FFD47E; --lb-clay:#FF6B3D;
+}
+
+/* ---- glass: the hole shows through the gaps, never through the type ---- */
+:root[data-season="void"] .panel,
+:root[data-season="void"] .board{
+  background:linear-gradient(180deg, rgba(23,19,40,.90), rgba(12,10,22,.94))!important;
+  border-color:rgba(225,215,255,.12)!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 0 0 1px rgba(255,179,92,.04), var(--shadow)!important;
+}
+:root[data-season="void"] .topbar,
+:root[data-season="void"] .botbar{
+  background:rgba(4,3,9,.94)!important;
+  box-shadow:0 1px 0 rgba(255,179,92,.16), 0 10px 40px -20px rgba(255,107,61,.35)!important;
+}
+:root[data-season="void"] .live-ticker-bar{background:#040309!important}
+/* the court skin's green primary button, re-lit by the disk */
+:root[data-season="void"][data-skin][data-theme] .btn{background:linear-gradient(180deg,#FFC67E,#F29A3D)!important;color:#1B0E00!important;border-color:transparent!important}
+:root[data-season="void"] .tb-ball{
+  background:radial-gradient(circle at 50% 50%, #000 0 46%, #FFB35C 52%, rgba(255,107,61,.6) 60%, transparent 72%)!important;
+  box-shadow:0 0 14px rgba(255,179,92,.55)!important;
+}
+:root[data-season="void"] .tb-ball::after,
+:root[data-season="void"] .tb-ball::before{display:none!important}
+
+/* ---- 2. the sky ---- */
+#voidSky,#voidDebris{display:none}
+:root[data-season="void"] #voidSky{
+  display:block;position:fixed;inset:0;z-index:-2;pointer-events:none;overflow:hidden;
+  --hx:50%; --hy:58%;
+}
+:root[data-season="void"] #voidSky::before{          /* far stars, one gradient */
+  content:"";position:absolute;inset:0;opacity:.55;
+  background:
+    radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 27% 72%, #cfc6ff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 41% 33%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 63% 12%, #ffe2bf 50%, transparent 51%),
+    radial-gradient(1px 1px at 78% 64%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 88% 28%, #cfe9ff 50%, transparent 51%),
+    radial-gradient(1px 1px at 6% 86%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 54% 92%, #ffd9b0 50%, transparent 51%),
+    radial-gradient(1px 1px at 93% 88%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 35% 6%, #fff 50%, transparent 51%),
+    radial-gradient(120vmax 80vmax at var(--hx) var(--hy), rgba(80,40,140,.22), transparent 60%);
+}
+#voidSky .vh{position:absolute;left:var(--hx);top:var(--hy);width:0;height:0}
+/* the disk: a conic of hot gas, squashed into an ellipse and turning.
+   Softness lives in the gradient stops and a feathered mask — no blur
+   filter (the FF Cup skin measured one at 117ms a frame). */
+#voidSky .vh-dk{position:absolute;left:-62vmin;top:-62vmin;width:124vmin;height:124vmin}
+/* the near half of the disk passes in front of the shadow */
+#voidSky .vh-dk.front{clip-path:inset(50% 0 0 0)}
+#voidSky .vh-disk{
+  position:absolute;left:0;top:0;width:100%;height:100%;border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(255,107,61,0) 0deg, rgba(255,179,92,.55) 40deg, rgba(255,236,200,.75) 70deg,
+    rgba(255,107,61,.35) 120deg, rgba(175,162,255,.20) 190deg, rgba(255,179,92,.45) 250deg,
+    rgba(255,236,200,.6) 290deg, rgba(255,107,61,.2) 330deg, rgba(255,107,61,0) 360deg);
+  -webkit-mask:radial-gradient(circle, transparent 0 21%, #000 27%, rgba(0,0,0,.55) 46%, transparent 70%);
+          mask:radial-gradient(circle, transparent 0 21%, #000 27%, rgba(0,0,0,.55) 46%, transparent 70%);
+  transform:scaleY(.28) rotate(0deg);
+  animation:voidSpin 90s linear infinite;
+  opacity:.85;
+}
+/* the photon ring and the lensed back of the disk, bent up over the top */
+#voidSky .vh-ring{
+  position:absolute;left:-17vmin;top:-17vmin;width:34vmin;height:34vmin;border-radius:50%;
+  background:radial-gradient(circle, transparent 0 55%, rgba(255,236,200,.95) 59%, rgba(255,179,92,.55) 63%, rgba(255,107,61,.18) 70%, transparent 78%);
+}
+#voidSky .vh-arc{
+  position:absolute;left:-30vmin;top:-30vmin;width:60vmin;height:60vmin;border-radius:50%;
+  background:radial-gradient(circle, transparent 0 34%, rgba(255,214,160,.55) 37%, rgba(255,140,80,.22) 44%, transparent 56%);
+  -webkit-mask:linear-gradient(180deg, #000 0 38%, transparent 52%);
+          mask:linear-gradient(180deg, #000 0 38%, transparent 52%);
+  transform:scaleX(1.25);
+  opacity:.8;
+}
+#voidSky .vh-core{
+  position:absolute;left:-9.6vmin;top:-9.6vmin;width:19.2vmin;height:19.2vmin;border-radius:50%;
+  background:#000;box-shadow:0 0 0 1px rgba(0,0,0,.9), 0 0 6vmin 2vmin rgba(0,0,0,.9);
+}
+@keyframes voidSpin{to{transform:scaleY(.28) rotate(360deg)}}
+:root[data-season="void"] #voidDebris{
+  display:block;position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;
+}
+
+/* ---- 3. the pull ---- */
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion: no-preference){
+    :root[data-season="void"] .wrap .panel,
+    :root[data-season="void"] .wrap .race-card{
+      animation:voidPull linear both;
+      animation-timeline:view();
+      animation-range:exit 0% exit 100%;
+      transform-origin:50% 100%;
+    }
+    @keyframes voidPull{
+      0%  {scale:1;  rotate:0deg;  opacity:1}
+      100%{scale:.62;rotate:-7deg; opacity:.08; translate:0 22vh}
+    }
+  }
+}
+
+/* ---- the season-over banner on every view ---- */
+.void-mount{display:none}
+:root[data-season="void"] .void-mount{display:block;margin:0 0 22px}
+.vm-slab{
+  position:relative;overflow:hidden;isolation:isolate;
+  border-radius:16px;padding:26px 26px 22px;
+  background:radial-gradient(90% 140% at 82% 120%, rgba(255,107,61,.20), transparent 60%),
+             linear-gradient(180deg,#120E22,#06050C);
+  border:1px solid rgba(255,179,92,.22);
+  box-shadow:0 30px 70px -40px rgba(255,107,61,.6), 0 1px 0 rgba(255,255,255,.06) inset;
+  color:#EFEBF7;
+}
+.vm-slab::after{                       /* a hole on the slab itself */
+  content:"";position:absolute;z-index:-1;right:-60px;bottom:-110px;width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle, #000 0 26%, rgba(255,236,200,.9) 28.5%, rgba(255,179,92,.45) 32%, rgba(255,107,61,.12) 42%, transparent 60%);
+}
+.vm-k{font:700 11px/1 'JetBrains Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:#FFB35C}
+.vm-t{font:800 clamp(30px,5.4vw,58px)/.92 'Barlow Condensed','Inter',sans-serif;font-style:italic;text-transform:uppercase;margin:10px 0 8px;letter-spacing:.01em}
+.vm-t em{font-style:italic;color:transparent;-webkit-text-stroke:1.2px #FFB35C}
+.vm-l{max-width:58ch;color:#BEB6D3;font-size:14.5px;line-height:1.5}
+.vm-stats{display:flex;flex-wrap:wrap;gap:8px 22px;margin:16px 0 18px;font:600 12px/1.3 'JetBrains Mono',monospace;color:#BEB6D3}
+.vm-stats b{display:block;font:800 24px/1 'Barlow Condensed',sans-serif;color:#EFEBF7;letter-spacing:.02em}
+.vm-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.vm-go{
+  appearance:none;border:0;cursor:pointer;border-radius:999px;padding:12px 20px;
+  font:800 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  color:#1B0E00;background:linear-gradient(180deg,#FFD08F,#FFB35C);box-shadow:0 8px 24px -8px rgba(255,179,92,.8);
+}
+.vm-go:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.vm-spring{font:600 12px/1.3 'JetBrains Mono',monospace;color:#D8F04A;letter-spacing:.06em}
+.vm-spring b{color:#EFEBF7}
+.void-mount.mini .vm-slab{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 16px}
+.void-mount.mini .vm-slab::after{width:140px;height:140px;right:-30px;bottom:-60px}
+.void-mount.mini .vm-t{font-size:22px;margin:0}
+.void-mount.mini .vm-go{padding:9px 14px;font-size:13px}
+.void-mount.mini .vm-l,.void-mount.mini .vm-stats,.void-mount.mini .vm-k{display:none}
+
+/* the report form: the season is closed, the form is not (an admin still
+   files corrections) — it just says so */
+.void-closed-note{display:none}
+:root[data-season="void"] .void-closed-note{
+  display:block;margin:0 0 12px;padding:10px 12px;border-radius:10px;
+  background:rgba(255,179,92,.10);border:1px solid rgba(255,179,92,.28);color:var(--ink);font-size:13px;line-height:1.45;
+}
+
+/* the top bar chip — the way back in, on every view */
+.void-chip{display:none}
+:root[data-season="void"] .void-chip{
+  display:inline-flex;flex-direction:column;justify-content:center;gap:2px;cursor:pointer;
+  margin-left:10px;padding:5px 11px 6px;border-radius:8px;border:1px solid rgba(255,179,92,.35);
+  background:linear-gradient(180deg,rgba(255,179,92,.14),rgba(255,107,61,.06));
+}
+.void-chip b{font:800 11px/1 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#FFB35C}
+.void-chip i{font:600 8.5px/1 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.1em;color:#BEB6D3;text-transform:uppercase}
+@media (max-width:560px){ :root[data-season="void"] .void-chip i{display:none} }
+
+/* ==== the retrospective: "Into the void" ==================== */
+#seasonVoid{display:none}
+#seasonVoid.open{
+  display:block;position:fixed;inset:0;z-index:9500;background:#030208;color:#EFEBF7;
+  font-family:'Inter',system-ui,sans-serif;
+  --amber:#FFB35C; --flare:#FF6B3D; --violet:#AFA2FF; --ice:#9FE7FF; --cup:#3DFF6E; --maple:#E8823A; --ball:#D8F04A;
+  --ink:#EFEBF7; --muted:#BEB6D3; --dim:#958CB0;
+}
+#seasonVoid canvas.sv-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.sv-scroll{
+  position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+}
+.sv-bar{
+  position:absolute;z-index:3;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;
+  padding:max(12px, env(safe-area-inset-top)) 16px 12px;
+  background:linear-gradient(180deg,rgba(3,2,8,.92),rgba(3,2,8,0));pointer-events:none;
+}
+.sv-bar > *{pointer-events:auto}
+.sv-mark{font:800 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase}
+.sv-mark span{color:var(--amber)}
+.sv-prog{flex:1;height:2px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
+.sv-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--violet),var(--amber));transform-origin:left}
+.sv-x{
+  appearance:none;cursor:pointer;border:1px solid rgba(255,255,255,.2);background:rgba(3,2,8,.6);color:var(--ink);
+  border-radius:999px;padding:9px 14px;font:700 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;
+}
+.sv-x:focus-visible,.sv-btn:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+.sv-ch{position:relative;z-index:2;min-height:100vh;min-height:100svh;padding:110px 16px 90px;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center}
+.sv-in{width:100%;max-width:920px}
+.sv-kick{font:700 11px/1.3 'JetBrains Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:var(--amber);margin-bottom:12px}
+.sv-h{font:800 clamp(40px,8.5vw,96px)/.88 'Barlow Condensed','Inter',sans-serif;font-style:italic;text-transform:uppercase;margin:0 0 18px;letter-spacing:.005em}
+.sv-h em{color:transparent;-webkit-text-stroke:1.5px var(--amber);font-style:italic}
+.sv-lede{font-size:clamp(16px,2.1vw,19px);line-height:1.6;color:var(--muted);max-width:62ch;margin:0 0 30px}
+.sv-lede b{color:var(--ink);font-weight:600}
+#seasonVoid .sv-h,#seasonVoid .sv-lede,#seasonVoid .sv-kick{text-shadow:0 0 3px #030208,0 2px 16px #030208,0 0 34px #030208}
+.sv-glass{background:rgba(10,8,20,.72);border:1px solid rgba(225,215,255,.12);border-radius:16px;padding:18px;
+  box-shadow:0 30px 60px -40px #000}
+
+/* the opening: words falling toward the hole */
+.sv-open{justify-content:center;text-align:center}
+.sv-open .sv-h{font-size:clamp(54px,13vw,170px);text-shadow:0 0 60px rgba(255,179,92,.25)}
+.sv-open .sv-lede{margin-left:auto;margin-right:auto;color:var(--ink);text-shadow:0 0 3px #000,0 2px 14px #000,0 0 30px #030208}
+.sv-open .sv-kick,.sv-open .sv-hint{text-shadow:0 0 3px #000,0 0 14px #000}
+.sv-hint{margin-top:26px;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+.sv-hint::after{content:"";display:block;width:1px;height:46px;margin:14px auto 0;background:linear-gradient(var(--amber),transparent);animation:svDrip 2.4s ease-in-out infinite}
+@keyframes svDrip{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+
+/* ---- memories ---- */
+.mems{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:22px 18px;align-items:start}
+.mem{
+  position:relative;color:var(--ink);border-radius:12px;
+  transition:transform .4s cubic-bezier(.2,.8,.2,1);
+}
+.mem:nth-child(3n+1){rotate:-1.2deg}
+.mem:nth-child(3n+2){rotate:.9deg;margin-top:14px}
+.mem:nth-child(3n){rotate:-.4deg}
+.mem-date{font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.mem-hd{font:800 21px/1.02 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.01em;margin:6px 0 4px}
+.mem-who{font-size:13.5px;color:var(--muted);line-height:1.4}
+.mem-who b{color:var(--ink);font-weight:600}
+.mem-q{margin:10px 0 0;padding:8px 0 0 12px;border-left:2px solid var(--amber);font:italic 500 14.5px/1.45 'Playfair Display',Georgia,serif;color:var(--ink)}
+.mem-q cite{display:block;margin-top:4px;font:600 10.5px/1 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.08em;color:var(--dim)}
+.mem-note{margin-top:8px;font:500 12px/1.45 'JetBrains Mono',monospace;color:var(--muted)}
+.mem-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.mem-tags span{font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;padding:4px 6px;border-radius:4px;
+  background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.08)}
+.mem-tags span.hot{color:#1B0E00;background:var(--amber);border-color:transparent}
+.mem a{color:var(--amber)}
+
+/* polaroid: a straight-sets win, the winner in the frame */
+.mem-pola{background:#F3EEE4;color:#1B1726;padding:12px 12px 16px;border-radius:3px;box-shadow:0 26px 50px -24px rgba(0,0,0,.9)}
+.mem-pola .pola-ph{height:132px;border-radius:2px;position:relative;overflow:hidden;
+  background:radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--pc) 70%, #fff), color-mix(in srgb, var(--pc) 60%, #000));
+  display:flex;align-items:flex-end;justify-content:space-between;padding:10px 12px;filter:sepia(.25) saturate(.9)}
+.mem-pola .pola-ph b{font:800 54px/.8 'Barlow Condensed',sans-serif;color:rgba(255,255,255,.92);letter-spacing:-.01em}
+.mem-pola .pola-ph s{font:700 22px/1 'JetBrains Mono',monospace;color:rgba(255,255,255,.95);text-decoration:none;text-align:right}
+.mem-pola .pola-ph::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.28),transparent 40%)}
+.mem-pola .mem-date,.mem-pola .mem-who{color:#5B5470}
+.mem-pola .mem-who b{color:#1B1726}
+.mem-pola .mem-hd{font:italic 600 19px/1.15 'Playfair Display',Georgia,serif;text-transform:none}
+.mem-pola .mem-q{color:#1B1726;border-color:#C76A1E}
+.mem-pola .mem-q cite{color:#5B5470}
+.mem-pola .mem-tags span{background:rgba(0,0,0,.05);color:#4A4360;border-color:rgba(0,0,0,.08)}
+.mem-pola .mem-tags span.hot{background:#1B1726;color:#FFD08F}
+.mem-pola .mem-note{color:#4A4360}
+.mem-pola a{color:#A4480B}
+
+/* clipping: the blowouts get a back page */
+.mem-clip{background:#EDE6D6;color:#1A1712;padding:14px 14px 16px;border-radius:2px;
+  clip-path:polygon(0 2%,6% 0,14% 1.5%,23% 0,35% 1%,47% 0,58% 1.6%,71% 0,82% 1.2%,93% 0,100% 1.5%,99% 50%,100% 98%,90% 100%,78% 98.5%,66% 100%,52% 98.6%,40% 100%,27% 98.5%,15% 100%,4% 98.6%,0 100%,1% 50%);
+  box-shadow:0 20px 40px -20px #000}
+.mem-clip .mast{display:flex;justify-content:space-between;border-bottom:2px solid #1A1712;padding-bottom:4px;font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase}
+.mem-clip .mem-hd{font:800 34px/.92 'Playfair Display',Georgia,serif;text-transform:uppercase;margin:10px 0 6px;letter-spacing:-.01em}
+.mem-clip .mem-date,.mem-clip .mem-who{color:#3A352B}
+.mem-clip .mem-who b{color:#1A1712}
+.mem-clip .clip-big{font:700 15px/1.2 'JetBrains Mono',monospace;margin:4px 0}
+.mem-clip .mem-q{color:#1A1712;border-color:#1A1712}
+.mem-clip .mem-q cite,.mem-clip .mem-note{color:#3A352B}
+.mem-clip .mem-tags span{background:transparent;color:#1A1712;border-color:#1A1712}
+.mem-clip .mem-tags span.hot{background:#1A1712;color:#EDE6D6}
+.mem-clip a{color:#7A2E06}
+
+/* film: a match that went the distance, one frame per set */
+.mem-film{background:#0B0A10;border:1px solid rgba(255,255,255,.1);padding:12px 12px 14px;box-shadow:0 24px 50px -26px #000}
+.mem-film .strip{display:flex;gap:6px;margin:10px 0 4px;padding:8px 6px;background:#16141C;border-radius:4px;position:relative}
+.mem-film .strip::before,.mem-film .strip::after{content:"";position:absolute;left:4px;right:4px;height:4px;
+  background:repeating-linear-gradient(90deg,#030208 0 6px,transparent 6px 12px)}
+.mem-film .strip::before{top:1px}.mem-film .strip::after{bottom:1px}
+.mem-film .fr{flex:1;border-radius:2px;padding:9px 6px 7px;text-align:center;background:linear-gradient(180deg,#24202E,#17141F)}
+.mem-film .fr b{display:block;font:800 26px/1 'Barlow Condensed',sans-serif}
+.mem-film .fr i{display:block;margin-top:3px;font:600 9px/1 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+.mem-film .fr.is-w b{color:var(--amber)}
+.mem-film .fr.is-l b{color:var(--muted)}
+.mem-film .fr.bk{background:linear-gradient(180deg,#3A2410,#1E1309)}
+.mem-film .fr.bk b{color:#FFD08F}
+
+/* breaker: a decider played to ten — the counter */
+.mem-brk{background:linear-gradient(180deg,#140F07,#080603);border:1px solid rgba(255,179,92,.35);padding:12px 14px 14px;
+  box-shadow:0 0 0 1px rgba(255,179,92,.08) inset, 0 24px 60px -30px rgba(255,107,61,.7)}
+.mem-brk .ctr{display:flex;align-items:center;justify-content:center;gap:14px;margin:12px 0 6px;
+  font:700 54px/1 'JetBrains Mono',monospace;color:#FFB35C;text-shadow:0 0 18px rgba(255,179,92,.65)}
+.mem-brk .ctr small{font:700 12px/1 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.2em}
+.mem-brk .pre{text-align:center;font:600 11px/1.3 'JetBrains Mono',monospace;color:var(--muted);letter-spacing:.06em}
+
+/* ticket: a game nobody won, torn in half */
+.mem-tix{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0;background:none}
+.mem-tix .tix-half{background:#E6DFF5;color:#191428;padding:12px;border-radius:8px;position:relative;
+  -webkit-mask:radial-gradient(circle at 100% 50%, transparent 9px, #000 9.5px);mask:radial-gradient(circle at 100% 50%, transparent 9px, #000 9.5px)}
+.mem-tix .tix-half + .tix-half{-webkit-mask:radial-gradient(circle at 0 50%, transparent 9px, #000 9.5px);mask:radial-gradient(circle at 0 50%, transparent 9px, #000 9.5px);rotate:3deg;translate:4px 6px}
+.mem-tix .tix-half b{display:block;font:800 22px/1 'Barlow Condensed',sans-serif;text-transform:uppercase}
+.mem-tix .tix-half s{display:block;margin-top:6px;font:700 20px/1 'JetBrains Mono',monospace;text-decoration:none}
+.mem-tix .tix-half i{display:block;margin-top:6px;font:600 9px/1.3 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.12em;text-transform:uppercase;color:#5A5373}
+.mem-tix .tix-tail{grid-column:1/-1;padding:4px 2px 0}
+
+/* plate: the rest — an engraved scoreboard plate */
+.mem-plate{background:linear-gradient(180deg,#1B1730,#0E0B1B);border:1px solid rgba(175,162,255,.25);padding:12px 14px 14px;
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 24px 50px -30px #000}
+.mem-plate .plate-rows{margin:10px 0 2px;border-top:1px solid rgba(255,255,255,.08)}
+.mem-plate .plate-r{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);font:600 15px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.mem-plate .plate-r span{flex:1}
+.mem-plate .plate-r em{font:700 15px/1 'JetBrains Mono',monospace;font-style:normal;min-width:22px;text-align:center;color:var(--muted)}
+.mem-plate .plate-r em.is-w{color:var(--amber)}
+.mem-plate .plate-r.is-w span::after{content:" ◂";color:var(--amber)}
+
+/* odds: an upset — the bar it beat */
+.odds{margin-top:9px;font:600 10.5px/1.3 'JetBrains Mono',monospace;color:var(--muted)}
+.odds .ob{height:6px;border-radius:3px;margin-top:4px;background:rgba(255,255,255,.12);overflow:hidden}
+.odds .ob i{display:block;height:100%;background:var(--amber)}
+.mem-pola .odds,.mem-clip .odds{color:#4A4360}
+.mem-pola .odds .ob,.mem-clip .odds .ob{background:rgba(0,0,0,.12)}
+.mem-pola .odds .ob i,.mem-clip .odds .ob i{background:#C76A1E}
+
+/* ---- the FF Cup chapter: neon, because that is what it wore ---- */
+.sv-cup .sv-kick{color:var(--cup)}
+.sv-cup .sv-h em{-webkit-text-stroke-color:var(--cup)}
+.cup-draw{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:12px;margin:0 0 26px;padding:18px;border-radius:16px;
+  background:radial-gradient(60% 80% at 50% 50%, rgba(61,255,110,.10), transparent 70%), #050806;border:1px solid rgba(61,255,110,.28);
+  box-shadow:0 0 0 1px rgba(61,255,110,.06) inset, 0 30px 70px -40px rgba(61,255,110,.5)}
+.cup-col{display:flex;flex-direction:column;gap:12px}
+.cup-tie{border:1px solid rgba(61,255,110,.22);border-radius:10px;padding:9px 10px;background:rgba(0,0,0,.55)}
+.cup-tie .lbl{font:700 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:var(--cup);text-transform:uppercase}
+.cup-tie .ct-p{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font:700 17px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.cup-tie .ct-p.is-w{color:#EFFFF3}
+.cup-tie .ct-p.is-w span::before{content:"";display:inline-block;vertical-align:middle;width:6px;height:6px;border-radius:50%;background:var(--cup);box-shadow:0 0 8px var(--cup);margin:-2px 7px 0 0}
+.cup-tie .ct-p.is-l{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.3)}
+.cup-tie .ct-p s{font:600 12px/1 'JetBrains Mono',monospace;text-decoration:none;color:var(--dim);align-self:center}
+.cup-trophy{text-align:center}
+.cup-trophy .cupic{font-size:46px;filter:drop-shadow(0 0 18px rgba(61,255,110,.6))}
+.cup-trophy b{display:block;margin-top:6px;font:800 34px/1 'Barlow Condensed',sans-serif;font-style:italic;text-transform:uppercase;color:#EFFFF3;text-shadow:0 0 22px rgba(61,255,110,.7)}
+.cup-trophy i{display:block;margin-top:4px;font:600 10.5px/1.3 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.14em;text-transform:uppercase;color:var(--cup)}
+.cup-group{margin:0 0 24px;overflow-x:auto}
+.cup-group table{width:100%;border-collapse:collapse;font:600 13px/1 'JetBrains Mono',monospace}
+.cup-group th,.cup-group td{padding:9px 8px;border-bottom:1px solid rgba(61,255,110,.14);text-align:center;white-space:nowrap}
+.cup-group th{font-size:10px;letter-spacing:.16em;color:var(--cup);text-transform:uppercase}
+.cup-group td:first-child,.cup-group th:first-child{text-align:left}
+.cup-group td:first-child{font:700 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.cup-group tr.is-q td:first-child::after{content:" Q";color:var(--cup);font:700 10px 'JetBrains Mono',monospace}
+.sv-cup .mem-plate{border-color:rgba(61,255,110,.3);background:linear-gradient(180deg,#0B1A10,#040906)}
+.sv-cup .mem-plate .plate-r em.is-w,.sv-cup .mem-plate .plate-r.is-w span::after{color:var(--cup)}
+.sv-cup .mem-film .fr.is-w b{color:var(--cup)}
+.sv-cup .mem-q{border-color:var(--cup)}
+.svf{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;align-items:center;margin:0 0 26px;padding:20px;border-radius:18px;
+  background:radial-gradient(70% 120% at 0% 0%, rgba(61,255,110,.16), transparent 60%), #040805;border:1px solid rgba(61,255,110,.4)}
+.svf .svf-k{font:700 11px/1 'JetBrains Mono',monospace;letter-spacing:.22em;color:var(--cup);text-transform:uppercase}
+.svf .svf-h{font:800 clamp(30px,5vw,50px)/.9 'Barlow Condensed',sans-serif;font-style:italic;text-transform:uppercase;margin:8px 0}
+.svf .svf-sets{display:flex;gap:8px;margin:10px 0}
+.svf .svf-sets span{flex:1;text-align:center;padding:10px 4px;border-radius:8px;background:rgba(0,0,0,.6);border:1px solid rgba(61,255,110,.18);font:800 30px/1 'Barlow Condensed',sans-serif}
+.svf .svf-sets span small{display:block;margin-top:4px;font:600 9px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.svf .svf-sets span.is-w{color:var(--cup);border-color:rgba(61,255,110,.5)}
+.svf .svf-yt{display:inline-flex;align-items:center;gap:8px;margin-top:6px;font:700 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#EFFFF3;text-decoration:none;
+  padding:10px 14px;border-radius:999px;border:1px solid rgba(61,255,110,.5);background:rgba(61,255,110,.1)}
+
+/* ---- fall: maple, the colour it wore ---- */
+.sv-fall .sv-kick{color:var(--maple)}
+.sv-fall .sv-h em{-webkit-text-stroke-color:var(--maple)}
+.fall-board{display:flex;flex-direction:column;gap:8px;margin:0 0 26px}
+.fall-row{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;
+  background:linear-gradient(90deg,rgba(232,130,58,.16),rgba(232,130,58,.02));border:1px solid rgba(232,130,58,.22)}
+.fall-row b{font:800 20px/1 'Barlow Condensed',sans-serif}
+.fall-row span{font:700 17px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.05em}
+.fall-row em{font:700 15px/1 'JetBrains Mono',monospace;font-style:normal;color:#FFC79A}
+.fall-row em.neg{color:var(--muted)}
+.fall-row small{display:block;font:500 10.5px/1.2 'JetBrains Mono',monospace;color:var(--dim);margin-top:3px;letter-spacing:.04em;text-transform:none}
+
+/* ---- doubles: constellations ---- */
+.sv-dbl .sv-kick{color:var(--ice)}
+.sv-dbl .sv-h em{-webkit-text-stroke-color:var(--ice)}
+.mem-star{background:radial-gradient(120% 100% at 50% 0%, #121633, #05060F);border:1px solid rgba(159,231,255,.22);padding:12px 12px 14px;
+  box-shadow:0 24px 60px -30px rgba(80,140,255,.45)}
+.mem-star svg{display:block;width:100%;height:auto;margin:6px 0 2px}
+.mem-star .dlk{stroke:rgba(159,231,255,.3);stroke-width:1.2;stroke-dasharray:3 4}
+.mem-star .dlk.is-w{stroke:#9FE7FF;stroke-width:2.2;stroke-dasharray:none;filter:drop-shadow(0 0 4px #9FE7FF)}
+.mem-star .dst{fill:#cfd8ff}
+.mem-star .dst.is-w{fill:#fff;filter:drop-shadow(0 0 6px #9FE7FF)}
+.mem-star text{font:700 12px 'Barlow Condensed',sans-serif;letter-spacing:.08em;fill:#cfd8ff;text-transform:uppercase}
+.mem-star text.is-w{fill:#fff}
+.mem-star .dsc{display:flex;gap:6px;justify-content:center;margin-top:4px}
+.mem-star .dsc span{font:700 13px/1 'JetBrains Mono',monospace;padding:5px 7px;border-radius:5px;background:rgba(159,231,255,.08);border:1px solid rgba(159,231,255,.18)}
+.pair-tab{width:100%;border-collapse:collapse;margin:0 0 26px;font:600 13px/1 'JetBrains Mono',monospace}
+.pair-tab td,.pair-tab th{padding:9px 8px;border-bottom:1px solid rgba(159,231,255,.12);text-align:left}
+.pair-tab th{font-size:10px;letter-spacing:.16em;color:var(--ice);text-transform:uppercase}
+.pair-tab td:first-child{font:700 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.05em;text-transform:uppercase}
+
+/* ---- the table, frozen ---- */
+.final-tab{display:flex;flex-direction:column;gap:10px;margin:0 0 26px}
+.ft-row{display:grid;grid-template-columns:34px 44px 1fr 120px 70px;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;
+  background:rgba(14,11,26,.85);border:1px solid rgba(225,215,255,.12)}
+.ft-row.is-top{border-color:rgba(255,212,126,.55);box-shadow:0 0 40px -18px rgba(255,212,126,.6)}
+.ft-rank{font:800 28px/1 'Barlow Condensed',sans-serif;font-style:italic;color:var(--muted)}
+.ft-row.is-top .ft-rank{color:#FFD47E}
+.ft-name{font:800 22px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em}
+.ft-name small{display:block;margin-top:4px;font:500 11px/1.3 'JetBrains Mono',monospace;color:var(--dim);text-transform:none;letter-spacing:.02em}
+.ft-spark{width:120px;height:34px}
+.ft-rat{font:700 22px/1 'JetBrains Mono',monospace;text-align:right}
+.ft-rat small{display:block;font:600 10px/1 'JetBrains Mono',monospace;color:var(--dim);margin-top:4px}
+@media (max-width:560px){ .ft-row{grid-template-columns:28px 38px 1fr 64px} .ft-spark{display:none} }
+.honours{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:0 0 10px}
+.hon{padding:14px;border-radius:12px;background:linear-gradient(180deg,rgba(255,212,126,.12),rgba(255,212,126,.02));border:1px solid rgba(255,212,126,.3)}
+.hon i{font-style:normal;font-size:24px}
+.hon b{display:block;margin-top:6px;font:800 20px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em}
+.hon span{display:block;margin-top:5px;font:500 12px/1.4 'JetBrains Mono',monospace;color:var(--muted)}
+
+/* ---- overheard ---- */
+.heard{columns:2 260px;column-gap:18px}
+.heard figure{break-inside:avoid;margin:0 0 18px;padding:14px 16px;border-radius:12px;background:rgba(14,11,26,.8);border:1px solid rgba(225,215,255,.1)}
+.heard blockquote{margin:0;font:italic 500 18px/1.4 'Playfair Display',Georgia,serif}
+.heard figcaption{margin-top:8px;font:600 11px/1.3 'JetBrains Mono',monospace;letter-spacing:.08em;color:var(--dim);text-transform:uppercase}
+
+/* ---- the ledger ---- */
+.ledger{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.ledger div{padding:14px;border-radius:12px;background:rgba(14,11,26,.8);border:1px solid rgba(225,215,255,.1)}
+.ledger b{display:block;font:800 40px/1 'Barlow Condensed',sans-serif;color:var(--amber)}
+.ledger span{display:block;margin-top:6px;font:500 12px/1.35 'JetBrains Mono',monospace;color:var(--muted)}
+
+/* ---- the end, and spring ---- */
+/* the end is laid out round the middle of the screen, because that is
+   where the hole collapses and the new ball comes up */
+.sv-end{text-align:center;padding-top:84px;padding-bottom:28px}
+.sv-end .sv-in{display:flex;flex-direction:column;justify-content:space-between;min-height:calc(100svh - 112px)}
+.sv-end .sv-h{font-size:clamp(40px,8vw,104px);margin-bottom:10px}
+.sv-end .sv-lede{font-size:clamp(14px,1.8vw,17px);margin-bottom:0}
+.sv-end .sv-gap{flex:1 0 30vh}
+.sv-spring{margin:0 auto;max-width:640px}
+.sv-spring .sv-k2{font:700 12px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--ball)}
+.sv-spring .sv-big{white-space:nowrap;font:800 clamp(44px,9vw,108px)/.9 'Barlow Condensed',sans-serif;font-style:italic;text-transform:uppercase;margin:12px 0;
+  background:linear-gradient(180deg,#F4FFC2,#D8F04A 55%,#8FB31B);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 30px rgba(216,240,74,.35))}
+.sv-cd{display:flex;justify-content:center;gap:10px;margin:10px 0 18px}
+.sv-cd div{min-width:68px;padding:10px 8px;border-radius:10px;background:rgba(216,240,74,.08);border:1px solid rgba(216,240,74,.3)}
+.sv-cd b{display:block;font:700 30px/1 'JetBrains Mono',monospace;color:#F4FFC2}
+.sv-cd i{display:block;margin-top:5px;font:600 9px/1 'JetBrains Mono',monospace;font-style:normal;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.sv-btn{appearance:none;cursor:pointer;border:0;border-radius:999px;padding:14px 22px;font:800 16px/1 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  color:#141A00;background:linear-gradient(180deg,#EAFF8A,#D8F04A);box-shadow:0 10px 30px -10px rgba(216,240,74,.7)}
+.sv-btn.ghost{background:transparent;color:var(--ink);border:1px solid rgba(255,255,255,.25);box-shadow:none;margin-left:8px}
+
+/* the pull, inside the film: a memory scrolling away is taken by the hole */
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion: no-preference){
+    #seasonVoid .mem,#seasonVoid .sv-glass,#seasonVoid .cup-draw,#seasonVoid .svf,#seasonVoid .ft-row,#seasonVoid .heard figure,#seasonVoid .ledger div,#seasonVoid .hon{
+      animation:svPull linear both;animation-timeline:view();animation-range:entry 0% exit 100%;
+    }
+    @keyframes svPull{
+      0%  {opacity:0;scale:.86;translate:0 40px}
+      14% {opacity:1;scale:1;translate:0 0}
+      78% {opacity:1;scale:1;translate:0 0}
+      100%{opacity:0;scale:.35;translate:0 35vh}
+    }
+  }
+}
+@media (max-width:640px){
+  .sv-ch{padding:92px 16px 70px}
+  .cup-draw{grid-template-columns:1fr;}
+  .svf{grid-template-columns:1fr}
+  .mems{grid-template-columns:1fr}
+  .mem:nth-child(3n+2){margin-top:0}
+}
+@media (prefers-reduced-motion: reduce){
+  #voidSky .vh-disk{animation:none}
+  .sv-hint::after{animation:none}
+  .sv-scroll{scroll-behavior:auto}
+}
+/* ==== SEASON-VOID-CSS-END ==== */
+</style>
+
 <body>
 <div id="hudGrid" aria-hidden="true"></div>
+<!-- SEASON VOID: the black hole behind the app and the season's results
+     falling into it. Inert (display:none) unless data-season="void" is on
+     <html>; the retrospective overlay is filled by the SEASON-VOID script. -->
+<div id="voidSky" aria-hidden="true"><div class="vh"><i class="vh-dk"><i class="vh-disk"></i></i><i class="vh-arc"></i><i class="vh-ring"></i><i class="vh-core"></i><i class="vh-dk front"><i class="vh-disk"></i></i></div></div>
+<canvas id="voidDebris" aria-hidden="true"></canvas>
+<div id="seasonVoid" role="dialog" aria-modal="true" aria-label="FGTA 2026 — into the void"></div>
 <!-- The cup's fire and its CRT. Both are inert off-skin (display:none) and
      take no part in layout: .ff-fire is a fixed strip of flame behind the
      app at z-index -2, .ff-crt is the scanline/roll overlay at 59, over the
@@ -11630,7 +12188,15 @@ let tournaments = []; // all tournaments from db
 /* admin-editable close of the Fall Exhibition window (see docs/fall-exhibition.sql);
    this default holds until that table loads, and forever if it was never migrated */
 const FALL_END_DEFAULT = "2026-11-30";
-let fallEndDate = FALL_END_DEFAULT;
+/* The day FGTA 2026 was closed (see SEASON VOID). While data-season="void"
+   is on, anything still running past it ends on it — the Fall Exhibition's
+   stored end date included, which is otherwise left as it is in the table,
+   so taking the attribute off in spring restores whatever the admin set. */
+const SEASON_CLOSED = "2026-11-03";
+function seasonClamp(d){
+  return d && document.documentElement.getAttribute("data-season") === "void" && d > SEASON_CLOSED ? SEASON_CLOSED : d;
+}
+let fallEndDate = seasonClamp(FALL_END_DEFAULT);
 let fallExhibitionTableMissing = false;
 let playerRatings = {}; // name -> attribute ratings
 let posts = [];         // standalone feed posts
@@ -25163,7 +25729,7 @@ const LOAD_TABLES = [
   ["string_jobs",       d=>{ stringJobs = d; }],
   /* optional: a deployment that hasn't run docs/fall-exhibition.sql yet just
      keeps FALL_END_DEFAULT, same graceful-miss handling as the Kit's tables */
-  ["fall_exhibition",   d=>{ if(d && d[0] && d[0].end_date) fallEndDate = d[0].end_date; }]
+  ["fall_exhibition",   d=>{ if(d && d[0] && d[0].end_date) fallEndDate = seasonClamp(d[0].end_date); }]
 ];
 
 let _loadInFlight = null;
@@ -25221,6 +25787,7 @@ async function load(opts){
     }catch(e){ /* quota or private mode — the cache is a nicety */ }
 
     render();
+    try{ if(window.SeasonVoid) SeasonVoid.onData(); }catch(e){ console.warn("[void]", e); }
     if(openMatchId !== null) renderComments(openMatchId);
     if(openScheduledMatchId !== null) openScheduledMatch(openScheduledMatchId);
     if(activeView === "bets") renderBets();
@@ -25253,6 +25820,7 @@ function restoreOfflineCache(){
   _ensembleWeightsCache = null;
   optAdoptServerState(["matches","comments","tournaments","posts","challenges"]);
   try{ render(); }catch(e){ console.warn("[load] cached render failed", e); }
+  try{ if(window.SeasonVoid) SeasonVoid.onData(); }catch(e){}
 }
 
 /* ============================================================
@@ -44782,5 +45350,848 @@ window.SITE = SITE;
 SITE.load();
 
 </script>
+<script>
+/* ==== SEASON-VOID-START ========================================
+   FGTA 2026 is over. Everything the season was — every singles game,
+   every doubles game, the FF Cup, the Fall Exhibition, what people
+   said about it — is pulled into one black hole, and the site says
+   it is coming back in spring.
+
+   Switched by data-season="void" on <html> and nothing else; with the
+   attribute off this whole script returns on its first line.
+
+   NOTHING HERE IS WRITTEN DOWN TWICE. Every score, record, rating and
+   table is read off the same live arrays the app draws from
+   (`matches`, `doublesMatches`, `tournaments`) through the app's own
+   engines — setPairs/breakerIndex for scores, matchKPair for the Elo
+   replay, computeStandings for the frozen table, rpSnapshot for the
+   cup, computeFallExhibition for the fall board. Correct a result in
+   the admin queue and the retrospective corrects itself. The only
+   things authored by hand are the STORIES below: lines people
+   actually posted, keyed to the match they were about. Those are
+   quotes, not data — the score beside them is always the live row.
+   ============================================================== */
+(function(){
+  "use strict";
+  const root = document.documentElement;
+  if(root.getAttribute("data-season") !== "void") return;
+
+  const SEASON = {
+    name: "FGTA 2026",
+    closed: typeof SEASON_CLOSED === "string" ? SEASON_CLOSED : "2026-11-03",   // the day the season was closed
+    returns: "2027-03-20",         // first day of spring — the countdown's target
+    returnsLabel: "Spring 2027"
+  };
+  const reduce = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  /* ---------- what people said, keyed to the game it was about ----------
+     Quotes are copied as posted (spelling included). Crude ones were left
+     in the feed where they belong; this is the version for the wall. */
+  const STORY = {
+    1:   {hd:"Where it started", note:"The first result ever filed on the FGTA ladder."},
+    6:   {q:[["I'm the goat","Aftab, in the comments"]]},
+    20:  {q:[["I'm retired","M4, in the comments"]]},
+    49:  {hd:"The rain game", note:"Set 2: rain started 10:10, lighting 10:25.",
+          q:[["I was honored to referee such a marvelous game between the new #1 of FGTA, Kabir L. Aakif put up a serious and resilient effort, but the rain poured and washed away enough to give Kabir the edge.","Aftab, the ref"]]},
+    58:  {q:[["Aakifs gave the Grint but Faiz stood strong and won the game in 2 sets.","Aftab, the ref"]]},
+    86:  {hd:"The callout", note:"Called out on Aug 2 — “August 11th. GET READY!!!” — and it got its own poll.",
+          q:[["I trained that guy 🗣️🗣️🗣️","M4"],["You cant win it all, but it was a heck of a game","Aftab"]]},
+    87:  {q:[["Aakifs showed up, but M4 had the fire in him.","Aftab, the ref"]]},
+    90:  {q:[["M4 came with aura, but Kabir left with it.","Aftab, the ref"]]},
+    94:  {hd:"The first crack", q:[["won't see it coming 👀","Faiz, eleven days earlier"]]},
+    97:  {note:"The draw's own solver rated this the tightest tie in the group. It went three sets."},
+    98:  {hd:"Twice", note:"The only two games Kabir lost all year were both to Faiz, both in this group."},
+    103: {hd:"M4 does the impossible", q:[["M4 does the impossible! I am honored to ref that amazing game.","Aftab, the ref"]]},
+    104: {hd:"Bee-sting semifinal", q:[["We break records here","Aftab, as quoted by Aakif"],["I got stung by a bee.","Aftab, that day"]]},
+    110: {q:[["I was honoured to ref such a spectacular game. FF cup finals, Winner Kabir","Aftab, the ref"]],
+          video:"https://youtu.be/1VcyrzVdszc"}
+  };
+  const HEARD = [
+    ["@faiz run the 1v1", "Aftab · the first post on the feed · Jul 24"],
+    ["I trained that guy 🗣️🗣️🗣️", "M4 · Aug 12"],
+    ["won't see it coming 👀", "Faiz · Aug 15"],
+    ["M4 came with aura, but Kabir left with it.", "Aftab · Aug 18"],
+    ["Bro I got 7k randomly after refereeing, I'm the most unbias ref", "M4 · in the comments"],
+    ["We break records here", "Aftab · via Aakif"],
+    ["I got stung by a bee.", "Aftab · semifinal day"],
+    ["Maybe FF cup was the just the lbs we lost along the way (tha shi was rigged)!", "M4 · the day after the final"],
+    ["Discipline turns potential into reality.", "M4 · Sep 16"],
+    ["🔥 Kabir is on a 5-game heater.", "League Bot · Aug 8"]
+  ];
+
+  /* ---------- reading the log ---------- */
+  const dOf  = m => new Date(m.created_at);
+  const fmt  = (d, o) => d.toLocaleDateString("en-US", o || {month:"short", day:"numeric"});
+  const fmtD = m => fmt(dOf(m));
+  const keyOf = n => String(n || "").trim().toLowerCase();
+  const E = s => esc(s == null ? "" : s);
+
+  /* a result, turned to face its winner. setPairs reads p1 first; a row
+     whose sets say the opposite of its outcome was written winner-first
+     (it happens — semi1 is one), and is read that way rather than shown
+     as a winner who lost every set. */
+  function orient(m){
+    const o = Number(m.outcome);
+    const pairs = setPairs(m.sets);
+    if(o === 0.5) return {draw:true, a:m.p1, b:m.p2, pairs};
+    const w = o === 1 ? m.p1 : m.p2, l = o === 1 ? m.p2 : m.p1;
+    let wp = o === 1 ? pairs : pairs.map(p => ({a:p.b, b:p.a}));
+    const won = wp.filter(p => p.a > p.b).length, lost = wp.filter(p => p.a < p.b).length;
+    if(won < lost) wp = wp.map(p => ({a:p.b, b:p.a}));
+    return {w, l, pairs:wp};
+  }
+  const setStr = pairs => pairs.map(p => p.a + "-" + p.b).join(", ");
+
+  function data(){
+    const singles = (matches || []).filter(m => m.status === "approved")
+      .slice().sort((a,b) => dOf(a) - dOf(b));
+    const dbl = (typeof doublesMatches !== "undefined" ? doublesMatches : []).filter(m => m.status === "approved")
+      .slice().sort((a,b) => dOf(a) - dOf(b));
+    const cup = (tournaments || []).find(t => /ff\s*cup/i.test(t.name || "")) || null;
+    return {singles, dbl, cup};
+  }
+
+  /* one replay of the season in order, collecting what each game MEANT:
+     the odds going in (the ladder's own Elo, same K and divisor), debuts,
+     first wins, streaks. Cup games are scored at the ratings of the day
+     but don't move them, exactly as the ladder treats them. */
+  function annotate(singles){
+    const R = {}, streak = {}, seen = {}, wins = {}, out = {};
+    const rating = n => (R[n] == null ? (R[n] = START) : R[n]);
+    singles.forEach((m, i) => {
+      const a = rating(m.p1), b = rating(m.p2);
+      const Ea = 1 / (1 + Math.pow(10, (b - a) / DIVISOR));
+      const f = orient(m), info = {i, f, tags:[]};
+      if(!f.draw){
+        info.pW = f.w === m.p1 ? Ea : 1 - Ea;
+        info.debutL = !seen[f.l]; info.debutW = !seen[f.w];
+        info.firstWin = !wins[f.w];
+        wins[f.w] = (wins[f.w] || 0) + 1;
+      } else { info.debutA = !seen[m.p1]; info.debutB = !seen[m.p2]; }
+      seen[m.p1] = seen[m.p2] = true;
+      const counts = (typeof countsForElo === "function") ? countsForElo(m) : true;
+      info.counts = counts;
+      if(counts){
+        const {kA, kB} = matchKPair(m, a, b);
+        const Sa = Number(m.outcome);
+        R[m.p1] = a + kA * (Sa - Ea);
+        R[m.p2] = b + kB * ((1 - Sa) - (1 - Ea));
+        if(!f.draw){ streak[f.w] = (streak[f.w] || 0) + 1; streak[f.l] = 0; info.streak = streak[f.w]; }
+        else { streak[m.p1] = streak[m.p2] = 0; }
+      }
+      out[m.id] = info;
+    });
+    return out;
+  }
+
+  /* ---------- one memory per game, each in the form its game earned ---------- */
+  function memSingles(m, info, ctx){
+    const f = info.f, st = STORY[m.id] || {}, pairs = f.pairs;
+    const bi = breakerIndex(pairs);
+    const bagels = pairs.filter(p => Math.min(p.a,p.b) === 0 && Math.max(p.a,p.b) === 6).length;
+    const lostG = f.draw ? 99 : pairs.reduce((s,p,k) => s + (k === bi ? 0 : p.b), 0);
+    const comeback = !f.draw && pairs.length >= 3 && pairs[0].a < pairs[0].b;
+    const tb = pairs.some(p => (p.a === 7 && p.b === 6) || (p.a === 6 && p.b === 7));
+    const tags = [];
+    if(info.i === 0) tags.push(["Game 1 of the season", 1]);
+    if(m.id === ctx.lastSinglesId) tags.push(["Last singles game of 2026", 1]);
+    if(!f.draw){
+      if(info.debutW && info.i) tags.push(["Debut · " + f.w]);
+      if(info.debutL && info.i) tags.push(["Debut · " + f.l]);
+      if(info.firstWin && info.i) tags.push(["First win · " + f.w, 1]);
+      if(info.pW < 0.42) tags.push(["Upset · " + Math.round(info.pW*100) + "% going in", 1]);
+      if(info.streak >= 3) tags.push([f.w + "'s " + info.streak + " in a row"]);
+      if(bagels === 2) tags.push(["Double bagel", 1]); else if(bagels) tags.push(["Bagel"]);
+      if(comeback) tags.push(["From a set down"]);
+      if(tb) tags.push(["Tiebreak set"]);
+    }
+    if(bi >= 0) tags.push(["Breaker decider"]);
+    if(m.round) tags.push([rpRoundName(m.round)]);
+    if(!info.counts && !m.tournament_id) tags.push(["Off the ladder"]);
+
+    const date = `<div class="mem-date">${E(fmtD(m))}${m.round ? " · " + E(rpRoundName(m.round)) : ""}</div>`;
+    const who = f.draw
+      ? `<div class="mem-who"><b>${E(f.a)}</b> and <b>${E(f.b)}</b> — nobody won it</div>`
+      : `<div class="mem-who"><b>${E(f.w)}</b> d. ${E(f.l)} · ${E(setStr(pairs))}</div>`;
+    const quotes = (st.q || []).slice(0,2).map(q => `<blockquote class="mem-q">“${E(q[0])}”<cite>— ${E(q[1])}</cite></blockquote>`).join("");
+    const note = st.note ? `<div class="mem-note">${E(st.note)}</div>` : "";
+    const vid = st.video ? `<div class="mem-note"><a href="${E(st.video)}" target="_blank" rel="noopener">▶ Watch it back</a></div>` : "";
+    const odds = (!f.draw && info.pW < 0.42) ? `<div class="odds">${E(f.w)} had a ${Math.round(info.pW*100)}% chance on the ladder's numbers<div class="ob"><i style="width:${Math.round(info.pW*100)}%"></i></div></div>` : "";
+    const tagH = tags.length ? `<div class="mem-tags">${tags.slice(0,4).map(t => `<span class="${t[1] ? "hot" : ""}">${E(t[0])}</span>`).join("")}</div>` : "";
+    const tail = quotes + note + vid + odds + tagH;
+    const data = `data-mid="${m.id}"`;
+
+    if(f.draw){
+      return `<article class="mem mem-tix" ${data}>
+        <div class="tix-half"><b>${E(f.a)}</b><s>${E(pairs.map(p=>p.a).join(" · "))}</s><i>${E(fmtD(m))}</i></div>
+        <div class="tix-half"><b>${E(f.b)}</b><s>${E(pairs.map(p=>p.b).join(" · "))}</s><i>Drawn · torn in two</i></div>
+        <div class="tix-tail">${st.hd ? `<div class="mem-hd">${E(st.hd)}</div>` : `<div class="mem-hd">Split down the middle</div>`}${tail}</div>
+      </article>`;
+    }
+    if(bi >= 0){
+      const b = pairs[bi];
+      return `<article class="mem mem-brk" ${data}>${date}
+        <div class="mem-hd">${E(st.hd || (b.a - b.b <= 2 ? "Ten points to settle it" : "Settled in a breaker"))}</div>
+        <div class="ctr">${b.a}<small>TO</small>${b.b}</div>
+        <div class="pre">${E(setStr(pairs.slice(0, bi)))} → one breaker for everything</div>
+        ${who}${tail}</article>`;
+    }
+    if(pairs.length >= 3){
+      const frames = pairs.map((p,k) => `<div class="fr ${p.a > p.b ? "is-w" : "is-l"}"><b>${p.a}-${p.b}</b><i>Set ${k+1}</i></div>`).join("");
+      return `<article class="mem mem-film" ${data}>${date}
+        <div class="mem-hd">${E(st.hd || (comeback ? f.w + " from a set down" : "The long way round"))}</div>
+        <div class="strip">${frames}</div>${who}${tail}</article>`;
+    }
+    if(bagels || lostG <= 3){
+      const hd = st.hd || (bagels === 2 ? "Double bagel" : lostG <= 2 ? "Over before it started" : "Bagel served");
+      return `<article class="mem mem-clip" ${data}>
+        <div class="mast"><span>The FGTA Post</span><span>${E(fmt(dOf(m), {month:"short", day:"numeric", year:"numeric"}))}</span></div>
+        <div class="mem-hd">${E(hd)}</div>
+        <div class="clip-big">${E(f.w.toUpperCase())} ${E(setStr(pairs))} ${E(f.l.toUpperCase())}</div>
+        ${quotes}${note}${vid}${odds}${tagH}</article>`;
+    }
+    if(info.i % 2 === 0 || st.hd){
+      return `<article class="mem mem-pola" ${data} style="--pc:${playerColor(f.w)}">
+        <div class="pola-ph"><b>${E(initials(f.w))}</b><s>${E(setStr(pairs))}</s></div>
+        ${date}<div class="mem-hd">${E(st.hd || (f.w + " over " + f.l))}</div>${who}${tail}</article>`;
+    }
+    const rowsH = [[f.w, pairs.map(p=>p.a), true], [f.l, pairs.map(p=>p.b), false]].map(([n, g, win]) =>
+      `<div class="plate-r${win ? " is-w" : ""}"><span>${E(n)}</span>${g.map((x,k) => `<em class="${(win ? x > pairs[k].b : x > pairs[k].a) ? "is-w" : ""}">${x}</em>`).join("")}</div>`).join("");
+    return `<article class="mem mem-plate" ${data}>${date}
+      <div class="mem-hd">${E(st.hd || (f.w + " in straight sets"))}</div>
+      <div class="plate-rows">${rowsH}</div>${tail}</article>`;
+  }
+
+  function rpRoundName(r){
+    if(!r) return "";
+    if(r === "final") return "Final";
+    if(r === "bronze") return "Third place";
+    if(/^semi/.test(r)) return "Semifinal";
+    if(/^grp/.test(r)) return "Group";
+    return r;
+  }
+
+  /* doubles: four stars, partners joined, the winning pair lit */
+  function memDoubles(m, i, ctx){
+    const t1 = [m.p1a, m.p1b], t2 = [m.p2a, m.p2b];
+    const o = Number(m.outcome), w1 = o === 1, draw = o === 0.5;
+    const pairs = setPairs(m.sets);
+    const W = w1 ? t1 : t2, L = w1 ? t2 : t1;
+    const sd = (m.id * 9301 + 49297) % 233280 / 233280;   // each sky its own, the same every time
+    const pts = [[38 + sd*20, 30], [70 + sd*14, 92], [222 - sd*16, 34], [248 - sd*22, 96]];
+    const lit = k => !draw && ((k < 2) === w1);
+    const svg = `<svg viewBox="0 0 290 130" aria-hidden="true">
+      <line class="dlk${lit(0) ? " is-w" : ""}" x1="${pts[0][0]}" y1="${pts[0][1]}" x2="${pts[1][0]}" y2="${pts[1][1]}"/>
+      <line class="dlk${lit(2) ? " is-w" : ""}" x1="${pts[2][0]}" y1="${pts[2][1]}" x2="${pts[3][0]}" y2="${pts[3][1]}"/>
+      <line class="dlk" x1="${(pts[0][0]+pts[1][0])/2}" y1="${(pts[0][1]+pts[1][1])/2}" x2="${(pts[2][0]+pts[3][0])/2}" y2="${(pts[2][1]+pts[3][1])/2}" style="stroke-dasharray:1 6"/>
+      ${[t1[0],t1[1],t2[0],t2[1]].map((n,k) => `<circle class="dst${lit(k) ? " is-w" : ""}" cx="${pts[k][0]}" cy="${pts[k][1]}" r="${lit(k) ? 4.5 : 3}"/>
+        <text class="${lit(k) ? "is-w" : ""}" x="${pts[k][0] + (k < 2 ? 9 : -9)}" y="${pts[k][1] + 4}" text-anchor="${k < 2 ? "start" : "end"}">${E(n)}</text>`).join("")}
+    </svg>`;
+    const tagH = [];
+    if(i === 0) tagH.push(["First doubles game", 1]);
+    if(m.id === ctx.lastDoublesId) tagH.push(["The last ball of 2026", 1]);
+    if(pairs.length >= 4) tagH.push([pairs.length + " sets"]);
+    const winP = draw ? "Drawn" : W.join(" & ") + " d. " + L.join(" & ");
+    return `<article class="mem mem-star" data-did="${m.id}">
+      <div class="mem-date">${E(fmtD(m))} · doubles</div>
+      <div class="mem-hd">${E(draw ? "Even" : W.join(" + "))}</div>
+      ${svg}
+      <div class="dsc">${pairs.map(p => `<span>${w1 || draw ? p.a + "-" + p.b : p.b + "-" + p.a}</span>`).join("")}</div>
+      <div class="mem-who" style="margin-top:8px">${E(winP)}</div>
+      ${tagH.length ? `<div class="mem-tags">${tagH.map(t => `<span class="${t[1] ? "hot" : ""}">${E(t[0])}</span>`).join("")}</div>` : ""}
+    </article>`;
+  }
+
+  /* ---------- the chapters ---------- */
+  function build(){
+    const {singles, dbl, cup} = data();
+    if(!singles.length) return null;
+    const notes = annotate(singles);
+    const st = (typeof computeStandings === "function") ? computeStandings() : [];
+    const top = (typeof SEASON_HONOURS !== "undefined" ? SEASON_HONOURS : []).find(h => /2026/.test(h.key)) || null;
+    const no1 = top ? top.player : (st[0] && st[0].name);
+    const ctx = {
+      lastSinglesId: singles[singles.length-1].id,
+      lastDoublesId: dbl.length ? dbl[dbl.length-1].id : null
+    };
+    const firstOf = n => singles.find(m => m.p1 === n || m.p2 === n);
+    const no1Debut = no1 && firstOf(no1) ? dOf(firstOf(no1)) : null;
+    const fallStart = new Date((typeof FALL_START !== "undefined" ? FALL_START : "2026-09-14") + "T00:00:00");
+    const isCup = m => cup && m.tournament_id === cup.id;
+    const others = singles.filter(m => !isCup(m));
+    const ch1 = others.filter(m => !no1Debut || dOf(m) < no1Debut);
+    const ch2 = others.filter(m => no1Debut && dOf(m) >= no1Debut && dOf(m) < fallStart);
+    const ch3 = singles.filter(isCup);
+    const ch4 = others.filter(m => dOf(m) >= fallStart);
+    const memList = list => `<div class="mems">${list.map(m => memSingles(m, notes[m.id], ctx)).join("")}</div>`;
+    const players = [...new Set(singles.flatMap(m => [m.p1, m.p2]))];
+
+    /* who carried a stretch: the most games in it */
+    const busiest = list => {
+      const c = {}; list.forEach(m => { c[m.p1] = (c[m.p1]||0)+1; c[m.p2] = (c[m.p2]||0)+1; });
+      return Object.entries(c).sort((a,b) => b[1]-a[1])[0] || null;
+    };
+    const ladderRec = n => { const r = st.find(x => x.name === n); return r ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""; };
+
+    const H = [];
+    const first = singles[0], last = dbl.length && dOf(dbl[dbl.length-1]) > dOf(singles[singles.length-1]) ? dbl[dbl.length-1] : singles[singles.length-1];
+    const days = Math.round((dOf(last) - dOf(first)) / 864e5);
+
+    /* 0. the opening */
+    H.push(`<section class="sv-ch sv-open" data-ch="Open"><div class="sv-in">
+      <div class="sv-kick">${E(fmt(dOf(first)))} – ${E(fmt(dOf(last)))} · ${days} days</div>
+      <h2 class="sv-h">${E(SEASON.name)}<br><em>is over</em></h2>
+      <p class="sv-lede">${singles.length} singles games. ${dbl.length} doubles games. One cup. Every one of them is about to fall into the hole in the middle of your screen — scroll, and watch them go.</p>
+      <div class="sv-hint">Scroll into the void</div>
+    </div></section>`);
+
+    /* 1. before the #1 arrived */
+    if(ch1.length){
+      const b = busiest(ch1);
+      H.push(`<section class="sv-ch" data-ch="Opening serve"><div class="sv-in">
+        <div class="sv-kick">Chapter one · ${E(fmtD(ch1[0]))} – ${E(fmtD(ch1[ch1.length-1]))}</div>
+        <h2 class="sv-h">Opening <em>serve</em></h2>
+        <p class="sv-lede">Before there was anybody to chase, there was a public court in Flemingdon Park and ${ch1.length} games in ${Math.max(1, Math.round((dOf(ch1[ch1.length-1]) - dOf(ch1[0]))/6048e5))} weeks.${b ? ` <b>${E(b[0])}</b> played in ${b[1]} of them.` : ""}</p>
+        ${memList(ch1)}
+      </div></section>`);
+    }
+
+    /* 2. the #1's summer */
+    if(ch2.length && no1){
+      const mine = ch2.filter(m => m.p1 === no1 || m.p2 === no1);
+      const unbeaten = mine.every(m => notes[m.id].f.w === no1);
+      H.push(`<section class="sv-ch" data-ch="Enter ${E(no1)}"><div class="sv-in">
+        <div class="sv-kick">Chapter two · from ${E(fmt(no1Debut))}</div>
+        <h2 class="sv-h">Enter <em>${E(no1)}</em></h2>
+        <p class="sv-lede"><b>${E(no1)}</b> filed a first game on ${E(fmt(no1Debut))} and ${unbeaten ? `did not lose a ladder game for the rest of the year — <b>${E(ladderRec(no1))}</b> when the season closed` : `finished the year top of the ladder`}. The rest of the summer was everybody else trying to work out how.</p>
+        ${memList(ch2)}
+      </div></section>`);
+    }
+
+    /* 3. the FF Cup */
+    if(ch3.length && cup) H.push(cupChapter(cup, ch3, notes, ctx));
+
+    /* 4. the fall */
+    if(ch4.length) H.push(fallChapter(ch4, memList, notes));
+
+    /* 5. doubles */
+    if(dbl.length) H.push(doublesChapter(dbl, ctx));
+
+    /* 6. the table, frozen */
+    H.push(tableChapter(st, singles, dbl, cup, notes, no1));
+
+    /* 7. overheard */
+    H.push(`<section class="sv-ch" data-ch="Overheard"><div class="sv-in">
+      <div class="sv-kick">Chapter seven · the feed</div>
+      <h2 class="sv-h">Over<em>heard</em></h2>
+      <p class="sv-lede">${(typeof posts !== "undefined" ? posts.length : 0)} posts and ${(typeof comments !== "undefined" ? comments.length : 0)} comments. A few of the ones fit to print.</p>
+      <div class="heard">${HEARD.map(h => `<figure><blockquote>“${E(h[0])}”</blockquote><figcaption>${E(h[1])}</figcaption></figure>`).join("")}</div>
+    </div></section>`);
+
+    /* 8. the ledger */
+    H.push(ledgerChapter(singles, dbl, players));
+
+    /* 9. the end, and spring */
+    H.push(`<section class="sv-ch sv-end" data-ch="Spring"><div class="sv-in">
+      <div class="sv-kick">Everything above is gone</div>
+      <h2 class="sv-h">Into the <em>void</em></h2>
+      <div><p class="sv-lede" style="margin-left:auto;margin-right:auto">Not lost — the match log keeps every point, and the archive is still one tap away. But the season is closed, the courts are going under snow, and the ladder sleeps until the thaw.</p></div>
+      <div class="sv-gap" aria-hidden="true"></div>
+      <div class="sv-spring">
+        <div class="sv-k2">FGTA returns</div>
+        <div class="sv-big">${E(SEASON.returnsLabel)}</div>
+        <div class="sv-cd" id="svCountdown" aria-live="off"></div>
+        <button class="sv-btn" type="button" data-sv="close">Back to the archive</button><button class="sv-btn ghost" type="button" data-sv="top">Fall in again</button>
+      </div>
+    </div></section>`);
+
+    return H.join("");
+  }
+
+  function cupChapter(cup, list, notes, ctx){
+    let snap = null; try{ snap = rpSnapshot(cup); }catch(e){}
+    const champ = cup.champion || (snap && snap.br && snap.br.final && snap.br.final.winner) || null;
+    const finalM = list.find(m => m.round === "final");
+    const semis = list.filter(m => /^semi/.test(m.round || ""));
+    const group = list.filter(m => !/^(semi|final|bronze)/.test(m.round || ""));
+    const tie = (m, label) => {
+      if(!m) return `<div class="cup-tie"><div class="lbl">${E(label)}</div></div>`;
+      const f = notes[m.id].f;
+      return `<div class="cup-tie"><div class="lbl">${E(label)} · ${E(fmtD(m))}</div>
+        <div class="ct-p is-w"><span>${E(f.w)}</span><s>${E(f.pairs.map(p=>p.a).join(" "))}</s></div>
+        <div class="ct-p is-l"><span>${E(f.l)}</span><s>${E(f.pairs.map(p=>p.b).join(" "))}</s></div></div>`;
+    };
+    const draw = `<div class="cup-draw" aria-label="FF Cup bracket">
+      <div class="cup-col">${tie(semis[0], "Semifinal 1")}</div>
+      <div class="cup-trophy"><div class="cupic">🏆</div><b>${E(champ || "—")}</b><i>FF Cup champion</i>${finalM ? `<div style="margin-top:12px">${tie(finalM, "Final")}</div>` : ""}</div>
+      <div class="cup-col">${tie(semis[1], "Semifinal 2")}</div>
+    </div>`;
+    let table = "";
+    if(snap && snap.qual && snap.qual.rows && snap.qual.rows.length){
+      /* a mark for who went through — unless everybody did */
+      const q = new Set((snap.seeds || []).length < snap.qual.rows.length ? snap.seeds : []);
+      table = `<div class="cup-group sv-glass"><table><thead><tr><th>Group</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Games</th><th>Pts</th></tr></thead><tbody>
+        ${snap.qual.rows.map(r => `<tr class="${q.has(r.name) ? "is-q" : ""}"><td>${E(r.name)}</td><td>${r.played}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td>${r.gw}–${r.gl}</td><td>${r.pts}</td></tr>`).join("")}
+      </tbody></table></div>`;
+    }
+    let fin = "";
+    if(finalM){
+      const f = notes[finalM.id].f, s = STORY[finalM.id] || {};
+      const firstLost = f.pairs[0] && f.pairs[0].a < f.pairs[0].b;
+      fin = `<div class="svf" data-mid="${finalM.id}">
+        <div><div class="svf-k">The final · ${E(fmt(dOf(finalM), {weekday:"long", month:"long", day:"numeric"}))}</div>
+          <div class="svf-h">${E(f.w)} ${firstLost ? "from a set down" : "takes the cup"}</div>
+          <div class="mem-who">${firstLost ? `<b>${E(f.l)}</b> took the first set ${f.pairs[0].b}-${f.pairs[0].a}. <b>${E(f.w)}</b> took the next ${f.pairs.length - 1} and the cup.` : `<b>${E(f.w)}</b> d. ${E(f.l)}.`}</div>
+          ${(s.q || []).map(q => `<blockquote class="mem-q">“${E(q[0])}”<cite>— ${E(q[1])}</cite></blockquote>`).join("")}
+          ${s.video ? `<a class="svf-yt" href="${E(s.video)}" target="_blank" rel="noopener">▶ Watch the final</a>` : ""}
+        </div>
+        <div class="svf-sets">${f.pairs.map((p,k) => `<span class="${p.a > p.b ? "is-w" : ""}">${p.a}-${p.b}<small>Set ${k+1}</small></span>`).join("")}</div>
+      </div>`;
+    }
+    const st = cup.bracket ? (()=>{ try{ return JSON.parse(cup.bracket); }catch(e){ return null; } })() : null;
+    const cut = st ? ((st.trim && st.trim.dropped || []).length + (st.voided || []).length) : 0;
+    const order = list.filter(m => m !== finalM);
+    return `<section class="sv-ch sv-cup" data-ch="FF Cup"><div class="sv-in">
+      <div class="sv-kick">Chapter three · ${E(fmtD(list[0]))} – ${E(fmtD(list[list.length-1]))}</div>
+      <h2 class="sv-h">The <em>FF Cup</em></h2>
+      <p class="sv-lede">${(st && st.roster ? st.roster.length : 4)} players, a double round robin, a cut to four and a bracket. ${list.length} games on record${cut ? `, ${cut} more cut or voided when the calendar ran out` : ""}. The site went jet black and neon for it, and every fixture got its own walk-in film. ${champ ? `<b>${E(champ)}</b> lifted it.` : ""}</p>
+      ${draw}${fin}${table}
+      <div class="mems">${order.map(m => memSingles(m, notes[m.id], ctx)).join("")}</div>
+    </div></section>`;
+  }
+
+  function fallChapter(list, memList, notes){
+    let rows = [], pend = [];
+    try{
+      const end = [typeof fallEndDate === "string" ? fallEndDate : SEASON.closed, SEASON.closed].sort()[0];
+      const fx = computeFallExhibition(end); rows = fx.eligible; pend = fx.pending;
+    }catch(e){}
+    const board = rows.length ? `<div class="fall-board">${rows.map((r,k) => `<div class="fall-row"><b>${k+1}</b>
+      <span>${E(r.name)}<small>${r.fallGames} fall games · ${Math.round(r.baseline)} → ${Math.round(r.rating)}</small></span>
+      <em class="${r.gain < 0 ? "neg" : ""}">${r.gain >= 0 ? "+" : ""}${Math.round(r.gain)}</em></div>`).join("")}
+      ${pend.length ? `<div class="mem-note">Not enough fall games to rank: ${pend.map(p => E(p.name) + " (" + p.fallGames + ")").join(", ")}</div>` : ""}</div>` : "";
+    const inj = (typeof INJURED !== "undefined") ? Object.keys(INJURED) : [];
+    return `<section class="sv-ch sv-fall" data-ch="Fall Exhibition"><div class="sv-in">
+      <div class="sv-kick">Chapter four · from ${E(fmtD(list[0]))}</div>
+      <h2 class="sv-h">Fall <em>Exhibition</em></h2>
+      <p class="sv-lede">The cup was over the day before. The ladder kept going and a second board counted only what each player gained from that moment on. ${rows[0] ? `<b>${E(rows[0].name)}</b> finished it ${rows[0].gain >= 0 ? "+" : ""}${Math.round(rows[0].gain)} up.` : ""} ${inj.length ? `By mid-October ${inj.map(E).join(" and ")} ${inj.length > 1 ? "were" : "was"} hurt and out for the year, and the singles ran out.` : ""}</p>
+      ${board}${memList(list)}
+    </div></section>`;
+  }
+
+  function doublesChapter(dbl, ctx){
+    const rec = {};
+    const key = (a,b) => [a,b].map(n => String(n).trim()).sort((x,y) => keyOf(x) < keyOf(y) ? -1 : 1);
+    const solo = {};
+    dbl.forEach(m => {
+      const o = Number(m.outcome);
+      [[[m.p1a,m.p1b], o === 1 ? "w" : o === 0 ? "l" : "d"], [[m.p2a,m.p2b], o === 0 ? "w" : o === 1 ? "l" : "d"]].forEach(([t, r]) => {
+        const k = key(t[0], t[1]), id = k.map(keyOf).join("+");
+        (rec[id] || (rec[id] = {names:k, w:0, l:0, d:0}))[r]++;
+        t.forEach(n => { const s = solo[keyOf(n)] || (solo[keyOf(n)] = {name:n, w:0, l:0, d:0}); s[r]++; });
+      });
+    });
+    const pairs = Object.values(rec).sort((a,b) => (b.w - b.l) - (a.w - a.l) || b.w - a.w);
+    const best = Object.values(solo).sort((a,b) => b.w - a.w || a.l - b.l)[0];
+    const lastM = dbl[dbl.length-1], lw = Number(lastM.outcome) === 1 ? [lastM.p1a,lastM.p1b] : [lastM.p2a,lastM.p2b];
+    return `<section class="sv-ch sv-dbl" data-ch="Doubles"><div class="sv-in">
+      <div class="sv-kick">Chapter five · ${E(fmtD(dbl[0]))} – ${E(fmtD(lastM))}</div>
+      <h2 class="sv-h">Two <em>on two</em></h2>
+      <p class="sv-lede">Doubles arrived late and stayed till the lights went out. ${dbl.length} games, ${Object.keys(solo).length} players, ${pairs.length} different partnerships. ${best ? `<b>${E(best.name)}</b> won the most (${best.w}–${best.l}).` : ""} The very last ball of 2026 was hit here: <b>${E(lw.join(" & "))}</b>, ${E(fmt(dOf(lastM), {month:"long", day:"numeric"}))}.</p>
+      <table class="pair-tab sv-glass"><thead><tr><th>Partnership</th><th>W–L</th></tr></thead><tbody>
+        ${pairs.map(p => `<tr><td>${E(p.names.join(" + "))}</td><td>${p.w}–${p.l}${p.d ? "–" + p.d : ""}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="mems">${dbl.map((m,i) => memDoubles(m, i, ctx)).join("")}</div>
+    </div></section>`;
+  }
+
+  function spark(h){
+    if(!h || h.length < 2) return "";
+    const lo = Math.min(...h), hi = Math.max(...h), W = 120, Hh = 34;
+    const pts = h.map((v,i) => `${(i/(h.length-1)*W).toFixed(1)},${(Hh - 3 - (hi === lo ? .5 : (v-lo)/(hi-lo)) * (Hh-6)).toFixed(1)}`).join(" ");
+    return `<svg class="ft-spark" viewBox="0 0 ${W} ${Hh}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="#FFB35C" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  }
+
+  function tableChapter(st, singles, dbl, cup, notes, no1){
+    const rows = st.map((p,k) => {
+      const inj = (typeof INJURED !== "undefined" && INJURED[p.name]) ? " · injured, out for 2026" : "";
+      return `<div class="ft-row${k === 0 ? " is-top" : ""}"><span class="ft-rank">${k+1}</span>${avatar(p.name, 40)}
+        <span class="ft-name">${E(p.name)}<small>${p.w}–${p.l}${p.d ? "–" + p.d : ""} on the ladder · peak ${Math.round(p.peak)}${inj}</small></span>
+        ${spark(p.history)}<span class="ft-rat">${Math.round(p.rating)}<small>Elo</small></span></div>`;
+    }).join("");
+    const hon = [];
+    if(no1) hon.push(["🥇", no1, "#1 — " + SEASON.name + ". Top of the ladder when the season closed."]);
+    if(cup && cup.champion) hon.push(["🏆", cup.champion, "FF Cup champion."]);
+    try{
+      const end = [typeof fallEndDate === "string" ? fallEndDate : SEASON.closed, SEASON.closed].sort()[0];
+      const fx = computeFallExhibition(end);
+      if(fx.eligible[0]) hon.push(["🍁", fx.eligible[0].name, "Fall Exhibition — most gained after the cup (+" + Math.round(fx.eligible[0].gain) + ")."]);
+    }catch(e){}
+    const games = {}; singles.forEach(m => { games[m.p1] = (games[m.p1]||0)+1; games[m.p2] = (games[m.p2]||0)+1; });
+    const iron = Object.entries(games).sort((a,b) => b[1]-a[1])[0];
+    if(iron) hon.push(["🔩", iron[0], "Iron man — " + iron[1] + " singles games, more than anyone."]);
+    let up = null; singles.forEach(m => { const n = notes[m.id]; if(!n.f.draw && (!up || n.pW < up.pW)) up = {m, pW:n.pW, f:n.f}; });
+    if(up && up.pW < 0.5) hon.push(["⚡", up.f.w, "Upset of the year — " + Math.round(up.pW*100) + "% against " + up.f.l + ", " + fmtD(up.m) + "."]);
+    return `<section class="sv-ch" data-ch="The table"><div class="sv-in">
+      <div class="sv-kick">Chapter six · frozen ${E(fmt(new Date(SEASON.closed + "T12:00:00"), {month:"long", day:"numeric"}))}</div>
+      <h2 class="sv-h">The table, <em>frozen</em></h2>
+      <p class="sv-lede">Where the Elo ladder stood when the season closed, with each player's whole year drawn beside it.</p>
+      <div class="final-tab">${rows}</div>
+      <div class="honours">${hon.map(h => `<div class="hon"><i>${h[0]}</i><b>${E(h[1])}</b><span>${E(h[2])}</span></div>`).join("")}</div>
+    </div></section>`;
+  }
+
+  function ledgerChapter(singles, dbl, players){
+    let sets = 0, gms = 0, bagels = 0, breakers = 0, three = 0;
+    const tally = list => list.forEach(m => {
+      const p = setPairs(m.sets), bi = breakerIndex(p);
+      sets += p.length; if(bi >= 0) breakers++;
+      if(p.length >= 3) three++;
+      p.forEach((x,k) => { if(k !== bi) gms += x.a + x.b; if(Math.min(x.a,x.b) === 0 && Math.max(x.a,x.b) === 6) bagels++; });
+    });
+    tally(singles); tally(dbl);
+    const filed = (matches || []).length;
+    const dplayers = new Set(dbl.flatMap(m => [m.p1a,m.p1b,m.p2a,m.p2b].map(keyOf)));
+    players.forEach(p => dplayers.add(keyOf(p)));
+    const cells = [
+      [singles.length + dbl.length, "games played"],
+      [sets, "sets"],
+      [gms.toLocaleString(), "games inside them"],
+      [bagels, "6-0 sets"],
+      [breakers, "decided on a breaker"],
+      [three, "went three sets or more"],
+      [dplayers.size, "players"],
+      [filed, `singles results reported — ${singles.length} survived review`]
+    ];
+    return `<section class="sv-ch" data-ch="The ledger"><div class="sv-in">
+      <div class="sv-kick">Chapter eight · the count</div>
+      <h2 class="sv-h">The <em>ledger</em></h2>
+      <div class="ledger">${cells.map(c => `<div><b>${c[0]}</b><span>${E(c[1])}</span></div>`).join("")}</div>
+    </div></section>`;
+  }
+
+  /* ---------- the hole: one engine, two canvases ----------
+     `film` draws the whole thing — stars, disk, shadow, ring — and pulls
+     each game in when the scroll reaches it. `sky` draws only the
+     debris, over the CSS hole behind the app, recycling forever. */
+  function makeHole(cv, opts){
+    const ctx = cv.getContext("2d");
+    let W = 0, Hh = 0, dpr = 1, raf = 0, last = 0, running = false, prog = 0, shown = 0;
+    let parts = [], dust = [], stars = [], eaten = 0, flash = 0;
+    const film = opts.mode === "film";
+    function size(){
+      dpr = Math.min(window.devicePixelRatio || 1, film ? 1.75 : 1.25);
+      W = cv.clientWidth || innerWidth; Hh = cv.clientHeight || innerHeight;
+      cv.width = Math.round(W*dpr); cv.height = Math.round(Hh*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      stars = Array.from({length: film ? 160 : 0}, (_,i) => ({x:Math.random()*W, y:Math.random()*Hh, r:Math.random()*1.2+.2, a:Math.random()*.7+.15}));
+    }
+    function geo(){
+      const m = Math.min(W, Hh);
+      return {cx: W*.5, cy: Hh*(opts.cy || .5), R: m*(film ? .085 : .096), tilt: film ? .34 : .28, rOut: Math.max(W, Hh)*.62};
+    }
+    function seed(labels){
+      parts = labels.map((l, i) => {
+        const g = geo();
+        return {l: l.t, c: l.c, k: i/Math.max(1, labels.length-1), a: Math.random()*Math.PI*2,
+                r: g.R*1.6 + Math.random()*(g.rOut - g.R*1.6), r0: 0, gone: false, sz: l.sz || 12};
+      });
+      parts.forEach(p => p.r0 = p.r);
+      dust = Array.from({length: film ? 420 : 0}, () => ({a: Math.random()*Math.PI*2, r: Math.random(), h: Math.random()}));
+    }
+    function draw(dt){
+      const g = geo(), t = performance.now()/1000;
+      ctx.clearRect(0,0,W,Hh);
+      shown += (prog - shown) * Math.min(1, dt*3);
+      /* the end of the film: once everything is in, the hole itself goes */
+      const collapse = film ? Math.max(0, Math.min(1, (shown - .9) / .08)) : 0;
+      const R = g.R * (1 - collapse*.92);
+      if(film){
+        ctx.fillStyle = "#030208"; ctx.fillRect(0,0,W,Hh);
+        stars.forEach(s => {
+          /* light near the hole is bent round it */
+          const dx = s.x - g.cx, dy = s.y - g.cy, d = Math.hypot(dx,dy) || 1, lens = (R*R*1.6)/d;
+          ctx.globalAlpha = s.a; ctx.fillStyle = "#fff";
+          ctx.fillRect(s.x + dx/d*lens, s.y + dy/d*lens, s.r, s.r);
+        });
+        ctx.globalAlpha = 1;
+        const glow = ctx.createRadialGradient(g.cx, g.cy, R*.8, g.cx, g.cy, R*7);
+        glow.addColorStop(0, "rgba(255,150,80,.32)"); glow.addColorStop(.35, "rgba(140,80,200,.12)"); glow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = glow; ctx.fillRect(0,0,W,Hh);
+      }
+      const pos = (r, a) => [g.cx + Math.cos(a)*r, g.cy + Math.sin(a)*r*g.tilt];
+      /* the disk, as dust: back half first */
+      const drawDust = front => {
+        if(!film) return;
+        dust.forEach(d => {
+          const r = R*(1.35 + d.r*3.2), a = d.a + t * (0.9/Math.pow(r/R, 1.5));
+          const s = Math.sin(a); if((s > 0) !== front) return;
+          const [x,y] = pos(r, a);
+          const hot = 1 - d.r;
+          ctx.fillStyle = `rgba(255,${Math.round(150+90*hot)},${Math.round(80+120*hot*hot)},${(.18+.5*hot)*(1-collapse)})`;
+          ctx.fillRect(x, y - d.h, 1.6, 1.6);
+        });
+      };
+      const drawParts = front => {
+        parts.forEach(p => {
+          if(p.gone) return;
+          let r;
+          if(film){
+            const due = .06 + p.k*.84;                      // where in the scroll this game goes in
+            const fall = Math.max(0, Math.min(1, (shown - due) / .07));
+            r = p.r0 * (1 - fall) + R*.6*fall;
+            if(fall >= 1){ p.gone = true; eaten++; flash = 1; return; }
+          } else {
+            p.r -= (8 + 900/Math.max(40, p.r)) * dt * (opts.speed || 1);
+            if(p.r < R*.9){ p.r = g.rOut*(.75 + Math.random()*.3); p.a = Math.random()*Math.PI*2; }
+            r = p.r;
+          }
+          p.a += dt * Math.min(2.4, 0.5*Math.pow(R*2.2/Math.max(r, R), 1.5));
+          const s = Math.sin(p.a); if((s > 0) !== front) return;
+          const [x,y] = pos(r, p.a);
+          const near = Math.max(0, Math.min(1, (r - R) / (R*4)));
+          /* behind the shadow is behind the shadow */
+          if(!front && Math.hypot(x - g.cx, (y - g.cy)) < R*1.08) return;
+          const stretch = 1 + (1 - near) * 2.6;
+          const alpha = (film ? .72 : (opts.alpha || .22)) * (.25 + .75*near) * (front ? 1 : .55);
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(p.a + Math.PI/2);
+          ctx.scale(stretch, 1/Math.sqrt(stretch));
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = p.c;
+          ctx.font = `600 ${p.sz}px 'JetBrains Mono', monospace`;
+          ctx.textAlign = "center";
+          ctx.fillText(p.l, 0, 0);
+          ctx.restore();
+        });
+      };
+      drawDust(false); drawParts(false);
+      if(film){
+        if(collapse < .97){
+          ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(g.cx, g.cy, R, 0, Math.PI*2); ctx.fill();
+          const ring = ctx.createRadialGradient(g.cx, g.cy, R*.98, g.cx, g.cy, R*1.35);
+          ring.addColorStop(0, `rgba(255,240,210,${.95 + flash*.05})`); ring.addColorStop(.25, "rgba(255,179,92,.55)"); ring.addColorStop(1, "rgba(255,107,61,0)");
+          ctx.fillStyle = ring; ctx.beginPath(); ctx.arc(g.cx, g.cy, R*1.35, 0, Math.PI*2); ctx.arc(g.cx, g.cy, R*.98, 0, Math.PI*2, true); ctx.fill();
+          if(flash > 0){ ctx.globalAlpha = flash*.5; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(g.cx, g.cy, R*1.05, 0, Math.PI*2); ctx.stroke(); ctx.globalAlpha = 1; flash = Math.max(0, flash - dt*3); }
+        }
+        /* spring: where the hole was, a new ball */
+        const sp = Math.max(0, Math.min(1, (shown - .955) / .04));
+        if(sp > 0){
+          const br = g.R * (.2 + .8*sp);
+          const halo = ctx.createRadialGradient(g.cx, g.cy, 0, g.cx, g.cy, br*5);
+          halo.addColorStop(0, `rgba(216,240,74,${.45*sp})`); halo.addColorStop(1, "rgba(216,240,74,0)");
+          ctx.fillStyle = halo; ctx.fillRect(0,0,W,Hh);
+          const ball = ctx.createRadialGradient(g.cx - br*.35, g.cy - br*.35, br*.1, g.cx, g.cy, br);
+          ball.addColorStop(0, "#F7FFC9"); ball.addColorStop(.6, "#D8F04A"); ball.addColorStop(1, "#7C9A12");
+          ctx.globalAlpha = sp; ctx.fillStyle = ball; ctx.beginPath(); ctx.arc(g.cx, g.cy, br, 0, Math.PI*2); ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = Math.max(1, br*.07);
+          ctx.beginPath(); ctx.arc(g.cx - br*1.05, g.cy, br*.8, -.9, .9); ctx.stroke();
+          ctx.beginPath(); ctx.arc(g.cx + br*1.05, g.cy, br*.8, Math.PI-.9, Math.PI+.9); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      drawDust(true); drawParts(true);
+    }
+    const budget = film ? 0 : 1/30;
+    function loop(now){
+      if(!running) return;
+      raf = requestAnimationFrame(loop);
+      const dt = Math.min(.1, (now - last)/1000 || 0);
+      if(budget && dt < budget) return;
+      last = now; draw(dt);
+    }
+    function onResize(){ size(); if(!running) draw(0); }
+    size();
+    window.addEventListener("resize", onResize, {passive:true});
+    return {
+      seed(labels){ seed(labels); draw(0); },
+      progress(p){ prog = p; if(p < shown - .02){ parts.forEach(q => q.gone = false); } },
+      start(){ if(running || reduce){ if(reduce) draw(0); return; } running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
+      stop(){ running = false; cancelAnimationFrame(raf); },
+      still(){ shown = prog; draw(0); }
+    };
+  }
+
+  /* every game as a fragment of light: initials and the score */
+  function labels(){
+    const {singles, dbl, cup} = data();
+    const L = singles.map(m => {
+      const f = orient(m);
+      const t = f.draw ? `${initials(f.a)} ${setStr(f.pairs)} ${initials(f.b)}` : `${initials(f.w)} ${setStr(f.pairs)} ${initials(f.l)}`;
+      const c = cup && m.tournament_id === cup.id ? "#7DFF9E" : dOf(m) >= new Date((typeof FALL_START !== "undefined" ? FALL_START : "2026-09-14") + "T00:00:00") ? "#FFB27A" : "#FFE2BF";
+      return {t, c, d:dOf(m)};
+    });
+    dbl.forEach(m => L.push({t: `${initials(m.p1a)}/${initials(m.p1b)} ${String(m.sets || "").replace(/\s/g,"").replace(/,/g,", ")} ${initials(m.p2a)}/${initials(m.p2b)}`, c:"#BFEFFF", d:dOf(m)}));
+    if(cup && cup.champion) L.push({t:"FF CUP · " + cup.champion.toUpperCase(), c:"#7DFF9E", d:new Date("2026-09-13T23:00:00"), sz:14});
+    return L.sort((a,b) => a.d - b.d);
+  }
+
+  /* ---------- the overlay ---------- */
+  let ov = null, film = null, lastFocus = null, cdTimer = 0;
+  function countdown(){
+    const el = document.getElementById("svCountdown"); if(!el) return;
+    const diff = new Date(SEASON.returns + "T00:00:00").getTime() - Date.now();
+    if(diff <= 0){ el.innerHTML = `<div><b>0</b><i>It's spring</i></div>`; return; }
+    const d = Math.floor(diff/864e5), h = Math.floor(diff/36e5)%24, m = Math.floor(diff/6e4)%60, s = Math.floor(diff/1e3)%60;
+    el.innerHTML = [[d,"days"],[h,"hours"],[m,"min"],[s,"sec"]].map(x => `<div><b>${String(x[0]).padStart(2,"0")}</b><i>${x[1]}</i></div>`).join("");
+  }
+  async function open(){
+    if(ov && ov.classList.contains("open")) return;
+    if(typeof doublesMatches !== "undefined" && !doublesMatches.length && typeof loadDoublesMatches === "function"){
+      try{ await Promise.race([loadDoublesMatches(), new Promise(r => setTimeout(r, 2500))]); }catch(e){}
+    }
+    const html = build();
+    if(!html) return;
+    lastFocus = document.activeElement;
+    ov = document.getElementById("seasonVoid");
+    ov.innerHTML = `<canvas class="sv-cv" aria-hidden="true"></canvas>
+      <div class="sv-bar"><div class="sv-mark">FGTA <span>2026</span></div><div class="sv-prog"><i></i></div>
+        <button class="sv-x" type="button" data-sv="close">Skip to the archive ✕</button></div>
+      <div class="sv-scroll" tabindex="-1">${html}</div>`;
+    ov.classList.add("open");
+    root.style.overflow = "hidden";
+    if(sky) sky.stop();
+    const sc = ov.querySelector(".sv-scroll"), bar = ov.querySelector(".sv-prog i");
+    film = makeHole(ov.querySelector("canvas"), {mode:"film", cy:.5});
+    film.seed(labels());
+    const onScroll = () => {
+      const p = sc.scrollTop / Math.max(1, sc.scrollHeight - sc.clientHeight);
+      film.progress(p); bar.style.transform = `scaleX(${p})`; bar.style.width = "100%";
+      if(reduce) film.still();
+    };
+    sc.addEventListener("scroll", onScroll, {passive:true});
+    onScroll(); film.start();
+    countdown(); cdTimer = setInterval(countdown, 1000);
+    ov.addEventListener("click", onClick);
+    document.addEventListener("keydown", onKey);
+    const x = ov.querySelector(".sv-x"); if(x) x.focus({preventScroll:true});
+    try{ sessionStorage.setItem("fgta_void_seen", "1"); }catch(e){}
+  }
+  function close(){
+    if(!ov) return;
+    ov.classList.remove("open"); ov.innerHTML = "";
+    if(film){ film.stop(); film = null; }
+    clearInterval(cdTimer);
+    root.style.overflow = "";
+    document.removeEventListener("keydown", onKey);
+    ov.removeEventListener("click", onClick);
+    if(sky && !document.hidden) sky.start();
+    if(lastFocus && lastFocus.focus) try{ lastFocus.focus({preventScroll:true}); }catch(e){}
+  }
+  function onClick(e){
+    const b = e.target.closest("[data-sv]"); if(!b) return;
+    if(b.dataset.sv === "close") close();
+    if(b.dataset.sv === "top"){ const sc = ov.querySelector(".sv-scroll"); sc.scrollTop = 0; }
+  }
+  function onKey(e){
+    if(e.key === "Escape"){ e.preventDefault(); close(); return; }
+    if(e.key === "Tab"){                                  // keep focus inside the dialog
+      const f = [...ov.querySelectorAll("button,a[href]")];
+      if(!f.length) return;
+      const i = f.indexOf(document.activeElement);
+      if(e.shiftKey && i <= 0){ e.preventDefault(); f[f.length-1].focus(); }
+      else if(!e.shiftKey && i === f.length-1){ e.preventDefault(); f[0].focus(); }
+    }
+  }
+
+  /* ---------- the banner on every view ---------- */
+  const FULL = {ladder:1, feed:1, events:1};
+  function mountHTML(full){
+    const {singles, dbl, cup} = data();
+    const diff = Math.max(0, Math.ceil((new Date(SEASON.returns + "T00:00:00") - Date.now())/864e5));
+    return `<div class="vm-slab">
+      <div class="vm-k">Season closed · ${E(fmt(new Date(SEASON.closed + "T12:00:00"), {month:"long", day:"numeric", year:"numeric"}))}</div>
+      <div class="vm-t">${E(SEASON.name)} is <em>over</em></div>
+      <div class="vm-l">The ladder is frozen for the winter. Every game of the season is still here — and every one of them is falling into the void behind this page.</div>
+      ${full ? `<div class="vm-stats"><span><b>${singles.length}</b>singles</span><span><b>${dbl.length}</b>doubles</span>${cup && cup.champion ? `<span><b>${E(cup.champion)}</b>FF Cup</span>` : ""}<span><b>${diff}</b>days to spring</span></div>` : ""}
+      <div class="vm-row"><button class="vm-go" type="button" onclick="SeasonVoid.open()">Enter the void →</button>
+        <span class="vm-spring">FGTA returns <b>${E(SEASON.returnsLabel)}</b></span></div>
+    </div>`;
+  }
+  let dblAsked = false;
+  function mountAll(){
+    /* doubles load lazily elsewhere in the app; the banner counts them */
+    if(!dblAsked && typeof doublesMatches !== "undefined" && !doublesMatches.length && typeof loadDoublesMatches === "function"){
+      dblAsked = true;
+      loadDoublesMatches().then(() => { if(doublesMatches.length){ mountAll(); if(sky) sky.seed(labels()); } }).catch(() => {});
+    }
+    document.querySelectorAll('[id^="view-"]').forEach(v => {
+      const name = v.id.slice(5);
+      let m = v.querySelector(":scope > .void-mount");
+      if(!m){ m = document.createElement("div"); m.className = "void-mount"; v.insertBefore(m, v.firstChild); }
+      m.classList.toggle("mini", !FULL[name]);
+      m.innerHTML = mountHTML(!!FULL[name]);
+    });
+    /* the report form says the season is shut (it still works: an admin
+       files corrections through it) */
+    const btn = document.getElementById("submitBtn");
+    const panel = btn && btn.closest(".panel");
+    if(panel && !panel.querySelector(".void-closed-note")){
+      const n = document.createElement("div"); n.className = "void-closed-note";
+      n.innerHTML = `<b>The 2026 season is closed.</b> New games wait for ${E(SEASON.returnsLabel)}; this form stays open for corrections to games already played.`;
+      panel.insertBefore(n, panel.firstChild);
+    }
+  }
+
+  /* the race board's clock keeps running into a winter nobody plays in */
+  function patchRace(){
+    const tag = document.getElementById("raceTag");
+    if(tag){ tag.className = "race-state final"; tag.textContent = "Winter break"; }
+    const mid = document.querySelector("#raceClock .race-ends span:nth-child(2)");
+    if(mid) mid.innerHTML = `<strong>Frozen for winter</strong> · back ${E(SEASON.returnsLabel.toLowerCase())}`;
+  }
+  if(typeof window.renderRace === "function"){
+    const rr = window.renderRace;
+    window.renderRace = function(){ const r = rr.apply(this, arguments); try{ patchRace(); }catch(e){} return r; };
+  }
+
+  /* the chip in the top bar: the way back in from anywhere */
+  (function chip(){
+    const brand = document.querySelector(".tb-brand");
+    if(!brand || brand.querySelector(".void-chip")) return;
+    const c = document.createElement("span");
+    c.className = "void-chip"; c.setAttribute("role", "button"); c.tabIndex = 0; c.title = "Relive FGTA 2026";
+    c.innerHTML = `<b>2026 · The void</b><i>Back ${E(SEASON.returnsLabel.toLowerCase())}</i>`;
+    c.addEventListener("click", () => open());
+    c.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } });
+    brand.appendChild(c);
+  })();
+
+  /* ---------- the sky behind the app ---------- */
+  let sky = null;
+  const cv = document.getElementById("voidDebris");
+  if(cv && cv.getContext){
+    sky = makeHole(cv, {mode:"sky", cy:.58, alpha:.2, speed:.55});
+    document.addEventListener("visibilitychange", () => {
+      if(!sky) return;
+      if(document.hidden || (ov && ov.classList.contains("open"))) sky.stop(); else sky.start();
+    });
+  }
+
+  /* ---------- when the data lands ---------- */
+  let booted = false;
+  function onData(){
+    if(!matches || !matches.length) return;
+    mountAll();
+    try{ patchRace(); }catch(e){}
+    if(sky){ sky.seed(labels()); if(!document.hidden) sky.start(); }
+    if(booted) return;
+    booted = true;
+    /* the front door: once a session, after the load screen, unless the
+       visitor arrived on a link to somewhere specific */
+    let seen = false; try{ seen = sessionStorage.getItem("fgta_void_seen") === "1"; }catch(e){}
+    const deep = location.hash && !/^#\/?(ladder)?\/?$/.test(location.hash);
+    if(seen || deep || /[?&]novoid\b/.test(location.search)) return;
+    const go = () => setTimeout(open, 250);
+    if(typeof window.ffWhenRevealed === "function") window.ffWhenRevealed(go); else go();
+  }
+
+  window.SeasonVoid = {open, close, onData, SEASON, build};
+  if(matches && matches.length) onData();
+})();
+/* ==== SEASON-VOID-END ==== */
+</script>
+
 </body>
 </html>
