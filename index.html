@@ -10252,9 +10252,41 @@
   box-shadow:0 30px 60px -40px #000}
 
 /* the opening: words falling toward the hole */
-.sv-open{justify-content:center;text-align:center}
-.sv-open .sv-h{font-size:clamp(54px,13vw,170px);text-shadow:0 0 60px rgba(255,179,92,.25)}
-.sv-open .sv-lede{margin-left:auto;margin-right:auto;color:var(--ink);text-shadow:0 0 3px #000,0 2px 14px #000,0 0 30px #030208}
+/* the opening is laid out round the hole: title above it, the count
+   below it, and nothing over the middle of the screen where the
+   season is being eaten */
+.sv-open{text-align:center;padding-top:84px;padding-bottom:28px}
+.sv-open .sv-in{display:flex;flex-direction:column;justify-content:space-between;min-height:calc(100svh - 112px)}
+.sv-open .sv-gap{flex:1 0 34vh}
+.sv-open .sv-h{font-size:clamp(50px,12vw,160px);margin:0;text-shadow:0 0 60px rgba(255,179,92,.25)}
+.sv-open .sv-h span{display:block}
+.sv-count{display:flex;justify-content:center;align-items:center;gap:14px;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.sv-count b{font:800 26px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:var(--amber);margin-right:6px;vertical-align:-4px}
+.sv-count i{width:4px;height:4px;border-radius:50%;background:rgba(255,179,92,.5)}
+.sv-open .sv-hint{margin-top:18px}
+/* scroll, and the title goes in first: it is drawn down into the middle
+   of the screen, shrinking and turning, as you leave the opening */
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion: no-preference){
+    #seasonVoid .sv-open{view-timeline-name:--svOpen}
+    #seasonVoid .sv-open .sv-top,#seasonVoid .sv-open .sv-bot{animation:svSuck linear both;animation-timeline:--svOpen;animation-range:exit 0% exit 65%}
+    #seasonVoid .sv-open .sv-bot{animation-name:svSuckUp}
+    /* the range is the first 65vh of scroll, so a translate that matches
+       the scroll holds a block still on screen; anything beyond it moves
+       the block toward the hole at the centre — slowly, then all at once */
+    @keyframes svSuck{
+      0%  {scale:1;  rotate:0deg; translate:0 0;    opacity:1}
+      50% {scale:.78;rotate:5deg; translate:0 38vh; opacity:1}
+      80% {scale:.28;rotate:16deg;translate:0 76vh; opacity:.9}
+      100%{scale:.02;rotate:40deg;translate:0 97vh; opacity:0}}
+    @keyframes svSuckUp{
+      0%  {scale:1;  rotate:0deg;  translate:0 0;    opacity:1}
+      30% {scale:.9; rotate:-3deg; translate:0 20vh; opacity:1}
+      60% {scale:.6; rotate:-9deg; translate:0 27vh; opacity:1}
+      85% {scale:.25;rotate:-22deg;translate:0 26vh; opacity:.8}
+      100%{scale:.02;rotate:-40deg;translate:0 25vh; opacity:0}}
+  }
+}
 .sv-open .sv-kick,.sv-open .sv-hint{text-shadow:0 0 3px #000,0 0 14px #000}
 .sv-hint{margin-top:26px;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
 .sv-hint::after{content:"";display:block;width:1px;height:46px;margin:14px auto 0;background:linear-gradient(var(--amber),transparent);animation:svDrip 2.4s ease-in-out infinite}
@@ -45639,10 +45671,15 @@ SITE.load();
 
     /* 0. the opening */
     H.push(`<section class="sv-ch sv-open" data-ch="Open"><div class="sv-in">
-      <div class="sv-kick">${E(fmt(dOf(first)))} – ${E(fmt(dOf(last)))} · ${days} days</div>
-      <h2 class="sv-h">${E(SEASON.name)}<br><em>is over</em></h2>
-      <p class="sv-lede">${singles.length} singles games. ${dbl.length} doubles games. One cup. Every one of them is about to fall into the hole in the middle of your screen — scroll, and watch them go.</p>
-      <div class="sv-hint">Scroll into the void</div>
+      <div class="sv-top">
+        <div class="sv-kick">${E(fmt(dOf(first)))} \u2013 ${E(fmt(dOf(last)))} \u00b7 ${days} days</div>
+        <h2 class="sv-h"><span>${E(SEASON.name)}</span> <em>is over</em></h2>
+      </div>
+      <div class="sv-gap" aria-hidden="true"></div>
+      <div class="sv-bot">
+        <div class="sv-count"><span><b>${singles.length}</b> singles</span><i></i><span><b>${dbl.length}</b> doubles</span><i></i><span><b>1</b> cup</span></div>
+        <div class="sv-hint">Scroll \u2014 and watch them go in</div>
+      </div>
     </div></section>`);
 
     /* 1. before the #1 arrived */
@@ -45890,14 +45927,59 @@ SITE.load();
       const m = Math.min(W, Hh);
       return {cx: W*.5, cy: Hh*(opts.cy || .5), R: m*(film ? .085 : .096), tilt: film ? .34 : .28, rOut: Math.max(W, Hh)*.62};
     }
+    /* ---- the physics ----
+       Everything that moves here is a body in the plane of the disk under
+       inverse-square gravity, a = -GM·r/|r|³, integrated in small fixed
+       substeps (semi-implicit Euler — stable for orbits, and cheap). A body
+       with no drag keeps its orbit forever. Drag (a = -k·v) bleeds off
+       angular momentum, and a body that loses it falls: slowly at first,
+       then faster and faster as it winds in, which is the thing a black
+       hole actually looks like it is doing. GM is set so a body at 2R
+       goes round about once every six seconds. The disk plane is drawn
+       tilted (z squashed by `tilt`), so z > 0 is the near side. */
+    let stream = [], echoes = [];
+    const GM = R0 => 10 * R0*R0*R0;
+    function circularV(r, R0){ return Math.sqrt(GM(R0) / r); }
+    function launch(b, r, a, R0, kind){
+      /* start on (or, for the stream, just inside) a circular orbit, with
+         a little eccentricity so no two paths are the same */
+      const v = circularV(r, R0) * (kind === "orbit" ? 1 : .72 + Math.random()*.22);
+      b.x = Math.cos(a)*r; b.z = Math.sin(a)*r;
+      b.vx = -Math.sin(a)*v; b.vz = Math.cos(a)*v;
+      if(kind !== "orbit"){ b.vx -= Math.cos(a)*v*.12; b.vz -= Math.sin(a)*v*.12; }
+      b.px = b.x; b.pz = b.z;
+    }
+    function step(b, dt, R0, k){
+      const n = Math.max(1, Math.ceil(dt / .006)), h = dt / n, gm = GM(R0);
+      b.px = b.x; b.pz = b.z;
+      for(let i = 0; i < n; i++){
+        const r2 = b.x*b.x + b.z*b.z, r = Math.sqrt(r2) || 1, f = gm / (r2*r);
+        b.vx += (-b.x*f - k*b.vx) * h;
+        b.vz += (-b.z*f - k*b.vz) * h;
+        b.x += b.vx*h; b.z += b.vz*h;
+        if(r < R0*.95) return true;            // over the horizon
+      }
+      return false;
+    }
     function seed(labels){
+      const g = geo();
       parts = labels.map((l, i) => {
-        const g = geo();
-        return {l: l.t, c: l.c, k: i/Math.max(1, labels.length-1), a: Math.random()*Math.PI*2,
-                r: g.R*1.6 + Math.random()*(g.rOut - g.R*1.6), r0: 0, gone: false, sz: l.sz || 12};
+        const b = {l: l.t, c: l.c, k: i/Math.max(1, labels.length-1), sz: l.sz || 12, gone: false,
+                   r0: g.R*2.2 + Math.random()*(g.rOut - g.R*2.2), a0: Math.random()*Math.PI*2};
+        if(film) launch(b, b.r0, b.a0, g.R, "orbit"); else launch(b, b.r0, b.a0, g.R, "fall");
+        return b;
       });
-      parts.forEach(p => p.r0 = p.r);
       dust = Array.from({length: film ? 420 : 0}, () => ({a: Math.random()*Math.PI*2, r: Math.random(), h: Math.random()}));
+      /* the infall stream: specks of gas, always on their way in */
+      stream = Array.from({length: film ? 300 : 0}, () => { const b = {k: .1 + Math.random()*.35}; launch(b, g.R*1.6 + Math.random()*(g.rOut - g.R*1.6), Math.random()*Math.PI*2, g.R, "fall"); return b; });
+      /* echoes: copies of the season's results caught in the stream, so the
+         opening is already being eaten before anyone scrolls */
+      echoes = film ? Array.from({length: Math.min(16, labels.length)}, () => {
+        const l = labels[Math.floor(Math.random()*labels.length)];
+        const b = {l: l.t, c: l.c, sz: 11, k: .12 + Math.random()*.2};
+        launch(b, g.R*3 + Math.random()*(g.rOut - g.R*3), Math.random()*Math.PI*2, g.R, "fall");
+        return b;
+      }) : [];
     }
     function draw(dt){
       const g = geo(), t = performance.now()/1000;
@@ -45919,7 +46001,9 @@ SITE.load();
         glow.addColorStop(0, "rgba(255,150,80,.32)"); glow.addColorStop(.35, "rgba(140,80,200,.12)"); glow.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = glow; ctx.fillRect(0,0,W,Hh);
       }
-      const pos = (r, a) => [g.cx + Math.cos(a)*r, g.cy + Math.sin(a)*r*g.tilt];
+      const scr = (x, z) => [g.cx + x, g.cy + z*g.tilt];
+      const pos = (r, a) => scr(Math.cos(a)*r, Math.sin(a)*r);
+      const hidden = (x, y, front) => !front && Math.hypot(x - g.cx, y - g.cy) < R*1.08;
       /* the disk, as dust: back half first */
       const drawDust = front => {
         if(!film) return;
@@ -45932,40 +46016,75 @@ SITE.load();
           ctx.fillRect(x, y - d.h, 1.6, 1.6);
         });
       };
-      const drawParts = front => {
-        parts.forEach(p => {
-          if(p.gone) return;
-          let r;
-          if(film){
-            const due = .06 + p.k*.84;                      // where in the scroll this game goes in
-            const fall = Math.max(0, Math.min(1, (shown - due) / .07));
-            r = p.r0 * (1 - fall) + R*.6*fall;
-            if(fall >= 1){ p.gone = true; eaten++; flash = 1; return; }
-          } else {
-            p.r -= (8 + 900/Math.max(40, p.r)) * dt * (opts.speed || 1);
-            if(p.r < R*.9){ p.r = g.rOut*(.75 + Math.random()*.3); p.a = Math.random()*Math.PI*2; }
-            r = p.r;
+      /* the stream: each speck drawn as a streak from where it was a frame
+         ago, so speed is visible — and it is fastest at the end */
+      const moveStream = () => {
+        stream.forEach(b => {
+          if(step(b, dt, g.R, b.k * (1 + collapse*6)) || b.x*b.x + b.z*b.z > g.rOut*g.rOut*2.2){
+            if(collapse > .6){ b.dead = true; return; }
+            flash = Math.min(1, flash + .04);
+            launch(b, g.rOut*(.8 + Math.random()*.4), Math.random()*Math.PI*2, g.R, "fall");
           }
-          p.a += dt * Math.min(2.4, 0.5*Math.pow(R*2.2/Math.max(r, R), 1.5));
-          const s = Math.sin(p.a); if((s > 0) !== front) return;
-          const [x,y] = pos(r, p.a);
-          const near = Math.max(0, Math.min(1, (r - R) / (R*4)));
-          /* behind the shadow is behind the shadow */
-          if(!front && Math.hypot(x - g.cx, (y - g.cy)) < R*1.08) return;
-          const stretch = 1 + (1 - near) * 2.6;
-          const alpha = (film ? .72 : (opts.alpha || .22)) * (.25 + .75*near) * (front ? 1 : .55);
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.rotate(p.a + Math.PI/2);
-          ctx.scale(stretch, 1/Math.sqrt(stretch));
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = p.c;
-          ctx.font = `600 ${p.sz}px 'JetBrains Mono', monospace`;
-          ctx.textAlign = "center";
-          ctx.fillText(p.l, 0, 0);
-          ctx.restore();
         });
       };
+      const drawStream = front => {
+        stream.forEach(b => {
+          if(b.dead || (b.z > 0) !== front) return;
+          const [x,y] = scr(b.x, b.z), [x0,y0] = scr(b.px, b.pz);
+          if(hidden(x, y, front)) return;
+          const r = Math.hypot(b.x, b.z), heat = Math.max(0, Math.min(1, 1 - (r - R)/(R*5)));
+          ctx.strokeStyle = `rgba(255,${Math.round(200 - 60*heat)},${Math.round(150 - 90*heat)},${(.12 + .7*heat) * (front ? 1 : .6)})`;
+          ctx.lineWidth = .8 + heat*1.4;
+          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x + (x - x0)*1.5, y + (y - y0)*1.5); ctx.stroke();
+        });
+      };
+      /* a label: turned along its velocity and stretched by the tide —
+         the closer it gets, the longer and thinner it is drawn */
+      const drawLabel = (b, front, alphaBase) => {
+        if((b.z > 0) !== front) return;
+        const [x,y] = scr(b.x, b.z);
+        if(hidden(x, y, front)) return;
+        const r = Math.hypot(b.x, b.z);
+        const near = Math.max(0, Math.min(1, (r - R) / (R*4)));
+        const stretch = Math.min(5, 1 + 2.4*Math.pow(R*1.6/Math.max(r, R), 2));
+        const ang = Math.atan2(b.vz*g.tilt, b.vx);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(ang);
+        ctx.scale(stretch, 1/Math.sqrt(stretch));
+        ctx.globalAlpha = alphaBase * (.25 + .75*near) * (front ? 1 : .55);
+        ctx.fillStyle = b.c;
+        ctx.font = `600 ${b.sz}px 'JetBrains Mono', monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(b.l, 0, 0);
+        ctx.restore();
+      };
+      const moveParts = () => {
+        parts.forEach(p => {
+          if(p.gone) return;
+          /* in the film a game keeps a clean orbit until the scroll reaches
+             it, then it is given drag and falls in on its own */
+          const k = film ? (shown >= .06 + p.k*.84 ? 1.4 : 0) : (.12 * (opts.speed || 1));
+          p.falling = k > 0;
+          if(step(p, dt, g.R, k)){
+            if(film){ p.gone = true; eaten++; flash = 1; }
+            else launch(p, g.rOut*(.75 + Math.random()*.3), Math.random()*Math.PI*2, g.R, "fall");
+          }
+        });
+        echoes.forEach(b => {
+          if(step(b, dt, g.R, b.k * (1 + collapse*6))){
+            if(collapse > .6){ b.dead = true; return; }
+            flash = Math.min(1, flash + .3);
+            launch(b, g.rOut*(.8 + Math.random()*.3), Math.random()*Math.PI*2, g.R, "fall");
+          }
+        });
+      };
+      const drawParts = front => {
+        echoes.forEach(b => { if(!b.dead) drawLabel(b, front, .38); });
+        parts.forEach(p => { if(!p.gone) drawLabel(p, front, film ? .72 : (opts.alpha || .22)); });
+      };
+      if(dt > 0){ moveStream(); moveParts(); }
+      drawStream(false);
       drawDust(false); drawParts(false);
       if(film){
         if(collapse < .97){
@@ -45991,7 +46110,7 @@ SITE.load();
           ctx.globalAlpha = 1;
         }
       }
-      drawDust(true); drawParts(true);
+      drawDust(true); drawStream(true); drawParts(true);
     }
     const budget = film ? 0 : 1/30;
     function loop(now){
@@ -46006,7 +46125,12 @@ SITE.load();
     window.addEventListener("resize", onResize, {passive:true});
     return {
       seed(labels){ seed(labels); draw(0); },
-      progress(p){ prog = p; if(p < shown - .02){ parts.forEach(q => q.gone = false); } },
+      progress(p){
+        prog = p;
+        /* scrolling back up un-eats what is above the new position */
+        if(p < shown - .02){ const g = geo(); parts.forEach(q => { if(q.gone || (q.falling && p < .06 + q.k*.84)){ q.gone = false; launch(q, q.r0, q.a0, g.R, "orbit"); } }); }
+        if(p < .9){ stream.forEach(b => b.dead = false); echoes.forEach(b => b.dead = false); }
+      },
       start(){ if(running || reduce){ if(reduce) draw(0); return; } running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
       stop(){ running = false; cancelAnimationFrame(raf); },
       still(){ shown = prog; draw(0); }
